@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 02 gave a vector a norm -- a way to measure its own magnitude, alone. This concept finally introduces a second vector: the dot product sums elementwise products into one number, that number relates geometrically to the angle between the two vectors, and dividing by both vectors' norms turns it into cosine similarity -- a value in [-1,1] measuring directional similarity independent of magnitude. This is the exact similarity measure dense retrieval will use on embeddings later (Module 08-09), forward-referenced only. Distance functions are Concept 04's job, not this one's.">
+<title>Dot product, vector similarity, angles and cosine similarity — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 03</p>
+<h1>Dot product, vector similarity,<br><em>angles and cosine similarity.</em></h1>
+<p class="lesson-lead">Concept 02 gave a single vector a norm — its own magnitude, measured alone, never by comparing it to anything else. This concept finally introduces a <b>second</b> vector. The <b>dot product</b> multiplies two vectors component by component and adds the results into one number. That number is not arbitrary — it relates directly to the <b>angle</b> between the two vectors. Dividing the dot product by both vectors' norms (Concept 02's term, cited, not re-derived) removes magnitude entirely and leaves <b>cosine similarity</b>: a number between -1 and 1 that measures only whether two vectors point the same way. Nothing here measures how <i>far apart</i> two vectors are — that's Euclidean distance, Concept 04's job.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's L2 norm, ‖v‖₂ — cited directly, not re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute a dot product and a cosine similarity by hand, and state what each number does and does not tell you</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You introduced a second vector for the first time — the dot product combined two vectors into one number, that number tied directly to the angle between them, and dividing by both norms turned it into cosine similarity, a bounded score measuring direction alone. Measuring the actual distance between two vectors is now open in Concept 04.</p>
+<b>3 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">How similar are two vectors — regardless of how big either one is?</h2>
+</div>
+<p>Concept 02 measured a vector's own size. This concept measures the relationship between two vectors: first a raw combined number (the dot product), then a magnitude-free similarity score built from it (cosine similarity).</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Dot product, angle, and cosine similarity — one new number, then a second, better one</h3>
+<div class="mental-compare">
+<div><span>DOT PRODUCT</span><p>Multiply the two vectors' matching components together, then add up every product. (3, 4) · (4, 3) = 3×4 + 4×3 = 24 — one number, from two vectors.</p></div>
+<div><span>COSINE SIMILARITY</span><p>The dot product divided by both vectors' L2 norms (Concept 02). Same two vectors, one new number, always between -1 and 1.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>GEOMETRIC MEANING</span><p>The dot product is tied to the angle θ between the two vectors: v·w = ‖v‖‖w‖cosθ. Cosine similarity is just cosθ, isolated.</p></div>
+<div><span>BOUNDED RANGE</span><p>1 means pointing the exact same way; 0 means at a right angle (unrelated direction); -1 means pointing exactly opposite. Nothing else is possible.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>USES CONCEPT 02'S NORM</span><p>Cosine similarity only exists because Concept 02 already defined ‖v‖₂ — that formula is reused here, not rebuilt.</p></div>
+<div><span>NOT YET: DISTANCE</span><p>How far apart two vectors are (lower = more alike) is a different question from how similar their direction is (higher = more alike) — that's Concept 04.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> the dot product combines two vectors into one number by multiplying and summing; cosine similarity is that same number rescaled by both norms so only direction — never size — decides the score, always landing between -1 and 1.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 02 could measure a vector — never compare two</h3>
+<p>Every tool up to this point works on one vector at a time. Concept 01 could write a vector down; Concept 02 could measure its dimension, its norm, and rescale it to length one. None of that toolkit can answer the single most useful retrieval question there is: <i>given two vectors, how alike are they?</i> The dot product is the first operation that even looks at two vectors together, and cosine similarity is what turns that raw number into an actual similarity score.</p>
+<div class="mental-compare">
+<div><span>WITHOUT A WAY TO COMPARE</span><p>A query vector and a document vector can each be measured on their own, but nothing yet says whether they represent the same idea.</p></div>
+<div><span>WITH DOT PRODUCT + COSINE SIMILARITY</span><p>Two vectors combine into one number (dot product), then into one bounded, magnitude-free score (cosine similarity) — the foundation every later similarity search builds on.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Do two support tickets describe the same underlying issue?</h3>
+<p>Ticket A mentions "refund" 3 times and "billing" 4 times: <b>A</b> = (3, 4) — Concept 02's exact ticket vector. Ticket B is a much longer, more detailed ticket about the same issue: "refund" 6 times, "billing" 8 times: <b>B</b> = (6, 8). Ticket C raises a related but slightly different mix: "refund" 4 times, "billing" 3 times: <b>C</b> = (4, 3).</p>
+<div class="context-demo">
+<div><span>A · B DOT PRODUCT</span><p>(3×6) + (4×8) = 18 + 32 = 50.</p></div>
+<div><span>A · B COSINE SIMILARITY</span><p>‖A‖₂ = 5, ‖B‖₂ = 10 (Concept 02). 50 ÷ (5×10) = 1.0 — <b>identical direction</b>, even though B has twice the raw mentions.</p></div>
+<div><span>A · C DOT PRODUCT</span><p>(3×4) + (4×3) = 12 + 12 = 24.</p></div>
+<div><span>A · C COSINE SIMILARITY</span><p>‖A‖₂ = 5, ‖C‖₂ = 5. 24 ÷ (5×5) = 0.96 — highly similar, but not identical: about a 16.3° angle apart.</p></div>
+</div>
+<p>A and B describe the exact same issue at different lengths — cosine similarity correctly reports them as perfectly aligned. A and C lean slightly differently between the two keywords, and cosine similarity reports that too, as a slightly-less-than-1 score.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two formulas, one geometric fact connecting them</h3>
+<div class="example-grid">
+<article class="info-card"><span>DOT PRODUCT</span><h3>Multiply, then sum</h3><p>v · w = v₁w₁ + v₂w₂ + … + vₙwₙ — one number, requires two vectors of the same dimension.</p></article>
+<article class="info-card"><span>GEOMETRIC IDENTITY</span><h3>The same number, another way</h3><p>v · w = ‖v‖ ‖w‖ cosθ — the dot product equals both norms multiplied together, times the cosine of the angle between them.</p></article>
+<article class="info-card"><span>COSINE SIMILARITY</span><h3>Cancel out the norms</h3><p>cos θ = (v · w) / (‖v‖ ‖w‖) — rearranging the identity above isolates cosθ itself, a pure direction score.</p></article>
+<article class="info-card"><span>ANGLE (OPTIONAL)</span><h3>Only if you want degrees</h3><p>θ = arccos(cosine similarity) — a number in [-1, 1] converted back into an angle; never required just to get the similarity score.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0403-visual-title">
+<strong class="concept-visual-title" id="c0403-visual-title">VISUAL · TWO TICKET VECTORS AND THE ANGLE BETWEEN THEM</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-labelledby="c0403-svg-title c0403-svg-desc">
+<title id="c0403-svg-title">Vectors A and C plotted from the origin with the angle between them marked</title>
+<desc id="c0403-svg-desc">Two arrows from the origin: a green arrow to (3,4) labelled A, and an orange arrow to (4,3) labelled C, with a small arc near the origin marking the roughly 16 degree angle between them.</desc>
+<line x1="40" y1="220" x2="280" y2="220" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="40" y1="220" x2="40" y2="20" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="40" y1="220" x2="130" y2="100" stroke="#5ee6c3" stroke-width="3"/>
+<circle cx="130" cy="100" r="4.5" fill="#14241f"/>
+<text x="136" y="94" font-size="13" fill="currentColor">A = (3, 4)</text>
+<line x1="40" y1="220" x2="160" y2="130" stroke="#ff7957" stroke-width="3"/>
+<circle cx="160" cy="130" r="4.5" fill="#14241f"/>
+<text x="166" y="124" font-size="13" fill="currentColor">C = (4, 3)</text>
+<path d="M64,188 A40,40 0 0 1 72,196" fill="none" stroke="currentColor" stroke-width="2"/>
+<text x="76" y="192" font-size="11" fill="currentColor">θ ≈ 16.3°</text>
+</svg>
+</div>
+<figcaption>A and C both point into the same general area of the plane, but not identically — the small arc marks the roughly 16.3° gap between them. Cosine similarity turns that gap into a single number, 0.96, without ever needing the angle in degrees at all.</figcaption>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The first step that touches two vectors at once</h3>
+<div class="pipeline-preview">
+<span>Concept 02 — one vector, measured</span><i>↓</i><span class="hot">This concept — two vectors, compared</span><i>↓</i><span>Concept 04 — distance between two vectors</span><i>↓</i><span>Module 08-09 — cosine similarity on embeddings</span>
+</div>
+<p>Every earlier computation in this module took one vector as input. This concept is the turning point: dot product and cosine similarity are the first operations that take two vectors and produce one comparison. Later, dense retrieval (Module 08-09) will run this exact calculation between a query embedding and every candidate document embedding — forward-referenced only, not built here.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners blur two different numbers into one</h3>
+<div class="distinction-table" role="table" aria-label="This concept's dot product and cosine similarity distinguished from Concept 02's norm and from Concept 04's distance">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Dot product (two vectors)</span><span role="cell">Norm (one vector, Concept 02)</span><span role="cell">A norm measures one vector alone; a dot product requires two vectors of the same dimension and cannot be computed from just one</span></div>
+<div role="row"><span role="cell">Dot product (raw, magnitude-sensitive)</span><span role="cell">Cosine similarity (rescaled, magnitude-free)</span><span role="cell">Dividing by both norms removes size from the answer — A·B = 50, but cosine(A, B) = 1.0; the raw number and the similarity score are not interchangeable</span></div>
+<div role="row"><span role="cell">Cosine similarity of 0</span><span role="cell">"Opposite" or "unrelated in every sense"</span><span role="cell">0 means a right angle — orthogonal, unrelated direction. Only -1 means truly opposite; 0 is a distinct, separate value on the same scale</span></div>
+<div role="row"><span role="cell">Similarity (this concept, higher = more alike)</span><span role="cell">Distance (Concept 04, lower = more alike)</span><span role="cell">These are inverse-flavored ideas measured with completely different formulas — this concept never computes a distance, only direction-based similarity</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A bigger dot product always means a more similar direction."</b><p>Not true — magnitude inflates the dot product regardless of direction. A vector ten times longer but pointing a different way can produce a bigger dot product than a shorter vector pointing exactly the same way. Cosine similarity exists specifically to fix this.</p></div>
+<div><b>"Cosine similarity of 0 means the two vectors are opposite."</b><p>0 means orthogonal — at a right angle, pointing in unrelated directions. Opposite is -1, a completely different point on the scale.</p></div>
+<div><b>"Cosine similarity can be any number, depending on the vectors."</b><p>It is always between -1 and 1, for any pair of real vectors — a mathematical guarantee (Cauchy-Schwarz), not a coincidence of the examples chosen here.</p></div>
+<div><b>"You need the angle in degrees before you can get cosine similarity."</b><p>Backwards — cosine similarity is computed directly from the dot product and the two norms. Converting it into an angle with arccos is optional and comes after, if wanted at all.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Comparing vectors the Oracle RAG project already has</h3>
+<div class="project-map">
+<div><span>SUPPORT TICKETS A & B</span><b>cosine(A, B) = 1.0</b><p>Same underlying issue, very different lengths — cosine similarity correctly ignores the length difference entirely.</p></div>
+<div><span>SUPPORT TICKETS A & C</span><b>cosine(A, C) = 0.96</b><p>A closely related but not identical issue — a high score, just short of a perfect 1.0.</p></div>
+<div><span>QUERY VS. DOCUMENT EMBEDDINGS, MODULE 08-09</span><b>Forward reference only</b><p>The exact same dot-product-then-divide-by-norms calculation is what dense retrieval will run between a query embedding and every candidate document — not built here, only named.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> the Oracle RAG project's very first "how similar are these two things" question is answered by exactly this mechanism — everything later in the retrieval pipeline is a variation on it.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Dot product</b><p>v · w = v₁w₁ + v₂w₂ + … + vₙwₙ — multiply matching components, then add. Requires two vectors of the same dimension.</p></div>
+<div><b>Cosine similarity</b><p>(v · w) / (‖v‖‖w‖) — the dot product with magnitude divided back out. Always between -1 and 1.</p></div>
+<div><b>What the bounds mean</b><p>1 = same direction, 0 = orthogonal/unrelated, -1 = opposite direction. No other value is possible.</p></div>
+<div><b>What stays deferred</b><p>Euclidean and other distance functions — measuring how far apart two vectors are, rather than how aligned — are Concept 04's job, not today's.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can two vectors have a large dot product without being very similar in direction?</li>
+<li>Compute the dot product and cosine similarity of (1, 0) and (0, 1) by hand. What does the result mean?</li>
+<li>Why is converting cosine similarity into an angle in degrees an optional last step, not a required one?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Euclidean and other distance functions</h3>
+<p>Today's concept measured how alike two vectors' directions are — higher cosine similarity meaning more alike, independent of size. Concept 04 asks a related but genuinely different question: how far apart are two vectors, measured as an actual geometric distance, where a lower number means more alike. Same two vectors going in, a completely different formula and a completely different scale coming out.</p>
+<div class="beginner-memory"><b>Concept 03 is complete.</b> Continue to Euclidean and other distance functions.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 04 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Multiply and sum. Divide by both norms. Get a bounded similarity score.</h2>
+<p>Master the dot product and cosine similarity first. Open the formal definitions, the from-scratch code, and The Similarity Calculator lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>The dot product multiplies and sums two vectors' components; cosine similarity divides that by both norms.</small></a>
+<a href="#b04"><span>02</span><b>Compute</b><small>v·w = Σvᵢwᵢ, v·w = ‖v‖‖w‖cosθ, cos θ = (v·w)/(‖v‖‖w‖).</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Compare two support tickets and preview the exact calculation dense retrieval will run on embeddings.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch code, and The Similarity Calculator lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Concept 02's norm cited, not re-derived → the dot product defined and tied to the angle between two vectors → cosine similarity isolated as a bounded, magnitude-free score → two support tickets compared by hand → Concept 04 previewed: distance, not similarity, is next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the dot product and cosine similarity deep dive</b><em>Formal definitions, from-scratch code, and The Similarity Calculator lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From measuring one vector to comparing two</h2></div></header>
+<p>Concept 02 closed having measured a single vector three ways — dimension, L1 norm, L2 norm — and rescaled it to length one, without ever looking at a second vector. This concept is where a second vector finally enters the picture. The dot product combines two vectors into one number; that number is provably tied to the angle between them; dividing by both norms turns it into cosine similarity, a bounded score that ignores magnitude entirely. Concept 04 will ask the complementary question — how far apart, rather than how aligned.</p>
+<div class="flow">
+<div class="flow-node">Concept 02 — how big is one vector?</div>
+<div class="flow-node hot">Concept 03 — how aligned are two?</div>
+<div class="flow-node">Concept 04 — how far apart are two?</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State both formulas precisely</h3><p>The dot product's algebraic definition, its geometric identity, and cosine similarity's definition — in this concept's exact wording.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute both by hand, plus the angle</h3><p>Given any two vectors of matching dimension, find their dot product, their cosine similarity, and (optionally) the angle between them in degrees.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Keep three ideas apart</h3><p>Dot product versus cosine similarity, cosine similarity of 0 versus -1, and this concept's similarity versus Concept 04's distance.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>Euclidean and other distance functions between two vectors are Concept 04's territory — this concept never computes a distance.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's vector definition and notation:</b> v = (v₁, …, vₙ), unchanged.</li>
+<li><b>Concept 02's L2 norm, cited directly:</b> ‖v‖₂ = √(v₁² + … + vₙ²). This concept's cosine similarity divides by exactly this quantity for both vectors — the formula is reused, not rebuilt.</li>
+<li><b>No other new prerequisite:</b> nothing from probability, ranking, or distance functions is assumed or used here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A shadow, and a shared compass heading</h2></div></header>
+<p>Imagine standing vector w on the ground and shining a light straight down onto vector v from directly above — v casts a shadow onto w's line. The length of that shadow, multiplied by w's own length, is exactly the dot product. When v and w point almost the same way, the shadow is long and the dot product is large. When they're at a right angle, v casts no shadow onto w's line at all, and the dot product is zero. Cosine similarity is a related but separate idea: two hikers can walk in exactly the same compass direction while one covers 2 miles and the other covers 20 — different distances, identical heading. Cosine similarity reports only the heading match, completely ignoring how far either one walked.</p>
+<div class="callout warning"><b>Analogy boundary</b>The shadow only illustrates the geometric identity in Section 05, and the compass heading only illustrates cosine similarity's magnitude-independence — neither analogy claims vectors are physical objects casting real shadows or walking real trails.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Dot product (algebraic)</td><td>v · w = v₁w₁ + v₂w₂ + … + vₙwₙ, for v, w ∈ ℝⁿ</td><td>Requires both vectors to have the same dimension n; undefined otherwise</td></tr>
+<tr><td>Dot product (geometric identity)</td><td>v · w = ‖v‖₂ ‖w‖₂ cos θ, where θ is the angle between v and w</td><td>Holds for every pair of real vectors; the two definitions always agree</td></tr>
+<tr><td>Cosine similarity</td><td>cos θ = (v · w) / (‖v‖₂ ‖w‖₂)</td><td>Undefined when either vector is the zero vector — Concept 02's zero-vector boundary case, reused here in a new denominator</td></tr>
+<tr><td>Angle (derived, optional)</td><td>θ = arccos(cosine similarity)</td><td>Only meaningful once cosine similarity is already known — never a required intermediate step</td></tr>
+<tr><td>Bound (Cauchy-Schwarz)</td><td>-1 ≤ cosine similarity ≤ 1, for every pair of real vectors</td><td>A mathematical guarantee, not an observation about specific examples</td></tr>
+</tbody>
+</table>
+</section>
+<figure class="concept-visual" aria-labelledby="c0403-proj-title">
+<strong class="concept-visual-title" id="c0403-proj-title">VISUAL · WHY THE DOT PRODUCT IS A PROJECTED LENGTH, TIMES A LENGTH</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-labelledby="c0403-svg2-title c0403-svg2-desc">
+<title id="c0403-svg2-title">Vector v projected onto vector w, showing the dot product as a projected length times a length</title>
+<desc id="c0403-svg2-desc">Vector w drawn flat along the horizontal axis with length 5, vector v drawn above it at an angle with length 5, a dashed vertical line dropping from v's tip down to w's line, and the resulting projected segment of length 3 marked in bold from the origin.</desc>
+<line x1="40" y1="220" x2="280" y2="220" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="40" y1="220" x2="100" y2="220" stroke="#d7ff53" stroke-width="6"/>
+<line x1="40" y1="220" x2="140" y2="220" stroke="#5ee6c3" stroke-width="3"/>
+<circle cx="140" cy="220" r="4.5" fill="#14241f"/>
+<text x="146" y="216" font-size="13" fill="currentColor">w = (5, 0), ‖w‖ = 5</text>
+<line x1="40" y1="220" x2="100" y2="140" stroke="#ff7957" stroke-width="3"/>
+<circle cx="100" cy="140" r="4.5" fill="#14241f"/>
+<text x="106" y="134" font-size="13" fill="currentColor">v = (3, 4), ‖v‖ = 5</text>
+<line x1="100" y1="140" x2="100" y2="220" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 4"/>
+<text x="46" y="238" font-size="12" fill="#14241f">‖v‖cosθ = 3</text>
+<path d="M62,206 A22,22 0 0 1 76,215" fill="none" stroke="currentColor" stroke-width="2"/>
+<text x="66" y="200" font-size="11" fill="currentColor">θ ≈ 53.1°</text>
+</svg>
+</div>
+<figcaption>w lies flat with length 5; v sits above it at roughly 53.1°, also with length 5. Dropping a perpendicular from v's tip down to w's line marks off a projected segment of length 3 — that's ‖v‖cosθ. The dot product v · w is exactly ‖w‖ times that projected length: 5 × 3 = 15, which matches computing it directly as (5×3) + (0×4) = 15. Long projection, large dot product; a projection near zero (a near-right angle) gives a dot product near zero.</figcaption>
+</figure>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing both computations on A = (3, 4) and C = (4, 3)</h2></div></header>
+<div class="lane-flow">
+<div><b>Multiply matching components —</b> 3×4 = 12, and 4×3 = 12.</div>
+<div><b>Sum the products —</b> 12 + 12 = 24. That's the dot product, A · C = 24.</div>
+<div><b>Recall both norms (Concept 02) —</b> ‖A‖₂ = √(3²+4²) = 5, and ‖C‖₂ = √(4²+3²) = 5.</div>
+<div><b>Divide —</b> cosine similarity = 24 ÷ (5 × 5) = 24 ÷ 25 = 0.96.</div>
+<div><b>Convert to an angle (optional) —</b> arccos(0.96) ≈ 16.26°.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two vectors in, one number out, at each stage</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing two input vectors reduced to a dot product, then to cosine similarity, then optionally to an angle">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>Vectors v, w (input)</b><small>e.g. (3,4) and (4,3)</small></div>
+<div class="diagram-node"><b>Elementwise products</b><small>v₁w₁, v₂w₂, …</small></div>
+<div class="diagram-node"><b>Dot product</b><small>sum of the products</small></div>
+<div class="diagram-node"><b>Cosine similarity</b><small>divide by ‖v‖‖w‖</small></div>
+<div class="diagram-node"><b>Angle (optional)</b><small>arccos of the result</small></div>
+</div>
+</div>
+<p>Each stage strictly depends on the one before it — the dot product needs both raw vectors, cosine similarity needs the dot product plus both norms, and the angle needs cosine similarity already computed. Skipping straight to the angle without cosine similarity first is not possible with this formula.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The first scoring step inside "Retrieval"</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Vectors — compared by dot product / cosine similarity</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The skeleton itself is unchanged since Concept 01 — this concept only names the comparison that happens once two vectors exist. Later, this exact calculation becomes a scoring function inside "Ranking functions and optimization objectives" (this module's Concept 08), and the vectors it compares become real embeddings once Module 08-09 build dense retrieval — both forward references, not built here.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Two formulas, one identity, one guaranteed bound</h2></div></header>
+<p>For vectors <code>v, w ∈ ℝⁿ</code> with components v₁…vₙ and w₁…wₙ:</p>
+<div class="equation">v · w = v₁w₁ + v₂w₂ + … + vₙwₙ = Σᵢ vᵢwᵢ
+
+v · w = ‖v‖₂ ‖w‖₂ cos θ
+
+cos θ = (v · w) / (‖v‖₂ ‖w‖₂)
+
+θ = arccos(cos θ),  with  -1 ≤ cos θ ≤ 1</div>
+<p>Read the first line as a direct computation from raw components. The second line is the same quantity expressed geometrically — it is a mathematical fact, not a separate formula that happens to agree. The third rearranges the second to isolate cos θ. The fourth states the Cauchy-Schwarz bound: no pair of real vectors can ever produce a cosine similarity outside [-1, 1]. One boundary case matters: if either v or w is the zero vector, ‖v‖₂ or ‖w‖₂ is 0, and dividing by zero is undefined — cosine similarity does not exist for a zero vector, echoing Concept 02's own normalization boundary.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Three pairs, fully traced, including the angle</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Dot product</th><th>‖v‖₂, ‖w‖₂</th><th>Cosine similarity</th><th>Angle</th></tr></thead>
+<tbody>
+<tr><td>A=(3,4), B=(6,8)</td><td>50</td><td>5, 10</td><td>1.00</td><td>0°</td></tr>
+<tr><td>A=(3,4), C=(4,3)</td><td>24</td><td>5, 5</td><td>0.96</td><td>≈16.26°</td></tr>
+<tr><td>Q=(0.9,0.2,0.6), Doc=(0.8,0.1,0.6)</td><td>1.10</td><td>1.10, ≈1.005</td><td>≈0.995</td><td>≈5.7°</td></tr>
+</tbody>
+</table>
+<p>The third row previews the exact calculation dense retrieval performs (Module 08-09, forward reference): a query vector Q and a document vector Doc, scored by cosine similarity. 0.995 is a very high score, consistent with two vectors that agree closely on every component.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A=(3,4) versus B=(6,8)</h3><p>Same direction, different magnitude — cosine similarity correctly reports a perfect 1.0, ignoring the size difference entirely.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Either vector is the zero vector</h3><p>Cosine similarity divides by ‖v‖₂‖w‖₂; if either norm is 0, that division is undefined — no similarity score exists, matching Concept 02's zero-vector guard.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>Raw dot product can rank the wrong candidate first</h3><p>Against A=(3,4): candidate (10,1) gives dot product 34; candidate (1.5,2) gives dot product 12.5 — smaller. But (1.5,2) points in exactly A's direction (cosine similarity 1.0), while (10,1) only reaches 0.68. Sorting by raw dot product alone would rank the less-aligned vector first.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>"Cosine similarity of 0 means unrelated in every way"</h3><p>(1,0) and (0,1) give a dot product of 0 and cosine similarity of 0 — a 90° angle, exactly orthogonal. That is a specific, well-defined geometric relationship, not a vague "no relationship at all."</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Dot product, guarded cosine similarity, and the angle, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES, WITH A ZERO-VECTOR GUARD AND A CLAMP</span>
+<pre><code>import math
+
+def dot_product(v, w):
+    # Section 09's Sum v_i * w_i
+    return sum(vi * wi for vi, wi in zip(v, w))
+
+def l2_norm(v):
+    # Concept 02, Section 09 -- cited directly, not re-derived
+    return sum(x * x for x in v) ** 0.5
+
+def cosine_similarity(v, w):
+    denom = l2_norm(v) * l2_norm(w)
+    if denom == 0:
+        raise ValueError("cosine similarity is undefined when either vector is the zero vector")
+    cos = dot_product(v, w) / denom
+    # floating-point rounding can push cos a hair past -1 or 1;
+    # clamp before it ever reaches acos, which would otherwise raise
+    # a domain error on an input like 1.0000000000000002
+    return max(-1.0, min(1.0, cos))
+
+def angle_degrees(v, w):
+    return math.degrees(math.acos(cosine_similarity(v, w)))
+
+
+A, B, C = [3, 4], [6, 8], [4, 3]
+
+print(dot_product(A, C))              # 24
+print(cosine_similarity(A, B))        # 1.0
+print(cosine_similarity(A, C))        # 0.96
+print(round(angle_degrees(A, C), 2))  # 16.26
+
+assert dot_product(A, C) == 24
+assert cosine_similarity(A, B) == 1.0
+assert abs(cosine_similarity(A, C) - 0.96) < 1e-9
+assert abs(angle_degrees(A, C) - 16.26) < 0.01
+
+try:
+    cosine_similarity([0, 0], A)
+    assert False, "should have raised"
+except ValueError:
+    pass  # the zero vector correctly refuses a cosine similarity
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same two ideas</h2></div></header>
+<p>NumPy's <code>numpy.dot(v, w)</code>, or simply <code>v @ w</code>, computes Section 09's algebraic dot product directly. <code>sklearn.metrics.pairwise.cosine_similarity</code> computes cosine similarity for whole batches of vectors at once, which is exactly what a retrieval system needs when scoring one query against many candidate documents. One well-known gotcha: SciPy's <code>scipy.spatial.distance.cosine</code> does not return cosine similarity at all — it returns 1 minus cosine similarity (a cosine <i>distance</i>), so a value near 0 there actually means highly similar, the opposite of what the function's name might suggest at a glance.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Similarity Calculator</h2></div></header>
+<div class="lab">
+<p>Drag either vector's sliders and watch the dot product, both norms, cosine similarity, and the angle between them update live. The plane below only draws two arrows and an angle arc when the dimension is 2.</p>
+<div class="dim-toggle" role="group" aria-label="Choose both vectors' dimension" id="simDimToggle0403">
+<button type="button" class="secondary active" data-dim="2">Dimension 2</button>
+<button type="button" class="secondary" data-dim="3">Dimension 3</button>
+</div>
+<div class="norm-controls" id="simSlidersV0403">
+<div class="control" data-slot="1"><label for="simV1_0403">v₁</label><input type="range" id="simV1_0403" min="-10" max="10" step="1" value="3"><output id="simV1Out_0403">3</output></div>
+<div class="control" data-slot="2"><label for="simV2_0403">v₂</label><input type="range" id="simV2_0403" min="-10" max="10" step="1" value="4"><output id="simV2Out_0403">4</output></div>
+<div class="control" data-slot="3"><label for="simV3_0403">v₃</label><input type="range" id="simV3_0403" min="-10" max="10" step="1" value="0"><output id="simV3Out_0403">0</output></div>
+</div>
+<div class="norm-controls" id="simSlidersW0403">
+<div class="control" data-slot="1"><label for="simW1_0403">w₁</label><input type="range" id="simW1_0403" min="-10" max="10" step="1" value="4"><output id="simW1Out_0403">4</output></div>
+<div class="control" data-slot="2"><label for="simW2_0403">w₂</label><input type="range" id="simW2_0403" min="-10" max="10" step="1" value="3"><output id="simW2Out_0403">3</output></div>
+<div class="control" data-slot="3"><label for="simW3_0403">w₃</label><input type="range" id="simW3_0403" min="-10" max="10" step="1" value="0"><output id="simW3Out_0403">0</output></div>
+</div>
+<div class="norm-readout">
+<div><span>DOT PRODUCT</span><b id="simDot0403">24.000</b></div>
+<div><span>‖v‖₂</span><b id="simNormV0403">5.000</b></div>
+<div><span>‖w‖₂</span><b id="simNormW0403">5.000</b></div>
+<div><span>COSINE SIMILARITY</span><b id="simCos0403">0.960</b></div>
+<div><span>ANGLE</span><b id="simAngle0403">16.26°</b></div>
+</div>
+<figure class="concept-visual" id="simVisualWrap0403" aria-labelledby="c0403-lab-title">
+<strong class="concept-visual-title" id="c0403-lab-title">LIVE PLANE · ONLY SHOWN FOR DIMENSION 2</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-label="Two live vector arrows and the angle arc between them, updating as the sliders change">
+<defs>
+<marker id="simArrowV0403" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5ee6c3"/></marker>
+<marker id="simArrowW0403" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ff7957"/></marker>
+</defs>
+<line x1="10" y1="130" x2="290" y2="130" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<line x1="150" y1="20" x2="150" y2="240" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<path id="simArc0403" d="" fill="none" stroke="currentColor" stroke-width="2"/>
+<text id="simAngleLabel0403" x="0" y="0" font-size="11" fill="currentColor"></text>
+<line id="simLineV0403" x1="150" y1="130" x2="183" y2="86" stroke="#5ee6c3" stroke-width="3" marker-end="url(#simArrowV0403)"/>
+<text id="simLabelV0403" x="188" y="82" font-size="12" fill="currentColor">v = (3, 4)</text>
+<line id="simLineW0403" x1="150" y1="130" x2="194" y2="97" stroke="#ff7957" stroke-width="3" marker-end="url(#simArrowW0403)"/>
+<text id="simLabelW0403" x="199" y="93" font-size="12" fill="currentColor">w = (4, 3)</text>
+</svg>
+</div>
+<figcaption id="simCaption0403">The green arrow is v, the orange arrow is w, and the arc marks the angle between them — drag either vector's sliders to see the dot product, cosine similarity, and angle change together.</figcaption>
+</figure>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="simReset0403">Reset to (3,4) and (4,3)</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Raw dot product versus cosine similarity, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it captures</th><th>Where it's typically preferred</th></tr></thead>
+<tbody>
+<tr><td>Raw dot product</td><td>Direction and magnitude combined — larger vectors pull the score up regardless of alignment</td><td>When every vector being compared is already known to share the same norm (Section 11's counterexample shows why this matters), or when embeddings are pre-normalized so dot product and cosine similarity coincide (Module 08-09, forward reference)</td></tr>
+<tr><td>Cosine similarity</td><td>Direction alone, with magnitude fully divided out</td><td>The conventional default for comparing embeddings of unknown or varying magnitude — the standard similarity score behind dense retrieval</td></tr>
+<tr><td>Distance functions (Concept 04)</td><td>Actual geometric closeness between two points, not just shared direction</td><td>Named here only as the next concept's territory — not compared in depth until then</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of computing and using similarity</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MAGNITUDE-BIASED RANKING</span><h3>Sorting by raw dot product instead of cosine similarity</h3><p>Section 11's counterexample: a longer, less-aligned vector can outscore a shorter, perfectly-aligned one on raw dot product alone — a real ranking bug if embeddings aren't already normalized to equal length.</p></article>
+<article class="info-card"><span>ACOS DOMAIN ERROR</span><h3>Feeding a cosine similarity of 1.0000000000000002 into arccos</h3><p>Ordinary floating-point rounding can push a computed cosine similarity a hair outside [-1, 1], and arccos has no defined output there — Section 12's clamp exists specifically to prevent this crash.</p></article>
+<article class="info-card"><span>ZERO-VECTOR DIVISION</span><h3>Computing cosine similarity when either vector is zero</h3><p>Section 09's boundary case, unhandled: dividing by a zero norm crashes or silently produces NaN instead of raising a clear error like Section 12's guard.</p></article>
+<article class="info-card"><span>SIMILARITY READ AS DISTANCE</span><h3>Treating a library's "cosine distance" output as a similarity score</h3><p>Section 13's SciPy gotcha: a small "distance" value there actually means highly similar, not dissimilar — reading it as a raw similarity score inverts the ranking.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Cosine similarity of 0 means the vectors are opposite</td><td>0 means orthogonal — a right angle, unrelated direction. -1, a different value entirely, is what "opposite" actually means.</td></tr>
+<tr><td>A bigger dot product always means a more similar direction</td><td>Only true when comparing vectors of equal or controlled magnitude; otherwise a longer, less-aligned vector can produce a bigger raw dot product than a shorter, perfectly-aligned one (Section 11).</td></tr>
+<tr><td>You must compute the angle in degrees before you can get cosine similarity</td><td>Backwards — cosine similarity comes directly from the dot product and both norms; the angle is an optional value derived from cosine similarity afterward, via arccos, never a prerequisite.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>If every embedding in an index is pre-normalized to L2 norm 1 (Concept 02, Module 08 forward reference), raw dot product and cosine similarity become the same number — letting a vector database skip the division step at query time and use a cheaper "dot product" index type with identical results.</li>
+<li>Section 16's magnitude-biased ranking risk applies at the whole-index level: mixing normalized and unnormalized embeddings in the same index makes raw dot product scores incomparable across vectors, exactly as Concept 02 warned for norms alone.</li>
+<li>Section 16's acos domain error is routine at floating-point scale; production similarity code clamps the input to arccos rather than trusting it to already sit inside [-1, 1].</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State the formula for the dot product and for cosine similarity of two vectors v and w.</summary><div>Dot product: v · w = v₁w₁ + v₂w₂ + … + vₙwₙ. Cosine similarity: (v · w) / (‖v‖₂ ‖w‖₂).</div></details>
+<details class="quiz"><summary>Why is cosine similarity always between -1 and 1, for any pair of real vectors?</summary><div>This follows from the Cauchy-Schwarz inequality, which guarantees that the magnitude of a dot product can never exceed the product of the two vectors' norms — dividing by that exact product therefore always lands the result in [-1, 1].</div></details>
+<details class="quiz"><summary>Why can raw dot product rank two candidate vectors in a different order than cosine similarity would?</summary><div>Raw dot product is inflated by magnitude as well as direction, so a longer vector that is less aligned can still produce a bigger dot product than a shorter vector that is perfectly aligned — Section 11's (10,1) versus (1.5,2) example against (3,4) shows this concretely.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Two document vectors describe raw signal counts: G = (0, 6, 8) and H = (8, 6, 0) — reusing Concept 02's exercise vector G, this time compared against a second vector instead of measured alone. Compute the dot product of G and H, both of their L2 norms, the cosine similarity between them, and the angle between them in degrees.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible answer</summary>
+<div>Dot product: (0×8) + (6×6) + (8×0) = 0 + 36 + 0 = 36. ‖G‖₂ = √(0² + 6² + 8²) = √100 = 10. ‖H‖₂ = √(8² + 6² + 0²) = √100 = 10. Cosine similarity: 36 ÷ (10 × 10) = 0.36. Angle: arccos(0.36) ≈ 68.90°.</div>
+</details>
+<p>Teach-back: explain, in your own words, why G and H share the same L2 norm (10) yet score only 0.36 on cosine similarity — what does that combination say about their relationship?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Dot product and cosine similarity</h3><ul><li><b>Dot product:</b> v · w = Σvᵢwᵢ</li><li><b>Geometric identity:</b> v · w = ‖v‖‖w‖cos θ</li><li><b>Cosine similarity:</b> (v · w) / (‖v‖‖w‖), bounded to [-1, 1]</li><li><b>Angle (optional):</b> θ = arccos(cosine similarity)</li></ul></div>
+<div><h3>Memorable example</h3><p>A = (3,4) and B = (6,8): dot product 50, but cosine similarity exactly 1.0 — same direction, double the length, magnitude fully divided away.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why do most dense retrieval systems rank candidates by cosine similarity rather than raw dot product?</summary><div>Raw dot product mixes direction with magnitude, so a longer embedding vector can outscore a shorter, better-aligned one purely from size, not relevance. Cosine similarity divides both norms out, leaving a score that reflects only how closely two embeddings point in the same direction — the property retrieval actually cares about.</div></details>
+<details class="quiz"><summary>Walk through why a computed cosine similarity can ever exceed 1.0 in code, even though the math guarantees it cannot.</summary><div>Floating-point arithmetic accumulates small rounding errors during the sum-of-products and square-root steps, so a value that is mathematically exactly 1.0 can come out as 1.0000000000000002 in practice. The math itself still guarantees the bound; the discrepancy is a representation artifact, which is why production code clamps the value before passing it to arccos.</div></details>
+<details class="quiz"><summary>Design question: a teammate reports that a retrieval system's top results all "feel" too long and generic rather than precisely on-topic. They mention the index uses raw dot product without normalization. What would you check first, and why?</summary><div>Check whether stored embeddings actually have similar L2 norms. If some embeddings are much larger in magnitude than others — often correlated with longer or more repetitive source text — raw dot product will systematically favor them regardless of true topical alignment (Section 11's counterexample). Switching the scoring to cosine similarity, or normalizing every embedding to unit length at index time so dot product and cosine similarity coincide, removes that bias.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Dot_product"><b>Wikipedia — Dot product</b><br><span>Algebraic and geometric definitions of the dot product, including the identity v · w = ‖v‖‖w‖cosθ, behind Sections 05 and 09.</span></a>
+<a href="https://en.wikipedia.org/wiki/Cosine_similarity"><b>Wikipedia — Cosine similarity</b><br><span>Definition, bounds, and interpretation of cosine similarity, behind Sections 05, 09, and this concept's core mechanism throughout.</span></a>
+<a href="https://mathworld.wolfram.com/DotProduct.html"><b>Wolfram MathWorld — Dot Product</b><br><span>Formal treatment of the dot product's algebraic and geometric forms, behind Sections 05 and 06.</span></a>
+<a href="https://en.wikipedia.org/wiki/Cauchy%E2%80%93Schwarz_inequality"><b>Wikipedia — Cauchy-Schwarz inequality</b><br><span>The general inequality guaranteeing cosine similarity's [-1, 1] bound, behind Section 09's fourth line and Section 19's first quiz answer.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 · COMPLETE</span>
+<h3>The dot product and cosine similarity are today's takeaway</h3>
+<p>Before moving on, be able to compute both quantities by hand for any two vectors, explain why cosine similarity is bounded to [-1, 1], and state clearly that nothing today measured how far apart two vectors are — only how aligned their direction is. Concept 04, "Euclidean and other distance functions," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Similarity Calculator lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Euclidean and other distance functions.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 03 · Complete</p>
+<a href="module-04-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

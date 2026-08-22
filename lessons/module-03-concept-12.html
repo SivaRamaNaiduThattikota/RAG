@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Concept 11 assumed RAG was the right tool and diagnosed where an already-answerable query's pipeline broke. This concept asks the harder question first: even implemented well, is RAG the right tool at all? Names four independent disqualifying gates -- not knowledge-intensive (Concept 10's first reason, reused as a gate), no domain coverage at all (Concept 10's second reason, reused and widened from one fact to a whole domain), query volume and latency making retrieval's overhead not worth it, and zero tolerance for Concept 11's residual failure-chain risk -- closing Module 03 and Phase 1.">
+<meta name="description" content="Concept 11 assumed RAG was the right tool and diagnosed where an already-answerable query's pipeline broke. This concept asks the harder question first: even implemented well, is RAG the right tool at all? Names four independent disqualifying gates -- not knowledge-intensive (Concept 10's first reason, reused as a gate), no domain coverage at all (Concept 10's second reason, reused and widened from one fact to a whole domain), query volume and latency making retrieval's overhead not worth it, and zero tolerance for Concept 11's residual failure-chain risk -- closing Module 03.">
 <title>When RAG should not be used — RAG Atlas</title>
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="../roadmap.css">
@@ -22,7 +22,7 @@
 <a href="../projects.html">Projects</a>
 </nav>
 <div class="top-actions">
-<span class="status-chip"><i></i> Concept 12 active</span>
+<span class="status-chip complete-chip"><i></i> Concept 12 complete</span>
 <button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
 </div>
 </header>
@@ -40,9 +40,9 @@
 <div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
 </div>
 </section>
-<section class="lesson-status">
-<p><b>Current checkpoint:</b> Concept 11 assumed an answerable question and localized where one specific run's pipeline broke. This concept steps back before any pipeline runs at all: given a task, should RAG even be attempted? Four independent gates can each say no on their own, regardless of how well retrieval, augmentation, and generation would perform.</p>
-<b>CONCEPT 11 COMPLETE · CONCEPT 12 ACTIVE</b>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 11 assumed an answerable question and localized where one specific run's pipeline broke. This concept stepped back before any pipeline runs at all: given a task, should RAG even be attempted? Four independent gates can each say no on their own, regardless of how well retrieval, augmentation, and generation would perform.</p>
+<b>12 CONCEPTS COMPLETED</b>
 </section>
 <section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
 <header class="beginner-heading">
@@ -183,9 +183,9 @@
 </article>
 <article class="core-block next-preview" id="b10">
 <span class="core-step">10 · NEXT LESSON</span>
-<h3><b>Concept 12 is complete.</b> Module 03 (12 of 12 concepts) and Phase 1 are complete.</h3>
-<p>That closes all twelve concepts of Module 03, RAG mental model &amp; problem framing, and with it, Phase 1, Generative AI &amp; retrieval foundations. You now have the full boundary case for RAG: what it is, why it beats or loses to each alternative, its own internal taxonomy, how to tell an answerable question from an unanswerable one, where a pipeline actually breaks, and now, whether to build the pipeline at all. Module 04, "Mathematics for retrieval," opens Phase 2 next: building the linear algebra, probability, and optimization intuition needed to reason about retrieval systems — the vector geometry Concept 06's skeleton has been assuming all along.</p>
-<div class="beginner-memory"><b>Concept 12 is complete.</b> Module 03 and Phase 1 are complete. Continue to Module 04, Mathematics for retrieval.</div>
+<h3><b>Concept 12 is complete.</b> Module 03 (12 of 12 concepts) is complete.</h3>
+<p>That closes all twelve concepts of Module 03, RAG mental model &amp; problem framing. Phase 1, Generative AI &amp; retrieval foundations, continues — it spans Modules 01 through 05, not just Module 03. You now have the full boundary case for RAG: what it is, why it beats or loses to each alternative, its own internal taxonomy, how to tell an answerable question from an unanswerable one, where a pipeline actually breaks, and now, whether to build the pipeline at all. Module 04, "Mathematics for retrieval," continues Phase 1 next: building the linear algebra, probability, and optimization intuition needed to reason about retrieval systems — the vector geometry Concept 06's skeleton has been assuming all along.</p>
+<div class="beginner-memory"><b>Concept 12 is complete.</b> Module 03 is complete. Continue to Module 04, Mathematics for retrieval, still within Phase 1.</div>
 <a class="button primary" href="../roadmap.html#module-04">See Module 04 on the roadmap →</a>
 </article>
 </div>
@@ -516,9 +516,9 @@ assert should_use_rag(True, True, True, True) == ("use_rag", "all_four_gates_cle
 <a href="https://arxiv.org/abs/2310.11511"><b>Asai, Wu, Wang et al. — Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection</b><br><span>Trains a model to make Gate 3's kind of judgment per query rather than per task — a forward pointer to Module 23, behind Section 13 and Section 15.</span></a>
 </div>
 <div class="checkpoint">
-<span class="checkpoint-state">MODULE 03 COMPLETE · PHASE 1 COMPLETE · CONCEPT 12 DONE</span>
-<h3>All twelve concepts of Module 03 are done — Phase 1 is complete, Module 04 starts retrieval mathematics next</h3>
-<p>Before moving on, work through Section 20's exercise and state, in one sentence, why the same kind of financially consequential task can pass Gate 4 in one setting and trip it in another. Module 04, "Mathematics for retrieval," begins Phase 2 next: building the linear algebra, probability, and optimization intuition needed to reason about retrieval systems — the vector geometry every later module has been assuming.</p>
+<span class="checkpoint-state">MODULE 03 COMPLETE · CONCEPT 12 DONE</span>
+<h3>All twelve concepts of Module 03 are done — Module 04 starts retrieval mathematics next, still within Phase 1</h3>
+<p>Before moving on, work through Section 20's exercise and state, in one sentence, why the same kind of financially consequential task can pass Gate 4 in one setting and trip it in another. Module 04, "Mathematics for retrieval," continues Phase 1 next: building the linear algebra, probability, and optimization intuition needed to reason about retrieval systems — the vector geometry every later module has been assuming.</p>
 <div class="checkpoint-actions">
 <a class="button secondary" href="#b09">Return to readiness check ↑</a>
 <a class="button primary" href="#s14">Open The RAG Fit Console lab ↑</a>

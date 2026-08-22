@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 01-04 built this module's geometry pillar: vectors, norms, dot products, and distance -- ways of comparing two fixed points. This concept opens the second pillar, probability, from a clean start. A discrete probability distribution assigns a number to every outcome so all of them add to exactly 1. Conditional probability P(A|B) asks how likely A is once B is already known. Bayes' rule -- derived here in full -- is the one identity that flips a conditional probability around. Turning a retrieval score into an actual probability distribution is Concept 06's job, not this one.">
+<title>Probability and conditional probability — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 05</p>
+<h1>Probability and<br><em>conditional probability.</em></h1>
+<p class="lesson-lead">Concepts 01 through 04 built one pillar of this module's mathematics: a vector's own norm, then two vectors compared by direction and by distance. This concept opens the second pillar, <b>probability</b>, from a clean start. A discrete <b>probability distribution</b> assigns a number to every possible outcome so that all of them add up to exactly 1. <b>Conditional probability</b>, P(A|B), asks a sharper question: given that B has already happened, how likely is A now? <b>Bayes' rule</b> is the one identity that flips a conditional probability around — from P(evidence | hypothesis), which is often easy to estimate, to P(hypothesis | evidence), which is usually what you actually want to know. Turning a raw retrieval score into an actual probability distribution is Concept 06's job, not this one.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>None from Concepts 01-04 — basic arithmetic and event/set language only, this module's first probability concept</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute a conditional probability and a full Bayes' rule update by hand from a contingency table, and state what a discrete probability distribution requires</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concepts 01-04 closed this module's geometry thread — a vector's own norm, then two vectors compared by direction (cosine similarity) and by distance. This concept opened an unrelated second thread: probability. It defined a discrete probability distribution, defined conditional probability P(A|B), and derived Bayes' rule in full — from first principles, not by analogy to anything geometric.</p>
+<b>5 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">How likely is something — and how likely is it once you know something else?</h2>
+</div>
+<p>Concepts 01-04 compared two given vectors. This concept starts over with a different kind of object entirely: a set of outcomes, each with a probability, and a way to update those probabilities once new evidence arrives.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A probability distribution, and conditional probability — numbers that must add up to 1</h3>
+<div class="mental-compare">
+<div><span>DISCRETE PROBABILITY DISTRIBUTION</span><p>Every possible outcome gets a number between 0 and 1, and all of those numbers add up to exactly 1. A fair six-sided die: P(1) = … = P(6) = 1/6 each, and 6 × (1/6) = 1.</p></div>
+<div><span>CONDITIONAL PROBABILITY</span><p>P(A|B) asks: given that B already happened, how likely is A now? P(A|B) = P(A∩B) / P(B) — not, in general, the same number as P(A) alone.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>NOT A SIMILARITY SCORE</span><p>Concept 03's cosine similarity and Concept 04's distance each describe a relationship between two given vectors — neither one sums to 1 across anything. A probability distribution, by definition, must.</p></div>
+<div><span>BAYES' RULE</span><p>The one identity that flips a conditional probability around: P(A|B) = P(B|A)P(A) / P(B). Derived in full in the advanced section, from nothing but the line above.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>A CLEAN START</span><p>This concept reuses none of Concepts 01-04's vector mechanics. Its only inputs are outcomes, events, and counts.</p></div>
+<div><span>NOT YET: TURNING SCORES INTO PROBABILITIES</span><p>Converting an arbitrary list of raw scores into an actual probability distribution is Concept 06's job (softmax) — not today's.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a probability distribution's numbers must add up to 1 across every outcome; conditional probability P(A|B) = P(A∩B)/P(B) asks about A once B is already known; Bayes' rule, P(A|B) = P(B|A)P(A)/P(B), is the one formula that flips that condition around.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Knowing an overall rate is not the same as knowing the rate given new evidence</h3>
+<p>An overall rate answers "on average, across everything." A conditional probability answers a sharper question: given one specific new piece of information, what should the estimate become right now? Without a formal way to update, the two get blurred together — either the overall rate gets used even after real evidence arrives, or the evidence gets used to jump straight to near-certainty, skipping the actual arithmetic.</p>
+<div class="mental-compare">
+<div><span>WITHOUT CONDITIONAL PROBABILITY</span><p>Across an entire ticket queue, only 25% of tickets turn out to be about refunds. Told nothing else about a new ticket, 25% is the best estimate available.</p></div>
+<div><span>WITH CONDITIONAL PROBABILITY</span><p>Told that a new ticket's text contains the word "refund," the right estimate is no longer 25% — it should update to reflect that specific evidence. Conditional probability is the tool that produces the updated number, not a guess.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Twenty support tickets, one keyword, and an update worth computing</h3>
+<p>Twenty tickets sit in a queue. Five are actually about refunds; fifteen are not. Among the five refund tickets, four contain the literal word "refund" somewhere in the text (one customer wrote "money back" instead). Among the fifteen non-refund tickets, three happen to contain the word "refund" anyway — mentioning a past refund inside an unrelated shipping question.</p>
+<div class="context-demo">
+<div><span>OVERALL RATE (PRIOR)</span><p>P(Refund) = 5/20 = 0.25, before reading any ticket's text.</p></div>
+<div><span>EVIDENCE, GIVEN THE CATEGORY</span><p>P("refund" | Refund) = 4/5 = 0.8.</p></div>
+<div><span>EVIDENCE, GIVEN NOT THE CATEGORY</span><p>P("refund" | ¬Refund) = 3/15 = 0.2.</p></div>
+<div><span>UPDATED RATE (POSTERIOR)</span><p>P(Refund | "refund") = 4/7 ≈ 0.571 — computed in full in b04 and Sections 09-10.</p></div>
+</div>
+<p>The word's presence pushed the estimate from 0.25 up to about 0.571 — more than double, but nowhere near 1.0, because plenty of non-refund tickets contain that same word too.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two counting rules and one division</h3>
+<div class="example-grid">
+<article class="info-card"><span>DISCRETE DISTRIBUTION</span><h3>Sums to 1, across every outcome</h3><p>For a complete, non-overlapping list of outcomes, each probability is ≥ 0 and the whole list adds to exactly 1 — never more, never less.</p></article>
+<article class="info-card"><span>JOINT PROBABILITY</span><h3>Both events at once</h3><p>P(A∩B) = count(A and B both true) / total count — how often two conditions hold together, out of everything.</p></article>
+<article class="info-card"><span>CONDITIONAL PROBABILITY</span><h3>Divide the joint by the given event</h3><p>P(A|B) = P(A∩B) / P(B), defined only when P(B) > 0 — there's no valid estimate given something that never happens.</p></article>
+<article class="info-card"><span>BAYES' RULE, NAMED HERE</span><h3>The flip, proved in Section 09</h3><p>P(A|B) = P(B|A)P(A) / P(B) — the full derivation uses nothing but the line above, written both ways.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0405-visual-title">
+<strong class="concept-visual-title" id="c0405-visual-title">VISUAL · A DISCRETE PROBABILITY DISTRIBUTION OVER FOUR OUTCOMES</strong>
+<div class="prob-bars" role="img" aria-label="Bar chart of the joint probability of ticket category and keyword presence, across four discrete outcomes that sum to 1">
+<div class="prob-row"><span>Refund ∩ word</span><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><span>0.20</span></div>
+<div class="prob-row"><span>Refund ∩ ¬word</span><div class="bar-track"><div class="bar-fill" style="width:5%"></div></div><span>0.05</span></div>
+<div class="prob-row"><span>¬Refund ∩ word</span><div class="bar-track"><div class="bar-fill" style="width:15%"></div></div><span>0.15</span></div>
+<div class="prob-row winner"><span>¬Refund ∩ ¬word</span><div class="bar-track"><div class="bar-fill" style="width:60%"></div></div><span>0.60</span></div>
+</div>
+<figcaption>Every one of the 20 tickets falls into exactly one of these four category-times-keyword combinations, and the four probabilities add up to exactly 1.00 (0.20 + 0.05 + 0.15 + 0.60). This is what "a discrete probability distribution" concretely means — a complete accounting of every outcome, not a single bounded number like Concept 03's cosine similarity or Concept 04's distance.</figcaption>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A second, independent mathematical thread inside this module</h3>
+<div class="pipeline-preview">
+<span>Concept 03 — direction</span><i>↓</i><span>Concept 04 — distance</span><i>↓</i><span class="hot">Concept 05 — probability, from a clean start</span><i>↓</i><span>Concept 06 — scores become a distribution</span>
+</div>
+<p>Nothing here reuses Concept 02's norms or Concept 03's dot product — probability starts from outcomes and counts, not coordinates. Concept 06 is the first place these two threads meet: it takes a set of raw similarity or distance scores and turns them into an actual probability distribution using the exponential function. That conversion is deliberately deferred until then.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners blur a joint, a conditional, and a reversed conditional together</h3>
+<div class="distinction-table" role="table" aria-label="Conditional probability distinguished from joint probability, from its own reverse, and from a bare similarity or distance score">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Conditional probability P(A|B)</span><span role="cell">Joint probability P(A∩B)</span><span role="cell">Conditional divides the joint by P(B); the joint alone hasn't conditioned on anything yet</span></div>
+<div role="row"><span role="cell">Conditional probability P(A|B)</span><span role="cell">The reverse conditional P(B|A)</span><span role="cell">Generally different numbers — b03's own tickets give P("refund"|Refund) = 0.8 but P(Refund|"refund") ≈ 0.571; confusing the two is the prosecutor's fallacy (b07, Section 16)</span></div>
+<div role="row"><span role="cell">A probability (bounded, sums to 1 across all outcomes)</span><span role="cell">Concept 03's cosine similarity or Concept 04's distance</span><span role="cell">Neither of those describes a complete set of outcomes or sums to anything in particular — a cosine similarity of 0.8 is not, by itself, a probability of anything</span></div>
+<div role="row"><span role="cell">Independent events: P(A|B) = P(A)</span><span role="cell">Dependent events: P(A|B) ≠ P(A)</span><span role="cell">Whether learning B changes the estimate for A at all — Section 11's Shipping-ticket example shows a genuinely independent pair, where the update does nothing</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"P(A|B) and P(B|A) are basically the same number."</b><p>Not in general — the prosecutor's fallacy. b03's own numbers: P("refund"|Refund) = 0.8, but P(Refund|"refund") ≈ 0.571. They only coincide when P(A) happens to equal P(B), a coincidence, not a rule.</p></div>
+<div><b>"A cosine similarity of 0.8 means an 80% probability of relevance."</b><p>A similarity score is not a probability just because it's a number between -1 and 1 or 0 and 1 — it has no requirement to sum to 1 across any set of outcomes. Turning a score into a genuine probability is Concept 06's job.</p></div>
+<div><b>"Conditional probability requires that B causes A."</b><p>It only requires statistical association within the data at hand. b03's word and category are correlated with no claim that the word causes the ticket's category.</p></div>
+<div><b>"A probability distribution can have one outcome above 1, as long as others are small."</b><p>No — every individual probability is bounded in [0, 1], and the total across all outcomes is always exactly 1, regardless of how the mass is split up.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Updating a belief about the Oracle RAG project's tickets</h3>
+<div class="project-map">
+<div><span>SUPPORT TICKET TRIAGE</span><b>0.25 → ≈0.571</b><p>A single keyword's presence roughly doubles the estimate that a new, unclassified ticket belongs in the refund queue — an update Bayes' rule computes exactly, not approximately.</p></div>
+<div><span>RELEVANCE AS A CONDITIONAL PROBABILITY, FORWARD REFERENCE</span><b>Named only, not built here</b><p>Precision and recall (Module 18, forward reference) are conditional probabilities in disguise — precision is P(actually relevant | retrieved), recall is P(retrieved | actually relevant).</p></div>
+<div><span>NAIVE BAYES CLASSIFIERS, FORWARD REFERENCE</span><b>Named only, not built here</b><p>A whole family of production classifiers apply exactly this concept's Bayes' rule to route or label documents — introduced at ecosystem depth in Section 13, not implemented as a project component yet.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> before any retrieval score can be trusted as a probability of relevance, it has to be turned into one — and before that, you need the rules this concept just defined.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Discrete probability distribution</b><p>Numbers ≥ 0, summing to exactly 1 across every outcome in a complete, non-overlapping list.</p></div>
+<div><b>Conditional probability</b><p>P(A|B) = P(A∩B)/P(B), defined only when P(B) > 0.</p></div>
+<div><b>Bayes' rule</b><p>P(A|B) = P(B|A)P(A)/P(B) — flips which event is "given."</p></div>
+<div><b>What stays deferred</b><p>Turning a raw score into an actual distribution (Concept 06) and measuring how uncertain or surprising a distribution is (Concept 07) are later concepts' territory.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's numbers, compute P(¬Refund | "refund") directly from the counts, and confirm it equals 1 - P(Refund | "refund") = 3/7.</li>
+<li>Why is P("refund" | Refund) = 0.8 not the same number as P(Refund | "refund") ≈ 0.571, even though both describe the same 20 tickets?</li>
+<li>What has to be true of a set of numbers before they can be called a probability distribution?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Softmax, temperature and logarithms</h3>
+<p>This concept defined what a probability distribution and a conditional probability are, using nothing but counts over a fixed set of tickets. Concept 06 asks a new question: given an arbitrary list of raw scores — similarity scores, distances, or a language model's raw output — how do you turn them into a genuine probability distribution that sums to 1? Softmax is that conversion, and temperature controls how sharply it favors the largest score.</p>
+<div class="beginner-memory"><b>Concept 05 is complete.</b> Continue to Softmax, temperature and logarithms.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 06 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Count, divide, then flip with Bayes' rule.</h2>
+<p>Master conditional probability first. Open the formal definitions, the from-scratch code, and The Bayes Calculator lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>A discrete probability distribution sums to 1 across outcomes; P(A|B) = P(A∩B)/P(B).</small></a>
+<a href="#b04"><span>02</span><b>Compute</b><small>P(Refund|"refund") = P(Refund∩"refund")/P("refund") = 0.20/0.35 = 4/7 ≈ 0.571.</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Update a triage estimate from a 25% base rate to about 57% once one keyword is observed.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the full Bayes' rule derivation, and The Bayes Calculator lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> a clean start from outcomes and counts, no vector mechanics carried over → discrete probability distribution and conditional probability defined precisely → twenty tickets updated from a 0.25 prior to a ≈0.571 posterior → the advanced section derives Bayes' rule in full and proves the update by two independent methods → Concept 06 previewed: softmax, next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the probability deep dive</b><em>Formal definitions, the full Bayes' rule derivation, and The Bayes Calculator lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From actual gap to actual likelihood</h2></div></header>
+<p>Concepts 01-04 closed having built one full pillar: a vector's own norm, then two vectors compared by direction and by distance. This concept opens the module's second pillar from a clean start: probability. Nothing computed here needs a vector, a norm, or a dot product — only outcomes, events, and counts. Concept 06 is the first place the two pillars meet, converting a list of raw scores into an actual probability distribution.</p>
+<div class="flow">
+<div class="flow-node">Concept 04 — how far apart are two?</div>
+<div class="flow-node hot">Concept 05 — how likely is it?</div>
+<div class="flow-node">Concept 06 — scores become a distribution</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State the distribution and conditional-probability rules precisely</h3><p>The sum-to-1 requirement for a discrete probability distribution, and the exact formula for conditional probability.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Build a contingency table and compute from it</h3><p>Given raw counts, find any marginal, joint, or conditional probability, plus the full Bayes' rule posterior, by hand.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Keep four ideas apart</h3><p>P(A|B) versus P(B|A); P(A|B) versus the joint P(A∩B); and a real probability versus a bare similarity or distance score.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Derive Bayes' rule from nothing else</h3><p>Bayes' rule and the law of total probability, built from the conditional-probability definition alone, with no unproven step.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Basic arithmetic:</b> fractions, ratios, and counting outcomes — nothing from Concepts 01-04's vector mechanics is required.</li>
+<li><b>Set and event language, used informally:</b> an event is a subset of possible outcomes; ∩ means "and"; ¬ means "not."</li>
+<li><b>Concepts 01-04, cited only as contrast:</b> this concept does not reuse their formulas, only their position earlier in this module.</li>
+<li><b>No prior probability background assumed:</b> this is the course's first probability concept, treated as a clean start.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Updating an estimate once new evidence arrives</h2></div></header>
+<p>Picture a city where 30% of days are rainy overall — a plain marginal probability, no conditioning on anything yet. Now add one piece of evidence: the sky is heavily overcast this morning. Does the 30% figure for "rain today" still apply, unchanged? Almost certainly not — overcast mornings are more common on days that go on to rain, so the right estimate, once that specific evidence is known, is some genuinely different number. Conditional probability is the formal machinery for computing that updated number, instead of guessing at it.</p>
+<div class="callout warning"><b>Analogy boundary</b>Weather only illustrates that new evidence should change an estimate — it says nothing about the exact update, which the ticket example (b03, Sections 09-10) computes precisely, unlike a weather forecast.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Discrete probability distribution</td><td>A function P over a finite or countable set of outcomes Ω, with P(ω) ≥ 0 for every ω, and Σ_{ω∈Ω} P(ω) = 1</td><td>Defined only over a complete, mutually exclusive list of outcomes — omitting one, or double-counting one, breaks the sum-to-1 requirement</td></tr>
+<tr><td>Event</td><td>Any subset A ⊆ Ω; P(A) = Σ_{ω∈A} P(ω)</td><td>P(∅) = 0 and P(Ω) = 1 always, for any distribution</td></tr>
+<tr><td>Joint probability</td><td>P(A∩B) — the probability that both A and B hold at once</td><td>Always P(A∩B) ≤ min(P(A), P(B))</td></tr>
+<tr><td>Conditional probability</td><td>P(A|B) = P(A∩B) / P(B)</td><td>Undefined when P(B) = 0 — there is no valid conditional probability given an impossible event</td></tr>
+<tr><td>Independence</td><td>A and B are independent exactly when P(A∩B) = P(A)P(B), equivalently P(A|B) = P(A)</td><td>A property of the actual numbers involved — never something to assume by default (Section 11)</td></tr>
+<tr><td>Bayes' rule</td><td>P(A|B) = P(B|A)P(A) / P(B), for P(A), P(B) &gt; 0</td><td>An identity, not a new assumption — derived directly from the conditional-probability definition above, written both ways (Section 09)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing P(Refund | "refund") step by step</h2></div></header>
+<div class="lane-flow">
+<div><b>Fix the sample space —</b> 20 tickets total, each one exactly one outcome.</div>
+<div><b>Count the event "Refund" —</b> 5 of 20 tickets. P(Refund) = 5/20 = 0.25.</div>
+<div><b>Count the joint event "Refund AND 'refund'" —</b> 4 of 20 tickets. P(Refund∩"refund") = 4/20 = 0.20.</div>
+<div><b>Count the marginal event "'refund'" —</b> 4 (from Refund) + 3 (from ¬Refund) = 7 of 20 tickets. P("refund") = 7/20 = 0.35.</div>
+<div><b>Divide —</b> P(Refund | "refund") = P(Refund∩"refund") / P("refund") = 0.20 / 0.35 = 4/7 ≈ 0.571.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Prior in, evidence in, posterior out</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing a prior probability combined with two likelihoods, reduced to a total-evidence probability, then divided out into a posterior probability">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>Prior P(H)</b><small>e.g. P(Refund) = 0.25</small></div>
+<div class="diagram-node"><b>Likelihoods P(E|H), P(E|¬H)</b><small>0.8 and 0.2</small></div>
+<div class="diagram-node"><b>Total probability P(E)</b><small>weighted sum = 0.35</small></div>
+<div class="diagram-node"><b>Bayes' division</b><small>P(E|H)P(H) / P(E)</small></div>
+<div class="diagram-node"><b>Posterior P(H|E)</b><small>≈ 0.571</small></div>
+</div>
+</div>
+<p>Each stage strictly depends on the one before it — the posterior cannot be computed without first combining the prior and both likelihoods into a single total-evidence probability, P(E). Skipping straight from a likelihood to a posterior, without that middle step, is exactly the prosecutor's fallacy named in Section 16.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The reasoning underneath a relevance decision</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors — scored by distance / similarity (Concepts 03-04)</span><i>↓</i><span class="hot">Retrieval — relevance reasoned about probabilistically</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The skeleton itself is unchanged since Concept 01 — this concept only names the reasoning tool underneath one specific kind of decision at the "Retrieval" stage: given some evidence (a score, a keyword, a metadata flag), how likely is a candidate to actually be relevant? Concept 06 supplies the mechanism for turning a whole list of scores into a distribution; evaluating retrieval quality with metrics that are themselves conditional probabilities is Module 18 (forward reference, not built here).</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Deriving Bayes' rule from the definition alone</h2></div></header>
+<p>For events <code>A, B</code> with <code>P(A), P(B) &gt; 0</code>:</p>
+<div class="equation">P(A|B) = P(A∩B) / P(B)        (definition, Section 05)
+
+P(B|A) = P(A∩B) / P(A)        (the same definition, roles swapped)
+
+⇒ P(A∩B) = P(A|B)P(B) = P(B|A)P(A)
+
+⇒ P(A|B) = P(B|A)P(A) / P(B)                    -- Bayes' rule
+
+P(B) = P(B|A)P(A) + P(B|¬A)P(¬A)                -- law of total probability
+
+⇒ P(A|B) = P(B|A)P(A) / [P(B|A)P(A) + P(B|¬A)P(¬A)]</div>
+<p>The first two lines are the same conditional-probability definition, applied once to P(A|B) and once to P(B|A) — nothing new yet. The third line notices that both give a formula for the same joint probability, P(A∩B), so those two formulas must be equal to each other. Rearranging that equality produces Bayes' rule directly: no additional assumption, no new axiom — just the same definition read twice. The fourth line, the law of total probability, expands the denominator P(B) into two pieces using the fact that A and ¬A partition every outcome; it lets the full posterior be computed from three numbers that are usually all that's ever measured directly: a prior, P(A), and two likelihoods, P(B|A) and P(B|¬A).</p>
+</section>
+<figure class="concept-visual" aria-labelledby="c0405-proof-title">
+<strong class="concept-visual-title" id="c0405-proof-title">VISUAL · THE PRIOR DISTRIBUTION, BEFORE AND AFTER ONE PIECE OF EVIDENCE</strong>
+<div class="prob-bars" role="img" aria-label="Two two-outcome probability distributions compared: the prior before the evidence, and the posterior after observing the keyword">
+<div class="prob-row"><span>Refund (prior)</span><div class="bar-track"><div class="bar-fill" style="width:25%"></div></div><span>0.25</span></div>
+<div class="prob-row"><span>¬Refund (prior)</span><div class="bar-track"><div class="bar-fill" style="width:75%"></div></div><span>0.75</span></div>
+<div class="prob-row winner"><span>Refund (posterior)</span><div class="bar-track"><div class="bar-fill" style="width:57%"></div></div><span>0.571</span></div>
+<div class="prob-row"><span>¬Refund (posterior)</span><div class="bar-track"><div class="bar-fill" style="width:43%"></div></div><span>0.429</span></div>
+</div>
+<figcaption>Two complete distributions, each summing to 1: the prior (0.25 + 0.75) before the word "refund" is observed, and the posterior (0.571 + 0.429, Bayes' rule, Section 09) after it is. Observing the word moved the estimate for "Refund" from 0.25 to about 0.571 — more than double, but Bayes' rule, not intuition, is what produced that exact number.</figcaption>
+</figure>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full contingency table, two ways, agreeing</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Quantity</th><th>Value</th><th>How</th></tr></thead>
+<tbody>
+<tr><td>P(Refund) — prior</td><td>0.25</td><td>5 refund tickets / 20 total</td></tr>
+<tr><td>P("refund" | Refund) — likelihood</td><td>0.80</td><td>4 of the 5 refund tickets contain the word</td></tr>
+<tr><td>P("refund" | ¬Refund) — likelihood</td><td>0.20</td><td>3 of the 15 non-refund tickets contain the word</td></tr>
+<tr><td>P("refund") — total evidence</td><td>0.35</td><td>0.80×0.25 + 0.20×0.75, law of total probability (Section 09)</td></tr>
+<tr><td>P(Refund | "refund") — posterior, via Bayes</td><td>4/7 ≈ 0.571</td><td>(0.80×0.25) / 0.35</td></tr>
+<tr><td>P(Refund | "refund") — posterior, via direct counting</td><td>4/7 ≈ 0.571</td><td>4 tickets are both Refund and "refund," out of 7 tickets that contain the word at all</td></tr>
+</tbody>
+</table>
+<p>The last two rows are the same number reached two independent ways — dividing through Bayes' rule symbolically, and counting the raw contingency table directly. They agree exactly, which is the whole point of Section 09's derivation: Bayes' rule is not a separate fact to trust on faith, it is a rearrangement of counting that must always match direct counting when both are done correctly.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, an independent pair, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>The refund-ticket update</h3><p>P(Refund) = 0.25 updates to P(Refund | "refund") ≈ 0.571 — a real, checkable dependency between a word and a category (Section 10).</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>An event that never occurs</h3><p>If no ticket in the queue contains the nonsense string "xyzzy," then P("xyzzy") = 0 and P(Refund | "xyzzy") is undefined — there is no valid estimate conditioned on something impossible (Section 05).</p></article>
+<article class="info-card"><span>INDEPENDENT PAIR</span><h3>Shipping category and the word "invoice"</h3><p>Of 20 tickets, 8 are "Shipping." The word "invoice" appears in 4 of those 8 Shipping tickets and in 6 of the 12 non-Shipping tickets — 50% either way. P("invoice") = 0.5, so P(Shipping | "invoice") = (0.5×0.4)/0.5 = 0.4, exactly P(Shipping) unchanged. Learning about the word did nothing here — true independence.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>The prosecutor's fallacy</h3><p>Reading P("refund" | Refund) = 0.8 as if it answered "how likely is Refund, given the word?" The actual answer is 0.571 (Section 10) — a materially different number, from swapping which event is "given."</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A contingency table, conditional probability, and Bayes' rule, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code># counts[category][has_word] -- Section 10's contingency table
+counts = {
+    "refund":     {"word": 4, "no_word": 1},   # 5 refund tickets
+    "not_refund": {"word": 3, "no_word": 12},  # 15 non-refund tickets
+}
+total = sum(counts[c][w] for c in counts for w in counts[c])  # 20
+
+def marginal(category):
+    # Section 05 -- P(A) = count(A) / total
+    return sum(counts[category].values()) / total
+
+def joint(category, word_state):
+    # Section 05 -- P(A ∩ B) = count(A and B) / total
+    return counts[category][word_state] / total
+
+def conditional(category, word_state):
+    # Section 05 -- P(A|B) = P(A ∩ B) / P(B)
+    p_word_state = sum(counts[c][word_state] for c in counts) / total
+    if p_word_state == 0:
+        raise ValueError("cannot condition on an event with probability 0")
+    return joint(category, word_state) / p_word_state
+
+def bayes_rule(prior, likelihood_given_h, likelihood_given_not_h):
+    # Section 09 -- P(H|E) = P(E|H)P(H) / [P(E|H)P(H) + P(E|notH)P(not H)]
+    p_evidence = likelihood_given_h * prior + likelihood_given_not_h * (1 - prior)
+    if p_evidence == 0:
+        raise ValueError("cannot condition on an event with probability 0")
+    return (likelihood_given_h * prior) / p_evidence
+
+
+p_refund = marginal("refund")                                  # 0.25
+p_word_given_refund = counts["refund"]["word"] / sum(counts["refund"].values())        # 0.8
+p_word_given_not_refund = counts["not_refund"]["word"] / sum(counts["not_refund"].values())  # 0.2
+
+direct = conditional("refund", "word")                         # counting method
+via_bayes = bayes_rule(p_refund, p_word_given_refund, p_word_given_not_refund)  # formula method
+
+print(round(direct, 3), round(via_bayes, 3))                   # 0.571 0.571
+assert abs(direct - via_bayes) < 1e-9                           # Section 10's two methods agree
+
+# independence check (Section 11's Shipping / "invoice" pair)
+p_shipping = 8 / 20
+p_invoice_given_shipping, p_invoice_given_not_shipping = 4 / 8, 6 / 12
+p_shipping_given_invoice = bayes_rule(p_shipping, p_invoice_given_shipping, p_invoice_given_not_shipping)
+assert abs(p_shipping_given_invoice - p_shipping) < 1e-9         # evidence changed nothing
+
+# boundary case: conditioning on an impossible event
+try:
+    conditional("refund", "never_seen")
+    assert False, "should have raised"
+except KeyError:
+    pass  # "never_seen" isn't even a tracked word state here -- a different, earlier failure than P(B)=0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same two ideas</h2></div></header>
+<p>Pandas builds a contingency table directly with <code>pandas.crosstab(category, has_word)</code> — the same counts as Section 12's <code>counts</code> dictionary, tabulated automatically from raw rows. SciPy's <code>scipy.stats</code> module works with named discrete and continuous distributions built from Section 05's same sum-to-1 requirement. Scikit-learn's <code>sklearn.naive_bayes.MultinomialNB</code> and <code>GaussianNB</code> apply this concept's Bayes' rule directly to route or label documents, and any scikit-learn classifier's <code>predict_proba(...)</code> output is itself a discrete probability distribution over classes — exactly the object Section 05 defines, not a metaphor for it. How a neural network's raw logits become that same kind of object is Concept 06's softmax, named here only as a forward pointer.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Bayes Calculator</h2></div></header>
+<div class="lab">
+<p>Drag the sliders for a prior P(H) and two likelihoods, P(E|H) and P(E|¬H). The readout shows the total evidence probability P(E), the posterior P(H|E) via Bayes' rule, and the posterior if the evidence had been absent instead, P(H|¬E). The live bars compare the prior to the posterior directly. The defaults reproduce this concept's exact ticket numbers.</p>
+<div class="norm-controls" id="simSliders0405">
+<div class="control"><label for="simPriorH_0405">Prior P(H)</label><input type="range" id="simPriorH_0405" min="1" max="99" step="1" value="25"><output id="simPriorHOut_0405">25%</output></div>
+<div class="control"><label for="simLikeH_0405">P(E|H)</label><input type="range" id="simLikeH_0405" min="0" max="100" step="1" value="80"><output id="simLikeHOut_0405">80%</output></div>
+<div class="control"><label for="simLikeNotH_0405">P(E|¬H)</label><input type="range" id="simLikeNotH_0405" min="0" max="100" step="1" value="20"><output id="simLikeNotHOut_0405">20%</output></div>
+</div>
+<div class="norm-readout">
+<div><span>P(¬H) — PRIOR COMPLEMENT</span><b id="simNotPriorBox0405">75.0%</b></div>
+<div><span>P(E) — TOTAL EVIDENCE PROBABILITY</span><b id="simEvidenceBox0405">35.0%</b></div>
+<div><span>P(H|E) — POSTERIOR</span><b id="simPosteriorBox0405">57.1%</b></div>
+<div><span>P(H|¬E) — POSTERIOR IF EVIDENCE ABSENT</span><b id="simPosteriorNotBox0405">7.7%</b></div>
+</div>
+<div class="prob-bars" id="simBars0405" role="img" aria-label="Live bar chart comparing the prior probability of H to the posterior probability of H after the evidence">
+<div class="prob-row"><span>Prior P(H)</span><div class="bar-track"><div class="bar-fill" id="simBarPrior0405" style="width:25%"></div></div><span id="simBarPriorOut0405">25.0%</span></div>
+<div class="prob-row" id="simBarPosteriorRow0405"><span>Posterior P(H|E)</span><div class="bar-track"><div class="bar-fill" id="simBarPosterior0405" style="width:57%"></div></div><span id="simBarPosteriorOut0405">57.1%</span></div>
+</div>
+<div class="callout" id="simVerdict0405">Prior 25.0% → posterior 57.1% after the evidence. The evidence increased the estimate.</div>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="simReset0405">Reset to Prior=25%, P(E|H)=80%, P(E|¬H)=20%</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Marginal, frequentist, and Bayesian framing, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it uses</th><th>Where it's typically preferred</th></tr></thead>
+<tbody>
+<tr><td>Marginal probability alone</td><td>Only the overall rate, P(A), ignoring any evidence that might already be available</td><td>No specific evidence exists yet, or gathering it costs more than the decision is worth</td></tr>
+<tr><td>Direct counting (frequentist)</td><td>Raw counts from a contingency table, divided directly (Section 06, Section 10's second method)</td><td>Enough historical data exists to count every combination reliably</td></tr>
+<tr><td>Bayes' rule (this concept)</td><td>A prior plus one or more likelihoods, combined algebraically (Section 09, Section 10's first method)</td><td>The reverse conditional — P(evidence|hypothesis) — is easier to estimate directly than P(hypothesis|evidence), or the prior needs to be updated repeatedly as new evidence arrives</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of computing and using conditional probability</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>PROSECUTOR'S FALLACY</span><h3>Swapping P(A|B) for P(B|A)</h3><p>Section 11's mistake to avoid, stated as a failure mode: treating a likelihood as if it were the posterior skips Section 09's division entirely and can overstate the true probability by a wide margin.</p></article>
+<article class="info-card"><span>BASE RATE FALLACY</span><h3>Ignoring a small prior in favor of a strong-sounding likelihood</h3><p>A high P(E|H) feels convincing on its own, but if P(H) is tiny, Section 09's law of total probability can still leave P(H|E) surprisingly small — the prior never drops out of the computation.</p></article>
+<article class="info-card"><span>UNSTABLE ESTIMATES FROM SMALL COUNTS</span><h3>P(B) estimated from very few examples</h3><p>A denominator built from a handful of observations is noisy, and if it happens to hit exactly 0, Section 05's undefined case is triggered outright, not just made unreliable.</p></article>
+<article class="info-card"><span>SCORE TREATED AS A PROBABILITY</span><h3>Feeding a raw similarity or distance score directly into a decision as if it already summed to 1</h3><p>Concepts 03-04's numbers were never built to satisfy Section 05's distribution requirement — Concept 06's conversion step is what makes that legitimate, and skipping it is not.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>P(A|B) and P(B|A) are interchangeable</td><td>They are generally different numbers; they coincide only when P(A) happens to equal P(B) exactly — a coincidence, not something to expect (Section 11).</td></tr>
+<tr><td>Independence can be assumed unless proven otherwise</td><td>Independence is a specific numeric property, P(A∩B) = P(A)P(B); it must be checked, or deliberately designed in, never assumed by default (Section 05, Section 11).</td></tr>
+<tr><td>A conditional probability describes causation</td><td>It only describes statistical association within the data at hand — Section 11's word-and-category pair are correlated with no claim that one causes the other.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Real systems estimate likelihoods like P(E|H) from finite historical data, so a rare hypothesis or an unusual evidence combination can make P(E) extremely small — Section 16's instability, and part of why Concept 07's logarithms (forward reference) become necessary for numerically stable computation.</li>
+<li>Naive Bayes classifiers (Section 13) work by assuming conditional independence between features given the class — an assumption that's often literally false in practice but still produces usable, reasonably well-ranked results.</li>
+<li>A model's predicted probability should be checked for calibration — does "70% confident" actually correspond to being correct about 70% of the time on similar cases. This concept only introduces the probability itself; evaluating whether it's trustworthy is Module 18 (forward reference).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State the formula for conditional probability P(A|B), and the condition under which it's undefined.</summary><div>P(A|B) = P(A∩B) / P(B), undefined when P(B) = 0.</div></details>
+<details class="quiz"><summary>Using Section 10's numbers, is P(Refund | "refund") the same number as P("refund" | Refund)? Why does the difference matter?</summary><div>No — 0.571 versus 0.8. Treating them as the same is the prosecutor's fallacy (Section 11, Section 16): it substitutes a likelihood for a posterior and can overstate how confident an estimate should actually be.</div></details>
+<details class="quiz"><summary>What single condition must a set of numbers satisfy to qualify as a discrete probability distribution?</summary><div>Every value is ≥ 0, and the full set of values sums to exactly 1 across a complete, non-overlapping list of outcomes (Section 05).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different queue holds 25 emails: 10 are spam, 15 are not. Among the 10 spam emails, 9 contain a link. Among the 15 non-spam emails, 3 contain a link. Compute P(spam) as a prior, P(link|spam) and P(link|¬spam) as likelihoods, P(link) using the law of total probability, and finally P(spam|link) using Bayes' rule. Then check your answer by counting directly: how many of the emails that contain a link are actually spam, out of all the emails that contain a link at all?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible answer</summary>
+<div>P(spam) = 10/25 = 0.4. P(link|spam) = 9/10 = 0.9. P(link|¬spam) = 3/15 = 0.2. P(link) = 0.9×0.4 + 0.2×0.6 = 0.36 + 0.12 = 0.48. P(spam|link) = (0.9×0.4)/0.48 = 0.36/0.48 = 0.75. Direct count: 9 spam-and-link emails out of 12 total link-containing emails (9 + 3) = 9/12 = 0.75 — the two methods agree exactly, the same check Section 10 ran on the ticket example.</div>
+</details>
+<p>Teach-back: explain, in your own words, why P(spam|link) = 0.75 is so much higher than the 0.4 prior, while P(link|spam) = 0.9 is a different number still, even though both numbers come from the exact same 25 emails.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Probability and conditional probability</h3><ul><li><b>Distribution:</b> P(ω) ≥ 0 for every outcome, Σ P(ω) = 1</li><li><b>Conditional:</b> P(A|B) = P(A∩B) / P(B), for P(B) &gt; 0</li><li><b>Bayes' rule:</b> P(A|B) = P(B|A)P(A) / P(B)</li><li><b>Total probability:</b> P(B) = P(B|A)P(A) + P(B|¬A)P(¬A)</li></ul></div>
+<div><h3>Memorable example</h3><p>25% of tickets are about refunds. Learning that a ticket contains the word "refund" updates that estimate to about 57%, not to 80% — the likelihood P("refund"|Refund) and the posterior P(Refund|"refund") are different numbers, and mixing them up is the prosecutor's fallacy.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain, conceptually, why a high P(evidence | hypothesis) does not automatically imply a high P(hypothesis | evidence).</summary><div>The two describe different conditionals, and Bayes' rule shows the posterior also depends on the prior P(hypothesis) and on how often the evidence occurs overall, P(evidence). A rare hypothesis with a strong-sounding likelihood can still have a modest posterior once the prior and the total evidence probability are both accounted for — the base rate fallacy (Section 16).</div></details>
+<details class="quiz"><summary>Derive Bayes' rule starting from nothing but the definition of conditional probability.</summary><div>P(A|B) = P(A∩B)/P(B) and P(B|A) = P(A∩B)/P(A) both define the same joint probability, so P(A|B)P(B) = P(B|A)P(A). Dividing both sides by P(B) gives P(A|B) = P(B|A)P(A)/P(B) directly (Section 09) — no assumption beyond the original definition.</div></details>
+<details class="quiz"><summary>Design question: a team wants to estimate P(document is relevant | retrieval score above threshold) but only has historical data for P(retrieval score above threshold | document is relevant). What else do they need, and how would they combine it?</summary><div>They need the prior probability that a document is relevant at all, P(relevant), and the likelihood of a high score given an irrelevant document, P(score above threshold | ¬relevant) — the law of total probability (Section 09) combines all three into P(relevant | score above threshold) via Bayes' rule. Without the prior and the second likelihood, the single number they already have cannot be turned into the posterior they actually want.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Probability_distribution"><b>Wikipedia — Probability distribution</b><br><span>The sum-to-1 requirement for a discrete probability distribution over a set of outcomes, behind Section 05.</span></a>
+<a href="https://en.wikipedia.org/wiki/Conditional_probability"><b>Wikipedia — Conditional probability</b><br><span>The formal definition P(A|B) = P(A∩B)/P(B) and its boundary conditions, behind Sections 05 and 06.</span></a>
+<a href="https://en.wikipedia.org/wiki/Bayes%27_theorem"><b>Wikipedia — Bayes' theorem</b><br><span>The identity connecting P(A|B) and P(B|A), and the law of total probability, behind Section 09's derivation.</span></a>
+<a href="https://mathworld.wolfram.com/BayesTheorem.html"><b>Wolfram MathWorld — Bayes' Theorem</b><br><span>An independent formal statement of the same identity, cross-checked against Section 09's derivation.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 · COMPLETE</span>
+<h3>A discrete probability distribution, conditional probability, and Bayes' rule are today's takeaway</h3>
+<p>Before moving on, be able to state the sum-to-1 requirement for a distribution, compute a conditional probability from a contingency table by hand, and derive Bayes' rule from the conditional-probability definition without looking it up. Concept 06, "Softmax, temperature and logarithms," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Bayes Calculator lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Softmax, temperature and logarithms.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 05 · Complete</p>
+<a href="module-04-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

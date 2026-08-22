@@ -205,6 +205,25 @@ html[data-theme=dark] .budget-bar{background:#06130f}
 @media(max-width:700px){.scale-stage{gap:36px;padding:36px 14px 48px}.scale-box.corpus-box{height:200px}}
 @media(prefers-reduced-motion:reduce){.scale-box{transform:rotateX(-16deg) rotateY(26deg)}}
 
+/* Vector/matrix geometry (Module 04, Concepts 01-02) */
+.vector-plane-wrap{display:flex;flex-wrap:wrap;gap:32px;align-items:center;justify-content:center;padding:6px 0}
+.vector-plane{width:100%;max-width:290px;height:auto;color:var(--ink)}
+.matrix-mini{border-collapse:collapse;font:13px DM Mono;align-self:center}
+.matrix-mini caption{caption-side:top;text-align:left;font:11px DM Mono;color:var(--muted);margin-bottom:10px;max-width:210px}
+.matrix-mini td{padding:11px 18px;border:1px solid var(--line);text-align:center;background:var(--paper)}
+.matrix-input{border-collapse:collapse;margin:18px 0}
+.matrix-input td{padding:6px;border:1px solid var(--line)}
+.matrix-input input{width:76px;padding:9px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:13px DM Mono}
+.norm-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:20px 0}
+.norm-controls .control input[type=range]{accent-color:var(--green)}
+.dim-toggle{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+.norm-readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+.norm-readout>div{padding:16px;border:1px solid var(--line);background:var(--paper);text-align:center}
+.norm-readout span{display:block;font:10px DM Mono;color:var(--orange);margin-bottom:8px}
+.norm-readout b{font-size:20px;font-family:'DM Mono',monospace}
+html[data-theme=dark] .matrix-mini td,html[data-theme=dark] .matrix-input input,html[data-theme=dark] .norm-readout>div{background:#06130f;color:#f4fbf8;border-color:#527066}
+@media(max-width:700px){.vector-plane-wrap{gap:20px}.matrix-input input{width:62px}}
+
 /* Grammar mask stepper (Concept 11) */
 .mask-panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0}
 .mask-panel{padding:18px;border:1px solid var(--line);background:var(--white)}

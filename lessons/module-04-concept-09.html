@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Every score, distribution, and loss in Concepts 01-08 was computed on paper for a handful of candidates. This concept asks what any of it costs once a corpus has real size: one similarity score is O(d), a brute-force search over n candidates is O(n*d), sorting those n scores afterward is O(n log n) -- independent of d -- and storing all n vectors takes O(n*d) space.">
+<title>Time and space complexity — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 09</p>
+<h1>Time<br><em>and space complexity.</em></h1>
+<p class="lesson-lead">Concepts 01-08 worked every calculation by hand, on three or four candidates. Real corpora hold thousands to billions of chunks, and every one of those hand calculations has a cost that grows with size. A single similarity score (Concept 03) touches every one of a vector's d dimensions once — <b>O(d)</b>. Scoring all n candidates in a corpus means doing that n times — <b>O(n·d)</b>. Sorting those n scores afterward (Concept 08's ranking) costs <b>O(n log n)</b> comparisons, and never touches d at all. Holding all n vectors in memory costs <b>O(n·d)</b> space. No new formula appears anywhere in this concept — only the question of how each one scales.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 03's dot product and cosine similarity, and Concept 08's ranking function — both cited directly, neither re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>State the time complexity of one similarity score, a brute-force search over n candidates, and sorting the results — and the space complexity of storing the corpus</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 08 named what a retrieval system ranks and what it trains against. This concept asked what either operation actually costs once the corpus is real-sized: a single similarity score is O(d), scoring every candidate is O(n·d), sorting the scores is O(n log n) independent of d, and storing the corpus is O(n·d) space.</p>
+<b>9 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The same formulas, but now at real scale</h2>
+</div>
+<p>Every calculation in Concepts 01-08 ran on a handful of numbers, by hand. This concept doesn't add a new calculation — it asks how those exact calculations behave once n and d stop being small.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Big-O counts how the work grows, not how long it takes today</h3>
+<div class="mental-compare">
+<div><span>TIME COMPLEXITY</span><p>How the number of basic operations grows as an input (n candidates, d dimensions) grows. O(d) means "grows in direct proportion to d" — double d, and the work roughly doubles.</p></div>
+<div><span>SPACE COMPLEXITY</span><p>How much memory is needed, by the same rule. O(n·d) space means the corpus's memory footprint grows in direct proportion to both the number of candidates and their dimension.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> Concept 03's dot product already told you the mechanism — multiply and add, once per dimension. This concept just names what that mechanism costs: one score is O(d); scoring an entire corpus is O(n·d).</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A formula that works for 3 candidates can still fail at scale</h3>
+<p>Every worked example since Concept 01 used three or four candidate vectors. Nothing about the math changes at real scale — Concept 03's dot product is still "multiply matching components, then add" — but a formula that finishes instantly for 3 candidates is not automatically fine for 3 million. This concept gives the vocabulary to say, precisely, how the cost grows, so later modules (Module 09's vector indexes) can be evaluated against a real baseline instead of a vague feeling of "slow."</p>
+<div class="mental-compare">
+<div><span>WITHOUT THIS CONCEPT</span><p>"Brute-force search is slow at scale" is a feeling, not a number.</p></div>
+<div><span>WITH THIS CONCEPT</span><p>"Brute-force search is O(n·d) — for n=10,000 candidates at d=768, that's exactly 7.68 million multiply-add operations per query" (b03) is a number that can be measured, budgeted, and compared against an approximate method later.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A corpus of 10,000 chunks, embedded at 768 dimensions</h3>
+<p>A realistic small-to-mid embedding model (Section 24) outputs d=768-dimensional vectors. A corpus of n=10,000 chunks is a modest but real size for a single-team RAG project.</p>
+<div class="context-demo">
+<div><span>ONE SIMILARITY SCORE</span><p>Concept 03's dot product touches all 768 dimensions once: 768 multiply-add operations — O(d).</p></div>
+<div><span>SCORING THE WHOLE CORPUS</span><p>Repeat that 10,000 times, once per candidate: 10,000 × 768 = 7,680,000 operations — O(n·d).</p></div>
+<div><span>SORTING THOSE 10,000 SCORES</span><p>Concept 08's ranking function needs about 10,000 × log₂(10,000) ≈ 132,877 comparisons — O(n log n), and this number never mentions d.</p></div>
+<div><span>STORING THE CORPUS</span><p>10,000 vectors × 768 dimensions × 4 bytes per float32 = 30,720,000 bytes ≈ 30.72 MB — O(n·d) space.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0409-beginner-visual-title">
+<strong class="concept-visual-title" id="c0409-beginner-visual-title">VISUAL · THREE COSTS, ONE QUERY, LOG SCALE</strong>
+<div class="prob-bars" role="img" aria-label="Three bars on a log scale showing one dot product at 768 operations, sorting at 132,877 comparisons, and brute-force search at 7,680,000 operations, for n=10,000 candidates at d=768 dimensions">
+<div class="prob-row"><span>One dot product · O(d)</span><div class="bar-track"><div class="bar-fill" style="width:41.9%"></div></div><span>768 ops</span></div>
+<div class="prob-row"><span>Sort n scores · O(n log n)</span><div class="bar-track"><div class="bar-fill" style="width:74.4%"></div></div><span>132.9K comparisons</span></div>
+<div class="prob-row winner"><span>Brute-force search · O(n·d)</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>7.68M ops</span></div>
+</div>
+<figcaption>Bar length is log₁₀ of the operation count (so a bar twice as long is a 10× jump, not a 2× one), for n=10,000 candidates at d=768 dimensions. Scoring the whole corpus (O(n·d)) dwarfs both sorting the results (O(n log n)) and any single score (O(d)) — the search term is what a real system's latency budget has to plan around first.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The same three costs, at a second, larger corpus size</h3>
+<table class="worked-table">
+<thead><tr><th>Corpus</th><th>One score O(d)</th><th>Search O(n·d)</th><th>Sort O(n log n)</th><th>Space O(n·d)</th></tr></thead>
+<tbody>
+<tr><td>n=10,000, d=768</td><td>768 ops</td><td>7,680,000 ops</td><td>≈132,877 comparisons</td><td>≈30.72 MB</td></tr>
+<tr><td>n=50,000, d=384</td><td>384 ops</td><td>19,200,000 ops</td><td>≈780,482 comparisons</td><td>≈76.80 MB</td></tr>
+</tbody>
+</table>
+<p>Doubling d (768 vs. 384, roughly) changes the per-score and per-search cost roughly proportionally, but the second row's corpus is 5× larger in n with half the dimension — and still costs more than twice as much to search, because n·d weighs both factors together. Notice the sort column in both rows: it depends only on n, never on d — a wider embedding model changes search and storage cost, but never sorting cost.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where each cost actually lands in the pipeline</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors — stored at O(n·d) space</span><i>↓</i><span class="hot">Retrieval — O(n·d) to score, O(n log n) to sort</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Space cost is paid once, when the corpus is embedded and stored. Time cost — the O(n·d) search and O(n log n) sort — is paid again on every single query, which is exactly why the "Retrieval" stage is where a real system's per-query latency budget concentrates.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Time vs. space, and worst-case vs. average-case</h3>
+<div class="distinction-table" role="table" aria-label="Time complexity, space complexity, and worst-case versus average-case distinguished from each other">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually measures</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Time complexity</span><span role="cell">How the operation count grows with n and d — paid on every query for search and sort</span><span role="cell">Mistaken for wall-clock seconds; O(n·d) says nothing about hardware speed, only about growth rate</span></div>
+<div role="row"><span role="cell">Space complexity</span><span role="cell">How memory grows with n and d — paid once, when the corpus is stored</span><span role="cell">Assumed to shrink if a query runs faster; the two are independent — a fast index can still need O(n·d) or more memory</span></div>
+<div role="row"><span role="cell">Brute-force exactness</span><span role="cell">O(n·d) search checks every candidate — guaranteed to find the true top-k, at that cost</span><span role="cell">Assumed to be "the slow way to do it wrong" — it's the slow way to do it exactly; approximate methods (Section 15, Module 09) trade some exactness for speed, not the other way around</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Sorting the results is the expensive part."</b><p>b03's own numbers show the opposite: search costs 7.68M operations against sorting's 132,877 — search dominates by more than 50× at this corpus size, and the gap only widens as n or d grows.</p></div>
+<div><b>"A bigger embedding dimension always means a slower system, full stop."</b><p>It raises the O(d) and O(n·d) terms, but never touches the O(n log n) sorting cost — d and n affect different stages differently.</p></div>
+<div><b>"O(n·d) means the exact number of operations."</b><p>Big-O describes the growth rate, dropping constant factors and lower-order terms — the exact count (7,680,000 for b03's example) is a specific instance of that growth rate, not a definition of it.</p></div>
+<div><b>"Big-O complexity is only a theory topic, not something that shows up in real budgets."</b><p>b03-b04's numbers are directly what a production latency and memory budget has to plan around — this is applied arithmetic, not abstract theory.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Sizing the Oracle RAG project's retrieval cost</h3>
+<div class="project-map">
+<div><span>PER-QUERY TIME BUDGET</span><b>O(n·d) to score every chunk, O(n log n) to rank them</b><p>Every live query against the Oracle-backed corpus pays both costs once — b03-b04's exact numbers are what a brute-force VECTOR_DISTANCE scan over the whole table would actually cost.</p></div>
+<div><span>STORAGE BUDGET</span><b>O(n·d) space for every chunk's embedding</b><p>Choosing an embedding model's dimension d is also choosing how many bytes each stored chunk costs — a decision made once, felt for the corpus's entire lifetime.</p></div>
+<div><span>WHAT THIS CONCEPT DOES NOT BUILD</span><b>Any actual index or approximation</b><p>Oracle's vector indexes and every approximate-search structure (Module 09, forward reference) exist specifically to beat this concept's brute-force O(n·d) baseline — not derived here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>One similarity score</b><p>O(d) — Concept 03's dot product touches every dimension once.</p></div>
+<div><b>Brute-force search over n candidates</b><p>O(n·d) — repeat the O(d) score once per candidate.</p></div>
+<div><b>Sorting n scores</b><p>O(n log n) — Concept 08's ranking, and it never depends on d.</p></div>
+<div><b>Storing the corpus</b><p>O(n·d) space — every candidate's full d-dimensional vector, held in memory.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's numbers, explain in your own words why sorting the scores is not the dominant cost at this corpus size.</li>
+<li>If d doubled but n stayed the same, which of the four costs in b04's table would double, and which would stay exactly the same? Why?</li>
+<li>Why is "O(n·d) operations" not the same claim as "this query takes n·d seconds"?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Worked retrieval geometry</h3>
+<p>This concept named what every earlier calculation in Module 04 actually costs at scale. Concept 10 closes the module by walking one small worked query through every concept in order — vectors, norms, cosine similarity, distance, softmax, entropy, cross-entropy, ranking, and this concept's operation counts — end to end, on a single example, introducing no new formula at all.</p>
+<div class="beginner-memory"><b>Concept 09 is complete.</b> Continue to Worked retrieval geometry.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 10 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One score is O(d). The whole corpus is O(n·d). Sorting never sees d.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>O(d) per score, O(n·d) to search a corpus, O(n log n) to sort, O(n·d) space to store it.</small></a>
+<a href="#b03"><span>02</span><b>Compute</b><small>n=10,000, d=768: 768 ops per score, 7.68M ops to search, 132.9K comparisons to sort, 30.72 MB stored.</small></a>
+<a href="#b04"><span>03</span><b>Compare</b><small>n=50,000, d=384 costs more to search despite the smaller dimension — n and d combine multiplicatively.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal O/Θ/Ω notation, the from-scratch code, and The Complexity Scaling Lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Concept 03's O(d) score → repeated n times is Concept 08's ranking input at O(n·d) → sorted at O(n log n), independent of d → the corpus itself costs O(n·d) to store → Concept 10 closes Module 04 by running one worked example through every one of these numbers, in order.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the time and space complexity deep dive</b><em>Formal Big-O notation, from-scratch operation-counting code, and The Complexity Scaling Lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Naming the cost of everything Module 04 already built</h2></div></header>
+<p>Concepts 01-08 defined vectors, norms, similarity, distance, distributions, entropy, and a ranking objective — every one computed by hand on three or four candidates. This concept introduces no new mechanism; it names how each of those mechanisms scales once n (the number of candidates) and d (the embedding dimension) stop being small.</p>
+<div class="flow">
+<div class="flow-node">Concepts 01-08 — the mechanisms</div>
+<div class="flow-node hot">Concept 09 — what they cost at scale</div>
+<div class="flow-node">Concept 10 — one worked example, every concept together</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State Big-O notation precisely</h3><p>What O(f(n)) actually claims about a growing input, and what it deliberately ignores.</p></article>
+<article class="info-card"><span>DERIVE</span><h3>Derive O(d), O(n·d), and O(n log n) from first principles</h3><p>Count the operations in a single dot product, a full brute-force search, and a sort, directly from their mechanisms (Concepts 03 and 08).</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Produce exact operation and byte counts for a stated n and d</h3><p>Reproduce b03-b04's worked numbers, and extend them to a new corpus size.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Separate exact brute-force cost from approximate-search cost</h3><p>State, at introductory depth, what an approximate method like HNSW trades away to beat O(n·d) (Section 15, Module 09 forward reference).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's vectors, cited directly:</b> a vector has exactly d components; that count is where O(d) comes from.</li>
+<li><b>Concept 03's dot product and cosine similarity, cited directly:</b> one similarity score requires one multiply-add per dimension.</li>
+<li><b>Concept 08's ranking function, cited directly:</b> sorting n raw scores, needing no softmax and no dependence on d.</li>
+<li><b>Out of scope here:</b> any actual index structure (HNSW, IVF, quantization — Module 09) that beats this concept's brute-force baseline is named as a forward reference, not built.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Counting steps, not stopwatch seconds</h2></div></header>
+<p>Imagine checking every book on a shelf for one that matches a description. Reading one book's summary takes some fixed effort — call it d pages worth of attention. Checking a shelf of n books means doing that n times: n·d pages of attention, total. A faster reader (better hardware) reads each page quicker, but doubling the shelf still doubles the reading, no matter how fast any one reader is. Big-O describes that second fact — how the work scales as the shelf grows — completely separately from how fast any one reader happens to be.</p>
+<div class="callout warning"><b>Analogy boundary</b>The shelf captures "work scales with shelf size and book length," not the exact constant — a real system's actual milliseconds also depend on hardware, vectorization, and cache behavior that Big-O deliberately abstracts away.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Big-O, O(f(n))</td><td>An algorithm's operation count is O(f(n)) if it is bounded above by c·f(n) for some constant c, once n is large enough</td><td>Describes an upper bound on growth rate — drops constant factors and lower-order terms; says nothing about wall-clock seconds</td></tr>
+<tr><td>Time complexity</td><td>The count of basic operations (here: multiply-adds for scoring, comparisons for sorting) as a function of the input size</td><td>"Basic operation" is a modeling choice — this lesson counts multiply-adds and comparisons, consistent with Concepts 03 and 08's mechanisms</td></tr>
+<tr><td>Space complexity</td><td>The amount of memory required as a function of the input size</td><td>Counted here in bytes, using 4 bytes per float32 component — a real system may use different precision (Section 16)</td></tr>
+<tr><td>n and d, in this module's notation</td><td>n = number of candidate vectors (corpus size); d = dimension of each vector</td><td>Both are independent knobs — a corpus can grow in n, in d, or in both at once, and each affects the four costs below differently</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Deriving each cost directly from its mechanism</h2></div></header>
+<div class="lane-flow">
+<div><b>One dot product (Concept 03) —</b> sum of d component-wise products: d multiplications, d−1 additions ≈ 2d basic operations → O(d).</div>
+<div><b>Score every candidate —</b> repeat the O(d) dot product once per candidate, n times: n × O(d) = O(n·d).</div>
+<div><b>Sort the n resulting scores (Concept 08) —</b> a comparison-based sort needs O(n log n) comparisons; nothing in this step ever inspects a vector's individual dimensions, so d never appears.</div>
+<div><b>Store the corpus —</b> n vectors, each with d float32 components at 4 bytes apiece: n × d × 4 bytes → O(n·d) space.</div>
+<div><b>Combine —</b> total per-query time = O(n·d) [search] + O(n log n) [sort] = O(n·d), since d is almost always far larger than log₂(n) for any real embedding model and corpus size (Section 09).</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One query vector, fanning out into n scores, collapsing into a ranking</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of a query vector being scored against n candidates at O(n times d) cost and then sorted at O(n log n) cost">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Query vector (Concept 01) · d dimensions</b><small>One vector, fixed cost to embed</small></div>
+<div class="diagram-node hub-center"><b>Score every candidate · O(n·d)</b><small>n dot products (Concept 03), each O(d)</small></div>
+<div class="diagram-node"><b>Sort n scores · O(n log n)</b><small>Concept 08's ranking — independent of d</small></div>
+</div>
+</div>
+<p>The hub above is the required flow; Section 14's lab lets you drag n and d independently and watch all four costs respond in real time. A second, additional visual — Section 09's quadrant map below — contrasts a small corpus against a large one on both axes at once.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where time cost and space cost each land in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors — stored once, O(n·d) space</span><i>↓</i><span class="hot">Retrieval — scored and sorted every query, O(n·d) + O(n log n) time</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Space complexity is a one-time cost, paid when the corpus is embedded and stored. Time complexity is a recurring cost, paid again in full on every single query — which is exactly why Module 09's vector indexes exist: to reduce the recurring O(n·d) term, usually by accepting some loss of exactness (Section 15).</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why the search term dominates the sort term in practice</h2></div></header>
+<p>Total per-query time is the sum of the search and sort terms:</p>
+<div class="equation">T(n, d) = O(n·d) + O(n log n) = O(n·(d + log n))</div>
+<p>Whichever of d or log₂(n) is larger determines which term dominates. For d to fall below log₂(n), the embedding dimension would need to be smaller than the log₂ of the corpus size:</p>
+<div class="equation">Search dominates sort  ⟺  d ≫ log₂(n)</div>
+<p>For n=10,000, log₂(n) ≈ 13.29 — far smaller than any real embedding model's dimension (typically 128 to 3,072). Even at n=1,000,000, log₂(n) ≈ 19.93 — still smaller than every common embedding dimension. In practice, the O(n·d) search term dominates T(n,d) at essentially every realistic corpus size and embedding model, and the sort term, while never zero, is the smaller of the two.</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable 2 by 2 map of small versus large corpus size against small versus large dimension, showing representative search-cost values in each combination">
+<p class="matrix-quad-label">CORPUS SIZE AND DIMENSION · SEARCH COST O(n·d) IN EACH COMBINATION</p>
+<div class="matrix-quad">
+<div class="matrix-corner"></div><div class="matrix-axis">Small d (64)</div><div class="matrix-axis">Large d (1,536)</div>
+<div class="matrix-axis">Small n (100)</div><div class="matrix-cell"><b>6,400 ops</b><span>n=100, d=64 — trivial at any hardware speed</span></div><div class="matrix-cell"><b>153,600 ops</b><span>n=100, d=1,536 — dimension alone can outweigh a tiny corpus</span></div>
+<div class="matrix-axis">Large n (1,000,000)</div><div class="matrix-cell"><b>64,000,000 ops</b><span>n=1,000,000, d=64 — corpus size alone can rival a wide-dimension small corpus</span></div><div class="matrix-cell"><b>1,536,000,000 ops</b><span>n=1,000,000, d=1,536 — both factors compounding, the worst cell on this map</span></div>
+</div>
+</div>
+<p>Every cell is the identical formula, n·d, evaluated at four different (n, d) pairs — the map exists to show that n and d contribute multiplicatively, not additively: doubling either one alone roughly doubles the cost, but growing both at once compounds.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Both corpus sizes, all four costs, side by side</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Corpus</th><th>O(d) · one score</th><th>O(n·d) · search</th><th>O(n log n) · sort</th><th>O(n·d) · space</th></tr></thead>
+<tbody>
+<tr><td>n=10,000, d=768</td><td>768 ops</td><td>10,000 × 768 = 7,680,000 ops</td><td>10,000 × log₂(10,000) ≈ 10,000 × 13.2877 ≈ 132,877 comparisons</td><td>10,000 × 768 × 4 = 30,720,000 bytes ≈ 30.72 MB</td></tr>
+<tr><td>n=50,000, d=384</td><td>384 ops</td><td>50,000 × 384 = 19,200,000 ops</td><td>50,000 × log₂(50,000) ≈ 50,000 × 15.6096 ≈ 780,482 comparisons</td><td>50,000 × 384 × 4 = 76,800,000 bytes ≈ 76.80 MB</td></tr>
+</tbody>
+</table>
+<p>Row two has 5× the candidates of row one but half the dimension, and still costs about 2.5× more to search (19.2M vs. 7.68M) — direct confirmation that n and d multiply together rather than trading off evenly. In both rows, the sort column is two to three orders of magnitude smaller than the search column, exactly as Section 09's dominance argument predicts.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a production use, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Sizing a brute-force scan before choosing an index</h3><p>Computing O(n·d) for a corpus's actual n and d gives a concrete operation count to budget latency against, before deciding whether an approximate index (Module 09) is even needed.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>n=1 — a single candidate</h3><p>Search collapses to a single O(d) score and sorting is free (nothing to compare) — the smallest possible instance of every formula in this concept.</p></article>
+<article class="info-card"><span>PRODUCTION USE</span><h3>Capacity planning for corpus growth</h3><p>Knowing search cost grows linearly in both n and d lets a team forecast latency and memory needs before a corpus doubles, rather than discovering the cost after it does.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming a faster CPU changes the growth rate</h3><p>Faster hardware shrinks the constant factor hidden inside Big-O notation, not the O(n·d) shape itself — doubling n still roughly doubles the work, on any hardware.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Counting the operations, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def dot_product_ops(d):
+    # Concept 03's dot product: d multiplications, d-1 additions.
+    return d + (d - 1)
+
+def brute_force_search_ops(n, d):
+    # Score every one of n candidates, each an O(d) dot product.
+    return n * dot_product_ops(d)
+
+def sort_ops(n):
+    # Concept 08's ranking -- a comparison-based sort, independent of d.
+    if n <= 1:
+        return 0
+    return n * math.log2(n)
+
+def storage_bytes(n, d, bytes_per_float=4):
+    return n * d * bytes_per_float
+
+n, d = 10_000, 768
+search = brute_force_search_ops(n, d)
+sort_ = sort_ops(n)
+space = storage_bytes(n, d)
+
+print(search)                       # 15359999 (2d-1 per score; O(n*d) either way)
+print(round(sort_))                 # 132877
+print(space)                        # 30720000
+
+assert search > sort_ * 50          # search dominates sort by more than 50x here
+assert dot_product_ops(2 * d) == 2 * dot_product_ops(d) + 1  # doubling d ~doubles one score's cost
+
+n2, d2 = 50_000, 384
+assert brute_force_search_ops(n2, d2) > search  # more candidates at half the dimension still costs more
+</code></pre>
+</div>
+<p>The code's exact operation count (15,359,999, using 2d−1 per dot product) differs from b03's rounded 7,680,000 (which used d alone as a simpler proxy) by a constant factor of roughly 2× — both describe the identical O(n·d) growth rate; Big-O notation is precisely the claim that this constant-factor difference does not matter for classifying the algorithm's scaling behavior.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same mechanism</h2></div></header>
+<p>NumPy's vectorized <code>corpus_matrix @ query_vector</code> computes the identical O(n·d) brute-force search as the from-scratch loop above, just with a far smaller constant factor — SIMD instructions and cache-friendly memory layout speed up the work without changing its asymptotic shape. FAISS's <code>IndexFlatIP</code> and <code>IndexFlatL2</code> are named specifically for being "flat," meaning exact, brute-force O(n·d) search — the library's other index types (Module 09, forward reference) exist to trade some of that exactness away for a lower time complexity.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Complexity Scaling Lab</h2></div></header>
+<div class="lab">
+<p>Drag the corpus size (n, as a power of ten) and the embedding dimension (d) independently. The four readouts update live: one score's cost, brute-force search cost, sort cost, and storage — plus a log-scale bar comparing all three time costs at once.</p>
+<div class="norm-controls" id="cxSliders_0409">
+<div class="control"><label for="cxN_0409">Corpus size n (candidates)</label><input type="range" id="cxN_0409" min="2" max="6" step="1" value="4"><output id="cxNOut_0409">10,000</output></div>
+<div class="control"><label for="cxD_0409">Embedding dimension d</label><input type="range" id="cxD_0409" min="32" max="1536" step="32" value="768"><output id="cxDOut_0409">768</output></div>
+</div>
+<div class="norm-readout">
+<div><span>ONE SCORE · O(d)</span><b id="cxDot_0409">768 ops</b></div>
+<div><span>BRUTE-FORCE SEARCH · O(n·d)</span><b id="cxSearch_0409">7.68M ops</b></div>
+<div><span>SORT · O(n log n)</span><b id="cxSort_0409">132.9K comparisons</b></div>
+<div><span>STORAGE · O(n·d)</span><b id="cxSpace_0409">30.72 MB</b></div>
+</div>
+<div class="prob-bars" id="cxBars0409" role="img" aria-label="Live log-scale bars comparing one score, sort, and brute-force search cost as n and d change">
+<div class="prob-row"><span>One score</span><div class="bar-track"><div class="bar-fill" id="cxBarDot_0409" style="width:41.9%"></div></div><span id="cxBarDotOut_0409">768</span></div>
+<div class="prob-row"><span>Sort</span><div class="bar-track"><div class="bar-fill" id="cxBarSort_0409" style="width:74.4%"></div></div><span id="cxBarSortOut_0409">132.9K</span></div>
+<div class="prob-row winner"><span>Search</span><div class="bar-track"><div class="bar-fill" id="cxBarSearch_0409" style="width:100%"></div></div><span id="cxBarSearchOut_0409">7.68M</span></div>
+</div>
+<div class="callout" id="cxVerdict_0409">Brute-force search costs 7.68M operations -- about 57.8x more than sorting the 10.0K results afterward (132.9K comparisons). Sorting would only overtake search if d fell below log2(n) (here log2(n) = 13.3) -- no real embedding model has a dimension that small, so search cost dominates at every setting on these sliders.</div>
+<div class="lab-actions" role="group" aria-label="Lab presets">
+<button type="button" class="secondary" id="cxPresetSmall_0409">Load tiny corpus (n=100, d=64)</button>
+<button type="button" class="secondary" id="cxPresetRealistic_0409">Load realistic corpus (n=10,000, d=768)</button>
+<button type="button" class="secondary" id="cxPresetLarge_0409">Load large corpus (n=1,000,000, d=1,536)</button>
+<button type="button" class="secondary" id="cxPresetReset_0409">Reset to start</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Exact brute-force search vs. approximate search, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Time complexity</th><th>What it trades away</th></tr></thead>
+<tbody>
+<tr><td>Brute-force / flat search (this concept)</td><td>O(n·d) per query</td><td>Nothing — guaranteed to find the true top-k, at the full linear cost</td></tr>
+<tr><td>HNSW graph search</td><td>O(log n) per query, approximately (Module 09, forward reference)</td><td>Exactness — may miss some true top-k results in exchange for sub-linear query time</td></tr>
+<tr><td>Inverted-file (IVF) partitioning</td><td>O(n/k · d) per query for k partitions, approximately (Module 09, forward reference)</td><td>Exactness at partition boundaries — a true neighbor in an unsearched partition can be missed</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>IGNORING d</span><h3>Budgeting only for corpus growth, not dimension growth</h3><p>Switching to a wider embedding model (larger d) raises search and storage cost just as surely as corpus growth does — b04's table shows both factors matter.</p></article>
+<article class="info-card"><span>CONFUSING TIME AND SPACE</span><h3>Assuming a memory-efficient format also runs faster</h3><p>Space complexity (storage) and time complexity (per-query search) are governed by the same O(n·d) shape but are paid at different moments and optimized by different techniques (quantization vs. indexing, Module 09).</p></article>
+<article class="info-card"><span>MEASURING WALL-CLOCK ONLY</span><h3>Benchmarking on today's corpus size and assuming it generalizes</h3><p>A system measured only at n=10,000 gives no information about its behavior at n=10,000,000 without knowing the growth rate — Big-O is exactly what predicts that jump.</p></article>
+<article class="info-card"><span>FORGETTING CONSTANT FACTORS ENTIRELY</span><h3>Treating two O(n·d) systems as identical in practice</h3><p>Section 12's 2× gap between a naive count and a tighter one shows constant factors are dropped by Big-O notation but still matter for real latency — Big-O tells you the shape, not the exact millisecond.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>O(n·d) tells you exactly how many milliseconds a query takes</td><td>False — Big-O describes a growth rate, dropping constant factors; actual milliseconds depend on hardware, vectorization, and implementation (Section 05, Section 12).</td></tr>
+<tr><td>Sorting is the expensive part of retrieval</td><td>False — Section 09 and b03's numbers show O(n·d) search dominates O(n log n) sort at essentially every realistic n and d, often by more than an order of magnitude.</td></tr>
+<tr><td>A larger embedding dimension only costs more storage, not more search time</td><td>False — d appears in both the O(n·d) search term and the O(n·d) space term identically; it raises both together.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Compute O(n·d) for the corpus's actual, current size before assuming brute-force search is "obviously too slow" or "obviously fine" — b03's 7.68M-operation example runs in a few milliseconds on modern hardware; a 100× larger corpus would not.</li>
+<li>Track corpus growth (n) and embedding-model changes (d) as two separate levers on both latency and memory budgets — a migration to a wider embedding model (Module 08, forward reference) raises both the search and storage cost, even with n unchanged.</li>
+<li>Revisit the brute-force-vs-index decision (Section 15) as n grows — the crossover point where an approximate index's sub-linear query time starts winning depends on n, d, and acceptable recall loss together, not on any single one alone.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why is sorting n scores O(n log n) and not O(n·d)?</summary><div>Sorting only ever compares scalar scores against each other — it never inspects a vector's individual d components, so d never enters the cost at all (Section 06).</div></details>
+<details class="quiz"><summary>For n=50,000 and d=384, which single number from Section 10's table is largest, and why does it make sense that it is?</summary><div>The search cost, 19,200,000 operations — it is the only one of the four costs that multiplies the full corpus size n by the full dimension d, while the others involve only one of the two factors (or, for sorting, neither).</div></details>
+<details class="quiz"><summary>Does doubling the embedding dimension d change the sort cost? Why or why not?</summary><div>No — sort cost is O(n log n), a function of n alone; Section 06's derivation shows sorting never looks at a vector's components, only at the already-computed scalar scores.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A corpus has n=200,000 candidates, each embedded at d=1,024 dimensions. Compute: (1) the cost of one similarity score, (2) the cost of a brute-force search over the whole corpus, (3) the cost of sorting the resulting scores (using log₂(200,000) ≈ 17.61), and (4) the storage cost in bytes and megabytes, at 4 bytes per float32 component. State which of the four numbers is largest and, in one sentence, why that ordering was predictable before computing anything.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>(1) One score: O(d) = 1,024 operations. (2) Brute-force search: n·d = 200,000 × 1,024 = 204,800,000 operations. (3) Sort: n·log₂(n) ≈ 200,000 × 17.61 ≈ 3,522,000 comparisons. (4) Storage: n·d·4 = 200,000 × 1,024 × 4 = 819,200,000 bytes ≈ 819.2 MB. The search cost (≈204.8M) is the largest, as predictable in advance from Section 09: it is the only quantity that multiplies the full n by the full d, and both n and d are large here — the same reasoning that made search dominate sort in every earlier worked example in this concept.</div>
+</details>
+<p>Teach-back: explain in your own words why the storage cost (819.2 MB) here is larger in raw byte count than the search cost (204.8M operations), even though search is described as the "dominant" cost in this concept — what exactly is "dominant" comparing, if not these two numbers directly?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Time and space complexity</h3><ul><li><b>One score:</b> O(d) — Concept 03's dot product, once</li><li><b>Brute-force search:</b> O(n·d) — one O(d) score, repeated n times</li><li><b>Sort:</b> O(n log n) — Concept 08's ranking, independent of d</li><li><b>Storage:</b> O(n·d) space — n vectors, each d dimensions</li></ul></div>
+<div><h3>Memorable example</h3><p>n=10,000, d=768: one score is 768 operations, the full search is 7.68 million, sorting is 132,877 comparisons, and storing the corpus takes 30.72 MB — search outweighs sort by more than 50×.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Derive the time complexity of a brute-force nearest-neighbor search over n vectors of dimension d.</summary><div>Each similarity score is a dot product touching all d dimensions once, costing O(d). Repeating that score computation once per candidate, for n candidates, gives n × O(d) = O(n·d) total (Section 06).</div></details>
+<details class="quiz"><summary>Why does the sorting step in a retrieval pipeline not depend on the embedding dimension d?</summary><div>Sorting operates only on the n already-computed scalar similarity scores, comparing numbers to each other — it never re-examines the original d-dimensional vectors, so d has no place in its cost (Section 06, Section 17).</div></details>
+<details class="quiz"><summary>System design: your corpus is about to grow from 100,000 to 10,000,000 chunks with the same embedding model. What happens to brute-force search cost, and what would you investigate first?</summary><div>Search cost is O(n·d) with d fixed, so it grows linearly with n — a 100× increase in n means roughly a 100× increase in search cost. The first thing to investigate is whether an approximate index (Section 15, Module 09) is now justified, since the crossover point where sub-linear query time starts winning is exactly a function of n growing this large.</div></details>
+<details class="quiz"><summary>Debugging: a retrieval service's p99 latency doubled after a routine embedding-model upgrade, with corpus size unchanged. What is the most likely explanation from this concept?</summary><div>The new embedding model likely uses a larger dimension d — since search cost is O(n·d) and n didn't change, a roughly proportional increase in d would directly explain a roughly proportional increase in measured latency (Section 08, Section 18).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Big_O_notation"><b>Wikipedia — Big O notation</b><br><span>The formal definition of asymptotic upper bounds used throughout Section 05.</span></a>
+<a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search"><b>Wikipedia — Nearest neighbor search</b><br><span>Brute-force exact search complexity and its contrast with approximate methods, behind Sections 06 and 15.</span></a>
+<a href="https://arxiv.org/abs/1603.09320"><b>Malkov &amp; Yashunin — Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs (arXiv:1603.09320)</b><br><span>The HNSW algorithm named as a forward reference in Section 15, beating this concept's O(n·d) baseline in Module 09.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 · COMPLETE</span>
+<h3>O(d) per score, O(n·d) to search, O(n log n) to sort, O(n·d) to store are today's takeaway</h3>
+<p>Before moving on, be able to derive each of these four costs from its underlying mechanism, and compute exact operation and byte counts for a stated n and d. Concept 10, "Worked retrieval geometry," is next — the module's closing synthesis.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Complexity Scaling Lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Worked retrieval geometry.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 09 · Complete</p>
+<a href="module-04-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

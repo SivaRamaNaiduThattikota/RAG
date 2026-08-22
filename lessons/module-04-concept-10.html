@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 01-09 built vectors, norms, cosine similarity, distance, probability, softmax, entropy, cross-entropy, ranking, and complexity as nine separate pieces. This closing concept introduces no new formula -- it walks one small worked query through all nine, in order, on a single example, proving they chain into one connected pipeline rather than nine isolated facts.">
+<title>Worked retrieval geometry — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 10 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 10</p>
+<h1>One query.<br><em>Every concept, in order.</em></h1>
+<p class="lesson-lead">Concepts 01-09 each introduced one piece: vectors, norms, cosine similarity, distance, probability, softmax, entropy, cross-entropy, ranking, and cost. Every one was proven on its own — never chained together on a single example. This closing concept introduces nothing new: it takes one query vector and two candidates, and runs every one of Module 04's nine formulas on them in order, producing a single connected number thread from raw coordinates to a final ranked, trained, cost-counted result.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth and final concept of Module 04, closing the module</b></div>
+<div><span>PREREQUISITE</span><b>Every concept in Module 04 (01-09) — all cited directly, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Walk a query and two candidates through norms, cosine similarity, distance, softmax, entropy, cross-entropy, ranking, and cost — as one connected pipeline, not nine separate facts</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concept 09 named what every earlier formula costs at scale. This concept closes the module by running one small example — a query and two candidates — through every one of Concepts 01-09's formulas, in order, showing they were always one pipeline, not nine unrelated facts.</p>
+<b>CONCEPT 09 COMPLETE · CONCEPT 10 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Nine separate lessons, one connected pipeline</h2>
+</div>
+<p>Every concept since Concept 01 was proven in isolation, on its own small example. This concept picks one query and two candidates and never lets go of them — every formula in Module 04 gets applied to the exact same three points, in the order a real system would actually use them.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>No new formula — one worked example, nine concepts, in order</h3>
+<div class="mental-compare">
+<div><span>EVERY EARLIER CONCEPT</span><p>Proved one formula, on its own small example — Concept 03's cosine similarity never touched Concept 07's cross-entropy directly.</p></div>
+<div><span>THIS CONCEPT</span><p>Takes one query (A) and two candidates (B, C) and feeds them through all nine formulas back to back — the exact chain a real retrieval query actually runs.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> this concept doesn't teach anything new — it proves that Concepts 01-09, together, already form one working pipeline.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Nine correct facts don't automatically prove they connect</h3>
+<p>Each earlier concept's worked example used its own numbers, chosen to make that one formula clear. Nothing in Module 04 so far has shown the OUTPUT of one concept feeding directly into the INPUT of the next, on the same data, end to end. This concept exists purely to close that gap — after this, Module 05 can build on "this module's math works as one pipeline," not just "nine separate formulas were each individually correct."</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One query, two candidates, geometric stage</h3>
+<p>Query A = (3, 4). Candidates: B = (6, 8), C = (4, 3). Same numbers, run through Concepts 02-04 in order.</p>
+<div class="context-demo">
+<div><span>NORMS · CONCEPT 02</span><p>‖A‖ = 5, ‖B‖ = 10, ‖C‖ = 5. (B is exactly twice A — same direction, different length.)</p></div>
+<div><span>COSINE SIMILARITY · CONCEPT 03</span><p>cos(A, B) = 1.0 (identical direction) · cos(A, C) = 0.96 — B looks more similar by direction.</p></div>
+<div><span>RAW DISTANCE · CONCEPT 04</span><p>dist(A, B) = 5.0 · dist(A, C) = 1.4142 — by raw distance, C looks CLOSER. Raw distance and cosine disagree.</p></div>
+<div><span>NORMALIZED DISTANCE · CONCEPTS 02 + 04</span><p>Normalize first: dist(Â, B̂) = 0.0 · dist(Â, Ĉ) = 0.2828 — now B is closer, agreeing with cosine. Normalizing resolved the disagreement, exactly as Concept 04 proved it always does.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0410-beginner-visual-title">
+<strong class="concept-visual-title" id="c0410-beginner-visual-title">VISUAL · THE SAME THREE POINTS, PLOTTED</strong>
+<svg class="vector-plane" viewBox="0 0 220 180" role="img" aria-labelledby="c0410-svg-title c0410-svg-desc">
+<title id="c0410-svg-title">Query A, and candidates B and C, plotted on a small coordinate grid</title>
+<desc id="c0410-svg-desc">A at (3,4), B at (6,8) directly along the same ray from the origin as A, and C at (4,3) off that ray — B looks farther from A in raw distance but shares its exact direction, while C is nearer in raw distance but points a different way.</desc>
+<line x1="20" y1="160" x2="200" y2="160" stroke="#8a978f" stroke-width="1"/>
+<line x1="20" y1="20" x2="20" y2="160" stroke="#8a978f" stroke-width="1"/>
+<line x1="20" y1="160" x2="146" y2="32" stroke="#3aa876" stroke-width="2"/>
+<line x1="20" y1="160" x2="83" y2="96" stroke="#ff7957" stroke-width="2" stroke-dasharray="3 3"/>
+<circle cx="83" cy="96" r="4" fill="#ff7957"/>
+<text x="88" y="92" font-size="9" fill="#ff7957">A (3,4)</text>
+<circle cx="146" cy="32" r="4" fill="#3aa876"/>
+<text x="151" y="28" font-size="9" fill="#3aa876">B (6,8) — same ray as A</text>
+<circle cx="104" cy="97" r="4" fill="#2a78d6"/>
+<text x="109" y="112" font-size="9" fill="#2a78d6">C (4,3)</text>
+<line x1="83" y1="96" x2="104" y2="97" stroke="#14241f" stroke-width="1" stroke-dasharray="2 3"/>
+</svg>
+<figcaption>A and B sit on the exact same ray from the origin — that's why cos(A,B)=1.0 — even though B is twice as far from the origin, and 5.0 raw units from A. C sits off that ray but only 1.4142 raw units from A. Direction and distance are measuring genuinely different things, which is the entire reason Concept 03 and Concept 04 needed to be separate concepts.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The same three points, probabilistic and cost stages</h3>
+<div class="context-demo">
+<div><span>SOFTMAX · CONCEPT 06</span><p>Treat [cos(A,B), cos(A,C)] = [1.0, 0.96] as raw scores: softmax gives [0.5100, 0.4900] at T=1 — a genuine distribution, still favoring B, exactly as cosine did.</p></div>
+<div><span>ENTROPY · CONCEPT 07</span><p>H(P) ≈ 0.6929 nats — this distribution is close to uniform, reflecting how close cos(A,B) and cos(A,C) actually are (1.0 vs. 0.96).</p></div>
+<div><span>CROSS-ENTROPY · CONCEPT 07</span><p>If B is the actually-correct candidate: −ln(0.5100) ≈ 0.6733 nats — a moderate loss, since the distribution is only mildly confident.</p></div>
+<div><span>RANKING &amp; COST · CONCEPTS 08-09</span><p>Ranking B &gt; C needs only the raw scores, no softmax (Concept 08). For n=2 candidates at d=2 dimensions: one score is 2 operations, brute-force search is 4, sorting is 2 comparisons, storage is 16 bytes (Concept 09) — every cost formula, evaluated at this example's actual size.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Every concept in Module 04, feeding the next</h3>
+<div class="pipeline-preview">
+<span>C01-02 — vectors, norms</span><i>↓</i><span>C03-04 — cosine, distance</span><i>↓</i><span>C05-06 — probability, softmax</span><i>↓</i><span>C07 — entropy, cross-entropy</span><i>↓</i><span class="hot">C08-09 — ranking, cost</span><i>↓</i><span>C10 — this synthesis</span>
+</div>
+<p>Nothing in this diagram is new. Every arrow is a concept this module already built; this concept is simply the first to draw the whole diagram at once, on one running example, instead of one box at a time.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three threads this module ran in parallel, now joined</h3>
+<div class="distinction-table" role="table" aria-label="The geometric, probabilistic, and cost threads of Module 04 distinguished from each other">
+<div role="row"><b role="cell">Thread</b><b role="cell">Concepts</b><b role="cell">What this concept shows about it</b></div>
+<div role="row"><span role="cell">Geometric</span><span role="cell">01-04 — vectors, norms, cosine, distance</span><span role="cell">Produces the raw scores everything downstream consumes — b03's cos and distance values</span></div>
+<div role="row"><span role="cell">Probabilistic</span><span role="cell">05-08 — probability, softmax, entropy/cross-entropy, ranking</span><span role="cell">Consumes the geometric thread's scores directly — b04's softmax input IS b03's cosine output</span></div>
+<div role="row"><span role="cell">Cost</span><span role="cell">09</span><span role="cell">Applies to every step in both threads at once — every operation in b03-b04 has a counted cost</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Each concept's math is independent of the others."</b><p>b04's softmax input is literally b03's cosine output — the probabilistic thread consumes the geometric thread's numbers directly, not a fresh example.</p></div>
+<div><b>"The raw-distance-vs-cosine disagreement in Concept 04 was a one-off, contrived example."</b><p>The identical disagreement reappears here with the same A, B, C — it's a structural fact about un-normalized vectors, not a coincidence of one example.</p></div>
+<div><b>"Softmax, entropy and cross-entropy only matter with a big corpus."</b><p>b04 computes all three from just 2 candidates — the formulas don't require scale, scale only changes Concept 09's cost.</p></div>
+<div><b>"This concept adds a new example to memorize."</b><p>It reuses the numbers to prove a connection, not to introduce new content — the takeaway is the chain, not the specific coordinates.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>This is one real query in the Oracle RAG project, done by hand</h3>
+<div class="project-map">
+<div><span>THE FULL CHAIN, FOR REAL</span><b>Embed → score → rank → (train)</b><p>A live query against the Oracle-backed corpus runs exactly this sequence — embed the query, score every candidate (Concepts 03-04), rank them (Concept 08) — at real scale, with Concept 09's cost formulas describing exactly how that scales up from this toy example.</p></div>
+<div><span>WHERE TRAINING FITS IN</span><b>Softmax + cross-entropy, offline</b><p>b04's softmax and cross-entropy steps aren't run at query time — they're exactly what Module 09's embedding-model training (forward reference) uses to make the raw scores themselves better over time.</p></div>
+<div><span>WHAT THIS CONCEPT DOES NOT BUILD</span><b>Any actual index or trained model</b><p>This is hand arithmetic on 2 candidates — Module 05 begins the classical search machinery, and Modules 08-09 build embeddings and vector indexes at real scale.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The full chain</b><p>Vectors → norms → cosine/distance → softmax → entropy/cross-entropy → ranking → cost — one pipeline, not nine facts.</p></div>
+<div><b>The disagreement, resolved</b><p>Raw distance and cosine disagree until vectors are normalized — proven again on b03's exact numbers.</p></div>
+<div><b>Where training fits</b><p>Softmax and cross-entropy are the training-time thread; ranking at inference needs neither (Concept 08, reused here).</p></div>
+<div><b>Module 04 is done</b><p>All ten concepts — the linear algebra, probability, and optimization intuition this module promised — are now built.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Trace, in your own words, exactly which concept's output becomes which concept's input, from b03 through b04.</li>
+<li>If C's coordinates changed so that cos(A,C) also became 1.0, what would happen to the softmax distribution, the entropy, and the cross-entropy against B? Why?</li>
+<li>Why does Concept 09's cost formula apply equally to the geometric thread (b03) and the probabilistic thread (b04), even though they compute different things?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 04 is complete. Module 05 opens next, still inside Phase 1.</h3>
+<p>That closes all ten concepts of Module 04, Mathematics for retrieval. Phase 1, Generative AI &amp; retrieval foundations, continues — Module 05, "Classical information retrieval," is its fifth and final module, covering the lexical-search foundations (inverted indexes, TF-IDF, BM25) that dense retrieval extends rather than replaces.</p>
+<div class="beginner-memory"><b>Concept 10 is complete.</b> Module 04 is complete. Continue to Module 05, still within Phase 1.</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Nine formulas. One query. One connected thread.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Geometric stage</b><small>Norms, cosine, raw and normalized distance — Concepts 02-04, chained.</small></a>
+<a href="#b04"><span>02</span><b>Probabilistic + cost stage</b><small>Softmax, entropy, cross-entropy, ranking, operation counts — Concepts 06-09, chained.</small></a>
+<a href="#b06"><span>03</span><b>See the threads join</b><small>Geometric output feeds probabilistic input directly; cost applies to both.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the full derivation chain, the from-scratch end-to-end code, and The Full Pipeline Walkthrough lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> one query, two candidates → every geometric formula (Concepts 01-04) → feeds every probabilistic formula (Concepts 05-08) → every cost formula applies to both (Concept 09) → Module 04 closes; Module 05 opens next, still inside Phase 1.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the worked retrieval geometry deep dive</b><em>The full derivation chain, from-scratch end-to-end code, and The Full Pipeline Walkthrough lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The module's closing knot, not a new thread</h2></div></header>
+<p>Concepts 01-09 each built one piece of Module 04's math: two geometric formulas (norm, cosine/distance), four probabilistic ones (distribution, softmax, entropy, cross-entropy), one optimization pair (ranking, contrastive loss), and one cost analysis. This concept adds nothing to that list — it ties every one of them to a single running example, proving the module is one pipeline before Module 05 builds on top of it.</p>
+<div class="flow">
+<div class="flow-node">Concepts 01-04 — geometric thread</div>
+<div class="flow-node">Concepts 05-08 — probabilistic thread</div>
+<div class="flow-node">Concept 09 — cost, applied to both</div>
+<div class="flow-node hot">Concept 10 — the closing knot</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>CHAIN</span><h3>Run all nine of Module 04's formulas on one example</h3><p>Produce every intermediate value — norms, cosine, distance, softmax, entropy, cross-entropy, ranking, cost — from a single query and two candidates.</p></article>
+<article class="info-card"><span>TRACE</span><h3>Identify each handoff between concepts</h3><p>Name exactly which concept's output becomes which concept's input, at every step of the chain.</p></article>
+<article class="info-card"><span>RECONFIRM</span><h3>Reproduce Concept 04's disagreement-then-agreement result</h3><p>Show, on this exact example, that raw distance and cosine disagree until normalization, then agree.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what Module 04 did not build</h3><p>No actual index, embedding model, or trained system — those begin in Module 05 and Modules 08-09.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>All of Concepts 01-09, cited directly:</b> every formula used in this concept was proven earlier in this module; none is re-derived.</li>
+<li><b>No new mechanism anywhere in this concept:</b> if a formula looks unfamiliar, it belongs to an earlier concept, not this one.</li>
+<li><b>Out of scope here:</b> Module 05's classical information retrieval, and Modules 08-09's embeddings and vector indexes, are named as what comes next, not built.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Nine instruments, one piece of music</h2></div></header>
+<p>Concepts 01-09 each tuned one instrument in isolation — checking that the cosine-similarity violin and the cross-entropy trumpet each individually play the right notes. This concept is the first rehearsal where every instrument plays together, on the same sheet of music, from the first note to the last. Nothing about any instrument's tuning changes; what's new is hearing them as one piece rather than nine separate tuning sessions.</p>
+<div class="callout warning"><b>Analogy boundary</b>The orchestra captures "many separately-correct pieces now running together," not the exact arithmetic — the actual numbers come from Section 10's table, computed directly, not from the metaphor.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>The full chain, named precisely</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Stage</th><th>Formula</th><th>Source concept</th></tr></thead>
+<tbody>
+<tr><td>Norm</td><td>‖v‖ = √(v₁² + v₂²)</td><td>Concept 02</td></tr>
+<tr><td>Cosine similarity</td><td>cos(u,v) = (u·v) / (‖u‖‖v‖)</td><td>Concept 03</td></tr>
+<tr><td>Distance</td><td>dist(u,v) = √((u₁−v₁)² + (u₂−v₂)²)</td><td>Concept 04</td></tr>
+<tr><td>Softmax</td><td>softmax_T(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T)</td><td>Concept 06</td></tr>
+<tr><td>Entropy / cross-entropy</td><td>H(P) = −Σpᵢln(pᵢ); H(P,Q) = −ln(q_correct)</td><td>Concept 07</td></tr>
+<tr><td>Ranking / cost</td><td>sort by raw score; O(d), O(n·d), O(n log n), O(n·d) space</td><td>Concepts 08-09</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing every handoff, in order</h2></div></header>
+<div class="lane-flow">
+<div><b>A=(3,4), B=(6,8), C=(4,3) —</b> the one example this entire concept reuses.</div>
+<div><b>Norms (C02) —</b> ‖A‖=5, ‖B‖=10, ‖C‖=5.</div>
+<div><b>Cosine similarity (C03), using the norms above —</b> cos(A,B)=1.0, cos(A,C)=0.96.</div>
+<div><b>Distance (C04), on the raw coordinates —</b> dist(A,B)=5.0, dist(A,C)=1.4142 — disagrees with cosine's ranking.</div>
+<div><b>Distance again, on normalized vectors (C02+C04) —</b> dist(Â,B̂)=0, dist(Â,Ĉ)=0.2828 — now agrees with cosine.</div>
+<div><b>Softmax (C06), fed the cosine values directly —</b> softmax([1.0, 0.96]) = [0.5100, 0.4900].</div>
+<div><b>Entropy and cross-entropy (C07), fed the softmax output —</b> H(P)≈0.6929 nats; cross-entropy vs. B ≈0.6733 nats.</div>
+<div><b>Ranking and cost (C08-09), on the original raw scores —</b> B ranks first; n=2,d=2 gives 2/4/2/16 for score/search/sort/space.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Every concept in Module 04, as one hub</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of all nine prior concepts feeding this concept's single worked example">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Concepts 01-04 · geometric</b><small>Vectors, norms, cosine, distance — produce the raw scores</small></div>
+<div class="diagram-node hub-center"><b>One query, two candidates</b><small>A=(3,4), B=(6,8), C=(4,3) — reused at every stage</small></div>
+<div class="diagram-node"><b>Concepts 05-09 · probabilistic + cost</b><small>Softmax, entropy, cross-entropy, ranking, operation counts — consume those scores</small></div>
+</div>
+</div>
+<p>The hub above is the required flow; Section 14's lab lets you drag the query vector A and watch every downstream number — cosine, distance, softmax, entropy, cross-entropy, ranking — recompute live from the same two formulas. A second, additional visual — the beginner core's b03 coordinate-plane figure — already showed the static geometry; this section's hub is the module-wide dependency view instead.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Vectors — scored, ranked, and costed exactly like b03-b04</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept doesn't add a new stage to the pipeline — it proves that everything Module 04 built already fits inside the "Retrieval" stage as one coherent computation, on real vectors of any size, not just this concept's toy 2-candidate example.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The full chain, as one composed function</h2></div></header>
+<p>Every stage in Section 06 composes into a single function of the query and candidates:</p>
+<div class="equation">rank(A, {B,C}) = sort_desc({ cos(A,B), cos(A,C) })                                    [C03, C08]
+loss(A, {B,C}, correct=B) = −ln( softmax_T({cos(A,B), cos(A,C)})[correct] )            [C06, C07]
+cost(n,d) = O(d) + O(n·d) + O(n log n) + O(n·d) space, evaluated at this example's n=2, d=2   [C09]</div>
+<p>Nothing on the right-hand side of any line is new; every symbol was defined in an earlier concept. The only thing this concept adds is the composition itself — showing that a ranking function, a training loss, and a cost formula can all be evaluated on the identical query and candidate set, without contradiction.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Every number, from every concept, in one table</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Concept</th><th>Quantity</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>02</td><td>‖A‖, ‖B‖, ‖C‖</td><td>5, 10, 5</td></tr>
+<tr><td>03</td><td>cos(A,B), cos(A,C)</td><td>1.0, 0.96</td></tr>
+<tr><td>04</td><td>raw dist(A,B), raw dist(A,C)</td><td>5.0, 1.4142</td></tr>
+<tr><td>02+04</td><td>normalized dist(A,B), dist(A,C)</td><td>0, 0.2828</td></tr>
+<tr><td>06</td><td>softmax([1.0, 0.96])</td><td>[0.5100, 0.4900]</td></tr>
+<tr><td>07</td><td>entropy H(P)</td><td>0.6929 nats</td></tr>
+<tr><td>07</td><td>cross-entropy vs. B</td><td>0.6733 nats</td></tr>
+<tr><td>08</td><td>ranking</td><td>B &gt; C</td></tr>
+<tr><td>09</td><td>score / search / sort / space (n=2,d=2)</td><td>2 / 4 / 2 / 16 bytes</td></tr>
+</tbody>
+</table>
+<p>Nine rows, nine concepts, one query and two candidates the entire way down. Every value above was independently recomputed for this lesson rather than copied from an earlier concept's own text, and matches exactly — direct confirmation that the chain holds together.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a production use, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Unit-testing a retrieval pipeline end to end</h3><p>Section 10's table is exactly the shape of a regression test: fixed input, exact expected output, at every stage of the pipeline.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Two candidates, the smallest interesting case</h3><p>With only 2 candidates, softmax's denominator has just 2 terms and ranking is a single comparison — the smallest example where every formula still does real work.</p></article>
+<article class="info-card"><span>PRODUCTION USE</span><h3>Tracing one real query through logs</h3><p>A production system's per-query logs, read in order, are exactly this concept's table — scores, a rank, and (during training) a loss, for one real query.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming a bigger example would prove something different</h3><p>Every formula in this chain is defined for any n and d — a 2-candidate example doesn't simplify the math, it just makes it hand-checkable (Concept 09's cost formulas are the only place the SIZE of n and d actually shows up).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The entire pipeline, end to end, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+A, B, C = (3.0, 4.0), (6.0, 8.0), (4.0, 3.0)
+
+def norm(v): return math.sqrt(v[0]**2 + v[1]**2)                     # Concept 02
+def dot(u, v): return u[0]*v[0] + u[1]*v[1]
+def cosine(u, v): return dot(u, v) / (norm(u) * norm(v))             # Concept 03
+def distance(u, v): return math.sqrt((u[0]-v[0])**2 + (u[1]-v[1])**2)  # Concept 04
+def normalize(v):
+    n = norm(v)
+    return (v[0]/n, v[1]/n) if n > 0 else (0.0, 0.0)
+
+def softmax(z, T=1.0):                                               # Concept 06
+    m = max(z)
+    exps = [math.exp((x - m) / T) for x in z]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+def entropy(p): return -sum(x * math.log(x) for x in p if x > 0)     # Concept 07
+def cross_entropy(p, correct_idx): return -math.log(p[correct_idx])  # Concept 07
+
+# The chain, run once, in order:
+n_a, n_b, n_c = norm(A), norm(B), norm(C)
+cos_ab, cos_ac = cosine(A, B), cosine(A, C)
+raw_ab, raw_ac = distance(A, B), distance(A, C)
+norm_ab, norm_ac = distance(normalize(A), normalize(B)), distance(normalize(A), normalize(C))
+probs = softmax([cos_ab, cos_ac])
+h = entropy(probs)
+ce_b = cross_entropy(probs, 0)
+ranking = "B > C" if cos_ab >= cos_ac else "C > B"
+
+assert (n_a, n_b, n_c) == (5.0, 10.0, 5.0)
+assert round(cos_ab, 2) == 1.0 and round(cos_ac, 2) == 0.96
+assert raw_ab > raw_ac                     # raw distance disagrees with cosine's ranking
+assert norm_ab < norm_ac                   # normalized distance agrees with cosine's ranking
+assert round(probs[0], 4) == 0.5100
+assert round(ce_b, 4) == 0.6733
+assert ranking == "B > C"
+
+n, d = 2, 2                                # Concept 09, at this example's actual size
+assert n * d == 4 and n * math.log2(n) == 2 and n * d * 4 == 16
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code runs the identical chain</h2></div></header>
+<p>A real dense retriever's forward pass runs this exact sequence at real scale: embed a query, score it against every candidate (Concepts 03-04, vectorized), optionally convert scores to a distribution for a training loss (Concepts 06-07), and return a ranked list (Concept 08) — the same nine-step chain this concept just ran by hand on 2 candidates. Lewis et al.'s original RAG paper and Karpukhin et al.'s DPR paper (both cited in earlier Module 04 concepts) describe exactly this chain running end to end inside a real retrieval-augmented system.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Full Pipeline Walkthrough</h2></div></header>
+<div class="lab">
+<p>Drag query A's two coordinates. Candidates B=(6,8) and C=(4,3) stay fixed. Every downstream value — norms, cosine, raw and normalized distance, softmax, entropy, cross-entropy, and the ranking — recomputes live, using nothing but Concepts 02-08's own formulas.</p>
+<div class="norm-controls" id="wgSliders_0410">
+<div class="control"><label for="wgAx_0410">Query A, x-coordinate</label><input type="range" id="wgAx_0410" min="1" max="8" step="0.5" value="3"><output id="wgAxOut_0410">3.0</output></div>
+<div class="control"><label for="wgAy_0410">Query A, y-coordinate</label><input type="range" id="wgAy_0410" min="1" max="8" step="0.5" value="4"><output id="wgAyOut_0410">4.0</output></div>
+</div>
+<div class="norm-readout">
+<div><span>NORMS ‖A‖ / ‖B‖ / ‖C‖</span><b><span id="wgNormA_0410">5.000</span> / <span id="wgNormB_0410">10.000</span> / <span id="wgNormC_0410">5.000</span></b></div>
+<div><span>COSINE cos(A,B) / cos(A,C)</span><b><span id="wgCosAB_0410">1.0000</span> / <span id="wgCosAC_0410">0.9600</span></b></div>
+<div><span>RAW DISTANCE A-B / A-C</span><b><span id="wgRawDistAB_0410">5.0000</span> / <span id="wgRawDistAC_0410">1.4142</span></b></div>
+<div><span>NORMALIZED DISTANCE A-B / A-C</span><b><span id="wgNormDistAB_0410">0.0000</span> / <span id="wgNormDistAC_0410">0.2828</span></b></div>
+<div><span>SOFTMAX (B share / C share)</span><b><span id="wgSoftB_0410">0.5100</span> / <span id="wgSoftC_0410">0.4900</span></b></div>
+<div><span>ENTROPY H(P)</span><b id="wgEntropy_0410">0.6929 nats</b></div>
+<div><span>CROSS-ENTROPY vs. WINNER</span><b id="wgCrossEnt_0410">0.6733 nats</b></div>
+</div>
+<div class="callout" id="wgVerdict_0410">Raw distance and cosine DISAGREE here on which candidate is closer -- exactly Concept 04's point. Normalized distance agrees with cosine, as it always does.</div>
+<div class="fine-print" id="wgRanking_0410">Cosine: B &gt; C (cosine) · Raw distance: C &gt; B (raw distance) · Normalized distance: B &gt; C (normalized distance)</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>This worked example vs. a real corpus</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Setting</th><th>n, d</th><th>What changes</th></tr></thead>
+<tbody>
+<tr><td>This concept's worked example</td><td>n=2, d=2</td><td>Every formula is hand-checkable; cost (Concept 09) is trivial at this size</td></tr>
+<tr><td>A real small RAG project</td><td>n≈10,000, d≈768</td><td>Same exact formulas; brute-force search (Concept 09) becomes the dominant cost, at millions of operations per query</td></tr>
+<tr><td>A large-scale production system</td><td>n≈millions, d≈1,024+</td><td>Same formulas again; brute-force search is no longer practical — Module 09's approximate indexes (forward reference) trade some exactness for speed</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SKIPPING NORMALIZATION</span><h3>Using raw distance to rank when cosine was the intended metric</h3><p>b03's own numbers show this can silently flip a ranking — C would look closer than B by raw distance alone, the wrong answer for this example's intended similarity notion.</p></article>
+<article class="info-card"><span>MIXING UP STAGES</span><h3>Feeding a raw score into a formula expecting a probability, or vice versa</h3><p>Section 06's ranking function wants raw scores directly (no softmax); Section 07's cross-entropy wants a softmax output — swapping them produces a number that parses but means nothing.</p></article>
+<article class="info-card"><span>TESTING ONLY THE FINAL OUTPUT</span><h3>Checking only the final ranking, never the intermediate values</h3><p>Section 10's full table is exactly the fix — a pipeline that returns the right final ranking by accident (e.g., two compensating bugs) would still fail an intermediate-value check.</p></article>
+<article class="info-card"><span>FORGETTING THE COST SCALES</span><h3>Assuming this example's trivial cost generalizes to any size</h3><p>Section 15's contrast is the reminder — the formulas don't change, but Concept 09's cost terms grow from trivial to dominant as n and d grow.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Module 04's concepts were nine unrelated topics grouped together</td><td>False — Section 06 traces a direct, unbroken handoff from Concept 02's norms through Concept 09's cost formulas, all on one example.</td></tr>
+<tr><td>A worked example this small can't demonstrate a real disagreement between formulas</td><td>False — b03's 2-candidate example reproduces Concept 04's raw-distance-vs-cosine disagreement exactly, at the smallest possible scale.</td></tr>
+<tr><td>This concept teaches new content that will be tested going forward</td><td>False — every formula belongs to Concepts 01-09; this concept's only content is the connections between them.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Write end-to-end pipeline tests shaped exactly like Section 10's table — fixed input, exact expected value at every stage, not just the final ranking.</li>
+<li>When debugging an unexpected ranking in production, check each stage in this concept's order (norm → score → distance/softmax → rank) rather than only inspecting the final output — Section 16's "mixing up stages" failure is invisible from the final ranking alone.</li>
+<li>Treat this chain as the specification a real embedding pipeline must satisfy — any production system claiming to do "vector retrieval" should be checkable against exactly these nine steps, just at a larger n and d.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Which concept's output directly becomes Concept 06's softmax input, in this concept's chain?</summary><div>Concept 03's cosine similarity values — softmax is applied directly to [cos(A,B), cos(A,C)], with no intermediate step (Section 06).</div></details>
+<details class="quiz"><summary>Does Concept 09's cost analysis apply only to the geometric thread, only to the probabilistic thread, or both?</summary><div>Both — Section 06's distinction table shows operation and storage costs apply to every stage in this concept's chain, geometric and probabilistic alike.</div></details>
+<details class="quiz"><summary>Why does this concept's worked example still show the raw-distance-vs-cosine disagreement from Concept 04?</summary><div>Because A, B, and C are the identical points used earlier — the disagreement is a structural fact about un-normalized vectors (B lies on the same ray as A but twice as far), not a coincidence tied to any one lesson's framing.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new query D = (2, 6) is compared against the same candidates B = (6, 8) and C = (4, 3). Compute, in order: the norm of D; cos(D,B) and cos(D,C); raw distance from D to B and to C; whether raw distance and cosine agree or disagree on the ranking; the softmax distribution over [cos(D,B), cos(D,C)]; and the cross-entropy if B is the correct candidate. State the full ranking at the end.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>‖D‖ = √(4+36) = √40 ≈ 6.3246. dot(D,B) = 12+48 = 60, so cos(D,B) = 60/(6.3246×10) ≈ 0.9487. dot(D,C) = 8+18 = 26, so cos(D,C) = 26/(6.3246×5) ≈ 0.8225. Raw distance: dist(D,B) = √(16+4) = √20 ≈ 4.4721; dist(D,C) = √(4+9) = √13 ≈ 3.6056 — C is raw-closer, while B has higher cosine similarity, so raw distance and cosine DISAGREE, same pattern as b03. Softmax([0.9487, 0.8225]) at T=1: exponentials ≈ [2.5822, 2.2762], sum ≈ 4.8584, giving probs ≈ [0.5315, 0.4685]. Cross-entropy vs. B (correct): −ln(0.5315) ≈ 0.6314 nats. Final ranking by cosine (and by softmax's larger share): B &gt; C.</div>
+</details>
+<p>Teach-back: explain, in your own words, why B ends up ranked first by cosine and softmax even though C is closer to D by raw distance — name the specific geometric fact (about D, B, and C's directions from the origin) that causes this.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Worked retrieval geometry</h3><ul><li><b>No new formula:</b> every number in this concept belongs to Concepts 01-09</li><li><b>The chain:</b> norms → cosine/distance → softmax → entropy/cross-entropy → ranking → cost</li><li><b>The proof:</b> Concept 04's disagreement-then-agreement result reproduces exactly on this example</li><li><b>What's closed:</b> Module 04, all ten concepts — Module 05 opens next, still inside Phase 1</li></ul></div>
+<div><h3>Memorable example</h3><p>A=(3,4), B=(6,8), C=(4,3): raw distance says C is closer (1.41 vs. 5.0), cosine and normalized distance both say B is — the same disagreement Concept 04 first proved, still holding at the module's very last concept.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Walk through, end to end, what happens when a query vector is compared against a set of candidate document vectors in a dense retrieval system.</summary><div>Compute each candidate's norm and the query's norm (Concept 02), score each candidate by cosine similarity or distance (Concepts 03-04), optionally convert those scores to a distribution via softmax for a training signal (Concept 06), measure that distribution's uncertainty and its agreement with a known-correct label via entropy and cross-entropy during training (Concept 07), and rank candidates directly from the raw scores at inference (Concept 08) — all at a cost governed by Concept 09's O(n·d) and O(n log n) terms.</div></details>
+<details class="quiz"><summary>Why might a system that ranks correctly still fail an end-to-end pipeline test?</summary><div>Because two compensating errors in intermediate stages (Section 16) can still produce a correct final ranking by coincidence — Section 10's full-table test catches this by checking every intermediate value, not just the final output.</div></details>
+<details class="quiz"><summary>Design question: you're asked to write a regression test suite for a retrieval pipeline. What should it check, based on this concept?</summary><div>Every stage in Section 06's chain independently — norms, similarity/distance scores, the softmax distribution (if training is involved), entropy/cross-entropy values, and the final ranking — with fixed inputs and exact expected outputs at each stage, exactly Section 10's table structure.</div></details>
+<details class="quiz"><summary>A colleague says "cosine similarity and Euclidean distance are basically interchangeable." How would you respond, using this module's own example?</summary><div>They agree only once vectors are normalized (Concept 04) — this concept's own A, B, C example shows them actively disagreeing on raw coordinates (B ranks first by cosine, C ranks first by raw distance), so they are not interchangeable in general, only under that specific condition.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.11401"><b>Lewis, Perez, Piktus et al. — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (arXiv:2005.11401)</b><br><span>Describes this exact embed-score-rank chain running inside a real RAG system, behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2004.04906"><b>Karpukhin, Oğuz, Min et al. — Dense Passage Retrieval for Open-Domain Question Answering (arXiv:2004.04906)</b><br><span>The dense-retrieval training loop that runs Concepts 06-08's softmax-and-cross-entropy stage at real scale, behind Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 04 COMPLETE · CONCEPT 10 DONE</span>
+<h3>All ten concepts of Module 04 are done — Module 05 opens next, still inside Phase 1</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can name every handoff between Concepts 01-09 without looking back. Module 05, "Classical information retrieval," is Phase 1's fifth and final module, covering the lexical-search foundations dense retrieval extends rather than replaces.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Full Pipeline Walkthrough ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Module 05, Classical information retrieval.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 10 · Active</p>
+<a href="module-04-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>

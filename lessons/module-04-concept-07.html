@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 06 turned any list of raw scores into a genuine probability distribution via softmax. This concept asks two separate questions about that same kind of distribution: how spread out or peaked is it on its own (entropy), and how well does it agree with where the real answer actually landed (cross-entropy)? Cross-entropy becomes the loss function Concept 08's ranking objective optimizes directly.">
+<title>Entropy and cross-entropy — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 07</p>
+<h1>Entropy<br><em>and cross-entropy.</em></h1>
+<p class="lesson-lead">Concept 06 turned any list of raw scores into a genuine probability distribution, and proved that temperature reshapes it without ever changing which candidate ranks highest. This concept asks two separate questions about a distribution like that. <b>Entropy</b> looks at the distribution alone: how spread out or how peaked is it? <b>Cross-entropy</b> looks at the distribution against a stated truth: given where the real answer actually landed, how well did this distribution see it coming? Cross-entropy is the exact number Concept 08's training objective minimizes.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's softmax output, cited directly — no new probability mechanics are re-derived here</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute entropy for a stated distribution by hand, compute cross-entropy against a stated true label, and explain why a confident distribution can still have high cross-entropy</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 06 showed that softmax turns any list of scores into a genuine distribution, and that temperature reshapes it without ever changing the ranking. This concept measured that distribution two different ways: entropy asked how spread out it is, on its own; cross-entropy asked how well it agrees with where the real answer landed.</p>
+<b>7 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two different questions about the same distribution</h2>
+</div>
+<p>Concept 06 handed back a distribution — a full set of probabilities, summing to 1. This concept asks two things about it: how uncertain is it, and does it actually agree with the truth?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Entropy measures a distribution alone; cross-entropy measures it against a truth</h3>
+<div class="mental-compare">
+<div><span>ENTROPY, H(P)</span><p>H(P) = −Σᵢ pᵢ·ln(pᵢ). A property of one distribution, by itself — no "correct answer" needed to compute it. Low entropy means concentrated on a few outcomes; high entropy means spread thin.</p></div>
+<div><span>CROSS-ENTROPY, H(P,Q)</span><p>H(P,Q) = −Σᵢ pᵢ·ln(qᵢ), comparing a true distribution P against a predicted one Q. When exactly one outcome is actually correct — P is one-hot — this collapses to a single term: −ln(q_correct).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> entropy asks "how spread out is this distribution?"; cross-entropy asks "how surprised should I be, given this distribution, when the real answer turns out to be this one?"</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Without this, "confident" and "correct" get confused</h3>
+<p>Concept 06's distribution can be as sharp or as flat as temperature allows, but sharpness alone says nothing about whether the sharp end is actually pointed at the right candidate. Entropy measures the sharpness. Cross-entropy is the number that catches the case a raw glance at the bars can't: a distribution that looks confident and is confidently wrong.</p>
+<div class="mental-compare">
+<div><span>ENTROPY ALONE</span><p>A distribution at T=0.5 has low entropy — it's sharp, concentrated on one candidate. That's a fact about the distribution's shape, true regardless of which candidate is actually correct.</p></div>
+<div><span>ENTROPY PLUS CROSS-ENTROPY</span><p>The same sharp distribution scores a tiny cross-entropy if the sharp end happens to be the correct candidate — and a large one if it isn't. Sharpness cuts both ways.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Concept 06's own distribution, measured for spread</h3>
+<p>Concept 06's three candidates at T=1 gave p = [0.659, 0.242, 0.099] — cited directly, not recomputed. Entropy sums −pᵢ·ln(pᵢ) over all three terms.</p>
+<div class="context-demo">
+<div><span>TERM FOR DOC 1</span><p>−0.659 × ln(0.659) = −0.659 × (−0.4166) ≈ 0.2746.</p></div>
+<div><span>TERM FOR DOC 2</span><p>−0.242 × ln(0.242) = −0.242 × (−1.4188) ≈ 0.3434.</p></div>
+<div><span>TERM FOR DOC 3</span><p>−0.099 × ln(0.099) = −0.099 × (−2.3125) ≈ 0.2289.</p></div>
+<div><span>SUM = ENTROPY</span><p>0.2746 + 0.3434 + 0.2289 ≈ 0.8467 nats.</p></div>
+</div>
+<p>Every term is positive (each pᵢ ∈ (0,1), so ln(pᵢ) is negative, and the leading minus sign flips it back positive) — entropy itself is always non-negative, for any distribution.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0407-visual-title">
+<strong class="concept-visual-title" id="c0407-visual-title">VISUAL · THE THREE ENTROPY TERMS, SIDE BY SIDE</strong>
+<div class="prob-bars" role="img" aria-label="Three bars showing the size of each entropy term for the distribution 0.659, 0.242, 0.099 -- 0.2746, 0.3434, and 0.2289, summing to entropy 0.8467">
+<div class="prob-row"><span>Doc 1 term</span><div class="bar-track"><div class="bar-fill" style="width:79.9%"></div></div><span>0.2746</span></div>
+<div class="prob-row winner"><span>Doc 2 term</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>0.3434</span></div>
+<div class="prob-row"><span>Doc 3 term</span><div class="bar-track"><div class="bar-fill" style="width:66.7%"></div></div><span>0.2289</span></div>
+</div>
+<figcaption>Each bar is one term of entropy's sum, −pᵢ·ln(pᵢ), for the distribution [0.659, 0.242, 0.099]. The middle candidate — not the top-scoring one — contributes the single largest term, because entropy weighs how probable an outcome is against how surprising it would be, and a mid-probability outcome does more of both at once than either the near-certain top candidate or the near-impossible bottom one. The three terms sum to entropy, 0.8467 nats.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The same distribution, scored against two different truths</h3>
+<div class="example-grid">
+<article class="info-card"><span>IF DOC 1 IS ACTUALLY CORRECT</span><h3>Cross-entropy = −ln(0.659) ≈ 0.4170 nats</h3><p>The distribution's largest share landed on the right candidate — a small, low loss.</p></article>
+<article class="info-card"><span>IF DOC 3 IS ACTUALLY CORRECT</span><h3>Cross-entropy = −ln(0.099) ≈ 2.3170 nats</h3><p>Same exact distribution — but the truth landed on the candidate it favored least. The loss jumps more than five-fold.</p></article>
+<article class="info-card"><span>WHY IT COLLAPSES TO ONE TERM</span><h3>The true distribution is one-hot</h3><p>P has a 1 at the correct index and 0 everywhere else; every 0×ln(qᵢ) term vanishes, leaving only −1×ln(q_correct) (Section 09 proves the general identity behind this).</p></article>
+<article class="info-card"><span>WHAT STAYS FIXED</span><h3>Entropy doesn't change</h3><p>H(P) ≈ 0.8467 nats either way — entropy only depends on the distribution's own shape, never on which candidate later turns out to be correct.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>From a distribution to a trainable number</h3>
+<div class="pipeline-preview">
+<span>Concept 06 — scores become a distribution</span><i>↓</i><span class="hot">Concept 07 — measuring it (entropy) and scoring it against truth (cross-entropy)</span><i>↓</i><span>Concept 08 — the training objective built on cross-entropy</span>
+</div>
+<p>Entropy is a diagnostic — a fact about a distribution's own shape, useful for monitoring but not by itself something to optimize during training. Cross-entropy is the number Concept 08 actually minimizes: pushing a model's raw scores so that the softmax distribution they produce keeps assigning more and more probability to whichever candidate really is correct.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Entropy, cross-entropy, and KL divergence — three related, different numbers</h3>
+<div class="distinction-table" role="table" aria-label="Entropy, cross-entropy and KL divergence distinguished from each other">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually measures</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Entropy, H(P)</span><span role="cell">How spread out ONE distribution is, with no reference to any truth</span><span role="cell">Mistaken for a correctness score — it isn't; a confidently wrong distribution can still have very low entropy</span></div>
+<div role="row"><span role="cell">Cross-entropy, H(P,Q)</span><span role="cell">How well a predicted distribution Q agrees with a true distribution P</span><span role="cell">Assumed symmetric — H(P,Q) ≠ H(Q,P) in general; here P is fixed as the one-hot truth, Q as the softmax prediction</span></div>
+<div role="row"><span role="cell">KL divergence, KL(P‖Q)</span><span role="cell">The extra cost specifically caused by using Q instead of the true P — KL(P‖Q) = H(P,Q) − H(P)</span><span role="cell">Treated as identical to cross-entropy — they coincide only when H(P) = 0, exactly the one-hot-truth case this module always uses (Section 09)</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Low entropy means the prediction is probably correct."</b><p>Entropy never looks at the truth at all — b04's doc-3 case has the exact same low-ish entropy as the doc-1 case, with a cross-entropy over five times larger.</p></div>
+<div><b>"Entropy and cross-entropy are just two names for the same formula."</b><p>Entropy takes one distribution as input; cross-entropy takes two — a true one and a predicted one (Section 05).</p></div>
+<div><b>"You need a ground-truth label before you can compute entropy."</b><p>Entropy is defined on a single distribution alone — b03 computes it with no mention of which candidate is correct.</p></div>
+<div><b>"Cross-entropy can be negative when a prediction is very good."</b><p>It can get arbitrarily close to 0 as q_correct → 1, but −ln(x) is never negative for x ∈ (0,1] — cross-entropy is always ≥ 0.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Turning the Oracle RAG project's distribution into a training signal</h3>
+<div class="project-map">
+<div><span>CROSS-ENTROPY AS THE RETRIEVAL LOSS</span><b>−ln(q_correct), computed per query</b><p>For a query whose actually-relevant passage is known during training, cross-entropy against Concept 06's softmax output is the exact number Concept 08's contrastive objective drives down.</p></div>
+<div><span>ENTROPY AS A MONITORING SIGNAL</span><b>Watched, not optimized</b><p>A retrieval system whose softmax distributions stay persistently high-entropy across many queries is hedging rather than committing — a diagnostic signal worth watching in production, separate from the loss itself.</p></div>
+<div><span>WHAT THIS CONCEPT DOES NOT BUILD</span><b>The actual training loop</b><p>Cross-entropy is the number; turning it into gradients that update an embedding model's weights is Module 09's job, forward-referenced and not built here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Entropy</b><p>H(P) = −Σᵢ pᵢ·ln(pᵢ) — a property of one distribution alone, always ≥ 0.</p></div>
+<div><b>Cross-entropy</b><p>H(P,Q) = −Σᵢ pᵢ·ln(qᵢ) — collapses to −ln(q_correct) when the true distribution P is one-hot.</p></div>
+<div><b>Confident ≠ correct</b><p>A sharp, low-entropy distribution can still produce a large cross-entropy if its confidence points the wrong way.</p></div>
+<div><b>What's next</b><p>Concept 08 builds the actual training objective directly on top of cross-entropy.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's distribution, explain why every individual entropy term −pᵢ·ln(pᵢ) comes out positive even though ln(pᵢ) itself is negative.</li>
+<li>Without recomputing anything, state whether entropy would change if doc 2 turned out to be the correct candidate instead of doc 1. Why or why not?</li>
+<li>Why does cross-entropy collapse to a single term, −ln(q_correct), specifically when the true distribution is one-hot?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Ranking functions and optimization objectives</h3>
+<p>This concept defined the number that measures how well a distribution agrees with the truth. Concept 08 asks what happens when that number becomes the actual thing a model is trained to minimize — turning Concept 06's softmax and this concept's cross-entropy into a real ranking objective, the kind used to train retrieval and reranking models.</p>
+<div class="beginner-memory"><b>Concept 07 is complete.</b> Continue to Ranking functions and optimization objectives.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 08 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Measure the spread, then measure the agreement with truth.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>H(P) = −Σpᵢln(pᵢ); H(P,Q) = −Σpᵢln(qᵢ), collapsing to −ln(q_correct) for a one-hot truth.</small></a>
+<a href="#b03"><span>02</span><b>Compute</b><small>Concept 06's distribution [0.659, 0.242, 0.099] has entropy ≈0.8467 nats.</small></a>
+<a href="#b04"><span>03</span><b>Contrast</b><small>Same distribution, cross-entropy 0.4170 nats if doc 1 is correct, 2.3170 nats if doc 3 is.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the H(P,Q)=H(P)+KL(P‖Q) identity, the from-scratch code, and The Surprise Meter lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Concept 06's distribution → entropy measures its own spread → cross-entropy measures its agreement with a stated truth → confident-but-wrong distributions score high even with low entropy → Concept 08 turns cross-entropy into an actual training objective.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the entropy and cross-entropy deep dive</b><em>The H(P,Q)=H(P)+KL(P‖Q) identity, from-scratch code, and The Surprise Meter lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Two new questions about a distribution already built</h2></div></header>
+<p>Concept 06 built the bridge from raw scores to a genuine distribution. This concept adds no new distribution-building mechanism — it adds two ways of reading one once it exists: entropy, asked of the distribution alone, and cross-entropy, asked of the distribution against a stated truth. Concept 08 then turns the second of those into an actual training objective.</p>
+<div class="flow">
+<div class="flow-node">Concept 06 — scores become a distribution</div>
+<div class="flow-node hot">Concept 07 — entropy and cross-entropy</div>
+<div class="flow-node">Concept 08 — the training objective</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State entropy and cross-entropy precisely</h3><p>Both formulas, and the one-hot-truth simplification that collapses cross-entropy to a single term.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Work both out by hand for a stated distribution</h3><p>Given a distribution and (for cross-entropy) a stated true label, produce the exact nats value for each.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate entropy, cross-entropy and KL divergence</h3><p>Three related numbers with three different jobs, connected by one identity (Section 09).</p></article>
+<article class="info-card"><span>CONNECT</span><h3>See cross-entropy as a loss function in waiting</h3><p>State, without building it, why cross-entropy is exactly the number Concept 08's training objective will minimize.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06's softmax output, cited directly:</b> a distribution over candidates, satisfying Concept 05's sum-to-1 requirement.</li>
+<li><b>Natural logarithm, ln(x):</b> defined for x &gt; 0, negative for x ∈ (0,1), zero at x=1, strictly increasing.</li>
+<li><b>The convention 0·ln(0) = 0:</b> needed so that a zero-probability outcome contributes nothing to entropy, matching its limiting behavior as p→0⁺.</li>
+<li><b>Out of scope here:</b> Concept 08's actual training loop and gradient computation are named as the destination, not built in this concept.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Surprise, and the price of being confidently wrong</h2></div></header>
+<p>Think of −ln(p) as a "surprise" score for a single outcome: an outcome you assigned probability close to 1 barely surprises you at all when it happens (−ln(p) near 0); an outcome you assigned a tiny probability surprises you a great deal (−ln(p) large). Entropy is the surprise you'd expect on average, if the world really does behave according to your own distribution. Cross-entropy is the surprise you actually get, when the world behaves according to a different, true distribution instead — and it is never smaller than entropy, because being wrong about where reality lands only ever costs you extra surprise, never a discount.</p>
+<div class="callout warning"><b>Analogy boundary</b>"Surprise" is an intuition for −ln(p), not a rigorous definition — Section 09's identity is the exact statement of why cross-entropy can never fall below entropy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Entropy, H(P)</td><td>H(P) = −Σᵢ pᵢ·ln(pᵢ), over a distribution P</td><td>Always ≥ 0; maximized at ln(n) for n equally likely outcomes; 0 only for a one-hot (fully certain) distribution</td></tr>
+<tr><td>Cross-entropy, H(P,Q)</td><td>H(P,Q) = −Σᵢ pᵢ·ln(qᵢ), P the true distribution, Q the predicted one</td><td>H(P,Q) ≥ H(P) always; equality only when Q = P exactly; not symmetric — H(P,Q) ≠ H(Q,P) in general</td></tr>
+<tr><td>KL divergence, KL(P‖Q)</td><td>KL(P‖Q) = H(P,Q) − H(P) = Σᵢ pᵢ·ln(pᵢ/qᵢ)</td><td>Always ≥ 0 (Gibbs' inequality); 0 only when Q = P; not a true distance — not symmetric, no triangle inequality</td></tr>
+<tr><td>Nats vs. bits</td><td>ln (natural log) gives nats; log₂ gives bits — the same quantity, a constant factor of ln(2) ≈ 0.6931 apart</td><td>This lesson uses nats throughout, matching ln; multiply by 1/ln(2) to convert any value here to bits</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing entropy and cross-entropy for the same distribution</h2></div></header>
+<div class="lane-flow">
+<div><b>Start with Concept 06's distribution —</b> p = [0.659, 0.242, 0.099] at T=1.</div>
+<div><b>Entropy — take −pᵢ·ln(pᵢ) for each term —</b> [0.2746, 0.3434, 0.2289], summing to ≈0.8467 nats.</div>
+<div><b>Cross-entropy, truth = doc 1 —</b> P = [1,0,0], so only the first term survives: −1·ln(0.659) ≈ 0.4170 nats.</div>
+<div><b>Cross-entropy, truth = doc 3 —</b> P = [0,0,1], so only the third term survives: −1·ln(0.099) ≈ 2.3170 nats.</div>
+<div><b>Compare —</b> entropy (0.8467) never moves; cross-entropy swings from 0.4170 to 2.3170 depending only on where the truth actually is.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One distribution, two separate measurements</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of a distribution feeding both entropy and cross-entropy, which in turn feeds Concept 08's training objective">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Concept 06's distribution</b><small>p = [0.659, 0.242, 0.099]</small></div>
+<div class="diagram-node hub-center"><b>Entropy: H(P) ≈ 0.8467 nats</b><small>The distribution's own spread — no truth needed</small></div>
+<div class="diagram-node"><b>Cross-entropy: H(P,Q) = −ln(q_correct)</b><small>0.4170 or 2.3170 nats, depending on the truth — Concept 08's loss</small></div>
+</div>
+</div>
+<p>The hub above is the required flow; Section 14's lab lets you drag temperature and flip which candidate is marked correct, watching entropy hold its own course while cross-entropy swings independently. A second, additional visual — Section 09's matrix below — makes the same point at a glance across confidence and correctness together.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors — scored by similarity (Concepts 03-04)</span><i>↓</i><span>Retrieval — scores become a distribution (Concept 06)</span><i>↓</i><span class="hot">Evaluation — entropy and cross-entropy measure that distribution</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Entropy and cross-entropy don't change the retrieval pipeline's shape — they attach two numbers to the distribution the pipeline already produces at the "Retrieval" stage. Cross-entropy specifically is what turns that distribution into a trainable signal, closing the loop back into the embedding model during training (Module 09, forward reference).</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>H(P,Q) = H(P) + KL(P‖Q), and why it collapses for a one-hot truth</h2></div></header>
+<p>Cross-entropy decomposes exactly into entropy plus KL divergence:</p>
+<div class="equation">H(P,Q) = −Σᵢ pᵢ·ln(qᵢ) = −Σᵢ pᵢ·ln(pᵢ) + Σᵢ pᵢ·ln(pᵢ/qᵢ) = H(P) + KL(P‖Q)</div>
+<p>Whenever the true distribution P is one-hot — exactly one candidate is actually correct, as in every case this module uses — H(P) = 0 (there is a single term 1·ln(1) = 0, and every 0·ln(0) term vanishes by convention). The identity above then collapses to H(P,Q) = KL(P‖Q) = −ln(q_correct): cross-entropy against a one-hot truth is, exactly, the KL divergence from the truth to the prediction, with no separate entropy term left over.</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable 2 by 2 map of confidence against correctness, showing representative cross-entropy values in each combination">
+<p class="matrix-quad-label">CONFIDENCE AND CORRECTNESS · CROSS-ENTROPY IN EACH COMBINATION</p>
+<div class="matrix-quad">
+<div class="matrix-corner"></div><div class="matrix-axis">Correct candidate favored</div><div class="matrix-axis">Correct candidate NOT favored</div>
+<div class="matrix-axis">Confident (low T)</div><div class="matrix-cell"><b>≈0.146 nats</b><span>T=0.5, truth=doc 1 — sharp and right</span></div><div class="matrix-cell"><b>≈3.946 nats</b><span>T=0.5, truth=doc 3 — sharp and wrong, the worst cell</span></div>
+<div class="matrix-axis">Unconfident (high T)</div><div class="matrix-cell"><b>≈0.690 nats</b><span>T=2, truth=doc 1 — right, but hedged</span></div><div class="matrix-cell"><b>≈1.640 nats</b><span>T=2, truth=doc 3 — wrong, but hedged, so the penalty is smaller than the sharp-and-wrong cell</span></div>
+</div>
+</div>
+<p>All four values come from the identical mechanism — Concept 06's softmax at a stated temperature, this concept's −ln(q_correct) — evaluated at the two temperatures already worked out in Concept 06's Section 10 and this concept's own truth-label choice. The sharp-and-wrong cell is the single largest number on the whole map, exactly the "confidently wrong" failure b07 warns about.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Entropy and cross-entropy across three temperatures</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Temperature</th><th>Distribution</th><th>Entropy H(P)</th><th>Cross-entropy, truth=doc 1</th><th>Cross-entropy, truth=doc 3</th></tr></thead>
+<tbody>
+<tr><td>T = 0.5</td><td>[0.864, 0.117, 0.019]</td><td>0.4537 nats</td><td>0.1464 nats</td><td>3.9464 nats</td></tr>
+<tr><td>T = 1.0</td><td>[0.659, 0.242, 0.099]</td><td>0.8467 nats</td><td>0.4170 nats</td><td>2.3170 nats</td></tr>
+<tr><td>T = 2.0</td><td>[0.502, 0.304, 0.194]</td><td>1.0262 nats</td><td>0.6898 nats</td><td>1.6398 nats</td></tr>
+</tbody>
+</table>
+<p>Reading down the entropy column: as temperature rises and the distribution flattens (Concept 06), entropy rises too, approaching ln(3) ≈ 1.0986 nats — the maximum possible entropy for three equally likely outcomes — but never reaching it, since the raw scores are never perfectly tied. Reading across any row: the same distribution produces a much smaller cross-entropy when the truth matches its favorite candidate than when it doesn't, and that gap is widest exactly at the lowest temperature, where the distribution commits hardest.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a production use, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Cross-entropy as a retrieval loss</h3><p>−ln(q_correct), computed per training query, is exactly the number Concept 08's objective drives toward 0 as the embedding model improves.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>The uniform distribution's maximum entropy</h3><p>For n equally likely outcomes, entropy reaches its maximum, ln(n) — for three outcomes, ln(3) ≈ 1.0986 nats, matching Concept 06's uniform limit as T→∞.</p></article>
+<article class="info-card"><span>PRODUCTION USE</span><h3>Perplexity as exp(cross-entropy)</h3><p>A commonly reported language-model metric, perplexity, is just exp() applied to an averaged cross-entropy — a familiar production number built directly on this concept's formula (forward reference, not derived here).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Reporting entropy where cross-entropy was meant</h3><p>A dashboard that only tracks a retrieval distribution's entropy is blind to b04's doc-3 failure mode entirely — entropy alone cannot detect a confidently wrong system.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Entropy and cross-entropy, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def entropy(probs):
+    return -sum(p * math.log(p) for p in probs if p > 0)  # 0*ln(0) convention
+
+def cross_entropy(true_idx, probs):
+    return -math.log(probs[true_idx])  # one-hot truth collapses the sum to one term
+
+probs = [0.659, 0.242, 0.099]  # Concept 06's distribution at T=1
+
+h = entropy(probs)
+print(round(h, 4))                          # 0.8467
+assert abs(h - 0.8467) < 1e-3
+
+ce_doc1 = cross_entropy(0, probs)
+ce_doc3 = cross_entropy(2, probs)
+print(round(ce_doc1, 4), round(ce_doc3, 4))  # 0.4170 2.3170
+assert ce_doc3 > ce_doc1                     # confidently wrong costs more than confidently right
+assert abs((ce_doc1) - (-math.log(probs[0]))) < 1e-9  # collapses to a single -ln(q_correct) term
+
+# KL divergence, one-hot truth case: KL(P||Q) = H(P,Q) - H(P) = H(P,Q), since H(one-hot) = 0
+kl_doc1 = ce_doc1 - 0.0
+assert abs(kl_doc1 - ce_doc1) < 1e-9
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same mechanism</h2></div></header>
+<p>PyTorch's <code>torch.nn.CrossEntropyLoss</code> takes raw logits directly, not a pre-computed softmax output — internally it applies a numerically stable log-softmax (Concept 06's log-sum-exp trick, applied to the log rather than computed as a separate softmax-then-log step) and then this concept's −ln(q_correct) in one fused operation, precisely to avoid computing softmax and its logarithm as two separate, less stable steps. <code>scipy.stats.entropy</code> computes Section 05's H(P) directly, and accepts a second distribution argument to compute cross-entropy or KL divergence between two distributions in one call.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Surprise Meter</h2></div></header>
+<div class="lab">
+<p>Drag the temperature slider, and mark which candidate is actually correct. The bars show Concept 06's live softmax distribution; the two readouts show this concept's entropy of that distribution and its cross-entropy against whichever candidate you marked correct.</p>
+<div class="norm-controls" id="seSliders0407">
+<div class="control"><label for="seTemp_0407">Temperature T</label><input type="range" id="seTemp_0407" min="10" max="500" step="5" value="100"><output id="seTempOut_0407">1.00</output></div>
+</div>
+<div class="control">
+<label id="seCorrectLabel_0407">Which candidate is actually correct?</label>
+<div class="lab-actions" id="seCorrectToggle_0407" role="group" aria-labelledby="seCorrectLabel_0407">
+<button type="button" class="secondary active" data-value="0">Doc 1 (score 2.0)</button>
+<button type="button" class="secondary" data-value="1">Doc 2 (score 1.0)</button>
+<button type="button" class="secondary" data-value="2">Doc 3 (score 0.1)</button>
+</div>
+</div>
+<div class="norm-readout">
+<div><span>ENTROPY, H(P)</span><b id="seEntropyBox_0407">0.8467 nats</b></div>
+<div><span>CROSS-ENTROPY, H(P,Q)</span><b id="seCrossEntBox_0407">0.4170 nats</b></div>
+</div>
+<div class="prob-bars" id="seBars0407" role="img" aria-label="Live softmax bars for scores 2.0, 1.0, 0.1, updating as temperature changes">
+<div class="prob-row winner"><span>Doc 1 (score 2.0)</span><div class="bar-track"><div class="bar-fill" id="seBar1_0407" style="width:65.9%"></div></div><span id="seBar1Out_0407">0.659</span></div>
+<div class="prob-row"><span>Doc 2 (score 1.0)</span><div class="bar-track"><div class="bar-fill" id="seBar2_0407" style="width:24.2%"></div></div><span id="seBar2Out_0407">0.242</span></div>
+<div class="prob-row"><span>Doc 3 (score 0.1)</span><div class="bar-track"><div class="bar-fill" id="seBar3_0407" style="width:9.9%"></div></div><span id="seBar3Out_0407">0.099</span></div>
+</div>
+<div class="callout" id="seVerdict_0407">Marked correct answer: Doc 1 (score 2.0), at 65.9% probability. Cross-entropy is low (0.417 nats) -- the distribution was already confident in the right place.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Entropy, cross-entropy, and plain accuracy, as training signals</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Signal</th><th>What it captures</th><th>Why it matters here</th></tr></thead>
+<tbody>
+<tr><td>Accuracy (was the top pick correct?)</td><td>A hard, binary fact per query</td><td>Not differentiable in the top-pick's raw scores — useless as a direct training target for gradient-based learning</td></tr>
+<tr><td>Entropy, H(P)</td><td>How spread out the distribution is, alone</td><td>A useful monitoring signal, but blind to correctness entirely — not a loss function</td></tr>
+<tr><td>Cross-entropy, H(P,Q) (this concept)</td><td>How well the distribution agrees with the actual truth</td><td>Smooth and differentiable in the raw scores (via softmax), and directly rewards moving more probability onto the correct candidate — exactly what Concept 08 optimizes</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>CONFUSING ENTROPY WITH CORRECTNESS</span><h3>Trusting a low-entropy output as "probably right"</h3><p>Section 09's matrix shows the single worst cross-entropy value sitting exactly in a low-entropy (confident) row — sharpness and correctness are entirely independent facts.</p></article>
+<article class="info-card"><span>ASSUMING SYMMETRY</span><h3>Treating H(P,Q) as equal to H(Q,P)</h3><p>Cross-entropy is directional — swapping which distribution is "true" and which is "predicted" generally changes the value, unlike a real distance.</p></article>
+<article class="info-card"><span>UNGUARDED LOG(0)</span><h3>A correct candidate's probability underflowing to exactly 0</h3><p>At a very low temperature, floating-point can round a tiny q_correct all the way to 0, and −ln(0) is undefined — production code needs a small epsilon floor, not a bare log call.</p></article>
+<article class="info-card"><span>NOISY LABELS</span><h3>Treating a mislabeled "truth" as real signal</h3><p>Cross-entropy against an incorrect label penalizes the model for being right — a data-quality problem cross-entropy cannot distinguish from a genuine mistake on its own.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A distribution with low entropy is a good prediction</td><td>False — low entropy only means concentrated, not correct; Section 09's matrix shows the worst cross-entropy value in a low-entropy row.</td></tr>
+<tr><td>Cross-entropy and KL divergence are always the same number</td><td>True only when the true distribution's own entropy is 0 — the one-hot case this module always uses, per Section 09's identity; in general H(P,Q) = H(P) + KL(P‖Q).</td></tr>
+<tr><td>Cross-entropy can be negative for a very confident, correct prediction</td><td>False — −ln(x) for x ∈ (0,1] is always ≥ 0; the best possible cross-entropy is 0, approached only as q_correct → 1.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Compute log-softmax directly, not softmax followed by a separate log — fusing the two (as PyTorch's <code>CrossEntropyLoss</code> and <code>log_softmax</code> do) reuses Concept 06's log-sum-exp stability trick instead of losing precision twice.</li>
+<li>Track entropy of a production retrieval system's score distributions over time as a monitoring signal — a sudden, sustained rise can indicate the system is losing confidence across the board, worth flagging even without a ground-truth label to compute cross-entropy against.</li>
+<li>Guard against −ln(0) explicitly wherever a real training pipeline computes cross-entropy on a live model's outputs — an unguarded call can silently produce NaN losses the moment any predicted probability underflows to exactly 0.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does entropy never depend on which candidate is actually correct?</summary><div>Entropy, H(P) = −Σpᵢln(pᵢ), is a function of the distribution's own probabilities alone — no true-label term appears anywhere in the formula (Section 05).</div></details>
+<details class="quiz"><summary>A distribution has low entropy. Does that guarantee low cross-entropy against any given true label? Why or why not?</summary><div>No — Section 09's matrix shows a low-entropy (confident) distribution can produce the single highest cross-entropy on the whole map, if its confidence happens to point at the wrong candidate.</div></details>
+<details class="quiz"><summary>Why does cross-entropy against a one-hot truth equal KL divergence exactly?</summary><div>H(P,Q) = H(P) + KL(P‖Q) always (Section 09); when P is one-hot, H(P) = 0, so the identity collapses to H(P,Q) = KL(P‖Q).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different query's softmax output over four candidates is q = [0.50, 0.30, 0.15, 0.05]. Compute this distribution's entropy. Then compute cross-entropy twice: once assuming the first candidate is actually correct, and once assuming the fourth candidate is. Report both cross-entropy values and state, in one sentence, which one KL divergence equals exactly and why.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Entropy: −(0.50·ln0.50 + 0.30·ln0.30 + 0.15·ln0.15 + 0.05·ln0.05) = −(0.50×−0.6931 + 0.30×−1.2040 + 0.15×−1.8971 + 0.05×−2.9957) = 0.3466+0.3612+0.2846+0.1498 ≈ 1.1421 nats. Cross-entropy, truth = candidate 1: −ln(0.50) ≈ 0.6931 nats. Cross-entropy, truth = candidate 4: −ln(0.05) ≈ 2.9957 nats. Both computed cross-entropy values equal their own KL divergence exactly, since the true distribution is one-hot in both cases (H(one-hot)=0, so H(P,Q)=KL(P‖Q) either way, per Section 09) — the question isn't which one KL equals, it's that KL always equals cross-entropy here, regardless of which candidate is marked true.</div>
+</details>
+<p>Teach-back: explain in your own words why the entropy value (1.1421 nats) is the same for both cross-entropy calculations above, even though the two cross-entropy values themselves are more than four times apart.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Entropy and cross-entropy</h3><ul><li><b>Entropy:</b> H(P) = −Σpᵢln(pᵢ) — a distribution's own spread, always ≥ 0</li><li><b>Cross-entropy:</b> H(P,Q) = −Σpᵢln(qᵢ), collapsing to −ln(q_correct) for a one-hot truth</li><li><b>KL divergence:</b> H(P,Q) = H(P) + KL(P‖Q) — equals cross-entropy exactly when H(P)=0</li><li><b>The core warning:</b> low entropy (confident) says nothing about being correct</li></ul></div>
+<div><h3>Memorable example</h3><p>Distribution [0.659, 0.242, 0.099]: entropy ≈0.8467 nats regardless of the truth; cross-entropy is 0.4170 nats if doc 1 is correct, but 2.3170 nats if doc 3 is — same confidence, very different cost.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain, precisely, the difference between entropy and cross-entropy.</summary><div>Entropy, H(P), takes one distribution and measures how spread out it is. Cross-entropy, H(P,Q), takes two — a true distribution P and a predicted one Q — and measures how much extra "surprise" using Q instead of P actually costs, on average under P (Section 05, Section 09).</div></details>
+<details class="quiz"><summary>Derive why cross-entropy against a one-hot true label reduces to −ln(q_correct).</summary><div>H(P,Q) = −Σᵢ pᵢ ln(qᵢ). If P is one-hot with a 1 at index c and 0 elsewhere, every term with pᵢ=0 vanishes (by the 0·ln(0)=0 convention, and 0·ln(qᵢ)=0 for any qᵢ&gt;0), leaving only −1·ln(q_c) = −ln(q_correct) (Section 09).</div></details>
+<details class="quiz"><summary>Debugging: a training run's cross-entropy loss occasionally spikes to NaN. What's the most likely cause, and the fix?</summary><div>A predicted probability for the correct class underflowed to exactly 0 in floating-point, and −ln(0) is undefined — the fix is a numerically stable, fused log-softmax-plus-cross-entropy implementation (Section 13) rather than computing softmax and log as two separate steps, plus an epsilon floor as a last resort.</div></details>
+<details class="quiz"><summary>System design: you can only log one of {entropy, cross-entropy} per production query, with no ground-truth label available at serving time. Which one, and why?</summary><div>Entropy — it requires no true label at all, so it's the only one of the two computable at serving time; cross-entropy needs a known-correct answer, which is exactly what's typically missing until an offline evaluation pass runs later.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Entropy_(information_theory)"><b>Wikipedia — Entropy (information theory)</b><br><span>The formal definition and its properties, behind Sections 05 and 10.</span></a>
+<a href="https://en.wikipedia.org/wiki/Cross-entropy"><b>Wikipedia — Cross-entropy</b><br><span>The formal definition and its use as a loss function, behind Sections 05 and 09.</span></a>
+<a href="https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence"><b>Wikipedia — Kullback–Leibler divergence</b><br><span>The formal KL divergence definition and Gibbs' inequality (KL ≥ 0), behind Section 09's identity.</span></a>
+<a href="https://mathworld.wolfram.com/Entropy.html"><b>Wolfram MathWorld — Entropy</b><br><span>An independent formal statement of entropy, cross-checked against Section 05's definition.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 · COMPLETE</span>
+<h3>Entropy, cross-entropy, and the confident-but-wrong failure mode are today's takeaway</h3>
+<p>Before moving on, be able to compute entropy for a stated distribution, compute cross-entropy against a stated true label, and explain why a low-entropy distribution can still produce a large cross-entropy. Concept 08, "Ranking functions and optimization objectives," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Surprise Meter lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Ranking functions and optimization objectives.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 07 · Complete</p>
+<a href="module-04-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

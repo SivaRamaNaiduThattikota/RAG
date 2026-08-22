@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 03 gave two vectors a similarity score built from the angle between them -- higher cosine similarity meaning more alike. This concept gives the complementary family: distance functions, where lower means more alike. Euclidean distance is not a new formula -- it is Concept 02's L2 norm, applied for the first time to a difference vector instead of a single vector's own coordinates. Manhattan distance does the same with the L1 norm, as a contrast. For vectors already normalized to length one, Euclidean distance and cosine similarity always rank nearest neighbors identically -- a new, citable fact this concept proves and lets you test live.">
+<title>Euclidean and other distance functions — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 04</p>
+<h1>Euclidean and other<br><em>distance functions.</em></h1>
+<p class="lesson-lead">Concept 03 gave two vectors a similarity score built from the angle between them — <b>cosine similarity</b>, where a higher number means more alike. This concept gives the complementary family: <b>distance functions</b>, where a lower number means more alike. <b>Euclidean distance</b> is not a new formula — it is Concept 02's L2 norm (cited, not re-derived), computed for the first time on a <b>difference vector</b> instead of on a single vector's own coordinates. <b>Manhattan distance</b> does the same with the L1 norm, as a contrast. The concept closes on a fact neither prior concept could state alone: for vectors already <b>normalized</b> to length one, Euclidean distance and cosine similarity always rank nearest neighbors <i>identically</i>.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's L1/L2 norms and Concept 03's cosine similarity — both cited directly, not re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute Euclidean and Manhattan distance between two vectors by hand, and state why normalizing first makes distance ranking match cosine-similarity ranking</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 03 compared two vectors by direction — cosine similarity, higher meaning more alike, magnitude fully divided out. This concept compared the same two vectors by actual geometric gap — distance, lower meaning more alike — starting with Euclidean distance, then Manhattan distance as a contrast, and closing on the fact that connects both concepts: for normalized vectors, the two rankings agree. Reasoning about likelihood instead of geometry opens next, in Concept 05.</p>
+<b>4 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">How far apart are two vectors — not just how aligned?</h2>
+</div>
+<p>Concept 03 measured whether two vectors point the same way. This concept measures something genuinely different: the actual gap between them, using the exact norm machinery Concept 02 already built — just applied to a new input.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Euclidean and Manhattan distance — the family where lower means more alike</h3>
+<div class="mental-compare">
+<div><span>EUCLIDEAN DISTANCE</span><p>The straight-line gap between two vectors' endpoints. ‖A-C‖₂ = ‖(3,4)-(4,3)‖₂ = ‖(-1,1)‖₂ = √2 ≈ 1.41 — one number, from two vectors.</p></div>
+<div><span>MANHATTAN DISTANCE</span><p>The grid-step gap instead — add up each component's absolute difference. ‖A-C‖₁ = |-1| + |1| = 2.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>SAME FORMULA, NEW INPUT</span><p>Both are Concept 02's L2 and L1 norms — nothing new in the formula itself. What's new is the input: the norm of the difference vector A - C, not of A or C alone.</p></div>
+<div><span>LOWER = CLOSER</span><p>Distance is the inverse-flavored idea from Concept 03's similarity: 0 means identical, and there is no upper bound — two vectors can be arbitrarily far apart.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>USES CONCEPT 02'S NORM</span><p>Every distance computed here reuses Concept 02's exact norm formulas — only the input, a difference vector, is new.</p></div>
+<div><span>NOT YET: PROBABILITY</span><p>Turning scores into likelihoods, or reasoning about uncertainty given evidence, is Concept 05's job — not today's.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> Euclidean distance is Concept 02's L2 norm applied to the difference between two vectors; Manhattan distance is the L1 norm applied the same way. Lower always means closer — the opposite direction from Concept 03's cosine similarity.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Cosine similarity ignores something distance functions were built to measure</h3>
+<p>Concept 03 answered "which direction does this vector point in?" precisely, and deliberately threw away magnitude to do it. But a direction-only answer can miss real information: two vectors pointing in nearly the same direction can still sit very far apart in absolute terms, and a system that only ever asks "how aligned?" has no number for that. Euclidean distance answers a different, equally valid question: how far apart are these two vectors' endpoints, treating their full geometry — direction and magnitude together — as one combined gap?</p>
+<div class="mental-compare">
+<div><span>WITHOUT A WAY TO MEASURE THE GAP</span><p>Ticket A and ticket B point in exactly the same direction (cosine similarity 1.0), but direction-only similarity has no number for the fact that B describes a much longer, more detailed ticket.</p></div>
+<div><span>WITH EUCLIDEAN / MANHATTAN DISTANCE</span><p>The straight-line or grid-step gap between A and B is a real, measurable number — 5, in this case — that direction-only similarity can never report.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Same three tickets, a completely different ranking</h3>
+<p>Reuse Concept 03's exact three tickets: A = (3, 4), B = (6, 8), C = (4, 3) — "refund" and "billing" mention counts. Concept 03 found cosine(A, B) = 1.0 and cosine(A, C) = 0.96, ranking B as more similar to A than C is. Distance asks the same three tickets a different question.</p>
+<div class="context-demo">
+<div><span>A · B EUCLIDEAN DISTANCE</span><p>‖A-B‖₂ = ‖(-3,-4)‖₂ = √(9+16) = √25 = 5.</p></div>
+<div><span>A · C EUCLIDEAN DISTANCE</span><p>‖A-C‖₂ = ‖(-1,1)‖₂ = √(1+1) = √2 ≈ 1.41 — much closer than A and B, even though cosine similarity ranked B ahead.</p></div>
+<div><span>A · B MANHATTAN DISTANCE</span><p>‖A-B‖₁ = |-3| + |-4| = 7.</p></div>
+<div><span>A · C MANHATTAN DISTANCE</span><p>‖A-C‖₁ = |-1| + |1| = 2.</p></div>
+</div>
+<p>By direction alone (Concept 03), B was the better match. By actual distance, C is the closer one — nearly four times closer than B. Neither ranking is wrong; they answer different questions about the same three tickets.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Subtract first, then reuse Concept 02's norm</h3>
+<div class="example-grid">
+<article class="info-card"><span>EUCLIDEAN DISTANCE</span><h3>L2 norm of a difference</h3><p>‖v-w‖₂ = √((v₁-w₁)² + … + (vₙ-wₙ)²) — Concept 02's L2 norm, computed on the difference vector v-w.</p></article>
+<article class="info-card"><span>MANHATTAN DISTANCE</span><h3>L1 norm of the same difference</h3><p>‖v-w‖₁ = |v₁-w₁| + … + |vₙ-wₙ| — Concept 02's L1 norm, same difference vector.</p></article>
+<article class="info-card"><span>DIFFERENCE VECTOR FIRST</span><h3>One extra step, before any norm</h3><p>Both formulas need v-w computed first — subtract matching components before either norm is taken.</p></article>
+<article class="info-card"><span>NO UPPER BOUND</span><h3>Unlike cosine similarity's [-1, 1]</h3><p>A distance can be 0 (identical vectors) or grow without limit — there is no ceiling, unlike Concept 03's bounded score.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0404-visual-title">
+<strong class="concept-visual-title" id="c0404-visual-title">VISUAL · STRAIGHT-LINE DISTANCE VS. GRID-STEP DISTANCE, ON A DIFFERENCE VECTOR</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 240" role="img" aria-labelledby="c0404-svg-title c0404-svg-desc">
+<title id="c0404-svg-title">Points P and R with the straight-line path and the grid-step path drawn between them</title>
+<desc id="c0404-svg-desc">Two points on a plane, P at (1,1) and R at (4,3), connected by a solid green diagonal line and by a dashed orange staircase path that moves right then up.</desc>
+<line x1="20" y1="220" x2="280" y2="220" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="40" y1="220" x2="40" y2="20" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="70" y1="190" x2="160" y2="130" stroke="#5ee6c3" stroke-width="3"/>
+<line x1="70" y1="190" x2="160" y2="190" stroke="#ff7957" stroke-width="3" stroke-dasharray="5 5"/>
+<line x1="160" y1="190" x2="160" y2="130" stroke="#ff7957" stroke-width="3" stroke-dasharray="5 5"/>
+<circle cx="70" cy="190" r="4.5" fill="#14241f"/>
+<text x="40" y="208" font-size="13" fill="currentColor">P = (1, 1)</text>
+<circle cx="160" cy="130" r="4.5" fill="#14241f"/>
+<text x="166" y="124" font-size="13" fill="currentColor">R = (4, 3)</text>
+<text x="95" y="150" font-size="12" fill="#14241f">√13 ≈ 3.61</text>
+<text x="100" y="207" font-size="11" fill="#14241f">3</text>
+<text x="167" y="163" font-size="11" fill="#14241f">2</text>
+</svg>
+</div>
+<figcaption>P = (1, 1) and R = (4, 3). The green diagonal is the straight-line path — Euclidean distance, ‖R-P‖₂ = ‖(3,2)‖₂ = √13 ≈ 3.61. The dashed orange staircase moves only right then up, one grid step at a time — Manhattan distance, ‖R-P‖₁ = ‖(3,2)‖₁ = 3 + 2 = 5. Both formulas are exactly Concept 02's L2 and L1 norms; the only new thing here is that the input, (3, 2), is a difference between two points rather than a single given vector.</figcaption>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A second, unrelated way to compare two vectors</h3>
+<div class="pipeline-preview">
+<span>Concept 02 — one vector's own norm</span><i>↓</i><span>Concept 03 — two vectors, compared by direction</span><i>↓</i><span class="hot">This concept — two vectors, compared by distance</span><i>↓</i><span>Concept 05 — probability, next</span>
+</div>
+<p>Concept 03 and this concept both take two vectors as input, but they produce fundamentally different kinds of number from the same inputs — one bounded and direction-only, the other unbounded and magnitude-sensitive. Later, when a vector index is built (Module 09-10, forward reference), one of these two families — or dot product — is chosen as the index's metric, fixed for the whole index.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners blur a norm, a distance, and a similarity together</h3>
+<div class="distinction-table" role="table" aria-label="This concept's Euclidean and Manhattan distance distinguished from Concept 02's norm and from Concept 03's cosine similarity">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Euclidean distance (norm of a difference)</span><span role="cell">L2 norm of a single vector (Concept 02)</span><span role="cell">Concept 02's ‖v‖₂ measures one vector alone; Euclidean distance first computes v-w, then applies that exact same formula to the result</span></div>
+<div role="row"><span role="cell">Distance (lower = more alike)</span><span role="cell">Cosine similarity (higher = more alike, Concept 03)</span><span role="cell">These measure genuinely different things — actual geometric gap versus direction only — using unrelated formulas; the same pair can rank differently on each</span></div>
+<div role="row"><span role="cell">Euclidean distance</span><span role="cell">Manhattan distance</span><span role="cell">Different norms (L2 vs L1) applied to the same difference vector — generally different numbers for the same pair, exactly like Concept 02's L1 and L2 norms differed for one vector</span></div>
+<div role="row"><span role="cell">Normalized vectors: distance ranking = cosine ranking</span><span role="cell">Raw vectors: distance ranking can disagree with cosine ranking</span><span role="cell">Section b03's own example — B ranks first by cosine, C ranks first by raw distance; the advanced section proves the two rankings agree only once every vector is normalized</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Distance and similarity are just opposite versions of the same number."</b><p>Not quite — flipping a similarity score's sign or subtracting it from 1 does not generally produce a valid distance, and the reverse isn't generally true either. They're different formulas that often, not always, agree on ranking.</p></div>
+<div><b>"Euclidean distance can be negative when two vectors point in different directions."</b><p>Never — it's a square root of a sum of squares, always ≥ 0. It equals zero only when the two vectors are identical.</p></div>
+<div><b>"Manhattan distance is just a rough approximation of Euclidean distance."</b><p>It's an exact, well-defined distance in its own right — Concept 02's L1 norm applied to a difference — not an approximation of anything. It measures a genuinely different kind of path.</p></div>
+<div><b>"If cosine similarity ranks B ahead of C, distance will rank them the same way."</b><p>Section b03 disproves this directly: cosine ranks B ahead, raw Euclidean distance ranks C ahead. They're only guaranteed to agree once both vectors are normalized.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Ranking the Oracle RAG project's tickets a second way</h3>
+<div class="project-map">
+<div><span>SUPPORT TICKETS A & B</span><b>Euclidean = 5, Manhattan = 7</b><p>Perfectly aligned by cosine similarity, but geometrically the farthest-apart pair here — a much longer ticket, not just a rephrased one.</p></div>
+<div><span>SUPPORT TICKETS A & C</span><b>Euclidean ≈ 1.41, Manhattan = 2</b><p>The geometrically closest pair in this example, despite a slightly-lower-than-perfect cosine similarity.</p></div>
+<div><span>VECTOR-INDEX METRIC, MODULE 09-10</span><b>Forward reference only</b><p>Production vector indexes are typically built for one specific metric — Euclidean, dot product, or cosine — fixed up front; mixing metrics between index-build time and query time silently produces the wrong ranking, not built here, only named.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> the Oracle RAG project will eventually have to pick one distance metric for its vector index — this concept is what makes that choice meaningful rather than arbitrary.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Euclidean distance</b><p>‖v-w‖₂ = √Σ(vᵢ-wᵢ)² — Concept 02's L2 norm, applied to a difference vector.</p></div>
+<div><b>Manhattan distance</b><p>‖v-w‖₁ = Σ|vᵢ-wᵢ| — Concept 02's L1 norm, same difference vector.</p></div>
+<div><b>Direction vs. distance</b><p>Cosine similarity (Concept 03) measures alignment only; distance measures the actual combined gap, including magnitude.</p></div>
+<div><b>What stays deferred</b><p>Why one metric gets chosen over another for a real vector index, and how probability enters the picture, are Concept 05's and later modules' territory.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Compute the Euclidean and Manhattan distance between (2, 0) and (0, 2) by hand. Are they equal here? Why or why not?</li>
+<li>Why can Euclidean distance and cosine similarity rank the same two candidates in a different order, using the exact same raw vectors?</li>
+<li>What single extra step turns a norm formula (Concept 02) into a distance formula (this concept)?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Probability and conditional probability</h3>
+<p>This concept closes the four foundational geometric ideas this module opened with — vectors, norms, angles/similarity, and now distance. Concept 05 leaves geometry behind and opens probability: how to reason about likelihood and update beliefs given evidence, the mathematical language behind ranking uncertainty and, later, language model outputs themselves.</p>
+<div class="beginner-memory"><b>Concept 04 is complete.</b> Continue to Probability and conditional probability.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Subtract, then apply Concept 02's norm. Lower means closer.</h2>
+<p>Master Euclidean and Manhattan distance first. Open the formal definitions, the from-scratch code, and The Distance Calculator lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Euclidean and Manhattan distance apply Concept 02's L2 and L1 norms to a difference vector instead of a single vector.</small></a>
+<a href="#b04"><span>02</span><b>Compute</b><small>‖v-w‖₂ = √Σ(vᵢ-wᵢ)², ‖v-w‖₁ = Σ|vᵢ-wᵢ|.</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Rank three support tickets by distance instead of direction, and watch the ranking change.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch code, and The Distance Calculator lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> Concept 02's norms and Concept 03's cosine similarity cited, not re-derived → Euclidean and Manhattan distance defined as those norms applied to a difference vector → three support tickets ranked by distance, disagreeing with Concept 03's ranking → the advanced section proves why normalizing first makes the two rankings agree → Concept 05 previewed: probability, next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the distance functions deep dive</b><em>Formal definitions, from-scratch code, and The Distance Calculator lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From aligned direction to actual gap</h2></div></header>
+<p>Concept 03 closed having reduced two vectors to a single, bounded, direction-only number — cosine similarity. This concept reduces the same two vectors to a different single number: an actual geometric distance, using the exact norm machinery Concept 02 already built, applied for the first time to the difference between two vectors rather than to one vector alone. Concept 05 leaves this module's geometric ideas behind and opens probability.</p>
+<div class="flow">
+<div class="flow-node">Concept 03 — how aligned are two?</div>
+<div class="flow-node hot">Concept 04 — how far apart are two?</div>
+<div class="flow-node">Concept 05 — how likely is it?</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State both distance formulas precisely</h3><p>Euclidean and Manhattan distance, and exactly which Concept 02 norm each one reuses.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute both by hand</h3><p>Given any two vectors of matching dimension, find their Euclidean distance and their Manhattan distance, plus that pair's cosine similarity for comparison.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Keep four ideas apart</h3><p>A norm (one vector) versus a distance (two vectors); Euclidean versus Manhattan; and distance ranking versus cosine-similarity ranking, raw versus normalized.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Derive the normalization fact</h3><p>Why normalized vectors make Euclidean-distance ranking and cosine-similarity ranking agree exactly, using Concept 02's norm and Concept 03's dot product.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's vector notation:</b> v = (v₁, …, vₙ), unchanged; componentwise subtraction v-w produces another vector of the same dimension.</li>
+<li><b>Concept 02's L1 norm and L2 norm, cited directly:</b> ‖v‖₁ = Σ|vᵢ|, ‖v‖₂ = √Σvᵢ². This concept's two distances are exactly these formulas, applied to v-w instead of to v.</li>
+<li><b>Concept 03's dot product and cosine similarity, cited directly:</b> needed only for Section 09's derivation connecting distance and similarity on normalized vectors.</li>
+<li><b>No other new prerequisite:</b> nothing from probability or ranking functions is assumed here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Two ways to measure the gap between two addresses</h2></div></header>
+<p>Picture two street addresses on a city grid. A bird flying between them measures the straight-line gap — Euclidean distance. A pedestrian confined to the streets measures a different gap, walking only along the grid's blocks — Manhattan distance, Concept 02's exact taxicab-norm intuition, now applied to the gap between two addresses instead of to one address's distance from a single starting corner.</p>
+<div class="callout warning"><b>Analogy boundary</b>The bird and the pedestrian only illustrate which path each formula corresponds to — neither vector is a real address, and nothing here claims one distance is "more correct" than the other.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Euclidean distance</td><td>d₂(v,w) = ‖v-w‖₂ = √(Σᵢ(vᵢ-wᵢ)²)</td><td>Always defined and ≥ 0 for two vectors of the same dimension n; equals 0 exactly when v = w</td></tr>
+<tr><td>Manhattan distance</td><td>d₁(v,w) = ‖v-w‖₁ = Σᵢ|vᵢ-wᵢ|</td><td>Always defined and ≥ 0; equals 0 exactly when v = w; equals d₂ only when v-w has at most one non-zero component (Concept 02's own L1/L2 boundary, reused)</td></tr>
+<tr><td>Minkowski distance (general form, named only)</td><td>dₚ(v,w) = (Σᵢ|vᵢ-wᵢ|ᵖ)^(1/p)</td><td>Euclidean is p = 2, Manhattan is p = 1 — one family, named here for context, not explored beyond these two cases</td></tr>
+<tr><td>Triangle inequality</td><td>d(v,u) ≤ d(v,w) + d(w,u), holding for both d₁ and d₂</td><td>A property every true distance metric must satisfy; cosine similarity, not being a distance, is not required to satisfy it</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing both computations on A = (3, 4) and C = (4, 3)</h2></div></header>
+<div class="lane-flow">
+<div><b>Subtract matching components —</b> A - C = (3-4, 4-3) = (-1, 1).</div>
+<div><b>Square each component (for Euclidean) —</b> (-1)² = 1, and 1² = 1.</div>
+<div><b>Sum the squares, then take the square root —</b> 1 + 1 = 2, √2 ≈ 1.41. That's the Euclidean distance.</div>
+<div><b>Take absolute values instead (for Manhattan) —</b> |-1| = 1, and |1| = 1.</div>
+<div><b>Sum the absolute values —</b> 1 + 1 = 2. That's the Manhattan distance directly, no square root involved.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two vectors in, one distance out, at each stage</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing two input vectors reduced to a difference vector, then to per-component magnitudes, then to a distance">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>Vectors v, w (input)</b><small>e.g. (1,1) and (4,3)</small></div>
+<div class="diagram-node"><b>Difference v - w</b><small>elementwise subtraction</small></div>
+<div class="diagram-node"><b>Per component: |·| or (·)²</b><small>L1 uses absolute value, L2 squares</small></div>
+<div class="diagram-node"><b>Sum the components</b><small>one running total</small></div>
+<div class="diagram-node"><b>Distance</b><small>L1: sum itself · L2: √sum</small></div>
+</div>
+</div>
+<p>Each stage strictly depends on the one before it — no distance can be computed without the difference vector first, and Euclidean distance additionally needs the square root as its very last step. Manhattan distance stops one step earlier, skipping the square and the square root entirely.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>A second, unrelated scoring option inside "Retrieval"</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Vectors — compared by Euclidean / Manhattan distance</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The skeleton itself is unchanged since Concept 01 — this concept only names a second way the "Vectors" stage can be compared, alongside Concept 03's dot product and cosine similarity. Which one a real vector index actually uses is a configuration choice made once, at index-build time (Module 09-10, forward reference), not decided per query.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The identity connecting distance and similarity</h2></div></header>
+<p>For vectors <code>v, w ∈ ℝⁿ</code>:</p>
+<div class="equation">d₂(v,w) = ‖v-w‖₂ = √(Σᵢ(vᵢ-wᵢ)²)
+
+d₁(v,w) = ‖v-w‖₁ = Σᵢ|vᵢ-wᵢ|
+
+‖v-w‖₂² = ‖v‖₂² + ‖w‖₂² - 2(v·w)
+
+if ‖v‖₂ = ‖w‖₂ = 1:  ‖v-w‖₂² = 2 - 2cos θ</div>
+<p>The first two lines are direct definitions — Concept 02's norms, computed on v-w. The third line expands the squared distance using nothing but the definition of a dot product of a vector with itself, (v-w)·(v-w) — new algebra this concept owns, even though every symbol in it was defined earlier. The fourth line is the payoff: once both vectors are normalized to length one (Concept 02's exact operation), squared Euclidean distance becomes a strictly decreasing function of cosine similarity (Concept 03's exact quantity) — a larger cosine similarity always means a smaller distance, with no exceptions. That single fact is why, and only why, Euclidean-distance ranking and cosine-similarity ranking always agree once every vector shares the same norm.</p>
+</section>
+<figure class="concept-visual" aria-labelledby="c0404-proof-title">
+<strong class="concept-visual-title" id="c0404-proof-title">VISUAL · WHY NORMALIZING MAKES DISTANCE RANKING MATCH COSINE RANKING</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-labelledby="c0404-svg2-title c0404-svg2-desc">
+<title id="c0404-svg2-title">A and C rescaled onto the unit circle, showing that the nearer point by straight-line distance is also the point with higher cosine similarity</title>
+<desc id="c0404-svg2-desc">A dashed unit circle centered at the origin, a green radius to the point where A-normalized and B-normalized coincide, an orange radius to C-normalized nearby, and a short dashed segment marking the small gap between them.</desc>
+<circle cx="150" cy="150" r="90" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4" opacity=".55"/>
+<circle cx="150" cy="150" r="3.5" fill="currentColor"/>
+<line x1="150" y1="150" x2="204" y2="78" stroke="#5ee6c3" stroke-width="3"/>
+<circle cx="204" cy="78" r="4.5" fill="#14241f"/>
+<text x="150" y="66" font-size="12" fill="currentColor">A_norm = B_norm = (0.6, 0.8)</text>
+<line x1="150" y1="150" x2="222" y2="96" stroke="#ff7957" stroke-width="3"/>
+<circle cx="222" cy="96" r="4.5" fill="#14241f"/>
+<text x="228" y="110" font-size="12" fill="currentColor">C_norm = (0.8, 0.6)</text>
+<line x1="204" y1="78" x2="222" y2="96" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="196" y="106" font-size="11" fill="currentColor">≈0.283</text>
+</svg>
+</div>
+<figcaption>Every vector here has been divided by its own L2 norm (Concept 02), so all three land on the unit circle. A_norm and B_norm land on the exact same point — cosine similarity 1.0 becomes distance 0. C_norm lands nearby but distinct, at distance ≈0.283. On the raw, un-normalized vectors (Section b03), B was the farther point from A; normalized, B is the nearer one — matching cosine similarity's ranking, which never changed.</figcaption>
+</figure>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Five pairs, raw and normalized, fully traced</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Euclidean</th><th>Manhattan</th><th>Cosine (cited)</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>A=(3,4), C=(4,3)</td><td>1.41</td><td>2</td><td>0.96</td><td>Close by distance and fairly aligned by direction — the two measures agree here.</td></tr>
+<tr><td>A=(3,4), B=(6,8)</td><td>5.00</td><td>7</td><td>1.00</td><td>Far apart by raw distance despite perfect cosine similarity — the two measures disagree.</td></tr>
+<tr><td>A_norm=(0.6,0.8), B_norm=(0.6,0.8)</td><td>0.00</td><td>0.00</td><td>1.00</td><td>Normalizing collapses A and B onto the same point — distance 0 exactly matches cosine similarity's maximum.</td></tr>
+<tr><td>A_norm=(0.6,0.8), C_norm=(0.8,0.6)</td><td>0.283</td><td>0.40</td><td>0.96</td><td>Normalized, C is now farther than B — matching the ranking cosine similarity already gave on the raw vectors.</td></tr>
+<tr><td>Q=(0.9,0.2,0.6), Doc=(0.8,0.1,0.6)</td><td>0.141</td><td>0.20</td><td>0.995</td><td>Concept 03's dense-retrieval preview pair — small distance and near-perfect cosine similarity, consistently.</td></tr>
+</tbody>
+</table>
+<p>Rows two and four are the same underlying pair, A and B, before and after normalizing — raw distance says they are the farthest pair in this table (5.00); normalized, they are the closest possible (0.00). Normalizing is what makes the two families of measurement agree.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A=(3,4) versus C=(4,3), raw or normalized</h3><p>Cosine similarity (0.96) and Euclidean distance (1.41 raw, 0.283 normalized) rank this pair the same way relative to A and B either way — direction and distance already agree here without normalizing.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>v = w exactly</h3><p>Both distances equal exactly 0 — the only case where either distance is 0, regardless of dimension or magnitude (Section 05).</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A versus B, before normalizing</h3><p>Cosine similarity ranks B ahead of C (1.00 versus 0.96); raw Euclidean distance ranks C ahead of B (1.41 versus 5.00) — the two rankings disagree until both vectors are normalized.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>"Distance zero and cosine-similarity zero mean the same thing"</h3><p>They don't — distance 0 means the two vectors are identical; cosine similarity 0 means they're at a right angle, nowhere near identical. Zero has no shared meaning across these two families.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Euclidean distance, Manhattan distance, and the ranking flip, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES, REUSING CONCEPT 02'S NORMALIZE</span>
+<pre><code>def euclidean_distance(v, w):
+    # Section 09 -- Concept 02's L2 norm, computed on the difference vector
+    return sum((vi - wi) ** 2 for vi, wi in zip(v, w)) ** 0.5
+
+def manhattan_distance(v, w):
+    # Section 09 -- Concept 02's L1 norm, same difference vector
+    return sum(abs(vi - wi) for vi, wi in zip(v, w))
+
+def normalize(v):
+    # Concept 02, Section 09 -- cited directly, not re-derived
+    n = sum(x * x for x in v) ** 0.5
+    if n == 0:
+        raise ValueError("cannot normalize the zero vector")
+    return [x / n for x in v]
+
+
+A, B, C = [3, 4], [6, 8], [4, 3]
+
+print(euclidean_distance(A, C))                 # 1.4142135623730951
+print(euclidean_distance(A, B))                 # 5.0
+print(manhattan_distance(A, C))                 # 2
+print(manhattan_distance(A, B))                 # 7
+
+A_n, B_n, C_n = normalize(A), normalize(B), normalize(C)
+print(round(euclidean_distance(A_n, B_n), 3))   # 0.0
+print(round(euclidean_distance(A_n, C_n), 3))   # 0.283
+
+# raw vectors: C is the closer one to A
+assert euclidean_distance(A, C) < euclidean_distance(A, B)
+# normalized vectors: B is now the closer one -- the ranking flipped
+assert euclidean_distance(A_n, B_n) < euclidean_distance(A_n, C_n)
+assert abs(euclidean_distance(A_n, B_n) - 0.0) < 1e-9
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same two ideas</h2></div></header>
+<p>NumPy computes Euclidean distance directly as <code>numpy.linalg.norm(v - w)</code>, or Manhattan distance as <code>numpy.abs(v - w).sum()</code> — both are just Concept 02's norm functions handed a difference array instead of a single vector. SciPy's <code>scipy.spatial.distance.euclidean</code> and <code>.cityblock</code> name the same two functions explicitly. Production vector databases — Pinecone, Qdrant, Milvus, and Oracle AI Database's <code>VECTOR_DISTANCE</code> — all expose a metric parameter at index-build time, typically <code>EUCLIDEAN</code> (L2), <code>COSINE</code>, or <code>DOT</code> (inner product), and that choice is made once for the whole index, not per query.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Distance Calculator</h2></div></header>
+<div class="lab">
+<p>Drag the sliders for a query vector Q and two candidates, C1 and C2. The readout shows Euclidean distance, Manhattan distance, and cosine similarity from Q to each candidate, plus a verdict on whether "nearest by distance" and "most similar by cosine" agree. Switch to normalized vectors to see the fact from Section 09 hold live.</p>
+<div class="dim-toggle" role="group" aria-label="Compute on raw or normalized vectors" id="simModeToggle0404">
+<button type="button" class="secondary active" data-mode="raw">Raw vectors</button>
+<button type="button" class="secondary" data-mode="normalized">Normalized vectors</button>
+</div>
+<div class="norm-controls" id="simSlidersQ0404">
+<div class="control"><label for="simQ1_0404">Q₁</label><input type="range" id="simQ1_0404" min="-10" max="10" step="1" value="3"><output id="simQ1Out_0404">3</output></div>
+<div class="control"><label for="simQ2_0404">Q₂</label><input type="range" id="simQ2_0404" min="-10" max="10" step="1" value="4"><output id="simQ2Out_0404">4</output></div>
+</div>
+<div class="norm-controls" id="simSlidersC10404">
+<div class="control"><label for="simC1x_0404">C1ₓ</label><input type="range" id="simC1x_0404" min="-10" max="10" step="1" value="6"><output id="simC1xOut_0404">6</output></div>
+<div class="control"><label for="simC1y_0404">C1ᵥ</label><input type="range" id="simC1y_0404" min="-10" max="10" step="1" value="8"><output id="simC1yOut_0404">8</output></div>
+</div>
+<div class="norm-controls" id="simSlidersC20404">
+<div class="control"><label for="simC2x_0404">C2ₓ</label><input type="range" id="simC2x_0404" min="-10" max="10" step="1" value="4"><output id="simC2xOut_0404">4</output></div>
+<div class="control"><label for="simC2y_0404">C2ᵥ</label><input type="range" id="simC2y_0404" min="-10" max="10" step="1" value="3"><output id="simC2yOut_0404">3</output></div>
+</div>
+<div class="norm-readout">
+<div><span>EUCLIDEAN (Q, C1)</span><b id="simEuclC1_0404">5.000</b></div>
+<div><span>MANHATTAN (Q, C1)</span><b id="simManhC1_0404">7.000</b></div>
+<div><span>COSINE (Q, C1)</span><b id="simCosC1_0404">1.000</b></div>
+<div><span>EUCLIDEAN (Q, C2)</span><b id="simEuclC2_0404">1.414</b></div>
+<div><span>MANHATTAN (Q, C2)</span><b id="simManhC2_0404">2.000</b></div>
+<div><span>COSINE (Q, C2)</span><b id="simCosC2_0404">0.960</b></div>
+</div>
+<div class="callout" id="simVerdict0404">Raw vectors — nearest by Euclidean distance: C2. Most similar by cosine: C1. They disagree.</div>
+<figure class="concept-visual" id="simVisualWrap0404" aria-labelledby="c0404-lab-title">
+<strong class="concept-visual-title" id="c0404-lab-title">LIVE PLANE · Q AND BOTH CANDIDATES</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-label="Three live points, Q, C1 and C2, with dashed segments marking the Euclidean gap from Q to each candidate">
+<defs>
+<marker id="simArrowQ0404" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5ee6c3"/></marker>
+<marker id="simArrowC10404" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#7aa2ff"/></marker>
+<marker id="simArrowC20404" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ff7957"/></marker>
+</defs>
+<line x1="10" y1="150" x2="290" y2="150" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<line x1="150" y1="20" x2="150" y2="250" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<path id="simUnitCircle0404" d="" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4" opacity=".55" style="display:none"/>
+<line id="simConnC10404" x1="150" y1="150" x2="150" y2="150" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 4"/>
+<line id="simConnC20404" x1="150" y1="150" x2="150" y2="150" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 4"/>
+<line id="simLineQ0404" x1="150" y1="150" x2="183" y2="106" stroke="#5ee6c3" stroke-width="3" marker-end="url(#simArrowQ0404)"/>
+<text id="simLabelQ0404" x="188" y="102" font-size="12" fill="currentColor">Q = (3, 4)</text>
+<line id="simLineC10404" x1="150" y1="150" x2="216" y2="62" stroke="#7aa2ff" stroke-width="3" marker-end="url(#simArrowC10404)"/>
+<text id="simLabelC10404" x="221" y="58" font-size="12" fill="currentColor">C1 = (6, 8)</text>
+<line id="simLineC20404" x1="150" y1="150" x2="194" y2="117" stroke="#ff7957" stroke-width="3" marker-end="url(#simArrowC20404)"/>
+<text id="simLabelC20404" x="199" y="113" font-size="12" fill="currentColor">C2 = (4, 3)</text>
+</svg>
+</div>
+<figcaption id="simCaption0404">Q, C1, and C2 at their raw sizes. The dashed segments are the straight-line gaps this concept measures — the shortest segment does not have to belong to the candidate with the highest cosine similarity.</figcaption>
+</figure>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="simReset0404">Reset to Q=(3,4), C1=(6,8), C2=(4,3)</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Euclidean, Manhattan, and cosine similarity, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it captures</th><th>Where it's typically preferred</th></tr></thead>
+<tbody>
+<tr><td>Euclidean distance</td><td>Actual straight-line gap, sensitive to every dimension equally</td><td>Data where absolute magnitude carries real meaning, in a genuinely continuous space — a common default for general-purpose vector indexes</td></tr>
+<tr><td>Manhattan distance</td><td>Grid-step gap; less dominated by any single large per-component difference than Euclidean</td><td>Higher-dimensional or sparse data where one dimension swinging wildly shouldn't dominate the whole score</td></tr>
+<tr><td>Cosine similarity (Concept 03)</td><td>Direction only, magnitude fully divided out</td><td>Comparing embeddings of unknown or varying length — the conventional default for dense retrieval specifically (Module 08-09, forward reference)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of computing and using distance</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>RANKING MISMATCH ON RAW VECTORS</span><h3>Ranking by raw Euclidean distance when embeddings aren't normalized</h3><p>Section 11's counterexample: raw distance and cosine similarity can rank the same two candidates in opposite order — a real bug if the system assumes they always agree.</p></article>
+<article class="info-card"><span>METRIC MISMATCH AT QUERY TIME</span><h3>Querying a Euclidean-built index as if it were cosine, or vice versa</h3><p>Section 13's production point: the metric is fixed at index-build time; querying with the wrong assumption silently returns a differently-ranked, not obviously broken, result set.</p></article>
+<article class="info-card"><span>SQUARED-DISTANCE SHORTCUT MISUSE</span><h3>Comparing a squared distance to a non-squared threshold</h3><p>Many systems skip the square root for speed since it doesn't change the ranking — but comparing that squared value against a threshold meant for the un-squared number silently changes which candidates pass.</p></article>
+<article class="info-card"><span>DISTANCE-ZERO CONFUSED WITH SIMILARITY-ZERO</span><h3>Treating a distance near 0 the same way as a cosine similarity near 0</h3><p>Section 11's mistake to avoid: distance 0 is the best possible match; cosine similarity 0 is an unrelated direction. Reading one scale using the other's meaning inverts the interpretation.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Distance and similarity are opposite versions of the same underlying number</td><td>They are different formulas that only reliably rank things the same way once every vector is normalized (Section 09) — before that, Section 11 shows them disagreeing outright.</td></tr>
+<tr><td>Manhattan distance is a rougher approximation of Euclidean distance</td><td>It's an exact, independently valid distance (Concept 02's L1 norm on a difference vector), not an approximation of the L2 version — the two only coincide when a difference vector has at most one non-zero component.</td></tr>
+<tr><td>If two vectors have distance 0, they must also have cosine similarity 0</td><td>The opposite is true: distance 0 means the vectors are identical, which forces cosine similarity to its maximum of 1, not to 0.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>If a vector index is built for Euclidean distance, embeddings need comparable norms for scores to be meaningful across the whole index — the same normalization discipline Concept 02 raised for norms and Concept 03 raised for dot product, applying a third time here.</li>
+<li>Section 16's squared-distance shortcut is routine in practice: since ranking order is unaffected by the square root, many nearest-neighbor libraries default to comparing squared Euclidean distance and skip the sqrt call entirely for speed.</li>
+<li>Section 09's derivation is why switching an index from Euclidean to cosine, or the reverse, is not just a preference: on already-normalized embeddings the two produce identical rankings, but on un-normalized ones they can disagree exactly as Section 11 shows.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State the Euclidean distance and Manhattan distance formulas for two vectors v and w.</summary><div>Euclidean: d₂(v,w) = ‖v-w‖₂ = √(Σ(vᵢ-wᵢ)²). Manhattan: d₁(v,w) = ‖v-w‖₁ = Σ|vᵢ-wᵢ|.</div></details>
+<details class="quiz"><summary>Why does normalizing two vectors before computing Euclidean distance make its ranking match cosine similarity's ranking?</summary><div>For unit vectors, ‖v-w‖₂² = 2 - 2cos θ (Section 09). Since this is a strictly decreasing function of cosine similarity, the vector with the highest cosine similarity to a query always has the smallest normalized Euclidean distance to it, and vice versa — the two rankings cannot disagree once both are computed on unit vectors.</div></details>
+<details class="quiz"><summary>A raw Euclidean-distance ranking and a raw cosine-similarity ranking disagree on the same two candidates. Which one is "wrong"?</summary><div>Neither. They measure different things — actual combined gap versus direction alone — and are only guaranteed to agree once every vector is normalized (Section 09). Disagreement on raw, un-normalized vectors is expected, not a bug in either formula.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Concept 03's exercise vectors, G = (0, 6, 8) and H = (8, 6, 0), had cosine similarity 0.36 — clearly not very aligned. Compute the Euclidean distance and Manhattan distance between G and H, then normalize both vectors and recompute the Euclidean distance. Does normalizing change the qualitative story here, or just the numbers?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible answer</summary>
+<div>Euclidean distance: ‖G-H‖₂ = ‖(-8,0,8)‖₂ = √(64+0+64) = √128 ≈ 11.31. Manhattan distance: ‖G-H‖₁ = 8+0+8 = 16. Normalized: G_norm = (0, 0.6, 0.8), H_norm = (0.8, 0.6, 0); Euclidean distance between them ≈ 1.131 — and squaring that gives 1.28, exactly matching Section 09's identity 2 - 2(0.36) using Concept 03's already-known cosine similarity of 0.36 for this pair. There's only one pair here, so no ranking to flip — normalizing changes the numbers dramatically but not the underlying relationship, which the 2 - 2cosθ identity ties directly back to a value Concept 03 already computed.</div>
+</details>
+<p>Teach-back: explain, in your own words, why the normalized distance (≈1.131) is so much smaller than the raw distance (≈11.31) even though the two vectors' relationship — a 0.36 cosine similarity — never changed.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Euclidean and Manhattan distance</h3><ul><li><b>Euclidean:</b> d₂(v,w) = ‖v-w‖₂ = √Σ(vᵢ-wᵢ)²</li><li><b>Manhattan:</b> d₁(v,w) = ‖v-w‖₁ = Σ|vᵢ-wᵢ|</li><li><b>Key identity (unit vectors):</b> ‖v-w‖₂² = 2 - 2cos θ</li><li><b>Bound:</b> 0 (identical) with no upper limit</li></ul></div>
+<div><h3>Memorable example</h3><p>A=(3,4) and B=(6,8): perfect cosine similarity (1.0), yet a raw Euclidean distance of 5 — the farthest pair in this concept's worked example, until both are normalized, when the distance drops to exactly 0.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why might a system that ranks candidates by raw Euclidean distance return different top results than the same system ranking by cosine similarity?</summary><div>Raw Euclidean distance is sensitive to both direction and magnitude, while cosine similarity ignores magnitude entirely. A candidate that is directionally aligned but has very different magnitude from the query can end up geometrically far away even though it's a strong directional match — Section 11's A/B/C example shows this concretely.</div></details>
+<details class="quiz"><summary>Derive, at a high level, why Euclidean distance and cosine similarity always agree on ranking once every vector is normalized to the same length.</summary><div>Expanding ‖v-w‖₂² as ‖v‖₂² + ‖w‖₂² - 2(v·w) and substituting ‖v‖₂ = ‖w‖₂ = 1 gives ‖v-w‖₂² = 2 - 2cos θ. Because this is a strictly decreasing function of cosine similarity, minimizing squared Euclidean distance and maximizing cosine similarity are the same optimization once every vector is a unit vector.</div></details>
+<details class="quiz"><summary>Design question: a team wants to switch a vector index from cosine similarity to Euclidean distance to save a normalization step at query time. What would you check first?</summary><div>Whether the embeddings already stored in the index are normalized to unit length. If they are, Section 09's identity guarantees the two metrics produce identical rankings, so the switch is safe and removes the division step. If they are not, the switch will silently change which candidates rank highest (Section 11), so normalizing every stored embedding first — not just skipping the metric — would be the actual prerequisite.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Euclidean_distance"><b>Wikipedia — Euclidean distance</b><br><span>Definition and properties of Euclidean distance as the L2 norm of a difference vector, behind Sections 05, 06, and 09.</span></a>
+<a href="https://en.wikipedia.org/wiki/Taxicab_geometry"><b>Wikipedia — Taxicab geometry</b><br><span>The grid-step (Manhattan / L1) distance and its geometric interpretation, behind Sections 04, 05, and 06.</span></a>
+<a href="https://en.wikipedia.org/wiki/Minkowski_distance"><b>Wikipedia — Minkowski distance</b><br><span>The general Lᵖ distance family, with Euclidean and Manhattan as its p=2 and p=1 special cases, behind Section 05's third row.</span></a>
+<a href="https://mathworld.wolfram.com/Metric.html"><b>Wolfram MathWorld — Metric</b><br><span>The formal axioms — non-negativity, identity of indiscernibles, symmetry, and the triangle inequality — that any true distance function must satisfy, behind Section 05's fourth row.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 · COMPLETE</span>
+<h3>Euclidean distance, Manhattan distance, and their link to cosine similarity are today's takeaway</h3>
+<p>Before moving on, be able to compute both distances by hand for any two vectors, state clearly that lower means more alike (the opposite of Concept 03's similarity), and explain why normalizing first makes Euclidean-distance ranking and cosine-similarity ranking agree exactly. Concept 05, "Probability and conditional probability," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Distance Calculator lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Probability and conditional probability.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 04 · Complete</p>
+<a href="module-04-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

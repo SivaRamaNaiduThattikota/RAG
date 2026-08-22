@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 03 closed the twelve-concept case for RAG's mental model. Module 04 opens the mathematics that model has been assuming all along, starting with the three ways numbers get held for retrieval: a single number (scalar), an ordered list of numbers (vector), and a grid of numbers arranged in rows and columns (matrix) -- notation and shape only, no length or comparison yet.">
+<title>Scalars, vectors and matrices — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 01</p>
+<h1>Scalars, vectors<br><em>and matrices.</em></h1>
+<p class="lesson-lead">Module 03 is complete — all twelve concepts, from what RAG is to when it shouldn't be used. Concept 06's skeleton drew a box labelled "Vectors" and a "vector database" beside it, and neither one was ever defined. Module 04, Mathematics for retrieval, opens by defining the three ways retrieval holds numbers: a <b>scalar</b> is a single number, a <b>vector</b> is an ordered list of numbers, and a <b>matrix</b> is a grid of numbers arranged in rows and columns — literally many vectors stacked together. Nothing here measures a vector's length or compares two of them yet; that starts next concept.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First of ten concepts opening Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>None new — only Concept 06's undefined "Vectors" and "vector database" boxes, finally given a definition</b></div>
+<div><span>BEGINNER GOAL</span><b>Define scalar, vector and matrix precisely, and read and write their notation and shape</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You defined a scalar as a single number, a vector as an ordered list of numbers (its components, in a fixed order), and a matrix as a rectangular grid of numbers arranged in rows and columns — many vectors stacked into one table, with a shape written rows × columns. Measuring a vector's length and comparing two vectors are both still ahead.</p>
+<b>1 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Three ways to hold numbers, before anything is done with them</h2>
+</div>
+<p>Concept 06 assumed retrieval runs on vectors without ever saying what one is. This concept fixes that gap with three definitions and their notation — nothing about length, comparison, or distance yet.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Scalar, vector, matrix — one number, an ordered list, a grid</h3>
+<div class="mental-compare">
+<div><span>SCALAR</span><p>A single number on its own, e.g. 0.82. No components, no order to keep track of — just a magnitude.</p></div>
+<div><span>VECTOR</span><p>An ordered list of numbers, e.g. (0.82, -0.14, 0.05). Order matters: position 1 always means the same thing every time this kind of vector appears.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>VECTOR, AGAIN</span><p>Three numbers, one fixed order — a single row of a table, or a single point plotted using each number as one coordinate.</p></div>
+<div><span>MATRIX</span><p>A rectangular grid of numbers arranged in rows and columns — several vectors of the same length, stacked so each row is one vector and each column keeps one position's meaning consistent down every row.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a scalar is one number, a vector is an ordered list of numbers, and a matrix is a grid of numbers — many same-length vectors stacked into rows. Order and position carry meaning; nothing here yet measures how "big" a vector is.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 06 used the word "vector" without ever defining it</h3>
+<p>Module 03's nine-box skeleton drew a "Vectors" node and a "vector database" beside it, and moved on — the diagram needed the word before Module 04 existed to define it properly. Before this course can build a norm, a dot product, or a distance function on top of "vector," everyone needs the exact same starting definition, the same notation, and the same way of describing a grid's shape.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THIS DEFINITION</span><p>"Vector" stays an unexamined word borrowed from Concept 06's diagram — useful for pointing at a box, useless for writing an equation on top of it.</p></div>
+<div><span>WITH THIS DEFINITION</span><p>Scalar, vector, and matrix each have a precise meaning and notation, so Concepts 02 through 10 can define operations on them without re-explaining what they are every time.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three toy scores per document — not an embedding yet</h3>
+<p>Suppose a search feature ranks documents using three hand-picked, placeholder scores per document: how fresh it is, how well its length fits the query, and how well its topic matches. These are toy numbers chosen for this example, not the learned numbers Module 08 will eventually produce.</p>
+<div class="context-demo">
+<div><span>DOCUMENT A</span><p>(0.90, 0.40, 0.70) — a vector: freshness 0.90, length-fit 0.40, topic-match 0.70, in that fixed order.</p></div>
+<div><span>DOCUMENT B</span><p>(0.20, 0.95, 0.55) — a different vector, same three positions meaning the same three things.</p></div>
+<div><span>DOCUMENT C</span><p>(0.60, 0.60, 0.10) — a third vector, still freshness, then length-fit, then topic-match.</p></div>
+<div><span>ALL THREE STACKED</span><p>A 3 × 3 matrix: one row per document, one column per score, with column 1 always meaning "freshness" no matter which row you read.</p></div>
+</div>
+<p>Module 08 replaces these three hand-picked numbers with hundreds of learned numbers per document — an embedding is still just a vector, only longer and produced by a model instead of chosen by hand. That's a name to recognize for later, not a mechanism to learn today.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Notation for all three, and how a matrix's shape is written</h3>
+<div class="example-grid">
+<article class="info-card"><span>SCALAR</span><h3>Plain lowercase, e.g. s or a</h3><p>Written like an ordinary variable: s = 0.82. No index, because there's nothing inside it to point at.</p></article>
+<article class="info-card"><span>VECTOR</span><h3>Bold lowercase, components indexed</h3><p>Written <b>v</b> = (v₁, v₂, v₃), read "v-one, v-two, v-three." vᵢ means "the number sitting in position i" — Document A's v₂ is 0.40.</p></article>
+<article class="info-card"><span>MATRIX</span><h3>Bold uppercase, entries indexed by row and column</h3><p>Written <b>M</b>, with Mᵢ,ⱼ meaning "the number in row i, column j." Document B's freshness score is M₂,₁.</p></article>
+<article class="info-card"><span>SHAPE</span><h3>Rows × columns</h3><p>Section 03's stacked matrix is "3 × 3" — 3 rows (documents), 3 columns (scores). Shape is always stated rows first, columns second.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0401-visual-title">
+<strong class="concept-visual-title" id="c0401-visual-title">VISUAL · A VECTOR AS AN ORDERED LIST AND AS A POINT</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-labelledby="c0401-svg-title c0401-svg-desc">
+<title id="c0401-svg-title">Vector (2, 3) plotted on a coordinate plane</title>
+<desc id="c0401-svg-desc">An arrow from the origin to the point (2, 3), with dashed guide lines showing v1 = 2 on the horizontal axis and v2 = 3 on the vertical axis.</desc>
+<line x1="30" y1="230" x2="280" y2="230" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="30" y1="230" x2="30" y2="20" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="190" y1="230" x2="190" y2="90" stroke="currentColor" stroke-width="1" stroke-dasharray="4 5" opacity=".55"/>
+<line x1="30" y1="90" x2="190" y2="90" stroke="currentColor" stroke-width="1" stroke-dasharray="4 5" opacity=".55"/>
+<line x1="30" y1="230" x2="190" y2="90" stroke="#5ee6c3" stroke-width="3"/>
+<polygon points="190,90 176,101 184,109" fill="#5ee6c3"/>
+<circle cx="190" cy="90" r="4.5" fill="#ff7957"/>
+<text x="196" y="83" font-size="13" fill="currentColor">(2, 3)</text>
+<text x="200" y="234" font-size="12" fill="currentColor">v₁ = 2</text>
+<text x="8" y="94" font-size="12" fill="currentColor">v₂ = 3</text>
+</svg>
+<table class="matrix-mini" aria-label="A 3 by 2 matrix shown as three stacked row vectors">
+<caption>Three row-vectors stacked into one 3 × 2 matrix</caption>
+<tbody>
+<tr><td>0.9</td><td>0.4</td></tr>
+<tr><td>0.2</td><td>0.95</td></tr>
+<tr><td>0.6</td><td>0.6</td></tr>
+</tbody>
+</table>
+</div>
+<figcaption>Left: the vector (2, 3) read two ways — the ordered list (v₁ = 2, v₂ = 3) and the point that same list reaches when each number is used as one coordinate. Right: a matrix is nothing more than several same-length vectors stacked as rows, one column per shared position.</figcaption>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where these words sit in Concept 06's skeleton</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model (Module 08)</span><i>↓</i><span class="hot">Vectors (today's definition)</span><i>↓</i><span>Rows of a vector database's matrix</span>
+</div>
+<p>Every later module keeps using the words "vector" and "matrix" without re-defining them. This concept is purely the dictionary entry — Module 08 explains how the numbers inside an embedding vector actually get produced, and Module 10 explains how a database stores rows of them; neither is this concept's job.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where a plain programming list and a mathematical vector diverge</h3>
+<div class="distinction-table" role="table" aria-label="This concept's scalar, vector and matrix distinguished from a plain list and from each other">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">A vector</span><span role="cell">Any list of numbers in code</span><span role="cell">A vector's positions have a fixed, shared meaning across every vector it gets compared to; a plain list promises nothing about what position 1 means from one list to the next</span></div>
+<div role="row"><span role="cell">A row vector</span><span role="cell">A column vector</span><span role="cell">Same numbers, different orientation — shape 1 × n laid out sideways versus shape n × 1 laid out downward; which orientation is used is a bookkeeping choice, not a new kind of object</span></div>
+<div role="row"><span role="cell">A 1 × n matrix</span><span role="cell">A different object from a vector</span><span role="cell">A matrix with exactly one row behaves exactly like a row vector — "matrix" and "vector" overlap here, they aren't rivals</span></div>
+<div role="row"><span role="cell">A scalar</span><span role="cell">A one-component vector</span><span role="cell">A scalar has no components to index at all; a vector with one component, written (v₁), is still a vector with an index that happens to stop at 1</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The order of the numbers doesn't matter, only which numbers are present."</b><p>Section 03's Document A (0.90, 0.40, 0.70) and a rearranged (0.40, 0.90, 0.70) are different vectors — swapping positions swaps which score each number describes.</p></div>
+<div><b>"A matrix is just several unrelated vectors sitting near each other."</b><p>A matrix's rows share the same column meanings — column 1 means "freshness" in every single row, not just the first one.</p></div>
+<div><b>"A vector's 'size' means how large its numbers are."</b><p>That's next concept's job (the norm). Here, the only thing "size" can mean is how many components the vector holds — a separate idea this concept deliberately leaves unnamed until Concept 02.</p></div>
+<div><b>"Vectors only exist in 2D or 3D, like arrows in physics."</b><p>Section 03's vectors have three components and nothing to do with physical space; a vector is just an ordered list, however many numbers it holds.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Naming what Concept 06's boxes were already holding</h3>
+<div class="project-map">
+<div><span>TOY SCORING VECTORS</span><b>Section 03's three-number rows</b><p>Each document's (freshness, length-fit, topic-match) triple is exactly the shape Module 10's future Oracle VECTOR-typed column will store — not explained yet, just named as the same shape.</p></div>
+<div><span>SCORE TABLE</span><b>The 3 × 3 matrix of all three documents</b><p>A document table with one numeric column per score is already a matrix in the sense defined today, rows and columns and all.</p></div>
+<div><span>CONCEPT 06'S "VECTORS" BOX</span><b>Finally has a definition</b><p>The unlabeled box in Module 03's skeleton is precisely today's vector — an ordered list of numbers, nothing more, nothing measured about it yet.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> nothing about the Oracle RAG project changed today — it just stopped relying on an undefined word.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Three definitions</b><p>Scalar: one number. Vector: an ordered list of numbers. Matrix: a grid of numbers, rows and columns, many same-length vectors stacked.</p></div>
+<div><b>Notation</b><p>s for a scalar; bold <b>v</b> with indexed components v₁…vₙ for a vector; bold <b>M</b> with Mᵢ,ⱼ for a matrix entry; shape written rows × columns.</p></div>
+<div><b>Order and position are load-bearing</b><p>Swapping two components changes the vector; every row of a matrix must keep the same column meanings.</p></div>
+<div><b>What stays deferred</b><p>Measuring a vector's length, comparing two vectors, and computing a distance are all still ahead — Concepts 02 through 04's job, not today's.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is a 1 × n matrix effectively the same thing as a row vector?</li>
+<li>Why doesn't rearranging a vector's components produce "the same vector in a different order"?</li>
+<li>What's the one thing "size" can mean about a vector today, and what does it deliberately not yet mean?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Vector norms, dimensions and normalization</h3>
+<p>Today's concept defined the shape of a vector — an ordered list of numbers — without ever asking how long that list is or how "big" the vector is as a whole. Concept 02 names the count of components formally (a vector's dimension), defines two ways to measure a vector's length (its norm), and rescales a vector to length one (normalization) — using only the vector's own numbers, never comparing it to another vector yet.</p>
+<div class="beginner-memory"><b>Concept 01 is complete.</b> Continue to Vector norms, dimensions and normalization.</div>
+<a class="button primary" href="module-04-concept-02.html">Start Concept 02 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One number, an ordered list, a grid of ordered lists.</h2>
+<p>Master the three definitions and their notation first. Open the formal definitions, the from-scratch code, and The Vector &amp; Matrix Inspector lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Scalar, vector, and matrix — one number, an ordered list, a grid of same-length ordered lists.</small></a>
+<a href="#b04"><span>02</span><b>Notate</b><small>s, bold v with indexed components, bold M with row-and-column-indexed entries, shape as rows × columns.</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Name what Concept 06's undefined "Vectors" box and the Oracle score table were already holding.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch code, and The Vector &amp; Matrix Inspector lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> Concept 06's undefined "Vectors" box cited as the gap → scalar, vector, matrix defined with notation and shape → Oracle's toy scoring vectors named against the definitions → Concept 02 previewed: length, dimension, and normalization next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the scalar / vector / matrix deep dive</b><em>Formal definitions, from-scratch indexing code, and The Vector &amp; Matrix Inspector lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From a twelve-concept case for RAG to the mathematics it assumed</h2></div></header>
+<p>Module 03 closed with a complete answer to whether RAG should be attempted for a given task. None of those twelve concepts ever explained the vector geometry Concept 06's skeleton leaned on to describe retrieval — a "Vectors" box and a "vector database" beside it, both undefined. Module 04 opens that gap, and this concept is its first brick: scalar, vector, and matrix, with notation and shape, and nothing else yet.</p>
+<div class="flow">
+<div class="flow-node">Module 03 — is RAG the right tool?</div>
+<div class="flow-node hot">Concept 01 — what is a vector, exactly?</div>
+<div class="flow-node">Concept 02 — how long is one?</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State all three definitions precisely</h3><p>Scalar, vector, matrix — with the same wording this concept uses, not a looser paraphrase.</p></article>
+<article class="info-card"><span>NOTATE</span><h3>Read and write the notation</h3><p>s for a scalar, bold v with indexed components for a vector, bold M with row-and-column-indexed entries for a matrix, and shape as rows × columns.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>Norms, dimension as a formally named quantity, dot products, angles, and distances all stay out of scope — Concepts 02 through 04's territory.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Name what Concept 06's undefined "Vectors" box, and the project's toy scoring table, already were.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06's skeleton:</b> cited directly — its undefined "Vectors" box and "vector database" label are the gap this concept closes.</li>
+<li><b>No math prerequisite otherwise:</b> this is Module 04's entry point; nothing from Modules 01–03 assumed any linear algebra beyond the word "vector" itself.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A spreadsheet: one cell, one row, the whole sheet</h2></div></header>
+<p>A single spreadsheet cell holding one number is a scalar. One full row of that spreadsheet, read left to right in order, is a vector — the third cell in every row means the same column every time. The entire sheet, every row stacked under the last, is a matrix: rows and columns, with each column keeping one consistent meaning down its whole length.</p>
+<div class="callout warning"><b>Analogy boundary</b>A spreadsheet doesn't have a length, an angle, or a distance between two rows — those are exactly the ideas this analogy is not meant to carry. The point is only the structural claim: one number, an ordered row of numbers, a stack of same-shaped rows.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Scalar</td><td>A single number, with no components and no order to track</td><td>Not a one-component vector — a scalar has nothing to index</td></tr>
+<tr><td>Vector</td><td>An ordered list of numbers, written <b>v</b> = (v₁, v₂, …, vₙ), where vᵢ is the number in position i</td><td>How many positions it has (n) is a count this concept deliberately leaves unnamed — Concept 02 names it "dimension"</td></tr>
+<tr><td>Matrix</td><td>A rectangular grid of numbers with entry Mᵢ,ⱼ in row i, column j, described by a shape of rows × columns</td><td>Equivalent to several same-length vectors stacked as rows (or columns) — not a fundamentally different object</td></tr>
+<tr><td>Row vector / column vector</td><td>The same list of numbers, oriented sideways (shape 1 × n) or downward (shape n × 1)</td><td>A layout choice, not two different mathematical objects</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing notation against Section 03's three documents</h2></div></header>
+<div class="lane-flow">
+<div><b>Document A —</b> written <b>v</b> = (0.90, 0.40, 0.70). v₁ = 0.90, v₂ = 0.40, v₃ = 0.70. Three components, one fixed order.</div>
+<div><b>Stacking rows —</b> Document A becomes row 1, Document B row 2, Document C row 3 of a matrix <b>M</b>. M₁,₁ = 0.90 (row 1, column 1); M₂,₁ = 0.20 (row 2, column 1) — same column, same meaning, different row.</div>
+<div><b>Reading the shape —</b> three documents, three scores each, so <b>M</b> has shape 3 × 3 — 3 rows, 3 columns.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Building up from one number to a grid</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable strip diagram showing a scalar building up into a vector and then a matrix">
+<div class="diagram-strip">
+<div class="diagram-node"><b>Scalar</b><small>one number, e.g. 0.82</small></div>
+<div class="diagram-node"><b>Vector</b><small>an ordered list, e.g. (0.9, 0.4, 0.7)</small></div>
+<div class="diagram-node active"><b>Matrix</b><small>a grid — same-length vectors stacked as rows</small></div>
+</div>
+</div>
+<p>Each stage adds structure without changing what's inside it: a matrix's rows are exactly the vectors defined one stage earlier, and a vector's components are exactly the scalars defined one stage before that.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Naming one box in Concept 06's nine-box skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Parsing</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Vectors</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Today's definition is only the word "Vectors" in that chain — an ordered list of numbers, full stop. How the embedding model produces those numbers (Module 08) and how a vector database stores rows of them (Module 10) are both later, separate concepts; nothing about the rest of the chain changes today.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Set notation for where these numbers live</h2></div></header>
+<p>A vector with n real-numbered components is written <code>v ∈ ℝⁿ</code>, read "v is an element of n-dimensional real space" — for now, just notation for "an ordered list of n real numbers," with the formal meaning of n itself still one concept away. A matrix with m rows and n columns is written <code>M ∈ ℝ^(m×n)</code>.</p>
+<div class="equation">v = (v₁, v₂, …, vₙ),  v ∈ ℝⁿ
+M = [Mᵢ,ⱼ],  M ∈ ℝ^(m×n)</div>
+<p>Read each line as a definition, not a computation: the first says a vector is exactly its ordered list of components; the second says a matrix is exactly its grid of entries, indexed by row i and column j. Neither line computes anything about the vector or matrix's size — that's Concept 02.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Indexing Section 03's matrix by hand</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Lookup</th><th>Meaning</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>M₁,₁</td><td>Row 1 (Document A), column 1 (freshness)</td><td>0.90</td></tr>
+<tr><td>M₂,₂</td><td>Row 2 (Document B), column 2 (length-fit)</td><td>0.95</td></tr>
+<tr><td>M₃,₃</td><td>Row 3 (Document C), column 3 (topic-match)</td><td>0.10</td></tr>
+<tr><td>Row 2 extracted</td><td>Document B as a standalone vector</td><td>(0.20, 0.95, 0.55)</td></tr>
+</tbody>
+</table>
+<p>Extracting a row doesn't change any of its numbers — Document B's row inside the matrix and Document B's vector on its own are the same three numbers in the same order, just described two different ways.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Section 03's three-score document table</h3><p>Three fixed-meaning columns, one row per document — a textbook matrix, no edge cases.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A vector with exactly one component, (0.5)</h3><p>Still a vector by today's definition — a list of numbers doesn't stop being ordered just because it only has one entry. It is not, however, a scalar.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>An unordered set of tags, {"urgent", "billing"}</h3><p>Not a vector — there's no fixed position for "urgent" to occupy across every document's tag set, so nothing here promises position 1 means the same thing twice.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Stacking rows whose columns don't mean the same thing</h3><p>If row 1's column 2 is "length-fit" but row 2's column 2 is accidentally "topic-match," the result isn't a valid matrix in this concept's sense, even though it still looks like a grid of numbers.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Scalars, vectors and matrices as plain nested lists</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · INDEXING A VECTOR AND A MATRIX, NO LIBRARIES</span>
+<pre><code>def vector_component(v, i):
+    # Section 05's v_i -- i is 1-indexed to match the lesson's notation
+    return v[i - 1]
+
+def matrix_entry(M, i, j):
+    # Section 05's M_i,j -- row i, column j, both 1-indexed
+    return M[i - 1][j - 1]
+
+def matrix_shape(M):
+    rows = len(M)
+    cols = len(M[0]) if rows else 0
+    return rows, cols
+
+def extract_row(M, i):
+    # Row i of a matrix, returned as its own standalone vector
+    return list(M[i - 1])
+
+
+# Section 03's three documents, stacked as Section 06 describes
+scores = [
+    [0.90, 0.40, 0.70],  # Document A
+    [0.20, 0.95, 0.55],  # Document B
+    [0.60, 0.60, 0.10],  # Document C
+]
+
+print(matrix_shape(scores))            # (3, 3)
+print(matrix_entry(scores, 1, 1))      # 0.9
+print(matrix_entry(scores, 2, 2))      # 0.95
+print(extract_row(scores, 2))          # [0.2, 0.95, 0.55]
+
+assert matrix_shape(scores) == (3, 3)
+assert extract_row(scores, 2) == scores[1]
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code holds the same three ideas</h2></div></header>
+<p>NumPy's <code>np.array([0.9, 0.4, 0.7])</code> is a vector by today's definition, and its <code>.shape</code> attribute reports exactly the rows-and-columns shape Section 05 defines, computed instead of hand-counted. A NumPy 2D array is a matrix the same way — <code>np.array(scores).shape</code> on Section 03's table returns <code>(3, 3)</code>, matching Section 10's worked shape. Module 10 will introduce Oracle AI Database's VECTOR column type, which stores exactly this kind of ordered list of numbers as a native database type — named here only as a forward pointer, not explained until that module.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Vector &amp; Matrix Inspector</h2></div></header>
+<div class="lab">
+<p>Edit any cell of the 3 × 3 matrix below, then look up an entry by row and column, or extract a whole row as its own vector. The inspector updates live as you type.</p>
+<table class="matrix-input" id="inspectorGrid0401" aria-label="Editable 3 by 3 matrix"></table>
+<div class="sample-output" id="inspectorShape0401" aria-live="polite"></div>
+<div class="lab-controls">
+<div class="control"><label for="lookupRow0401">Row (1–3)</label><input type="number" id="lookupRow0401" min="1" max="3" value="1"></div>
+<div class="control"><label for="lookupCol0401">Column (1–3)</label><input type="number" id="lookupCol0401" min="1" max="3" value="1"></div>
+</div>
+<div class="lab-actions" role="group" aria-label="Inspector controls">
+<button type="button" class="secondary" id="lookupButton0401">Look up Mᵢ,ⱼ</button>
+<button type="button" class="secondary" id="rowButton0401">Extract this row as a vector</button>
+</div>
+<div class="sample-output" id="inspectorResult0401" aria-live="polite">Set a row and column, then choose an action.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Hand-indexed lists versus array libraries</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>How indexing works</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Plain nested lists (Section 12)</td><td>Manual 1-indexed lookups, shape computed by hand from <code>len()</code></td><td>Transparent and dependency-free, but slow and error-prone at any real scale</td></tr>
+<tr><td>NumPy arrays (Section 13)</td><td><code>.shape</code>, 0-indexed slicing, vectorized operations</td><td>Fast and standard in production, but the mechanism this concept just defined is hidden behind the library</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of the definitions themselves</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>OFF-BY-ONE</span><h3>Confusing 1-indexed notation with 0-indexed code</h3><p>Section 12's <code>vector_component</code> deliberately subtracts 1 so the lesson's v₁ notation and Python's list indexing agree — forgetting that conversion is the most common source of silent bugs here.</p></article>
+<article class="info-card"><span>SHAPE MISMATCH</span><h3>Stacking rows of different lengths</h3><p>A "matrix" built from a 3-number row and a 4-number row isn't a valid matrix by today's definition — every row must share the same length before it counts as one grid.</p></article>
+<article class="info-card"><span>MEANING DRIFT</span><h3>Column i meaning different things in different rows</h3><p>Section 11's mistake card generalizes: a matrix's usefulness depends entirely on every row agreeing what each column position means.</p></article>
+<article class="info-card"><span>ORIENTATION SWAP</span><h3>Transposing rows and columns without noticing</h3><p>Reading a matrix as though its rows were columns silently swaps which axis is "documents" and which is "scores" — the numbers don't change, but every downstream lookup does.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A matrix must be square (same number of rows and columns)</td><td>Section 03's 3 × 3 example is square by coincidence; a matrix can have any number of rows and any number of columns, independently.</td></tr>
+<tr><td>Vectors and matrices already support operations like adding or multiplying</td><td>Today's concept defines the objects and their notation only — any operation on them, including ones this course will eventually need, is out of scope until it's explicitly introduced.</td></tr>
+<tr><td>"Dimension" already has a settled meaning after this concept</td><td>This concept deliberately avoids naming the component count "dimension" — that formal name and definition belong to Concept 02.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Every column in a stored matrix (a database table's numeric columns, for instance) needs a documented, stable meaning — Section 16's meaning-drift failure is a real migration risk if a column's definition quietly changes over time.</li>
+<li>Row length must be enforced consistently before storage; a system that silently accepts rows of different lengths has already broken today's definition of a matrix, even if nothing crashes immediately.</li>
+<li>Array libraries (Section 13) hide indexing cost behind convenient syntax — worth knowing the by-hand version exists underneath, for debugging when the convenient syntax returns something unexpected.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define scalar, vector, and matrix in one sentence each.</summary><div>Scalar: a single number. Vector: an ordered list of numbers. Matrix: a rectangular grid of numbers, equivalent to several same-length vectors stacked as rows.</div></details>
+<details class="quiz"><summary>Why is a 1 × n matrix not a fundamentally different object from a row vector?</summary><div>A matrix with exactly one row is, entry for entry, the same ordered list of numbers as a row vector of the same length — "matrix" and "vector" overlap rather than compete here.</div></details>
+<details class="quiz"><summary>What does this concept deliberately not name, even though it's closely related to a vector's component count?</summary><div>"Dimension." The count of components is real and used in today's notation (n in v ∈ ℝⁿ), but it isn't given the formal name "dimension" until Concept 02.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A support-ticket system scores each ticket on three numbers: urgency, customer-tier, and days-open. Ticket #101 scores (0.8, 0.3, 0.1); ticket #102 scores (0.2, 0.9, 0.6); ticket #103 scores (0.5, 0.5, 0.9). Write out the vector for ticket #102, state the shape of the matrix formed by stacking all three tickets, and identify M₃,₂ by both its row/column meaning and its value.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible answer</summary>
+<div>Ticket #102's vector is (0.2, 0.9, 0.6). Stacking all three tickets gives a 3 × 3 matrix (3 tickets, 3 scores each). M₃,₂ is row 3 (ticket #103), column 2 (customer-tier), with value 0.5.</div>
+</details>
+<p>Teach-back: explain, in your own words, why ticket #102's vector on its own and ticket #102's row inside the stacked matrix contain exactly the same information.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Scalar, vector, matrix</h3><ul><li><b>Scalar:</b> a single number, no components</li><li><b>Vector:</b> an ordered list of numbers, <b>v</b> = (v₁, …, vₙ)</li><li><b>Matrix:</b> a grid of numbers, Mᵢ,ⱼ, shape rows × columns</li><li><b>Not yet named:</b> the component count "dimension," length, comparison</li></ul></div>
+<div><h3>Memorable example</h3><p>Document A's toy scores (0.90, 0.40, 0.70) are a vector; stacking Documents A, B, and C gives a 3 × 3 matrix where column 1 always means "freshness."</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A junior engineer says "a vector is just an array." What's missing from that description?</summary><div>An array in code makes no promise about what each position means across different arrays; a vector's positions carry a fixed, shared meaning wherever it's compared to another vector of the same kind — the array is the storage, the fixed meaning per position is what makes it a vector.</div></details>
+<details class="quiz"><summary>Why must every row of a matrix have the same length before it's a valid matrix?</summary><div>A matrix's shape (rows × columns) only makes sense if every row has the same column count; rows of different lengths break the grid structure the definition depends on, even before any operation is attempted on it.</div></details>
+<details class="quiz"><summary>Design question: a teammate proposes storing embeddings as unordered JSON objects (key-value pairs) instead of ordered arrays. What breaks?</summary><div>Nothing guarantees a stable position-to-meaning mapping across different objects' keys the way an ordered vector's fixed component order does; any later operation that assumes "position i means the same thing in every vector" (which every later concept in this module will) has no guarantee left to rely on.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Euclidean_vector"><b>Wikipedia — Euclidean vector</b><br><span>General definition and notation for a vector as an ordered tuple of components, behind Sections 05 and 09.</span></a>
+<a href="https://en.wikipedia.org/wiki/Matrix_(mathematics)"><b>Wikipedia — Matrix (mathematics)</b><br><span>Formal definition of a matrix as a rectangular array indexed by row and column, behind Sections 05 and 09.</span></a>
+<a href="https://mathworld.wolfram.com/Scalar.html"><b>Wolfram MathWorld — Scalar</b><br><span>Precise definition of a scalar as distinct from a vector or tensor of any rank, behind Section 05.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 · COMPLETE</span>
+<h3>Scalar, vector, matrix, and their notation are today's takeaway</h3>
+<p>Before moving on, be able to state all three definitions, read and write the notation, and explain why "dimension" was deliberately left unnamed today. Concept 02, "Vector norms, dimensions and normalization," is next — it names the component count, measures a vector's length two different ways, and rescales a vector using only its own length.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-04-concept-02.html">Start Concept 02 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Vector norms, dimensions and normalization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 01 · Complete</p>
+<a href="../lessons/module-03-concept-12.html">← Concept</a>
+</footer>
+</body>
+</html>

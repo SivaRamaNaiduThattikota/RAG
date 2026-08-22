@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 01 defined a vector as an ordered list of numbers and left its length and its size both unnamed on purpose. This concept names the list's length as dimension, defines a norm -- the L1 (taxicab) and L2 (Euclidean) ways to measure a vector's own magnitude -- and rescales a vector to length one using nothing but its own numbers (normalization). No comparing two vectors yet -- dot products, angles and cosine similarity are Concept 03's job.">
+<title>Vector norms, dimensions and normalization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 02</p>
+<h1>Vector norms, dimensions<br><em>and normalization.</em></h1>
+<p class="lesson-lead">Concept 01 defined a vector as an ordered list of numbers and deliberately left two questions unanswered: how long is that list, and how big is the vector as a whole? This concept answers both. The list's length gets a name — <b>dimension</b>. The vector's overall size gets a number called a <b>norm</b>, computed two different ways: the <b>L1 norm</b> (add up the absolute values) and the <b>L2 norm</b> (the familiar straight-line length). Dividing a vector by its own norm rescales it to length one — <b>normalization</b> — using nothing but that one vector's own numbers. Nothing here compares two vectors to each other; that's dot products, angles, and cosine similarity, next concept.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's vector definition and notation (v, vᵢ) — cited directly, not re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute a vector's dimension, L1 norm, and L2 norm by hand, and normalize a vector to length one</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You named a vector's length as its dimension, measured its magnitude two ways — the L1 norm (sum of absolute values) and the L2 norm (straight-line length) — and rescaled it to length one using nothing but its own numbers (normalization). Comparing two vectors to each other is now open in Concept 03.</p>
+<b>2 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">How long is the list, and how big is the vector?</h2>
+</div>
+<p>Concept 01 gave a vector its shape. This concept measures it: how many numbers it holds, and how large those numbers are together, in two different but equally valid ways.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Dimension, norm, and normalization — three new words, one vector, no comparisons</h3>
+<div class="mental-compare">
+<div><span>DIMENSION</span><p>The count of components in the list. (3, 4) has dimension 2 — literally, how many numbers.</p></div>
+<div><span>NORM</span><p>A single number describing how big the whole vector is, computed from its own components — its magnitude, or length.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>L1 NORM</span><p>Add up the absolute value of every component. For (3, 4): |3| + |4| = 7.</p></div>
+<div><span>L2 NORM</span><p>Square every component, add them up, take the square root. For (3, 4): √(3² + 4²) = √25 = 5 — the familiar straight-line length.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>NORMALIZATION</span><p>Divide every component by the vector's own norm, so the result has norm exactly 1 — still one vector, rescaled, never two.</p></div>
+<div><span>NOT YET: COMPARING VECTORS</span><p>Nothing here asks whether two vectors point the same way or how similar they are — that's dot products and cosine similarity, next concept.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> dimension counts the numbers; a norm measures their combined size, in one of at least two different ways (L1 or L2); normalization rescales one vector to size exactly 1, using nothing but its own numbers.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 01 could describe a vector's shape, never its size</h3>
+<p>Concept 01's notation can write down any vector precisely, but it has no way to say that one vector is "bigger" than another of the same dimension, or to shrink an oversized vector down to some standard scale before anything later gets built on top of it. Two vectors can share a dimension and still differ enormously in magnitude — Concept 01's toolkit alone can't say by how much.</p>
+<div class="mental-compare">
+<div><span>WITHOUT NORMS</span><p>Every vector's "size" stays a vague impression — useful for eyeballing a small example, useless for writing an equation or a threshold on top of it.</p></div>
+<div><span>WITH NORMS</span><p>Every vector gets an exact magnitude, computed one of two well-defined ways, and can be rescaled to a standard length before anything else happens to it.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>How strong is one support ticket's keyword signal?</h3>
+<p>A support ticket mentions "refund" 3 times and "billing" 4 times. Written as a vector in that fixed order, <b>t</b> = (3, 4) — raw counts this time, not Concept 01's 0-to-1 scores, chosen because the arithmetic comes out clean.</p>
+<div class="context-demo">
+<div><span>DIMENSION</span><p>2 — two counts, refund then billing, in that fixed order (Concept 01's rule).</p></div>
+<div><span>L1 NORM</span><p>|3| + |4| = 7 — walk 3 blocks one way and 4 the other, then add the blocks.</p></div>
+<div><span>L2 NORM</span><p>√(3² + 4²) = √25 = 5 — the straight-line distance from the origin to the point (3, 4).</p></div>
+<div><span>NORMALIZED VECTOR</span><p>(3/5, 4/5) = (0.6, 0.8) — same direction, rescaled so its own L2 norm is exactly 1.</p></div>
+</div>
+<p>Embedding vectors (Module 08) are commonly normalized this same way before they're ever compared to anything — why that helps is a question for later, not today. Today's job is only computing the number, not using it.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three formulas, applied to one vector at a time</h3>
+<div class="example-grid">
+<article class="info-card"><span>DIMENSION</span><h3>Count the components</h3><p>dim(<b>v</b>) = n, where <b>v</b> has n components — Concept 01's n, finally named.</p></article>
+<article class="info-card"><span>L1 NORM</span><h3>Sum of absolute values</h3><p>‖<b>v</b>‖₁ = |v₁| + |v₂| + … + |vₙ| — also called the taxicab or Manhattan norm.</p></article>
+<article class="info-card"><span>L2 NORM</span><h3>Square root of sum of squares</h3><p>‖<b>v</b>‖₂ = √(v₁² + v₂² + … + vₙ²) — also called the Euclidean norm.</p></article>
+<article class="info-card"><span>NORMALIZATION</span><h3>Divide by the L2 norm</h3><p>v̂ = <b>v</b> / ‖<b>v</b>‖₂ — by default, "normalize" means rescale to L2 norm 1 unless stated otherwise.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0402-visual-title">
+<strong class="concept-visual-title" id="c0402-visual-title">VISUAL · TWO WAYS TO MEASURE THE SAME VECTOR</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-labelledby="c0402-svg-title c0402-svg-desc">
+<title id="c0402-svg-title">L1 staircase path versus L2 straight-line path to the point (3, 4)</title>
+<desc id="c0402-svg-desc">An orange staircase path of length 7 (3 blocks right, then 4 blocks up) and a green diagonal path of length 5, both running from the origin to the same point representing the vector (3, 4).</desc>
+<line x1="30" y1="230" x2="280" y2="230" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="30" y1="230" x2="30" y2="20" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<polyline points="30,230 180,230 180,90" fill="none" stroke="#ff7957" stroke-width="3" stroke-dasharray="2 4"/>
+<line x1="30" y1="230" x2="180" y2="90" stroke="#5ee6c3" stroke-width="3"/>
+<circle cx="180" cy="90" r="4.5" fill="#14241f"/>
+<text x="186" y="83" font-size="13" fill="currentColor">(3, 4)</text>
+<text x="70" y="250" font-size="11" fill="#ff7957">3 blocks →</text>
+<text x="184" y="165" font-size="11" fill="#ff7957">4 blocks ↑</text>
+<text x="70" y="150" font-size="12" fill="#5ee6c3">‖v‖₂ = 5</text>
+</svg>
+</div>
+<figcaption>The orange staircase (3 blocks right, then 4 up) has total length 7 — the L1 norm. The green diagonal is the straight-line length 5 — the L2 norm. Same vector, same endpoint, two different, equally valid answers to "how big is it."</figcaption>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Still inside one vector, before anything gets compared</h3>
+<div class="pipeline-preview">
+<span>Concept 01 — a vector, defined</span><i>↓</i><span class="hot">This concept — dimension, norm, normalized</span><i>↓</i><span>Concept 03 — compare two vectors</span><i>↓</i><span>Module 08 — embeddings normalized this same way</span>
+</div>
+<p>Every computation in this concept takes exactly one vector as input and produces one number or one new vector as output. Nothing here ever looks at a second vector — that step, and the reason embeddings get normalized before it, both belong to later concepts.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners blur two different numbers into one</h3>
+<div class="distinction-table" role="table" aria-label="This concept's dimension, L1 norm, L2 norm and normalization distinguished from each other and from later concepts">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Dimension</span><span role="cell">Norm</span><span role="cell">Dimension counts components (a whole number); a norm measures magnitude (any non-negative real number) — two vectors of the same dimension can have wildly different norms</span></div>
+<div role="row"><span role="cell">L1 norm</span><span role="cell">L2 norm</span><span role="cell">Different formulas, generally different results for the same vector — (3, 4) gives 7 and 5, not the same number twice</span></div>
+<div role="row"><span role="cell">Normalization (this concept, L2 by default)</span><span role="cell">L1-normalization</span><span role="cell">Dividing by the L2 norm gives a vector with L2 norm exactly 1; dividing the same vector by its L1 norm gives a different result that is not a unit vector in the L2 sense — a separate, related idea named here only, used later for turning non-negative values into a sum-to-one distribution</span></div>
+<div role="row"><span role="cell">Normalizing a vector</span><span role="cell">Comparing two vectors</span><span role="cell">Normalization only ever touches one vector's own numbers; comparing direction or similarity needs a second vector and is Concept 03's job</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A vector's dimension and its norm are the same idea."</b><p>Dimension counts components; norm measures magnitude. (3, 4) and (10, 0) both have dimension 2, but L2 norms 5 and 10 — same dimension, different size.</p></div>
+<div><b>"L1 and L2 norms always give the same number."</b><p>They only coincide when a vector has at most one non-zero component. Section 03's (3, 4) gives 7 and 5 — not the same number.</p></div>
+<div><b>"Normalizing a vector changes which way it points."</b><p>Every component gets divided by the same positive number (the norm), so direction never changes — only magnitude shrinks to exactly 1.</p></div>
+<div><b>"You need a second vector before you can normalize the first one."</b><p>Normalization only uses the vector's own norm. No comparison to anything else happens in this concept at all.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Measuring, not yet comparing, three familiar vectors</h3>
+<div class="project-map">
+<div><span>SUPPORT-TICKET COUNTS</span><b>t = (3, 4)</b><p>Dimension 2, L1 norm 7, L2 norm 5 — a single ticket's overall keyword strength, before it's compared to any other ticket.</p></div>
+<div><span>CONCEPT 01'S DOCUMENT SCORES</span><b>Document A = (0.90, 0.40, 0.70)</b><p>Now has a computable dimension (3) and a magnitude, before Module 03's ranking logic ever touches it.</p></div>
+<div><span>EMBEDDING VECTORS, MODULE 08</span><b>Forward reference only</b><p>Commonly normalized this same way before comparison — the mechanism is today's; the reason is Module 08's, not explained here.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> every vector in the Oracle RAG project can now be measured on its own, before Concept 03 ever compares two of them.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Dimension</b><p>The count of components in a vector — a whole number, unrelated to how large those components are.</p></div>
+<div><b>L1 and L2 norms</b><p>‖v‖₁ = sum of absolute values; ‖v‖₂ = square root of sum of squares. Different formulas, usually different results.</p></div>
+<div><b>Normalization</b><p>Dividing a vector by its own L2 norm produces a vector with L2 norm exactly 1 — direction unchanged, magnitude fixed.</p></div>
+<div><b>What stays deferred</b><p>Comparing two vectors, angles, and cosine similarity are all still ahead — Concept 03's job, not today's.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can two vectors share a dimension but have completely different norms?</li>
+<li>Compute the L1 and L2 norms of (0, 5) by hand. Why do they come out equal here specifically?</li>
+<li>Why doesn't normalizing a vector ever require looking at a second vector?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Dot product, vector similarity, angles and cosine similarity</h3>
+<p>Today's concept measured one vector at a time — its dimension, its two kinds of norm, and its normalized, unit-length version. Concept 03 finally introduces a second vector: the dot product combines two vectors into one number, that number relates to the angle between them, and dividing by both vectors' norms turns it into cosine similarity — the first idea in this module that actually compares anything.</p>
+<div class="beginner-memory"><b>Concept 02 is complete.</b> Continue to Dot product, vector similarity, angles and cosine similarity.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 03 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Count the numbers. Measure the vector two ways. Rescale it to one.</h2>
+<p>Master dimension, L1, L2, and normalization first. Open the formal definitions, the from-scratch code, and The Norm Calculator lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Dimension counts components; a norm measures magnitude two ways (L1, L2); normalization rescales to length one.</small></a>
+<a href="#b04"><span>02</span><b>Compute</b><small>dim(v) = n, ‖v‖₁ = Σ|vᵢ|, ‖v‖₂ = √Σvᵢ², v̂ = v / ‖v‖₂.</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Measure a support ticket's keyword vector and Concept 01's document scores, without comparing either to anything yet.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch code, and The Norm Calculator lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> Concept 01's vector definition cited, not re-derived → dimension, L1 norm, L2 norm, and L2-based normalization defined and computed by hand → a support ticket's keyword vector measured on its own → Concept 03 previewed: the dot product finally compares two vectors.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the norms and normalization deep dive</b><em>Formal definitions, from-scratch code, and The Norm Calculator lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From naming a vector to measuring it</h2></div></header>
+<p>Concept 01 closed with two questions left deliberately open: how long is a vector's list, and how big is the vector as a whole? This concept answers both without ever introducing a second vector. Dimension names the list's length. A norm — computed as L1 or L2 — names the vector's magnitude. Normalization rescales a vector to magnitude 1 using only its own numbers. Concept 03 is the first place a second vector appears at all.</p>
+<div class="flow">
+<div class="flow-node">Concept 01 — what is a vector?</div>
+<div class="flow-node hot">Concept 02 — how long, how big?</div>
+<div class="flow-node">Concept 03 — how do two compare?</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State all four terms precisely</h3><p>Dimension, L1 norm, L2 norm, and normalization — with this concept's exact wording, not a looser paraphrase.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute all four by hand</h3><p>Given any vector, find its dimension, its L1 norm, its L2 norm, and its L2-normalized version.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Keep four pairs apart</h3><p>Dimension versus norm, L1 versus L2, this concept's L2-based normalization versus L1-normalization, and normalizing versus comparing.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>Dot products, angles, cosine similarity, and distance between two vectors are all Concepts 03 and 04's territory, not today's.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's vector definition and notation:</b> cited directly — <b>v</b> = (v₁, …, vₙ), unchanged. This concept only adds a name for n and a way to measure the vᵢ together.</li>
+<li><b>No other new prerequisite:</b> nothing from probability, dot products, or distance is assumed or used here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Walking city blocks versus flying straight</h2></div></header>
+<p>To reach a point 3 blocks east and 4 blocks north, a pedestrian confined to the street grid walks 3 blocks then 4 blocks — 7 blocks total, the L1 norm's intuition. A bird flies the straight-line distance instead — 5 units, the L2 norm's intuition. Both are completely valid answers to "how far is that point from here"; they just measure different things about the same trip.</p>
+<div class="callout warning"><b>Analogy boundary</b>Norms are pure arithmetic on a list of numbers, regardless of whether any real streets or straight lines are involved. The city-blocks-versus-flight framing only carries the L1-versus-L2 distinction, nothing about actual geography or travel.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Dimension</td><td>dim(<b>v</b>) = n, the count of components in <b>v</b> ∈ ℝⁿ — Concept 01's n, now named</td><td>A whole number describing shape, not magnitude — unrelated to any norm</td></tr>
+<tr><td>L1 norm (taxicab / Manhattan norm)</td><td>‖<b>v</b>‖₁ = |v₁| + |v₂| + … + |vₙ|</td><td>Always defined for every real vector; equal to the L2 norm only when at most one component is non-zero</td></tr>
+<tr><td>L2 norm (Euclidean norm)</td><td>‖<b>v</b>‖₂ = √(v₁² + v₂² + … + vₙ²)</td><td>Always defined and non-negative; equals zero only for the zero vector</td></tr>
+<tr><td>Normalization (this concept's default)</td><td>v̂ = <b>v</b> / ‖<b>v</b>‖₂, giving ‖v̂‖₂ = 1 exactly</td><td>Undefined for the zero vector (division by zero); "normalize" defaults to this L2 form unless a norm is stated otherwise</td></tr>
+<tr><td>L1-normalization (named, not the default here)</td><td><b>v</b> / ‖<b>v</b>‖₁, giving a vector whose components sum to 1 in absolute value</td><td>A different rescaling with a different use — turning non-negative values into a sum-to-one distribution, previewed for Concept 05, not built here</td></tr>
+</tbody>
+</table>
+</section>
+<figure class="concept-visual" aria-labelledby="c0402-unitball-title">
+<strong class="concept-visual-title" id="c0402-unitball-title">VISUAL · WHERE "LENGTH ONE" ACTUALLY SITS, FOR EACH NORM</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 200 200" role="img" aria-labelledby="c0402-ball1-title c0402-ball1-desc">
+<title id="c0402-ball1-title">The L1 unit ball — a diamond</title>
+<desc id="c0402-ball1-desc">A diamond shape connecting (1,0), (0,1), (-1,0) and (0,-1), with the point (0.6, 0.8) marked outside the diamond's edge.</desc>
+<line x1="10" y1="100" x2="190" y2="100" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<line x1="100" y1="10" x2="100" y2="190" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<polygon points="160,100 100,40 40,100 100,160" fill="rgba(255,121,87,.18)" stroke="#ff7957" stroke-width="2.5"/>
+<circle cx="136" cy="52" r="4.5" fill="#14241f"/>
+<text x="140" y="46" font-size="11" fill="currentColor">(0.6, 0.8)</text>
+<text x="6" y="112" font-size="10" fill="currentColor">‖v‖₁ = 1 on the edge</text>
+</svg>
+<svg class="vector-plane" viewBox="0 0 200 200" role="img" aria-labelledby="c0402-ball2-title c0402-ball2-desc">
+<title id="c0402-ball2-title">The L2 unit ball — a circle</title>
+<desc id="c0402-ball2-desc">A circle of radius 1, with the point (0.6, 0.8) marked exactly on the circle's edge.</desc>
+<line x1="10" y1="100" x2="190" y2="100" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<line x1="100" y1="10" x2="100" y2="190" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<circle cx="100" cy="100" r="60" fill="rgba(94,230,195,.18)" stroke="#5ee6c3" stroke-width="2.5"/>
+<circle cx="136" cy="52" r="4.5" fill="#14241f"/>
+<text x="140" y="46" font-size="11" fill="currentColor">(0.6, 0.8)</text>
+<text x="6" y="112" font-size="10" fill="currentColor">‖v‖₂ = 1 on the edge</text>
+</svg>
+</div>
+<figcaption>The same point, (0.6, 0.8) — Section 03's ticket vector after dividing by its own L2 norm. It lands exactly on the L2 unit circle on the right, because that's the norm it was divided by. On the left, its L1 norm is 0.6 + 0.8 = 1.4, so the same point sits outside the L1 diamond — normalizing by one norm never guarantees landing on another norm's unit shape.</figcaption>
+</figure>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing all three computations on t = (3, 4)</h2></div></header>
+<div class="lane-flow">
+<div><b>Dimension —</b> count the components: 2.</div>
+<div><b>L1 norm —</b> |3| + |4| = 3 + 4 = 7.</div>
+<div><b>L2 norm —</b> square each (9, 16), sum them (25), take the square root: √25 = 5.</div>
+<div><b>Normalize —</b> divide each original component by 5: (3/5, 4/5) = (0.6, 0.8).</div>
+<div><b>Verify —</b> the normalized vector's own L2 norm: √(0.6² + 0.8²) = √(0.36 + 0.64) = √1 = 1. Confirmed.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One vector, three independent readings, one rescaled output</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing one vector producing dimension, L1 norm and L2 norm independently, with the L2 norm feeding normalization">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>Vector v (input)</b><small>e.g. (3, 4)</small></div>
+<div class="diagram-node"><b>Dimension</b><small>count of components</small></div>
+<div class="diagram-node"><b>L1 norm</b><small>Σ|vᵢ|</small></div>
+<div class="diagram-node"><b>L2 norm</b><small>√Σvᵢ²</small></div>
+<div class="diagram-node"><b>Normalized vector</b><small>v ÷ its own L2 norm</small></div>
+</div>
+</div>
+<p>Dimension, L1 norm, and L2 norm are three independent readings of the same input vector — none of them depends on the other two. Normalization is the one downstream step here, and it specifically consumes the L2 norm, not the L1 norm, by this concept's default convention.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Annotating Concept 06's "Vectors" box, not changing it</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Parsing</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Vectors (+ dimension, norm, normalized)</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The skeleton itself is unchanged from Concept 01 — this concept only says more about what already sits inside the "Vectors" box. Whether normalizing embeddings actually helps retrieval, and where in the pipeline that would happen, are both later questions (Module 08), forward-referenced but not answered here.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Three formulas and one boundary case</h2></div></header>
+<p>For a vector <code>v ∈ ℝⁿ</code> with components v₁ through vₙ:</p>
+<div class="equation">dim(v) = n
+
+‖v‖₁ = |v₁| + |v₂| + … + |vₙ| = Σᵢ |vᵢ|
+
+‖v‖₂ = √(v₁² + v₂² + … + vₙ²) = √(Σᵢ vᵢ²)
+
+v̂ = v / ‖v‖₂,  so that ‖v̂‖₂ = 1</div>
+<p>Read the first line as a count, the second and third as sums built from the vector's own components, and the fourth as a rescaling that divides every component by the same positive number. One boundary case matters: if <b>v</b> is the zero vector, ‖v‖₂ = 0, and dividing by zero is undefined — the zero vector has no direction to preserve, so it cannot be normalized at all.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two vectors, fully traced, including the verification step</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Vector</th><th>Dimension</th><th>L1 norm</th><th>L2 norm</th><th>Normalized</th><th>Check: ‖v̂‖₂</th></tr></thead>
+<tbody>
+<tr><td>t = (3, 4)</td><td>2</td><td>7</td><td>5</td><td>(0.6, 0.8)</td><td>√(0.36+0.64) = 1</td></tr>
+<tr><td>w = (1, 2, 2)</td><td>3</td><td>5</td><td>3</td><td>(0.333, 0.667, 0.667)</td><td>√(1/9+4/9+4/9) = 1</td></tr>
+</tbody>
+</table>
+<p>w = (1, 2, 2) generalizes the pattern to three dimensions: L1 sums |1| + |2| + |2| = 5; L2 is √(1 + 4 + 4) = √9 = 3, a clean whole number chosen deliberately so the normalized components stay easy to check by hand.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Section 03's ticket vector t = (3, 4)</h3><p>A textbook case — non-zero, low-dimensional, easy to verify by hand with the classic 3-4-5 triangle.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>The zero vector, (0, 0)</h3><p>Dimension 2, L1 norm 0, L2 norm 0 — and no normalized version exists, because Section 09's division by ‖v‖₂ is undefined at zero.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>Assuming L1-normalizing gives a unit vector</h3><p>Dividing (3, 4) by its L1 norm (7) gives (3/7, 4/7) ≈ (0.429, 0.571). Its L2 norm is √(0.184+0.327) ≈ 0.714, not 1 — L1-normalizing does not produce an L2 unit vector.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>"A bigger L1 norm means a bigger L2 norm"</h3><p>(5, 0) has L1 = 5, L2 = 5. (3, 3) has L1 = 6 (bigger) but L2 ≈ 4.24 (smaller) — a bigger L1 norm does not guarantee a bigger L2 norm across different vectors.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Dimension, both norms, and a guarded normalize, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES, WITH A ZERO-VECTOR GUARD</span>
+<pre><code>def dimension(v):
+    return len(v)
+
+def l1_norm(v):
+    # Section 05's Sum |v_i|
+    return sum(abs(x) for x in v)
+
+def l2_norm(v):
+    # Section 05's sqrt(Sum v_i^2)
+    return sum(x * x for x in v) ** 0.5
+
+def normalize(v):
+    # Section 09's boundary case: the zero vector has no direction to
+    # rescale, so dividing by its own (zero) L2 norm is refused outright
+    # instead of silently producing NaN or infinity.
+    norm = l2_norm(v)
+    if norm == 0:
+        raise ValueError("cannot normalize the zero vector")
+    return [x / norm for x in v]
+
+
+t = [3, 4]
+print(dimension(t))     # 2
+print(l1_norm(t))        # 7
+print(l2_norm(t))        # 5.0
+print(normalize(t))      # [0.6, 0.8]
+
+assert dimension(t) == 2
+assert l1_norm(t) == 7
+assert l2_norm(t) == 5.0
+assert normalize(t) == [0.6, 0.8]
+assert abs(l2_norm(normalize(t)) - 1.0) < 1e-9
+
+try:
+    normalize([0, 0])
+    assert False, "should have raised"
+except ValueError:
+    pass  # the zero vector correctly refuses to normalize
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same three ideas</h2></div></header>
+<p>NumPy's <code>numpy.linalg.norm(v)</code> computes the L2 norm by default, and <code>numpy.linalg.norm(v, ord=1)</code> switches to the L1 norm — Section 05's two formulas, as one function with a parameter instead of two separate ones. Dividing by that result, <code>v / numpy.linalg.norm(v)</code>, is Section 09's normalization written as one line. Embedding libraries built on top of models like sentence-transformers commonly expose a <code>normalize_embeddings</code> option that performs exactly this L2 normalization automatically — named here only as a forward pointer to Module 08, not explained.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Norm Calculator</h2></div></header>
+<div class="lab">
+<p>Choose a dimension, drag each slider, and watch the dimension, L1 norm, L2 norm, and normalized vector update live. The plane below only draws when the dimension is 2, since higher-dimensional vectors can't be plotted on a flat page.</p>
+<div class="dim-toggle" role="group" aria-label="Choose the vector's dimension" id="normDimToggle0402">
+<button type="button" class="secondary active" data-dim="2">Dimension 2</button>
+<button type="button" class="secondary" data-dim="3">Dimension 3</button>
+<button type="button" class="secondary" data-dim="4">Dimension 4</button>
+<button type="button" class="secondary" data-dim="5">Dimension 5</button>
+</div>
+<div class="norm-controls" id="normSliders0402">
+<div class="control" data-slot="1"><label for="normV1_0402">v₁</label><input type="range" id="normV1_0402" min="-10" max="10" step="1" value="3"><output id="normV1Out_0402">3</output></div>
+<div class="control" data-slot="2"><label for="normV2_0402">v₂</label><input type="range" id="normV2_0402" min="-10" max="10" step="1" value="4"><output id="normV2Out_0402">4</output></div>
+<div class="control" data-slot="3"><label for="normV3_0402">v₃</label><input type="range" id="normV3_0402" min="-10" max="10" step="1" value="0"><output id="normV3Out_0402">0</output></div>
+<div class="control" data-slot="4"><label for="normV4_0402">v₄</label><input type="range" id="normV4_0402" min="-10" max="10" step="1" value="0"><output id="normV4Out_0402">0</output></div>
+<div class="control" data-slot="5"><label for="normV5_0402">v₅</label><input type="range" id="normV5_0402" min="-10" max="10" step="1" value="0"><output id="normV5Out_0402">0</output></div>
+</div>
+<div class="norm-readout">
+<div><span>DIMENSION</span><b id="normDim0402">2</b></div>
+<div><span>L1 NORM</span><b id="normL1_0402">7.000</b></div>
+<div><span>L2 NORM</span><b id="normL2_0402">5.000</b></div>
+<div><span>NORMALIZED</span><b id="normUnit0402">(0.600, 0.800)</b></div>
+</div>
+<figure class="concept-visual" id="normVisualWrap0402" aria-labelledby="c0402-lab-title">
+<strong class="concept-visual-title" id="c0402-lab-title">LIVE PLANE · ONLY SHOWN FOR DIMENSION 2</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-label="Live vector arrow updating as the sliders change">
+<defs>
+<marker id="normArrow0402" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5ee6c3"/></marker>
+</defs>
+<line x1="10" y1="130" x2="290" y2="130" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<line x1="150" y1="20" x2="150" y2="240" stroke="currentColor" stroke-width="1" opacity=".45"/>
+<line id="normLine0402" x1="150" y1="130" x2="183" y2="86" stroke="#5ee6c3" stroke-width="3" marker-end="url(#normArrow0402)"/>
+<text id="normPointLabel0402" x="188" y="82" font-size="12" fill="currentColor">(3, 4)</text>
+</svg>
+</div>
+<figcaption id="normCaption0402">The arrow points from the origin to (v₁, v₂) using this vector's current values; its length on the page is proportional to its L2 norm.</figcaption>
+</figure>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="normReset0402">Reset to (3, 4)</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>L1 versus L2, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Norm</th><th>What it emphasizes</th><th>Where it's typically preferred</th></tr></thead>
+<tbody>
+<tr><td>L1 (taxicab / Manhattan)</td><td>Total absolute movement across every component, treating each one equally</td><td>Contexts favoring sparsity or robustness to a single extreme component — named here only; the reasons are outside this concept's math</td></tr>
+<tr><td>L2 (Euclidean)</td><td>Straight-line geometric length, matching ordinary geometric intuition</td><td>The conventional default for "normalize" in embedding and retrieval contexts (Module 08, forward-referenced)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of computing and using norms</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>DIVIDE BY ZERO</span><h3>Normalizing the zero vector</h3><p>Section 09's boundary case, unhandled: dividing by a zero L2 norm crashes or silently produces NaN/infinity instead of raising a clear error like Section 12's guard.</p></article>
+<article class="info-card"><span>WRONG NORM, SAME NAME</span><h3>Calling an L1-normalized vector "normalized" without saying which norm</h3><p>Section 11's counterexample: it looks rescaled, but its L2 norm isn't 1 — any code downstream assuming a unit L2 vector gets a silently wrong number.</p></article>
+<article class="info-card"><span>SCALE MISMATCH</span><h3>Comparing norms across different-dimension vectors as if they meant the same thing</h3><p>A higher-dimensional vector's L1 norm tends to run larger purely from having more terms to sum — comparing raw norms across dimensions without accounting for that is comparing different scales.</p></article>
+<article class="info-card"><span>FLOATING-POINT DRIFT</span><h3>A "unit" vector whose computed norm is 0.999999999, not exactly 1</h3><p>Ordinary floating-point rounding after repeated division — expected, and usually handled with a small tolerance rather than an exact equality check, as Section 12's assertion does.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Normalizing always means dividing by the L1 norm</td><td>This concept's default is the L2 norm; L1-normalization is a separate, named idea used for a different purpose (Section 05), not the default meaning of "normalize."</td></tr>
+<tr><td>A vector's dimension can change after it's normalized</td><td>Dimension only counts components; normalizing rescales their values, so the count — and therefore the dimension — never changes.</td></tr>
+<tr><td>Two vectors with equal L2 norms must be the same vector</td><td>Countless different directions share the same length — Section 11's (5, 0) and, say, (3, 4) both have an L2 norm of 5, and they are not the same vector.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Storing a vector's precomputed norm alongside it avoids recomputing Section 09's square root on every later use — a small cost saving that adds up across a large index (Module 09, forward flavor only).</li>
+<li>An index that mixes normalized and unnormalized vectors breaks any later comparison that assumes a consistent convention — Section 16's scale-mismatch risk applies at the whole-index level, not just one vector at a time.</li>
+<li>Section 16's floating-point drift is routine at scale; production normalization code checks against a small tolerance rather than expecting an exact 1.0.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State the formulas for the L1 norm and the L2 norm of a vector v with components v₁ through vₙ.</summary><div>‖v‖₁ = |v₁| + |v₂| + … + |vₙ|. ‖v‖₂ = √(v₁² + v₂² + … + vₙ²).</div></details>
+<details class="quiz"><summary>Why can't the zero vector be normalized?</summary><div>Normalization divides every component by the vector's L2 norm. The zero vector's L2 norm is 0, and dividing by zero is undefined — there's also no meaningful direction for the zero vector to preserve.</div></details>
+<details class="quiz"><summary>Why does dividing a vector by its L1 norm not generally produce a vector with L2 norm 1?</summary><div>The L1 and L2 norms are different formulas that usually give different values for the same vector, so dividing by one doesn't rescale the vector to length 1 as measured by the other — Section 11's (3, 4) example confirms this by hand.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A three-component vector describes a document's raw signal counts: 0 mentions of "refund," 6 mentions of "billing," 8 mentions of "cancel" — written as (0, 6, 8). Compute its dimension, its L1 norm, its L2 norm, and its L2-normalized version by hand, then verify that the normalized vector's own L2 norm is 1.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible answer</summary>
+<div>Dimension: 3. L1 norm: |0| + |6| + |8| = 14. L2 norm: √(0² + 6² + 8²) = √(0 + 36 + 64) = √100 = 10. Normalized: (0/10, 6/10, 8/10) = (0, 0.6, 0.8). Check: √(0² + 0.6² + 0.8²) = √(0 + 0.36 + 0.64) = √1 = 1, confirmed.</div>
+</details>
+<p>Teach-back: explain, in your own words, why this vector's normalized version, (0, 0.6, 0.8), has exactly the same direction as (0, 6, 8), even though every component shrank.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Dimension, L1, L2, normalization</h3><ul><li><b>Dimension:</b> dim(v) = n, the component count</li><li><b>L1 norm:</b> ‖v‖₁ = Σ|vᵢ|</li><li><b>L2 norm:</b> ‖v‖₂ = √Σvᵢ²</li><li><b>Normalization:</b> v̂ = v / ‖v‖₂, so ‖v̂‖₂ = 1 (undefined for the zero vector)</li></ul></div>
+<div><h3>Memorable example</h3><p>t = (3, 4): dimension 2, L1 norm 7, L2 norm 5, normalized (0.6, 0.8) — the 3-4-5 triangle, one vector measured two different ways.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A teammate says two embedding vectors "must be similar" because they have the same L2 norm. What's wrong with that reasoning?</summary><div>Equal L2 norm only means equal magnitude — countless different directions share the same length. Nothing about magnitude alone says whether two vectors point the same way or are otherwise similar; that requires comparing direction, which is Concept 03's dot product and cosine similarity, not a norm.</div></details>
+<details class="quiz"><summary>Why does normalization code typically guard against the zero vector explicitly, rather than letting the division happen?</summary><div>Dividing by an L2 norm of zero is undefined and would either crash or silently produce NaN or infinity; an explicit guard (Section 12) turns a hidden failure into a clear, catchable error, and makes the zero vector's undefined direction visible in the code rather than hidden in its output.</div></details>
+<details class="quiz"><summary>Design question: your team is building a vector index where some embeddings were normalized before storage and some weren't, due to a bug. What immediate risk does that create, and how would you detect it cheaply?</summary><div>Any later step assuming a consistent norm convention (comparisons, thresholds, or distance calculations built on top of a unit-norm assumption) silently gets inconsistent results depending on which vectors happen to be involved. A cheap detection pass: compute the L2 norm of every stored vector and check whether they cluster near 1.0 (normalized) or vary widely (not normalized) — vectors far from the expected cluster flag the ones the bug touched.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Norm_(mathematics)"><b>Wikipedia — Norm (mathematics)</b><br><span>General definition of a norm, including the L1 and L2 special cases, behind Sections 05 and 09.</span></a>
+<a href="https://mathworld.wolfram.com/L2-Norm.html"><b>Wolfram MathWorld — L²-Norm</b><br><span>Formal treatment of the Euclidean norm used for this concept's default normalization, behind Sections 05 and 09.</span></a>
+<a href="https://mathworld.wolfram.com/L1-Norm.html"><b>Wolfram MathWorld — L¹-Norm</b><br><span>Formal treatment of the taxicab norm contrasted with the L2 norm throughout, behind Sections 04, 05, and 15.</span></a>
+<a href="https://en.wikipedia.org/wiki/Unit_vector"><b>Wikipedia — Unit vector</b><br><span>Definition of a normalized, length-one vector, behind Section 05's normalization entry.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 · COMPLETE</span>
+<h3>Dimension, L1 norm, L2 norm, and L2-based normalization are today's takeaway</h3>
+<p>Before moving on, be able to compute all three quantities for any vector by hand, explain why the zero vector can't be normalized, and state clearly that nothing today compared two vectors to each other. Concept 03, "Dot product, vector similarity, angles and cosine similarity," is next — it introduces the second vector this concept deliberately withheld.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Norm Calculator lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Dot product, vector similarity, angles and cosine similarity.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 02 · Complete</p>
+<a href="module-04-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

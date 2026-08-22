@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 05 defined what a discrete probability distribution is, from a clean start of outcomes and counts. This concept is where that thread meets Concepts 01-04's raw scores: softmax takes any list of real-valued scores -- similarity scores, distances, or a model's raw logits -- and turns them into a genuine probability distribution that sums to exactly 1. Temperature controls how sharply softmax favors the largest score. Logarithms turn up twice: they make the arithmetic numerically stable (the log-sum-exp trick), and taking a log never changes which score was largest -- a fact Concept 07's cross-entropy and Concept 08's ranking objectives both depend on.">
+<title>Softmax, temperature and logarithms — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 06</p>
+<h1>Softmax, temperature<br><em>and logarithms.</em></h1>
+<p class="lesson-lead">Concept 05 defined what a discrete probability distribution actually is, starting from outcomes and counts, with no vectors involved. This concept is where that thread meets Concepts 01-04's raw scores: <b>softmax</b> takes any list of real-valued numbers — similarity scores, negative distances, a model's raw logits — and turns them into a genuine probability distribution that satisfies Concept 05's sum-to-1 rule. <b>Temperature</b>, a single positive number dividing every score before exponentiating, controls how sharply softmax favors the largest one. <b>Logarithms</b> turn up for two separate reasons: they keep the arithmetic numerically stable when scores get large, and — because log is monotonically increasing — taking a log never changes which score was largest, a fact Concept 07's cross-entropy and Concept 08's ranking objectives both lean on directly.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 05's probability-distribution definition, cited directly — nothing from Concepts 01-04's vector mechanics is required</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute softmax by hand for a short list of scores at more than one temperature, and explain why the result always sums to 1 regardless of the raw scores</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 05 defined a discrete probability distribution and conditional probability from a clean start — counts over tickets, nothing geometric. This concept was the first place that thread actually met Concepts 01-04's raw scores: softmax converts an arbitrary list of real numbers into an object that satisfies Concept 05's own sum-to-1 requirement, with temperature controlling how sharply it favors the largest input, and with the ranking of the original scores always preserved.</p>
+<b>6 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Turning any list of scores into a distribution that sums to 1</h2>
+</div>
+<p>Concept 05 required a real probability distribution to have every number ≥ 0 and all of them summing to exactly 1. Concepts 01-04's raw similarity scores and distances satisfy neither requirement on their own. Softmax is the specific fix.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Softmax: exponentiate every score, then divide by the total</h3>
+<div class="mental-compare">
+<div><span>SOFTMAX</span><p>Given scores z₁, …, zₙ: softmax(zᵢ) = exp(zᵢ) / Σⱼ exp(zⱼ). Every output is positive, and they all add up to exactly 1 — Concept 05's distribution requirement, satisfied by construction.</p></div>
+<div><span>TEMPERATURE, T</span><p>Divide every score by T before exponentiating: softmax(zᵢ/T). Small T (below 1) sharpens the distribution toward the largest score; large T (above 1) flattens it toward uniform.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>WHY EXPONENTIATE AT ALL</span><p>Raw scores can be negative or zero, which a probability can never be. exp(x) is positive for every real x, so exponentiating first guarantees every output clears that bar before the division even happens.</p></div>
+<div><span>LOGARITHMS, PREVIEWED</span><p>Taking a log undoes an exponential and never changes which score was largest — log is monotonically increasing. Both facts get used directly in Section 09's log-sum-exp trick and in Concept 07's cross-entropy.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> softmax(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T) — always positive, always sums to 1, and temperature T controls how sharply the largest score dominates the rest.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Raw scores fail Concept 05's own requirement</h3>
+<p>A cosine similarity can be negative. A raw model logit can be any real number at all, positive or negative, with no upper bound. Neither one sums to 1 across a set of candidates, and neither is guaranteed to be non-negative. Concept 05 was explicit about what a distribution requires; softmax is the specific, differentiable function that takes any such list and produces something that actually qualifies — without throwing away the relative order of the original scores.</p>
+<div class="mental-compare">
+<div><span>WITHOUT SOFTMAX</span><p>Three candidate documents score 2.0, 1.0, and 0.1 against a query. Read directly, there's no sense in which these "add up to 1," and 2.0 isn't a probability of anything.</p></div>
+<div><span>WITH SOFTMAX</span><p>The same three scores become a genuine distribution — about 0.66, 0.24, and 0.10 at temperature 1 (computed in b03) — that can be used directly as a probability of relevance, or as the input to a loss function (Concept 07).</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three candidate documents, one query, one temperature at a time</h3>
+<p>A query is scored against three retrieved candidates, giving raw similarity scores z = [2.0, 1.0, 0.1]. At temperature T = 1, softmax turns these into a distribution as follows.</p>
+<div class="context-demo">
+<div><span>EXPONENTIATE EACH SCORE</span><p>exp(2.0) ≈ 7.389, exp(1.0) ≈ 2.718, exp(0.1) ≈ 1.105.</p></div>
+<div><span>SUM THE EXPONENTIALS</span><p>7.389 + 2.718 + 1.105 ≈ 11.213.</p></div>
+<div><span>DIVIDE EACH BY THE SUM</span><p>7.389/11.213 ≈ 0.659, 2.718/11.213 ≈ 0.242, 1.105/11.213 ≈ 0.099.</p></div>
+<div><span>CHECK: DO THEY SUM TO 1?</span><p>0.659 + 0.242 + 0.099 = 1.000 — exactly, up to rounding. Concept 05's requirement, satisfied.</p></div>
+</div>
+<p>The highest-scoring candidate keeps the largest share of the probability mass, but the other two are not zeroed out — softmax is a soft, differentiable version of picking the single best candidate, not a hard cutoff. Temperature (b04, Section 07) controls exactly how soft.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0406-visual-title">
+<strong class="concept-visual-title" id="c0406-visual-title">VISUAL · THE SAME THREE SCORES, SOFTMAX AT THREE TEMPERATURES</strong>
+<div class="prob-bars" role="img" aria-label="Three sets of softmax bars for the same raw scores 2.0, 1.0, 0.1, computed at temperature 0.5, 1, and 2, showing the distribution sharpening as temperature falls and flattening as it rises">
+<div class="prob-row"><span>T=0.5, top</span><div class="bar-track"><div class="bar-fill" style="width:86.4%"></div></div><span>0.864</span></div>
+<div class="prob-row winner"><span>T=1, top</span><div class="bar-track"><div class="bar-fill" style="width:65.9%"></div></div><span>0.659</span></div>
+<div class="prob-row"><span>T=2, top</span><div class="bar-track"><div class="bar-fill" style="width:50.2%"></div></div><span>0.502</span></div>
+</div>
+<figcaption>The top-scoring candidate's own softmax probability, taken from the same raw scores [2.0, 1.0, 0.1], at three different temperatures. Halving temperature from 1 to 0.5 pushes its share from 0.659 up to 0.864; doubling it to 2 pulls that share back down to 0.502 — closer to a uniform 0.333 across all three. The ranking never changes at any of the three temperatures (Section 09 proves why).</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two steps, applied to every score in the list</h3>
+<div class="example-grid">
+<article class="info-card"><span>STEP 1 — SCALE</span><h3>Divide by temperature</h3><p>Every score zᵢ becomes zᵢ/T first. This step alone does nothing to the ranking — dividing by a positive number never swaps which score is largest.</p></article>
+<article class="info-card"><span>STEP 2 — EXPONENTIATE</span><h3>Apply exp to every scaled score</h3><p>exp is strictly increasing, so the largest scaled score still produces the largest exponential — order preserved again.</p></article>
+<article class="info-card"><span>STEP 3 — NORMALIZE</span><h3>Divide each exponential by their sum</h3><p>Every term is divided by the same positive number, so relative order is preserved a third time — this is why softmax never re-ranks its inputs (Section 09).</p></article>
+<article class="info-card"><span>RESULT</span><h3>A genuine distribution, same ranking</h3><p>The output satisfies Concept 05's sum-to-1 rule, and sorting by softmax output gives the identical order as sorting by the original raw scores.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where the geometry thread and the probability thread meet</h3>
+<div class="pipeline-preview">
+<span>Concepts 01-04 — raw scores</span><i>↓</i><span class="hot">Concept 06 — softmax turns scores into a distribution</span><i>↓</i><span>Concept 07 — measuring that distribution's uncertainty</span><i>↓</i><span>Concept 08 — the training objective built on both</span>
+</div>
+<p>Concept 05's probability machinery and Concepts 01-04's similarity scores were built as two separate threads on purpose. Softmax is the bridge: it is the first operation in this module that takes a geometric object (a list of scores) and hands back a probabilistic one (a distribution). Concept 07 measures how spread out or peaked that distribution is; Concept 08 uses both ideas together to define what gets optimized during training.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Softmax versus a plain normalization, versus a hard argmax</h3>
+<div class="distinction-table" role="table" aria-label="Softmax distinguished from dividing by the sum directly and from a hard argmax">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Softmax: exponentiate, then normalize</span><span role="cell">Plain normalization: divide raw scores by their sum</span><span role="cell">Plain normalization breaks the moment any score is negative or zero — b03's own scores would still work by luck, but a score of -1 would produce a negative "probability," which Concept 05 forbids outright</span></div>
+<div role="row"><span role="cell">Softmax (soft selection)</span><span role="cell">Argmax (hard selection)</span><span role="cell">Argmax outputs a single one-hot winner and nothing else; softmax keeps every candidate's share above zero and stays differentiable, which Concept 08's training objective specifically needs</span></div>
+<div role="row"><span role="cell">Temperature T (this concept)</span><span role="cell">A learned model parameter such as a weight</span><span role="cell">T is a single fixed scalar chosen or tuned for the whole distribution, not learned per input the way a model's internal weights are</span></div>
+<div role="row"><span role="cell">The softmax output (a probability)</span><span role="cell">The raw score it came from</span><span role="cell">The output sums to 1 across all candidates and is bounded in (0, 1); the input has neither property (Section 05)</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Softmax changes which candidate had the best score."</b><p>It never does, for any temperature T &gt; 0 — softmax only reshapes how much probability mass separates the candidates, not their order (Section 09).</p></div>
+<div><b>"A higher temperature makes softmax more confident."</b><p>Backwards — b03's own numbers show the top share falling from 0.864 at T=0.5 to 0.502 at T=2. Lower temperature sharpens; higher temperature flattens toward uniform.</p></div>
+<div><b>"Temperature divides the final probabilities, not the raw scores."</b><p>It divides the scores before exponentiating, not after. Dividing the final probabilities by T would not even produce numbers that still sum to 1.</p></div>
+<div><b>"Softmax output can be read directly as a percentage confidence that generalizes to new data."</b><p>It's a valid probability distribution over the given candidates only — whether it's well calibrated against real-world outcomes is a separate question, deferred to Module 18 (forward reference).</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Turning the Oracle RAG project's retrieval scores into a distribution</h3>
+<div class="project-map">
+<div><span>RELEVANCE AS A DISTRIBUTION</span><b>[2.0, 1.0, 0.1] → [0.659, 0.242, 0.099]</b><p>Three retrieved candidates' raw similarity scores become an actual probability distribution over "which one is the right context" — usable directly, or as the input to a loss (Concept 08).</p></div>
+<div><span>TEMPERATURE AS A DEPLOYED CONTROL</span><b>Sharper vs. flatter routing</b><p>A classifier routing a query to one of several tools or indexes can use a low temperature to commit strongly to its top choice, or a higher one to hedge across a few plausible ones.</p></div>
+<div><span>TRAINING SIGNAL, FORWARD REFERENCE</span><b>Named only, not built here</b><p>Concept 08 uses exactly this softmax output, compared against which candidate was actually correct, to define the loss that trains an embedding or reranking model.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> softmax is the specific, checkable mechanism that turns a list of retrieval scores into a genuine probability distribution — everything Concept 05 required, satisfied by construction, not by assumption.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Softmax</b><p>softmax(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T) — always positive, always sums to 1.</p></div>
+<div><b>Temperature</b><p>Divides the raw scores before exponentiating; low T sharpens, high T flattens toward uniform.</p></div>
+<div><b>Ranking is preserved</b><p>Sorting by softmax output always matches sorting by the original raw scores, for any T &gt; 0.</p></div>
+<div><b>What stays deferred</b><p>Measuring how spread out or peaked a distribution is (Concept 07) and using softmax inside an actual training loss (Concept 08) are later concepts' territory.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's scores, explain in words why exponentiating before normalizing avoids the negative-probability problem that dividing the raw scores directly would risk.</li>
+<li>Without recomputing anything, state whether the second-place candidate in b03 could ever become the top candidate purely by changing temperature. Why or why not?</li>
+<li>What single property of exp and of division by a positive constant guarantees that softmax never changes the ranking of its inputs?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Entropy and cross-entropy</h3>
+<p>This concept turned a list of raw scores into a genuine probability distribution and showed how temperature reshapes it without ever changing its ranking. Concept 07 asks the next natural question: given a distribution, how spread out or how peaked actually is it — and separately, how well does one distribution predict where the real answer landed? Entropy measures the first; cross-entropy measures the second, and becomes the loss function Concept 08 optimizes.</p>
+<div class="beginner-memory"><b>Concept 06 is complete.</b> Continue to Entropy and cross-entropy.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 07 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Exponentiate, sum, divide — then dial the temperature.</h2>
+<p>Master softmax and temperature first. Open the formal definitions, the log-sum-exp trick, and The Temperature Dial lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>softmax(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T) — always positive, always sums to 1.</small></a>
+<a href="#b03"><span>02</span><b>Compute</b><small>[2.0, 1.0, 0.1] at T=1 becomes [0.659, 0.242, 0.099].</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Turn a retrieval system's raw similarity scores into a genuine probability distribution over candidates.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the log-sum-exp trick, and The Temperature Dial lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> raw scores fail Concept 05's distribution requirement → softmax fixes that by exponentiating then normalizing → three retrieval scores turned into a real distribution at three temperatures, ranking unchanged every time → the advanced section proves the ranking-preservation fact and derives the log-sum-exp trick → Concept 07 previewed: entropy and cross-entropy, next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the softmax deep dive</b><em>Formal definitions, the log-sum-exp trick, and The Temperature Dial lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The bridge between two independent threads</h2></div></header>
+<p>Concepts 01-04 built the geometry pillar of this module: norms, dot products, distances. Concept 05 built the probability pillar from a clean start: counts, conditional probability, Bayes' rule. This concept is the first place the two threads actually meet — softmax is a specific, checkable function that maps any list of real-valued scores onto Concept 05's own probability-distribution requirement, and nothing about it depends on where the scores came from.</p>
+<div class="flow">
+<div class="flow-node">Concept 05 — probability, from counts</div>
+<div class="flow-node hot">Concept 06 — scores become a distribution</div>
+<div class="flow-node">Concept 07 — measuring that distribution</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State softmax and temperature precisely</h3><p>The exact formula, the role of T, and why the output always satisfies Concept 05's sum-to-1 requirement.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Run softmax by hand at more than one temperature</h3><p>Given a short list of scores, compute the full distribution at a stated T, and explain the shift between temperatures.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Show that softmax preserves ranking</h3><p>A direct argument, from the monotonicity of exp and of dividing by a positive constant, that softmax never re-orders its inputs.</p></article>
+<article class="info-card"><span>STABILIZE</span><h3>Apply the log-sum-exp trick</h3><p>Rewrite softmax's normalizing sum in a form that never overflows, even for large raw scores.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 05's probability distribution definition, cited directly:</b> every output ≥ 0, all outputs summing to exactly 1.</li>
+<li><b>The exponential function exp(x) = eˣ:</b> always positive, strictly increasing, and exp(a+b) = exp(a)·exp(b).</li>
+<li><b>Natural logarithm, as the inverse of exp:</b> log(exp(x)) = x, and log is strictly increasing.</li>
+<li><b>No prior deep-learning background assumed:</b> "logits" are introduced here as a name for arbitrary raw scores, not a fact you're expected to already know.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A dimmer switch on how confidently one candidate wins</h2></div></header>
+<p>Picture the three retrieval scores from b03 as three runners crossing a finish line at slightly different times. Argmax only ever announces the winner and forgets the other two. Softmax instead hands out a full set of "how likely is each one to actually be the right answer" shares, all adding to 1, and temperature is a dimmer switch on how strongly the winner's share dominates: turn it down and the winner takes almost everything, turn it up and the three shares drift toward an even split.</p>
+<div class="callout warning"><b>Analogy boundary</b>The runners only illustrate degree of dominance, not the exact arithmetic — the exact shares at any temperature come from Section 09's formula, computed precisely, not estimated from a picture.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Logit</td><td>Any raw, unnormalized real-valued score — a similarity score, a negative distance, or a model's final linear-layer output</td><td>Carries no probabilistic meaning by itself; can be negative, zero, or unbounded</td></tr>
+<tr><td>Softmax</td><td>softmax(zᵢ) = exp(zᵢ) / Σⱼ₌₁ⁿ exp(zⱼ), for a list z₁,…,zₙ</td><td>Every output lies strictly in (0, 1); the outputs sum to exactly 1</td></tr>
+<tr><td>Temperature-scaled softmax</td><td>softmax_T(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T), for T &gt; 0</td><td>T = 1 recovers plain softmax; T → 0⁺ approaches a one-hot argmax; T → ∞ approaches the uniform distribution</td></tr>
+<tr><td>Log-sum-exp (LSE)</td><td>LSE(z) = log Σⱼ exp(zⱼ)</td><td>Computed via the shift LSE(z) = m + log Σⱼ exp(zⱼ − m), m = max(z), to avoid overflow (Section 09)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing softmax at T=1 and T=0.5, step by step</h2></div></header>
+<div class="lane-flow">
+<div><b>Start with raw scores —</b> z = [2.0, 1.0, 0.1], T = 1.</div>
+<div><b>Scale by temperature —</b> z/T = [2.0, 1.0, 0.1] unchanged, since T = 1.</div>
+<div><b>Exponentiate each —</b> [exp(2.0), exp(1.0), exp(0.1)] ≈ [7.389, 2.718, 1.105].</div>
+<div><b>Sum the exponentials —</b> 7.389 + 2.718 + 1.105 ≈ 11.213.</div>
+<div><b>Divide each by the sum —</b> [0.659, 0.242, 0.099], summing to 1.000.</div>
+<div><b>Repeat at T=0.5 —</b> z/T = [4.0, 2.0, 0.2] → exponentials ≈ [54.598, 7.389, 1.221] → sum ≈ 63.208 → [0.864, 0.117, 0.019].</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The top candidate's share, as temperature sweeps from 0.25 to 5</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0406-curve-title">
+<strong class="concept-visual-title" id="c0406-curve-title">VISUAL · SOFTMAX SHARPNESS VS. TEMPERATURE, SAME THREE SCORES</strong>
+<svg class="vector-plane" viewBox="0 0 320 200" role="img" aria-labelledby="c0406-curve-svg-title c0406-curve-svg-desc">
+<title id="c0406-curve-svg-title">Curve of the top candidate's softmax probability as temperature rises from 0.25 to 5</title>
+<desc id="c0406-curve-svg-desc">A declining curve starting near 0.98 at temperature 0.25, passing through 0.66 at temperature 1, and flattening out near the uniform value of 0.33 as temperature approaches 5, with a dashed reference line marking that uniform limit.</desc>
+<line x1="30" y1="120" x2="300" y2="120" stroke="#8a978f" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="304" y="123" font-size="9" fill="#8a978f">1/3</text>
+<polyline points="30,22.8 44.2,40.4 72.6,71.2 101.1,86.5 129.5,94.7 186.3,103.3 243.2,107.5 300,110.1" fill="none" stroke="#3aa876" stroke-width="3"/>
+<circle cx="72.6" cy="71.2" r="4" fill="#ff7957"/>
+<text x="78" y="68" font-size="9" fill="#ff7957">T=1, p≈0.659</text>
+<line x1="30" y1="170" x2="300" y2="170" stroke="#14241f" stroke-width="1"/>
+<line x1="30" y1="10" x2="30" y2="170" stroke="#14241f" stroke-width="1"/>
+<text x="26" y="182" font-size="9" fill="#14241f">T=0.25</text>
+<text x="288" y="182" font-size="9" fill="#14241f">T=5</text>
+</svg>
+<figcaption>The top-scoring candidate's own softmax probability from the fixed scores [2.0, 1.0, 0.1], plotted as temperature rises from 0.25 to 5 (values from Section 06's table). The curve falls steeply at first, then flattens — approaching, but never reaching, the uniform value 1/3 marked by the dashed line. It never crosses below that line and never re-orders the three candidates at any point along it (Section 09).</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where softmax sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors — scored by similarity (Concepts 03-04)</span><i>↓</i><span class="hot">Retrieval — scores become a distribution via softmax</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The skeleton is unchanged since Concept 01. Softmax's job at the "Retrieval" stage is narrow but load-bearing: it is the specific conversion that lets a raw similarity score be treated as a genuine probability — either directly, as a soft relevance weight, or as the input to Concept 08's training loss. The LLM itself also runs softmax internally, over its own vocabulary logits, at every generated token — the identical formula, a different list of scores.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Ranking preservation and the log-sum-exp trick</h2></div></header>
+<p><b>Claim 1 — softmax never changes the ranking.</b> For any T &gt; 0 and any two scores zᵢ &gt; zⱼ:</p>
+<div class="equation">zᵢ &gt; zⱼ
+⇒ zᵢ/T &gt; zⱼ/T                      (T &gt; 0, dividing preserves order)
+⇒ exp(zᵢ/T) &gt; exp(zⱼ/T)             (exp is strictly increasing)
+⇒ exp(zᵢ/T)/S &gt; exp(zⱼ/T)/S         (S = Σₖ exp(zₖ/T) &gt; 0, same S for every term)
+⇒ softmax_T(zᵢ) &gt; softmax_T(zⱼ)</div>
+<p>Every arrow is a known monotonic step applied to both sides at once, so the final inequality is forced — softmax_T can never flip which of two scores is larger, for any positive temperature. This is exactly why Section 07's curve, and b03's bar chart, never change which candidate is on top, no matter where temperature is set.</p>
+<p><b>Claim 2 — the log-sum-exp trick keeps the normalizing sum computable.</b> Directly computing Σⱼ exp(zⱼ) overflows in floating-point once any zⱼ gets even moderately large (exp(1000), for instance, is far beyond what a 64-bit float can represent). Subtracting the maximum score first fixes this without changing the answer:</p>
+<div class="equation">log Σⱼ exp(zⱼ) = m + log Σⱼ exp(zⱼ − m),     m = max(z)
+
+softmax(zᵢ) = exp(zᵢ − m) / Σⱼ exp(zⱼ − m)</div>
+<p>Subtracting m makes the largest exponent exactly 0 (exp(0) = 1) and every other exponent negative, so every term in the new sum lies in (0, 1] — no overflow is possible, and the algebra guarantees the result is identical to the unshifted version. This is the same identity every production softmax and cross-entropy implementation runs internally (Section 13).</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Softmax at three temperatures, fully computed</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Temperature</th><th>Scaled scores z/T</th><th>Softmax output</th><th>Sum</th></tr></thead>
+<tbody>
+<tr><td>T = 0.5</td><td>[4.0, 2.0, 0.2]</td><td>[0.864, 0.117, 0.019]</td><td>1.000</td></tr>
+<tr><td>T = 1.0</td><td>[2.0, 1.0, 0.1]</td><td>[0.659, 0.242, 0.099]</td><td>1.000</td></tr>
+<tr><td>T = 2.0</td><td>[1.0, 0.5, 0.05]</td><td>[0.502, 0.304, 0.194]</td><td>1.000</td></tr>
+</tbody>
+</table>
+<p>All three rows start from the identical raw scores [2.0, 1.0, 0.1] and end in the identical order — the top candidate always keeps the largest share. Only the sharpness of the split changes: from a near-decisive 0.864 at T=0.5 down to a much softer 0.502 at T=2. Each row's three outputs sum to 1.000, confirmed to three decimal places by direct addition.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a routing use, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Converting retrieval scores to relevance weights</h3><p>b03's scores become [0.659, 0.242, 0.099] at T=1 — a real distribution usable directly as soft relevance weights across the three candidates.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>All scores identical</h3><p>If z = [1.0, 1.0, 1.0], every exponential is equal, so softmax returns exactly [1/3, 1/3, 1/3] at any temperature — the uniform distribution, correctly, with no candidate favored.</p></article>
+<article class="info-card"><span>ROUTING USE</span><h3>Choosing among tools or indexes</h3><p>A query router scoring three candidate tools can use a low temperature to commit strongly to the top-scoring tool, or a higher one to keep a fallback option's probability meaningfully above zero.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Applying softmax across the wrong axis</h3><p>Softmax must be applied across the set of competing candidates for one query — applying it down a single candidate's own feature vector instead produces a distribution over the wrong thing entirely.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Softmax and the log-sum-exp trick, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def softmax(scores, T=1.0):
+    # Section 09's log-sum-exp trick -- subtract the max before exponentiating
+    m = max(scores)
+    scaled = [(s - m) / T for s in scores]
+    exps = [math.exp(s) for s in scaled]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+scores = [2.0, 1.0, 0.1]
+
+p_t1   = softmax(scores, T=1.0)     # [0.659, 0.242, 0.099]
+p_t05  = softmax(scores, T=0.5)     # [0.864, 0.117, 0.019]
+p_t2   = softmax(scores, T=2.0)     # [0.502, 0.304, 0.194]
+
+print([round(p, 3) for p in p_t1])
+assert abs(sum(p_t1) - 1.0) < 1e-9                       # Section 05's requirement
+assert p_t1.index(max(p_t1)) == scores.index(max(scores))  # Section 09's ranking-preservation claim
+
+# overflow check: without the max-subtraction trick this would raise OverflowError
+huge_scores = [1000.0, 999.0, 1.0]
+p_huge = softmax(huge_scores, T=1.0)
+print([round(p, 6) for p in p_huge])                     # [0.731, 0.269, ~0.0] -- computed safely
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same mechanism</h2></div></header>
+<p>PyTorch's <code>torch.nn.functional.softmax(logits, dim=-1)</code> and its temperature-scaled variants apply exactly Section 05's formula, over whichever axis <code>dim</code> names — the same axis-choice caution as Section 11's mistake to avoid. NumPy and SciPy expose <code>scipy.special.softmax</code>, and both libraries' internal implementations use Section 09's log-sum-exp shift by default, never the naive unshifted version. Any language model's decoding step — temperature-controlled sampling included — applies this identical formula to the vocabulary's raw logits at every generated token; a decoding temperature of 0.7 versus 1.2 is the same dial as this concept's T, just applied to a much longer list of scores.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Temperature Dial</h2></div></header>
+<div class="lab">
+<p>Drag the temperature slider from 0.1 to 5. The three bars show softmax output for the fixed raw scores [2.0, 1.0, 0.1], recomputed live at the chosen temperature. The readout reports the top candidate's exact share and confirms all three still sum to 1.000 at every setting.</p>
+<div class="norm-controls" id="simSliders0406">
+<div class="control"><label for="simTemp_0406">Temperature T</label><input type="range" id="simTemp_0406" min="10" max="500" step="5" value="100"><output id="simTempOut_0406">1.00</output></div>
+</div>
+<div class="norm-readout">
+<div><span>TOP CANDIDATE SHARE</span><b id="simTopBox0406">65.9%</b></div>
+<div><span>SUM OF ALL THREE</span><b id="simSumBox0406">100.0%</b></div>
+<div><span>RANKING</span><b id="simRankBox0406">Unchanged</b></div>
+</div>
+<div class="prob-bars" id="simBars0406" role="img" aria-label="Live softmax bars for scores 2.0, 1.0, 0.1, updating as temperature changes">
+<div class="prob-row winner"><span>Score 2.0</span><div class="bar-track"><div class="bar-fill" id="simBar1_0406" style="width:65.9%"></div></div><span id="simBar1Out0406">0.659</span></div>
+<div class="prob-row"><span>Score 1.0</span><div class="bar-track"><div class="bar-fill" id="simBar2_0406" style="width:24.2%"></div></div><span id="simBar2Out0406">0.242</span></div>
+<div class="prob-row"><span>Score 0.1</span><div class="bar-track"><div class="bar-fill" id="simBar3_0406" style="width:9.9%"></div></div><span id="simBar3Out0406">0.099</span></div>
+</div>
+<div class="callout" id="simVerdict0406">At T=1.00, the top candidate holds 65.9% of the probability mass. The ranking is unchanged from the raw scores at every temperature.</div>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="simReset0406">Reset to T=1.00</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Softmax, plain normalization, and argmax, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it produces</th><th>Where it's typically preferred</th></tr></thead>
+<tbody>
+<tr><td>Argmax</td><td>A single one-hot winner, all other candidates zeroed out</td><td>Final decision time, once a choice actually needs to be made and no gradient needs to flow through it</td></tr>
+<tr><td>Plain normalization (divide by the sum)</td><td>A distribution only when every input is already non-negative</td><td>Rare in practice for arbitrary scores — fails outright the moment a score is negative</td></tr>
+<tr><td>Softmax with temperature (this concept)</td><td>A full, differentiable distribution over every candidate, tunable from near-argmax to near-uniform</td><td>Training (Concept 08's loss needs a differentiable distribution) and any setting where the runner-up candidates' scores still carry useful information</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of computing and using softmax</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>NUMERICAL OVERFLOW</span><h3>Exponentiating a large raw score directly</h3><p>exp(1000) overflows standard floating-point outright; Section 09's log-sum-exp shift is the fix, not an optional refinement.</p></article>
+<article class="info-card"><span>TEMPERATURE SET TOO LOW</span><h3>Softmax collapsing toward a near one-hot output</h3><p>An extremely small T makes softmax behave almost exactly like argmax, discarding the gradient signal Concept 08's training loss actually needs from the runner-up candidates.</p></article>
+<article class="info-card"><span>TEMPERATURE SET TOO HIGH</span><h3>Softmax collapsing toward uniform</h3><p>An extremely large T washes out real score differences entirely, making every candidate look equally likely even when the raw scores clearly favored one.</p></article>
+<article class="info-card"><span>WRONG AXIS</span><h3>Normalizing over the wrong dimension</h3><p>Section 11's mistake to avoid, stated as a failure mode: applying softmax down a single candidate's own feature vector instead of across competing candidates silently produces a meaningless distribution.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Higher temperature means a more confident output</td><td>The opposite — higher T flattens the distribution toward uniform; lower T sharpens it toward the top score (Section 07, Section 10).</td></tr>
+<tr><td>Softmax can re-rank its inputs at some temperature</td><td>It cannot, for any T &gt; 0 — Section 09 proves this directly from the monotonicity of exp and of positive division.</td></tr>
+<tr><td>The log-sum-exp trick changes the mathematical result</td><td>It changes nothing about the answer, only how safely it's computed in floating-point — the shift by m algebraically cancels exactly (Section 09).</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Temperature is a genuine, frequently tuned hyperparameter — in generation (decoding temperature), in distillation (Section 24, forward-referenced literature), and in contrastive training objectives (Concept 08, forward reference), each with its own preferred range.</li>
+<li>Every serious softmax implementation uses the log-sum-exp shift by default (Section 13) — a from-scratch implementation that skips it will work in a classroom example and silently overflow the first time scores get large in production.</li>
+<li>Because ranking is provably preserved (Section 09), a retrieval system's final top-k ordering can be computed directly from raw similarity scores without ever running softmax at inference time — softmax only needs to be computed where an actual probability or a differentiable loss is required, such as during training (Concept 08).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State the softmax formula with temperature, and the range T can take.</summary><div>softmax_T(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T), defined for any T &gt; 0.</div></details>
+<details class="quiz"><summary>Does raising temperature ever change which candidate has the highest softmax output? Why or why not?</summary><div>No — Section 09 proves that for any T &gt; 0, dividing by T, exponentiating, and normalizing are all order-preserving operations, so the ranking of the outputs always matches the ranking of the raw scores.</div></details>
+<details class="quiz"><summary>Why does a real softmax implementation subtract the maximum score before exponentiating?</summary><div>To avoid floating-point overflow on large scores (Section 09's log-sum-exp trick) — the shift is algebraically exact and changes nothing about the final probabilities.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different query returns four candidates with raw similarity scores [3.0, 1.5, 1.5, 0.0]. Compute the full softmax distribution at T=1, then again at T=0.3. Report which candidate holds the largest share at each temperature, confirm both distributions sum to 1, and explain in one sentence why the two middle candidates (both scoring 1.5) always end up with identical softmax shares regardless of temperature.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible answer</summary>
+<div>At T=1: exponentials are exp(3.0)≈20.086, exp(1.5)≈4.482 (twice), exp(0.0)=1, summing to ≈30.050. Shares ≈ [0.668, 0.149, 0.149, 0.033]. At T=0.3: scaled scores are [10.0, 5.0, 5.0, 0.0]; exponentials ≈ [22026.5, 148.4, 148.4, 1], summing to ≈22324.3; shares ≈ [0.9867, 0.00665, 0.00665, 0.0000448]. The top candidate (score 3.0) leads at both temperatures, and its share grows sharply as temperature falls. The two candidates tied at 1.5 always receive identical shares because they have the identical scaled score at any T, so their exponentials — and therefore their normalized shares — are always equal by construction, not by coincidence.</div>
+</details>
+<p>Teach-back: explain, in your own words, why lowering temperature from 1 to 0.3 changed the top candidate's share so much more dramatically than raising it would have (compare with Section 07's curve, which flattens out rather than exploding as T grows).</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Softmax, temperature and logarithms</h3><ul><li><b>Softmax:</b> softmax_T(zᵢ) = exp(zᵢ/T) / Σⱼ exp(zⱼ/T)</li><li><b>Temperature:</b> low T sharpens toward argmax; high T flattens toward uniform</li><li><b>Ranking preserved:</b> for any T &gt; 0, softmax never re-orders its inputs</li><li><b>Log-sum-exp:</b> subtract max(z) before exponentiating to avoid overflow, with no change to the result</li></ul></div>
+<div><h3>Memorable example</h3><p>Raw scores [2.0, 1.0, 0.1] become [0.659, 0.242, 0.099] at T=1, [0.864, 0.117, 0.019] at T=0.5, and [0.502, 0.304, 0.194] at T=2 — always summing to 1.000, always keeping the same top candidate.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain why softmax is described as a "soft" version of argmax, and what is lost by using argmax directly during training.</summary><div>Softmax keeps every candidate's probability strictly positive and differentiable with respect to the raw scores, so a gradient-based optimizer can push scores up or down smoothly. Argmax's output is a discontinuous, non-differentiable one-hot vector — a training loss built directly on it would have no useful gradient almost everywhere (Section 15).</div></details>
+<details class="quiz"><summary>Prove that softmax preserves ranking for any positive temperature.</summary><div>For zᵢ &gt; zⱼ and T &gt; 0: zᵢ/T &gt; zⱼ/T (dividing by a positive number preserves order); exp(zᵢ/T) &gt; exp(zⱼ/T) (exp is strictly increasing); dividing both by the same positive sum S preserves the inequality — so softmax_T(zᵢ) &gt; softmax_T(zⱼ) (Section 09).</div></details>
+<details class="quiz"><summary>Design question: a production softmax implementation is overflowing on a batch of unusually large raw scores. What is the fix, and why does it not change the output?</summary><div>Subtract the maximum score in the batch from every score before exponentiating (the log-sum-exp trick, Section 09). This makes the largest exponent exactly 0 and every other exponent negative, so no term can overflow; algebraically, the shift cancels exactly in the final ratio, so the computed probabilities are identical to the unshifted (but overflow-prone) version.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Softmax_function"><b>Wikipedia — Softmax function</b><br><span>The formula, its properties, and the temperature-scaled variant, behind Sections 05 and 09.</span></a>
+<a href="https://arxiv.org/abs/1503.02531"><b>Hinton, Vinyals &amp; Dean — Distilling the Knowledge in a Neural Network (arXiv:1503.02531)</b><br><span>Introduces temperature-scaled softmax explicitly as a tool for sharpening or softening a model's output distribution, behind Sections 05 and 18.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 · COMPLETE</span>
+<h3>Softmax, temperature, and ranking preservation are today's takeaway</h3>
+<p>Before moving on, be able to compute softmax by hand at a stated temperature, state why the result always sums to 1, and explain why no temperature can ever change the ranking of the original scores. Concept 07, "Entropy and cross-entropy," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Temperature Dial lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Entropy and cross-entropy.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 06 · Complete</p>
+<a href="module-04-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

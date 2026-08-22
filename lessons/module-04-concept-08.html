@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 06 built a distribution from raw scores; Concept 07 measured how well that distribution agrees with the truth. This concept connects both to what a retrieval system actually does: a ranking function sorts candidates at inference time, using nothing but the raw scores, while a contrastive optimization objective -- literally Concept 07's cross-entropy, framed as one positive against several negatives -- is what trains the scores themselves during training.">
+<title>Ranking functions and optimization objectives — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-04-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 04 · CONCEPT 08</p>
+<h1>Ranking functions<br><em>and optimization objectives.</em></h1>
+<p class="lesson-lead">Concept 06 built a distribution from raw scores; Concept 07 measured how well that distribution agrees with the truth. Neither one, on its own, said what a retrieval system actually <i>does</i> with either idea. This concept closes that gap with two separate objects. A <b>ranking function</b> sorts candidates by score — the thing a retrieval system runs at inference, needing nothing but the raw scores Concepts 03-04 already built. A <b>contrastive optimization objective</b> is Concept 07's cross-entropy, framed as one positive candidate against several negatives — the thing a training loop actually minimizes to make the raw scores themselves better.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth of ten concepts in Module 04 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's softmax and ranking-preservation proof, and Concept 07's cross-entropy — both cited directly, neither re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>State the difference between a ranking function and an optimization objective, and write the contrastive loss as literally Concept 07's cross-entropy applied to one positive and several negatives</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 07 measured how well a distribution agrees with a stated truth. This concept connected that measurement to what a retrieval system actually does: sort candidates by raw score at inference (a ranking function, needing no softmax at all), and minimize Concept 07's cross-entropy — reframed as a contrastive loss between one positive and several negatives — during training.</p>
+<b>8 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two jobs, two different times: ranking at inference, loss at training</h2>
+</div>
+<p>Concepts 06-07 built a distribution and a way to measure it. This concept asks when each piece actually gets used — and shows that the "contrastive loss" real retrieval systems train on is not a new formula at all.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A ranking function sorts; an optimization objective trains</h3>
+<div class="mental-compare">
+<div><span>RANKING FUNCTION</span><p>Given raw scores, sort the candidates from largest to smallest. Needs nothing but the scores themselves — no distribution, no truth, no training. Runs at inference, every query, every time.</p></div>
+<div><span>OPTIMIZATION OBJECTIVE</span><p>A number a training loop tries to shrink. This concept's version — the contrastive loss — is Concept 07's cross-entropy, computed with one candidate marked "positive" (actually relevant) and the rest marked "negative."</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> ranking answers "which one wins, right now?"; the optimization objective answers "how do I change the scores so the right one wins more decisively next time?"</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concepts 06-07 never said when either piece actually runs</h3>
+<p>Concept 06 proved softmax never changes which score is largest. Concept 07 showed cross-entropy punishes a confidently wrong distribution. Neither concept connected those facts to an actual system: does a retrieval system need to compute a full distribution just to return its top-k results? And what, concretely, is a model being trained against? This concept answers both.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THIS CONCEPT</span><p>It's tempting to assume softmax has to run every time a query is answered, since it "produces the real probabilities."</p></div>
+<div><span>WITH THIS CONCEPT</span><p>Concept 06 already proved ranking is invariant to temperature — so a live system can skip softmax entirely at inference and just sort the raw scores (b03).</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same three scores, doing two different jobs</h3>
+<p>Reusing Concepts 06-07's exact scores, z = [2.0, 1.0, 0.1], with doc 1 marked as the query's actual positive (relevant) passage and docs 2-3 as negatives.</p>
+<div class="context-demo">
+<div><span>RANKING (INFERENCE)</span><p>Sort z directly: doc 1 &gt; doc 2 &gt; doc 3. No softmax computed at all — Concept 06 Section 09 guarantees this is the same order softmax would give, at any temperature.</p></div>
+<div><span>LOSS (TRAINING)</span><p>Cross-entropy against doc 1 as the positive, cited directly from Concept 07: −ln(0.659) ≈ 0.4170 nats.</p></div>
+<div><span>WHAT CHANGED</span><p>Nothing new was computed — the ranking reused raw scores, the loss reused Concept 07's exact formula and exact number.</p></div>
+<div><span>WHAT'S ACTUALLY NEW</span><p>The framing: "positive vs. negatives" instead of "candidates vs. true label" — the same object, a name retrieval training literature uses (Section 05).</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What training actually does: push the positive's raw score up</h3>
+<table class="worked-table">
+<thead><tr><th>Doc 1's raw score</th><th>Softmax (doc 1 share)</th><th>Contrastive loss</th></tr></thead>
+<tbody>
+<tr><td>2.0 (start)</td><td>0.659</td><td>0.4170 nats</td></tr>
+<tr><td>3.0</td><td>0.840</td><td>0.1743 nats</td></tr>
+<tr><td>4.0</td><td>0.935</td><td>0.0677 nats</td></tr>
+<tr><td>5.0</td><td>0.975</td><td>0.0254 nats</td></tr>
+</tbody>
+</table>
+<p>Docs 2-3's scores never move in this table — only doc 1's does. As it rises, its softmax share climbs toward 1 and the loss falls toward 0. This is, mechanically, what a training step does: nudge the raw scores (via the embedding model's weights, Module 09, forward reference) so the positive's share grows and the loss shrinks — the exact numbers above were computed with Concept 06's own softmax formula, not a new one.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0408-visual-title">
+<strong class="concept-visual-title" id="c0408-visual-title">VISUAL · THE LOSS FALLING AS THE POSITIVE'S SCORE RISES</strong>
+<div class="prob-bars" role="img" aria-label="Four bars showing the contrastive loss falling from 0.4170 nats to 0.0254 nats as doc 1's raw score rises from 2.0 to 5.0">
+<div class="prob-row winner"><span>Score 2.0</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>0.4170 nats</span></div>
+<div class="prob-row"><span>Score 3.0</span><div class="bar-track"><div class="bar-fill" style="width:41.8%"></div></div><span>0.1743 nats</span></div>
+<div class="prob-row"><span>Score 4.0</span><div class="bar-track"><div class="bar-fill" style="width:16.2%"></div></div><span>0.0677 nats</span></div>
+<div class="prob-row"><span>Score 5.0</span><div class="bar-track"><div class="bar-fill" style="width:6.1%"></div></div><span>0.0254 nats</span></div>
+</div>
+<figcaption>Bar length is the contrastive loss (bars scaled relative to the largest, 0.4170 nats) at each of b04's four raw-score values for the positive document. The loss shrinks by more than 16× across this range, while docs 2-3's scores never change — exactly what a training step is trying to accomplish.</figcaption>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where ranking and the loss each sit</h3>
+<div class="pipeline-preview">
+<span>Concept 06 — distribution</span><i>↓</i><span>Concept 07 — cross-entropy</span><i>↓</i><span class="hot">Concept 08 — ranking at inference, contrastive loss at training</span><i>↓</i><span>Module 09 — the actual training loop</span>
+</div>
+<p>Ranking and the loss never run at the same moment in a real system's life. Ranking runs constantly, in production, on every query, using only raw scores. The loss runs only during training, on batches of queries with known positives, and never touches a live user's request at all.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Ranking function, loss function, and where negatives come from</h3>
+<div class="distinction-table" role="table" aria-label="Ranking function, contrastive loss, and negative sourcing distinguished from each other">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Ranking function</span><span role="cell">Sorts candidates by raw score — an inference-time operation, no training involved</span><span role="cell">Assumed to require a softmax pass; Concept 06 Section 09 already proved raw scores alone give the identical order</span></div>
+<div role="row"><span role="cell">Contrastive loss</span><span role="cell">Concept 07's cross-entropy, with one positive and one or more negatives — a training-time number</span><span role="cell">Treated as a different formula from cross-entropy; it is the identical formula, just applied to a positive/negatives framing (Section 09)</span></div>
+<div role="row"><span role="cell">In-batch negatives</span><span role="cell">Using other queries' positives, already present in the same training batch, as this query's negatives — free, no extra retrieval needed</span><span role="cell">Assumed negatives must be hand-picked or mined separately — in-batch negatives are the standard, cheaper default (Section 18)</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A live retrieval system computes softmax to rank its results."</b><p>It doesn't need to — Concept 06 Section 09 already proved raw scores sort identically to any softmax output, for any temperature.</p></div>
+<div><b>"Contrastive loss is a completely different idea from cross-entropy."</b><p>It's the identical formula (Section 09) — "contrastive" describes the positive-vs-negatives framing, not a different piece of math.</p></div>
+<div><b>"More negatives per query always makes training strictly better."</b><p>More negatives make the softmax's denominator larger and the task harder, which usually helps up to a point — but this concept only names the trade-off; tuning it is out of scope here.</p></div>
+<div><b>"The ranking function is what gets trained."</b><p>The ranking function itself has no parameters — training adjusts the embedding model producing the raw scores, and the ranking function is simply re-run on whatever scores that model happens to output.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Ranking and training, in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>AT INFERENCE</span><b>Sort raw similarity scores, no softmax</b><p>Retrieving the top-k chunks for a live query only ever needs Concepts 03-04's raw scores, sorted directly — the fastest possible path, and provably correct per Concept 06 Section 09.</p></div>
+<div><span>AT TRAINING</span><b>Contrastive loss, one relevant chunk vs. the rest</b><p>Training or fine-tuning an embedding model uses exactly this concept's loss — the known-relevant chunk as the positive, other chunks (often from other queries in the same batch) as negatives.</p></div>
+<div><span>WHAT THIS CONCEPT DOES NOT BUILD</span><b>The training loop itself</b><p>Turning this loss into gradient updates on real model weights is Module 09's job, forward-referenced and not built here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Ranking function</b><p>Sorts candidates by raw score — an inference-time operation needing no distribution at all.</p></div>
+<div><b>Contrastive loss</b><p>Concept 07's cross-entropy, framed as one positive versus one or more negatives — a training-time number.</p></div>
+<div><b>Same formula, two names</b><p>"Contrastive loss" and "cross-entropy" are the identical computation under two different framings.</p></div>
+<div><b>What training actually does</b><p>Pushes the positive's raw score up, which (per Concept 06's softmax) raises its share and (per Concept 07) lowers the loss.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Explain why a production retrieval system can skip computing softmax entirely when it only needs to return a ranked top-k list.</li>
+<li>Using b04's table, explain in your own words why the loss keeps falling even though docs 2-3's scores never change.</li>
+<li>What does "in-batch negatives" mean, and why is it cheaper than hand-picking negative examples for every query?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Time and space complexity</h3>
+<p>This concept settled what gets optimized and how ranking actually runs. Concept 09 asks a different question entirely: how expensive is any of this — computing a similarity score, sorting a ranking, running softmax over a candidate set — as the number of documents or the number of dimensions grows large?</p>
+<div class="beginner-memory"><b>Concept 08 is complete.</b> Continue to Time and space complexity.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Concept 09 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Rank with raw scores. Train with the same loss Concept 07 already built.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>A ranking function sorts by score; the contrastive loss is Concept 07's cross-entropy, positive vs. negatives.</small></a>
+<a href="#b03"><span>02</span><b>Compute</b><small>Same three scores: ranking needs no softmax; the loss reuses Concept 07's exact 0.4170 nats.</small></a>
+<a href="#b04"><span>03</span><b>Watch</b><small>Loss falls from 0.4170 to 0.0254 nats as the positive's raw score rises from 2.0 to 5.0.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal InfoNCE identity, the from-scratch code, and The Ranking &amp; Contrastive Loss Lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concept 06's softmax + Concept 07's cross-entropy → a ranking function (inference, raw scores only) and a contrastive loss (training, positive vs. negatives) → the loss is literally cross-entropy, reframed → Concept 09 asks what all of this costs to compute at scale.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the ranking and contrastive-loss deep dive</b><em>The formal InfoNCE identity, from-scratch code, and The Ranking &amp; Contrastive Loss Lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Closing the loop between a distribution, a measurement, and a system</h2></div></header>
+<p>Concept 06 built a distribution; Concept 07 measured it against a truth. This concept adds no new probability mechanics — it names the two moments where those pieces actually get used inside a real retrieval system, and shows that the "contrastive loss" widely used to train dense retrievers is not a third formula, but Concept 07's cross-entropy under a different name.</p>
+<div class="flow">
+<div class="flow-node">Concept 06 — distribution</div>
+<div class="flow-node">Concept 07 — cross-entropy</div>
+<div class="flow-node hot">Concept 08 — ranking and the training objective</div>
+<div class="flow-node">Concept 09 — cost at scale</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State a ranking function and the contrastive loss precisely</h3><p>Both formal definitions, and the identity connecting the loss directly to Concept 07's cross-entropy.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Show ranking needs no softmax</h3><p>Cite Concept 06 Section 09's argument that raw scores and any softmax output share the same order, for any T &gt; 0.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Trace the loss as a positive's score rises</h3><p>Reproduce b04's table and explain why the loss falls monotonically.</p></article>
+<article class="info-card"><span>NAME</span><h3>Describe in-batch negatives</h3><p>State what they are and why they are the standard, low-cost default in real dense-retrieval training.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06's softmax and ranking-preservation proof, cited directly:</b> softmax_T(z) shares z's ranking for any T &gt; 0.</li>
+<li><b>Concept 07's cross-entropy, cited directly:</b> H(P,Q) = −ln(q_correct) when the true distribution P is one-hot.</li>
+<li><b>Concepts 03-04's raw similarity scores:</b> the actual input both the ranking function and the loss operate on.</li>
+<li><b>Out of scope here:</b> Module 09's actual gradient-based training loop is named as the destination, not built in this concept.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A leaderboard, and the coach who studies it afterward</h2></div></header>
+<p>A ranking function is the leaderboard itself — whoever scored highest today is listed first, full stop, no further analysis needed. The contrastive loss is the coach reviewing that leaderboard afterward, specifically asking: "the athlete who should have won — how far below first place did they actually land, and by how much do we need to raise their performance before they'd win outright?" The leaderboard gets read constantly, every event. The coach's review happens on its own schedule, entirely separately, and never changes what today's leaderboard said.</p>
+<div class="callout warning"><b>Analogy boundary</b>The coach analogy captures "reviewed separately, on its own schedule," not the exact arithmetic — the loss's exact value comes from Concept 07's formula, not from any subjective coaching judgment.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Ranking function, ρ(z)</td><td>The permutation that sorts indices of z in descending order — ρ(z)ᵢ names which original index holds the i-th largest score</td><td>Requires only the raw scores; has no learnable parameters of its own</td></tr>
+<tr><td>Contrastive loss (InfoNCE-style)</td><td>L = −log( exp(sim(q,d⁺)/τ) / Σ_{d ∈ {d⁺}∪D⁻} exp(sim(q,d)/τ) )</td><td>Identical to Concept 07's H(P,Q) with P one-hot at d⁺ and Q = softmax_τ(similarity scores) — a new name, not a new formula</td></tr>
+<tr><td>Positive, d⁺</td><td>The one candidate actually relevant to query q</td><td>Exactly one per query in this framing — Concept 07's one-hot true distribution</td></tr>
+<tr><td>Negatives, D⁻</td><td>Every other candidate in the softmax's denominator</td><td>Can be hand-picked, mined, or drawn for free from other queries in the same batch (Section 18)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing ranking and the loss from the same raw scores</h2></div></header>
+<div class="lane-flow">
+<div><b>Start with raw scores —</b> z = [2.0, 1.0, 0.1], doc 1 marked positive.</div>
+<div><b>Ranking, no softmax —</b> sort z directly: doc 1 &gt; doc 2 &gt; doc 3.</div>
+<div><b>Softmax at T=1 (Concept 06) —</b> [0.659, 0.242, 0.099]; same order confirmed.</div>
+<div><b>Cross-entropy against doc 1 (Concept 07) —</b> −ln(0.659) ≈ 0.4170 nats, now read as "the contrastive loss."</div>
+<div><b>Raise doc 1's score to 5.0, repeat —</b> softmax ≈ [0.975, 0.018, 0.007]; loss ≈ 0.0254 nats — training's actual direction of travel.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One set of scores, feeding two separate uses</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of raw scores feeding both a ranking function at inference and a contrastive loss at training">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Raw similarity scores (Concepts 03-04)</b><small>z = [2.0, 1.0, 0.1]</small></div>
+<div class="diagram-node hub-center"><b>Ranking function (inference) / Contrastive loss (training)</b><small>Sort directly, no softmax needed / Concept 07's cross-entropy, positive vs. negatives</small></div>
+<div class="diagram-node"><b>Top-k results served / Gradient signal to the embedding model</b><small>Never computed together for the same request</small></div>
+</div>
+</div>
+<p>The hub above is the required flow; Section 14's lab lets you drag the raw scores and temperature independently, watching the ranking respond only to the scores while the loss responds to both. A second, additional visual — Section 09's matrix below — lays out exactly which of these four objects is needed at inference versus at training.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where ranking and training sit in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors — scored by similarity (Concepts 03-04)</span><i>↓</i><span class="hot">Retrieval — ranked by raw score, no softmax</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The ranking function sits directly at the "Retrieval" stage of every live query. The contrastive loss sits nowhere in this diagram at all — it belongs to a separate training pipeline (Module 09, forward reference) that produces the embedding model this diagram already assumes exists, before any live query is ever served.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The contrastive loss is exactly Concept 07's cross-entropy</h2></div></header>
+<p>Write the InfoNCE-style contrastive loss out in full, for a query q, its positive d⁺, and negatives D⁻:</p>
+<div class="equation">L(q, d⁺, D⁻) = −log( exp(sim(q,d⁺)/τ) / Σ_{d ∈ {d⁺}∪D⁻} exp(sim(q,d)/τ) )</div>
+<p>The fraction inside the log is exactly Concept 06's softmax_τ, applied to the similarity scores of {d⁺}∪D⁻, evaluated at the positive's own index. So the whole expression is:</p>
+<div class="equation">L(q, d⁺, D⁻) = −log( softmax_τ(sim scores)[d⁺] ) = H(P, Q),  P one-hot at d⁺,  Q = softmax_τ(sim scores)</div>
+<p>— which is precisely Concept 07's definition of cross-entropy against a one-hot truth. Nothing about temperature, the exponential, or the normalizing sum is new; only the names "positive" and "negatives" are.</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable 2 by 2 map of inference versus training against ranking-related versus loss-related objects">
+<p class="matrix-quad-label">WHEN EACH OBJECT IS NEEDED · INFERENCE VS. TRAINING</p>
+<div class="matrix-quad">
+<div class="matrix-corner"></div><div class="matrix-axis">Ranking-related</div><div class="matrix-axis">Loss-related</div>
+<div class="matrix-axis">At inference</div><div class="matrix-cell"><b>Raw scores + ranking function</b><span>Softmax not required — Concept 06 Section 09</span></div><div class="matrix-cell"><b>Nothing</b><span>The loss is never computed for a live query</span></div>
+<div class="matrix-axis">At training</div><div class="matrix-cell"><b>Same raw scores, now softmaxed</b><span>Needed only so a loss can be computed (Concept 06)</span></div><div class="matrix-cell"><b>Contrastive loss / cross-entropy</b><span>Concept 07's formula, against the known positive</span></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The loss, fully traced as the positive's score rises</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>z (doc 1, doc 2, doc 3)</th><th>softmax(z)</th><th>Loss = −ln(softmax(z)[0])</th></tr></thead>
+<tbody>
+<tr><td>[2.0, 1.0, 0.1]</td><td>[0.659, 0.242, 0.099]</td><td>0.4170 nats</td></tr>
+<tr><td>[3.0, 1.0, 0.1]</td><td>[0.840, 0.114, 0.046]</td><td>0.1743 nats</td></tr>
+<tr><td>[4.0, 1.0, 0.1]</td><td>[0.935, 0.047, 0.019]</td><td>0.0677 nats</td></tr>
+<tr><td>[5.0, 1.0, 0.1]</td><td>[0.975, 0.018, 0.007]</td><td>0.0254 nats</td></tr>
+</tbody>
+</table>
+<p>Every row reuses the identical softmax formula (Concept 06) and the identical cross-entropy formula (Concept 07) — only doc 1's raw score changes, row to row. The loss falls monotonically as that score rises, and would keep falling toward 0 as the score grows without bound, though it can never reach exactly 0 for any finite score.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a production use, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Ranking a live query's top-k without softmax</h3><p>Sorting raw similarity scores directly returns the identical order softmax would, at any temperature — Concept 06 Section 09, applied.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A single negative (one positive, one negative)</h3><p>With only one negative, the loss reduces to a two-outcome cross-entropy — the same formula, the smallest possible contrastive setup.</p></article>
+<article class="info-card"><span>PRODUCTION USE</span><h3>In-batch negatives at scale</h3><p>A training batch of 100 queries gives every query 99 free negatives — other queries' positives — with no extra retrieval or mining step (Section 18).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Computing softmax at serving time "to be safe"</h3><p>It changes nothing about the returned ranking (Concept 06 Section 09) and only adds unnecessary computation to every live query.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Ranking and the contrastive loss, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def rank(scores):
+    # A ranking function needs only the raw scores -- no softmax at all.
+    return sorted(range(len(scores)), key=lambda i: -scores[i])
+
+def softmax(scores, T=1.0):
+    m = max(scores)
+    exps = [math.exp((s - m) / T) for s in scores]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+def contrastive_loss(scores, positive_idx, T=1.0):
+    # Concept 07's cross-entropy, against a one-hot truth at positive_idx.
+    probs = softmax(scores, T)
+    return -math.log(probs[positive_idx])
+
+z = [2.0, 1.0, 0.1]
+
+print(rank(z))                                   # [0, 1, 2] -- doc 1 first
+assert rank(z) == rank(softmax(z, 1.0))            # ranking is invariant, Concept 06 Section 09
+assert rank(z) == rank(softmax(z, 0.3))            # still true at a different temperature
+
+loss = contrastive_loss(z, positive_idx=0)
+print(round(loss, 4))                             # 0.4170
+assert abs(loss - 0.4170) < 1e-3
+
+loss_after_training = contrastive_loss([5.0, 1.0, 0.1], positive_idx=0)
+assert loss_after_training < loss                 # raising the positive's score shrinks the loss
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production code exposes the same mechanism</h2></div></header>
+<p>The <code>sentence-transformers</code> library's <code>MultipleNegativesRankingLoss</code> implements exactly this concept's loss, treating every other example in a training batch as a free negative for the current one — the in-batch negatives strategy named in Section 18. PyTorch's <code>torch.nn.functional.cross_entropy</code> (Concept 07, Section 13) can be called directly on a batch of similarity scores treated as logits, with the positive's index as the target — no separate "contrastive loss" implementation is actually required, since it is the same function under a different name.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Ranking &amp; Contrastive Loss Lab</h2></div></header>
+<div class="lab">
+<p>Drag doc 1's raw score up or down — unlike Concepts 06-07's labs, this one lets you change the scores themselves, not just temperature. Doc 1 is always the positive. Watch the ranking respond only to the scores, and the loss respond to both the scores and temperature.</p>
+<div class="norm-controls" id="rlSliders_0408">
+<div class="control"><label for="rlZ1_0408">Doc 1 (positive) score</label><input type="range" id="rlZ1_0408" min="-2" max="6" step="0.1" value="2.0"><output id="rlZ1Out_0408">2.0</output></div>
+<div class="control"><label for="rlZ2_0408">Doc 2 (negative) score</label><input type="range" id="rlZ2_0408" min="-2" max="6" step="0.1" value="1.0"><output id="rlZ2Out_0408">1.0</output></div>
+<div class="control"><label for="rlZ3_0408">Doc 3 (negative) score</label><input type="range" id="rlZ3_0408" min="-2" max="6" step="0.1" value="0.1"><output id="rlZ3Out_0408">0.1</output></div>
+<div class="control"><label for="rlTemp_0408">Temperature T</label><input type="range" id="rlTemp_0408" min="10" max="500" step="5" value="100"><output id="rlTempOut_0408">1.00</output></div>
+</div>
+<div class="norm-readout">
+<div><span>RANKING (RAW SCORES)</span><b id="rlRanking_0408">Doc 1 (positive) &gt; Doc 2 (negative) &gt; Doc 3 (negative)</b></div>
+<div><span>CONTRASTIVE LOSS</span><b id="rlLoss_0408">0.4170 nats</b></div>
+</div>
+<div class="prob-bars" id="rlBars0408" role="img" aria-label="Live softmax bars for the three draggable scores">
+<div class="prob-row winner"><span>Doc 1 (positive)</span><div class="bar-track"><div class="bar-fill" id="rlBar1_0408" style="width:65.9%"></div></div><span id="rlBar1Out_0408">0.659</span></div>
+<div class="prob-row"><span>Doc 2 (negative)</span><div class="bar-track"><div class="bar-fill" id="rlBar2_0408" style="width:24.2%"></div></div><span id="rlBar2Out_0408">0.242</span></div>
+<div class="prob-row"><span>Doc 3 (negative)</span><div class="bar-track"><div class="bar-fill" id="rlBar3_0408" style="width:9.9%"></div></div><span id="rlBar3Out_0408">0.099</span></div>
+</div>
+<div class="callout" id="rlVerdict_0408">The positive document ranks first, and the contrastive loss is 0.417 nats. Ranking from raw scores matches ranking from the softmax output -- temperature changes the loss, never the order.</div>
+<div class="lab-actions" role="group" aria-label="Lab presets">
+<button type="button" class="secondary" id="rlPresetLow_0408">Load low-loss state (well-trained)</button>
+<button type="button" class="secondary" id="rlPresetHigh_0408">Load high-loss state (badly-trained)</button>
+<button type="button" class="secondary" id="rlPresetReset_0408">Reset to start</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Ranking-loss families, at introductory depth</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it compares</th><th>Where it fits</th></tr></thead>
+<tbody>
+<tr><td>Contrastive / InfoNCE loss (this concept)</td><td>One positive against many negatives at once, via a single softmax</td><td>The standard choice for training dense retrievers with in-batch negatives</td></tr>
+<tr><td>Triplet loss</td><td>One positive and exactly one negative, compared via a margin rather than a softmax</td><td>An older ranking-loss family; conceptually simpler, but scales negatives one comparison at a time instead of all at once</td></tr>
+<tr><td>Plain classification cross-entropy (Concept 07)</td><td>A fixed set of classes, not a variable set of retrieval candidates per query</td><td>The same formula this concept reuses — the retrieval framing is what's different, not the math</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNNECESSARY INFERENCE-TIME SOFTMAX</span><h3>Computing a full distribution just to rank</h3><p>Wastes compute on every live query for a result Concept 06 Section 09 already guarantees is unchanged.</p></article>
+<article class="info-card"><span>TOO FEW NEGATIVES</span><h3>A softmax denominator with almost no competition</h3><p>If only one weak negative is present, the loss can shrink to near 0 without the model actually learning to discriminate hard cases.</p></article>
+<article class="info-card"><span>FALSE NEGATIVES IN-BATCH</span><h3>Another query's positive accidentally being relevant to this query too</h3><p>In-batch negatives assume other queries' positives are irrelevant here — when that assumption breaks, the loss punishes the model for a correct answer.</p></article>
+<article class="info-card"><span>TEMPERATURE MISMATCH</span><h3>Using a training-time τ that doesn't match deployment assumptions</h3><p>Since ranking is temperature-invariant (Concept 06) but the loss is not, an unexamined τ can still shape training dynamics even though it never affects served rankings.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Contrastive loss and cross-entropy are different formulas</td><td>False — Section 09 shows the contrastive loss is Concept 07's cross-entropy exactly, with a positive/negatives framing layered on top.</td></tr>
+<tr><td>A retrieval system must run softmax to serve ranked results</td><td>False — Concept 06 Section 09's ranking-preservation proof means raw scores alone always suffice.</td></tr>
+<tr><td>In-batch negatives require extra retrieval work to gather</td><td>False — they come for free from other queries already present in the same training batch (Section 13, Section 18).</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Never compute softmax purely to serve a ranking — Concept 06 Section 09's invariance makes it pure overhead at inference time.</li>
+<li>Prefer in-batch negatives as the default training strategy for dense retrievers — it scales with batch size for free, and is the approach behind widely used dense-passage-retrieval training recipes (Section 24).</li>
+<li>Watch for false negatives when using in-batch negatives at scale — as batch size grows, the chance that some other query's positive is also secretly relevant to the current query rises, and needs periodic auditing rather than being assumed away permanently.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why doesn't a production retrieval system need to compute softmax to return a ranked list?</summary><div>Concept 06 Section 09 proves softmax never changes the order of its inputs for any T &gt; 0 — sorting the raw scores directly always gives the identical ranking.</div></details>
+<details class="quiz"><summary>Is the contrastive loss a different formula from cross-entropy?</summary><div>No — Section 09 shows it is exactly Concept 07's cross-entropy formula, with the true distribution one-hot at the positive candidate and the predicted distribution given by Concept 06's softmax over similarity scores.</div></details>
+<details class="quiz"><summary>What are in-batch negatives, and why are they the standard choice?</summary><div>Other queries' positive documents, already present in the same training batch, reused as the current query's negatives — free, requiring no extra retrieval or mining step (Section 13, Section 18).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A query has one positive and three negatives, with raw similarity scores z = [1.5, 1.5, 0.5, -1.0] (positive first). Compute the ranking directly from the raw scores. Then compute softmax at T=1 and the contrastive loss against the positive. Finally, state whether raising temperature to T=3 would change the ranking, and why.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Ranking directly from z = [1.5, 1.5, 0.5, -1.0]: the positive (index 0) is tied for first with the second candidate (index 1), both ahead of index 2, ahead of index 3 — order [0 or 1 tied, then 2, then 3]. Softmax at T=1: exponentials ≈ [4.4817, 4.4817, 1.6487, 0.3679], summing to ≈10.9800, giving probs ≈ [0.4083, 0.4083, 0.1502, 0.0335]. Contrastive loss against the positive: −ln(0.4083) ≈ 0.8956 nats. Raising temperature to T=3 would NOT change the ranking — Concept 06 Section 09 guarantees the order is preserved for any T &gt; 0; only the sharpness of the softmax shares (and therefore the loss) would change, not which candidates lead.</div>
+</details>
+<p>Teach-back: explain, in your own words, why the positive being exactly tied with another candidate here produces a meaningfully higher loss (0.8956 nats) than Concept 07's clear-lead example (0.4170 nats), even though neither case has the positive ranked last.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Ranking functions and optimization objectives</h3><ul><li><b>Ranking function:</b> sorts raw scores directly — no softmax needed, ever, at inference</li><li><b>Contrastive loss:</b> Concept 07's cross-entropy, framed as positive vs. negatives — the identical formula</li><li><b>In-batch negatives:</b> other queries' positives, reused for free as this query's negatives</li><li><b>What training does:</b> raises the positive's raw score, which raises its softmax share and lowers the loss</li></ul></div>
+<div><h3>Memorable example</h3><p>Doc 1's score rising from 2.0 to 5.0 (docs 2-3 unchanged) takes the contrastive loss from 0.4170 nats down to 0.0254 nats — the exact direction training pushes.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain why a contrastive loss and a plain classification cross-entropy loss are, mathematically, the same thing.</summary><div>Both are H(P,Q) = −ln(q_correct) for a one-hot true distribution P and a predicted softmax distribution Q — the only difference is that a classification problem has a fixed set of classes, while a retrieval query's "classes" are its positive and negative candidates, which vary per query (Section 09).</div></details>
+<details class="quiz"><summary>Why can a production retrieval system skip computing softmax entirely?</summary><div>Because ranking only needs the order of the scores, and softmax_T never changes that order for any T &gt; 0 (Concept 06 Section 09) — sorting the raw scores directly is both correct and cheaper.</div></details>
+<details class="quiz"><summary>What is an in-batch negative, and what production risk does relying on them introduce as batch size grows?</summary><div>Another query's positive document, reused as a free negative for the current query. As batch size grows, the chance that one of those "negatives" is secretly also relevant to the current query rises, silently penalizing the model for a correct answer (Section 16, Section 18).</div></details>
+<details class="quiz"><summary>Design question: you need to train a new embedding model to distinguish two very similar negative candidates from the true positive. What lever from this concept would you reach for first, and why?</summary><div>Increase the number and difficulty of negatives (harder negatives specifically, not just more of them) so the softmax's denominator forces a sharper distinction — the loss only pushes the model to separate the positive from whichever negatives are actually present in it (Section 16's "too few negatives" failure mode, in reverse).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Learning_to_rank"><b>Wikipedia — Learning to rank</b><br><span>General background on ranking functions as a distinct object from classification, behind Section 05.</span></a>
+<a href="https://arxiv.org/abs/2004.04906"><b>Karpukhin, Oğuz, Min et al. — Dense Passage Retrieval for Open-Domain Question Answering (arXiv:2004.04906)</b><br><span>The canonical dense-retrieval paper training on exactly this concept's contrastive loss with in-batch negatives, behind Sections 13 and 18.</span></a>
+<a href="https://arxiv.org/abs/1807.03748"><b>van den Oord, Li &amp; Vinyals — Representation Learning with Contrastive Predictive Coding (arXiv:1807.03748)</b><br><span>Introduces the InfoNCE loss this concept's formula follows, behind Section 09.</span></a>
+<a href="https://en.wikipedia.org/wiki/Triplet_loss"><b>Wikipedia — Triplet loss</b><br><span>An older, margin-based ranking-loss family, contrasted with this concept's softmax-based loss in Section 15.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 · COMPLETE</span>
+<h3>Ranking at inference, and a training loss that's just cross-entropy renamed, are today's takeaway</h3>
+<p>Before moving on, be able to state why a retrieval system's ranking never needs softmax, and write the contrastive loss as literally Concept 07's cross-entropy applied to a positive and its negatives. Concept 09, "Time and space complexity," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Ranking &amp; Contrastive Loss Lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Time and space complexity.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 04 · Concept 08 · Complete</p>
+<a href="module-04-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>
