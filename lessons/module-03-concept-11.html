@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 10 asked whether a question is answerable at all. This concept assumes yes and asks a new question: at which of three links -- retrieval, augmentation, or generation -- did this particular run actually break? Names the three-link failure chain, citing Concept 04's grounded-misread mechanism for the generation link rather than re-deriving it.">
+<title>The RAG failure chain — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-11.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 11 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 11</p>
+<h1>The RAG<br><em>failure chain.</em></h1>
+<p class="lesson-lead">Concept 10 cleared the ground before this concept can even start: it asked whether one specific question, against one specific corpus, was answerable at all. This concept only picks up the case Concept 10 confirmed as answerable — and asks a different question entirely: if that answerable question still came back wrong, at which of three links in the pipeline did it actually break? A query can fail at retrieval (the wrong evidence, or none, gets found), at augmentation (the right evidence is found but assembled or truncated badly before the model ever sees it), or at generation (the right evidence sits in context and the model still gets it wrong — Concept 04's grounded-misread mechanism). This concept is the first to name all three as one ordered chain and show how to tell them apart.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eleventh of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 04's grounded-misread and citation-content mismatch mechanisms; Concept 10's answerability gate (both cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Given an answerable question that still came back wrong, localize the failure to exactly one of three links: retrieval, augmentation, or generation</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You localized an answerable question's wrong answer to exactly one of three links — retrieval, augmentation, or generation — using Concept 04's grounded-misread mechanism for the generation case rather than re-deriving it. Concept 12 now closes Module 03 by asking a harder question that comes before any of this: for a given task, should RAG be attempted at all?</p>
+<b>11 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A chain is only as strong as its weakest link</h2>
+</div>
+<p>An answerable question that still comes back wrong looks like one failure from the outside. It is actually three different possible failures wearing the same disguise, and this concept is about telling them apart.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three links, in a fixed order</h3>
+<div class="mental-compare">
+<div><span>LINK 1 · RETRIEVAL</span><p>Given the query, does the necessary evidence chunk actually land in the retrieved candidate set? If not — wrong chunk, no chunk, buried too far down — nothing downstream can recover it.</p></div>
+<div><span>LINK 2 · AUGMENTATION</span><p>Given a retrieved candidate set that does contain the evidence, does that evidence survive intact into the exact context the model is handed? Truncation, bad ordering, or a consolidation bug can drop it even after retrieval succeeded.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>LINK 3 · GENERATION</span><p>Given evidence that is correctly, intact, in the model's context, does the model actually use it correctly? This is Concept 04's grounded-misread mechanism, replayed here as the last possible place things go wrong.</p></div>
+<div><span>THE CHAIN AS A WHOLE</span><p>All three links must hold for a correct, grounded answer. One broken link is enough to produce a wrong or missing answer, no matter how well the other two performed.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> an answerable question that comes back wrong broke at exactly one of three places — retrieval, augmentation, or generation — and the fix is different at each one.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Without the chain, every fix looks the same</h3>
+<p>Concept 10 already cleared the "is this even possible" question — this concept is only useful once that answer is yes. Without naming the three links separately, a wrong answer on an answerable question triggers the same reflex every time: re-tune the retriever, add a reranker, tweak the prompt — often aimed at a link that was never broken. Concept 04 already gave the generation link its mechanism (grounded-misread: evidence present, model still wrong) and Concept 10 already gave the answerability gate its two-question test. This concept's job is narrower than either: given that the question is answerable, name the three places a specific run can still fail, in the fixed order a query actually passes through them.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THE FAILURE CHAIN</span><p>One catch-all label — "RAG got it wrong" — covers three causes that need three different fixes: re-chunk and re-embed, fix the context assembler, or improve the generation prompt and model.</p></div>
+<div><span>WITH THE FAILURE CHAIN</span><p>A wrong answer gets localized to exactly one link before any fix is attempted, because the fix for a retrieval miss does nothing for a truncation bug, and the fix for a truncation bug does nothing for a grounded-misread.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One query, broken three different ways</h3>
+<p>Reuse Concept 10's small Oracle HR corpus and its confirmed-answerable question: <b>"How many remote workdays per week are employees allowed?"</b> The remote-work policy states the fact directly — "up to 3 days per week" — so Concept 10 already cleared this as a fair test. Now imagine three separate runs of that same query, each one failing at a different link.</p>
+<div class="context-demo">
+<div><span>RUN A · RETRIEVAL BREAKS</span><p>The remote-work document never appears in the top-k candidates at all — a vocabulary mismatch between "remote" in the query and "telecommute" in the document's phrasing. The model, correctly given no relevant evidence, hedges instead of stating a number.</p></div>
+<div><span>RUN B · AUGMENTATION BREAKS</span><p>The remote-work document is retrieved at rank 1 — retrieval worked. But a context-assembly bug discards it as a near-duplicate of an unrelated boilerplate chunk before the prompt is built. The model again sees no number and hedges — from the outside, this looks identical to Run A.</p></div>
+<div><span>RUN C · GENERATION BREAKS</span><p>The remote-work document is retrieved at rank 1 and its exact text — "up to 3 days per week" — sits intact in the model's context. The model answers "5 days" anyway. This is Concept 04's grounded-misread case, replayed for a new query.</p></div>
+</div>
+<p>Three different broken links, and two of them (Runs A and B) even produce the same visible symptom. Section 04's test is what actually tells them apart.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three checks, in the order a query actually travels</h3>
+<div class="example-grid">
+<article class="info-card"><span>CHECK 1</span><h3>Was the evidence retrieved?</h3><p>Inspect the retrieval log: did the chunk containing the needed fact appear anywhere in the candidate set actually returned? If no, stop — this is a retrieval failure, regardless of what happens afterward.</p></article>
+<article class="info-card"><span>CHECK 2</span><h3>Did the evidence survive into context?</h3><p>Only asked if check 1 is yes. Inspect the exact assembled context sent to the model: is the retrieved evidence still there, intact and legible, or did truncation, ordering, or consolidation drop it? If no, this is an augmentation failure.</p></article>
+<article class="info-card"><span>CHECK 3</span><h3>Did the model use the evidence correctly?</h3><p>Only asked if checks 1 and 2 are both yes. The evidence is confirmed present, intact, in context — if the answer still contradicts it, this is a generation failure, Concept 04's mechanism at work.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0311-visual-title">
+<strong class="concept-visual-title" id="c0311-visual-title">VISUAL · THE THREE-LINK CHAIN</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing the three sequential links of the RAG failure chain: retrieval, augmentation, generation">
+<div class="diagram-strip">
+<div class="diagram-node"><b>Link 1 · Retrieval</b><small>Wrong or missing evidence in the candidate set</small></div>
+<div class="diagram-node"><b>Link 2 · Augmentation</b><small>Right evidence found, assembled or truncated badly</small></div>
+<div class="diagram-node"><b>Link 3 · Generation</b><small>Right evidence in context, model still gets it wrong</small></div>
+</div>
+</div>
+<figcaption>All three links must hold for a correct, grounded answer on an already-answerable question. Any single break is enough to produce a wrong or missing answer.</figcaption>
+<ol class="diagram-key"><li><b>Retrieval:</b> fixed by re-chunking, re-embedding, or improving the query — Modules 07-16's territory.</li><li><b>Augmentation:</b> fixed by fixing context assembly, ordering, or truncation — Concept 17's territory.</li><li><b>Generation:</b> fixed by prompting, model choice, or grounded generation technique — Concept 04's mechanism, Module 17's remedies.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Three links overlaid on the same skeleton</h3>
+<div class="pipeline-preview">
+<span>Query</span><i>↓</i><span class="hot">Retrieval — Link 1</span><i>↓</i><span class="hot">Context — Link 2 (augmentation)</span><i>↓</i><span class="hot">LLM — Link 3 (generation)</span><i>↓</i><span>Answer</span>
+</div>
+<p>This isn't a new skeleton — it's Concept 06's same nine boxes, with three of them renamed as failure links rather than as pipeline stages. Retrieval, Context, and LLM were always there; what this concept adds is the claim that a wrong answer traces to exactly one of those three boxes, never to Query or Answer themselves, and never (on an answerable question) to more than one box being the root cause worth fixing first.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners collapse separate failures into one</h3>
+<div class="distinction-table" role="table" aria-label="The failure chain distinguished from answerability, coverage gaps, and generation-only explanations">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">The failure chain (this concept)</span><span role="cell">Concept 10's answerability check</span><span role="cell">Answerability asks whether a correct answer is possible at all; the chain presupposes "yes" and asks where a specific run's answer went missing</span></div>
+<div role="row"><span role="cell">A retrieval failure</span><span role="cell">Concept 10's coverage gap</span><span role="cell">A coverage gap means the fact was never in the corpus at all; a retrieval failure means the fact was in the corpus but this run's candidate set missed it — confirming which one happened requires checking the whole corpus, not just one run's log</span></div>
+<div role="row"><span role="cell">An augmentation failure</span><span role="cell">A generation failure</span><span role="cell">Augmentation failure means the evidence never reached the model's context intact; generation failure means it did reach the model intact and the model still misused it — Concept 04's grounded-misread is specifically the second case, never the first</span></div>
+<div role="row"><span role="cell">Any one link breaking</span><span role="cell">A vague "the pipeline is broken"</span><span role="cell">Each link has a different owner and a different fix; treating all three as one undifferentiated failure means applying the wrong fix at least two-thirds of the time</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A wrong answer means retrieval failed."</b><p>Not necessarily — Run C in Section 03 had perfect retrieval and still produced the wrong number. Retrieval is only one of three links, and often not the broken one.</p></div>
+<div><b>"If the model hedges instead of answering, that proves retrieval failed."</b><p>Runs A and B in Section 03 produce the identical visible symptom — a hedge with no number — for two completely different underlying reasons. The symptom alone never tells you which link broke.</p></div>
+<div><b>"Running this chain first is always the right move."</b><p>Only after Concept 10 confirms the question was answerable. Running the failure chain on a genuinely unanswerable question wastes effort diagnosing links that were never going to produce a correct answer regardless.</p></div>
+<div><b>"If context assembly looks fine, generation must be the problem."</b><p>Confirm the exact evidence text is actually present in the prompt sent to the model, not just that "some context" was assembled — a truncated or malformed chunk can look present while missing the one sentence that mattered.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Localizing three broken runs of the same Oracle query</h3>
+<div class="project-map">
+<div><span>RETRIEVAL FAILURE</span><b>Run A never surfaces the remote-work document</b><p>Fix: improve chunking or query phrasing so "remote" and "telecommute" resolve to the same evidence — Modules 07-16's territory, not this concept's.</p></div>
+<div><span>AUGMENTATION FAILURE</span><b>Run B retrieves correctly but drops the chunk during assembly</b><p>Fix: repair the context assembler's consolidation logic — Concept 17's territory, a completely different codepath from retrieval.</p></div>
+<div><span>GENERATION FAILURE</span><b>Run C has correct, intact evidence and still answers wrong</b><p>Fix: this is Concept 04's grounded-misread — prompting and model-level remedies, not a retrieval or assembly change.</p></div>
+<div><span>THE POINT</span><b>Same query, same wrong-looking outcome, three different owners</b><p>Localizing the link before choosing a fix is what keeps engineering effort aimed at the actual cause.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The three links</b><p>Retrieval (wrong/no evidence found), augmentation (right evidence assembled or truncated badly), generation (right evidence in context, model still wrong).</p></div>
+<div><b>Fixed order, single root cause</b><p>A query passes through the links in that order; on an answerable question, exactly one link is the one worth fixing first.</p></div>
+<div><b>Presupposes Concept 10</b><p>The chain only makes sense once answerability is already confirmed — it never replaces that check.</p></div>
+<div><b>What stays deferred</b><p>Whether RAG should even be attempted for a task at all — Concept 12, next.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can two different broken links (Section 03's Runs A and B) produce the exact same visible symptom?</li>
+<li>Why must Concept 10's answerability check run before this concept's chain, and not the other way around?</li>
+<li>Give one reason a "fix the retriever" response could be the wrong fix even when the final answer is wrong.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 11 is complete.</b> Continue to When RAG should not be used.</h3>
+<p>This concept assumed RAG was the right tool and localized where an answerable query's answer went missing inside it. Concept 12 steps back one level further and closes Module 03 by asking the question that should come before any of this: for a given task, should RAG be attempted at all — or does a different tool avoid needing this chain in the first place?</p>
+<div class="beginner-memory"><b>Concept 11 is complete.</b> Continue to When RAG should not be used.</div>
+<a class="button primary" href="module-03-concept-12.html">Start Concept 12 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Three links, one fixed order, one root cause.</h2>
+<p>Master the three-link chain and its diagnostic order first. Open the formal definitions, the from-scratch diagnostic, and The Failure Chain Diagnostic lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Retrieval, augmentation, and generation as three ordered, independently breakable links.</small></a>
+<a href="#b04"><span>02</span><b>Test</b><small>Was it retrieved? Did it survive into context? Did the model use it correctly?</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Localize three broken runs of the same Oracle query to three different owners.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch diagnostic function, and The Failure Chain Diagnostic lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 11 path:</b> Concept 10's answerability gate, presupposed rather than repeated → a three-link failure chain named and ordered → Concept 04's grounded-misread cited as the generation link's mechanism → one localized root cause per broken run, handed off to Concept 12's harder question of whether RAG belonged here at all.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the failure chain deep dive</b><em>Formal definitions, a from-scratch diagnostic function, and The Failure Chain Diagnostic lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From "is an answer possible" to "where did it actually break"</h2></div></header>
+<p>Concept 10 cleared a question in two independent ways a request can be unanswerable, and left exactly one case standing: knowledge-intensive, and covered by the corpus. This concept only ever operates on that surviving case. Given an answerable question whose final answer is still wrong or missing, three ordered links can be the cause: retrieval finds the wrong or no evidence, augmentation assembles or truncates good evidence badly before the model sees it, or generation has good evidence sitting right there in context and still gets it wrong — Concept 04's grounded-misread mechanism, cited rather than re-derived. Concept 12 closes the module by asking a still-different question: whether RAG was ever the right tool to reach for.</p>
+<div class="flow">
+<div class="flow-node">Concept 10 — is this question answerable at all?</div>
+<div class="flow-node hot">Concept 11 — which link, if any, broke?</div>
+<div class="flow-node">Concept 12 — should RAG be used here at all?</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State the three links precisely</h3><p>Retrieval, augmentation, generation — in the fixed order a query travels through them, with a distinct failure signature at each.</p></article>
+<article class="info-card"><span>TEST</span><h3>Run the three-check diagnostic</h3><p>Was the evidence retrieved? Did it survive into context? Did the model use it correctly? Classify any broken run against exactly one link.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>This concept never re-runs Concept 10's answerability test and never decides whether RAG belongs here at all — Concept 12's job, next.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Localize three broken runs of the same remote-workdays query to three different owners before choosing any fix.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 10's answerability gate:</b> cited directly, as the check that must already have returned "answerable" before this concept's chain applies at all.</li>
+<li><b>Concept 04's grounded-misread and citation-content mismatch:</b> cited directly as the mechanism behind this concept's generation link — not re-derived here. Concept 04 already showed that evidence presence does not guarantee correct use; this concept reuses that finding as one of three named links rather than re-proving it.</li>
+<li>Concept 06's nine-box skeleton is assumed known, since Section 08 overlays the chain directly onto it. Concept 17's context-engineering remedies and Module 19's tracing infrastructure are named only as forward pointers, not built.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A package that never arrives correctly used</h2></div></header>
+<p>A package can fail to reach its recipient three different ways. The warehouse can pick the wrong item off the shelf, or none at all — nothing else that happens afterward matters once that's true. The right item can be picked correctly, then damaged or lost in transit before it reaches the door — the warehouse did its job, the courier didn't. Or the right, undamaged item can arrive intact, and the recipient can still misread the label and use it wrong. Only the third case is the recipient's fault; the first two never gave them a fair chance.</p>
+<div class="callout warning"><b>Analogy boundary</b>Warehouses and couriers don't have embeddings, token budgets, or attention weights. The point of the analogy is the structural claim only — three sequential opportunities to fail, each with a different owner — not anything about logistics.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Retrieval failure</td><td>Given an answerable (question, corpus) pair, the chunk containing the needed fact does not appear in the candidate set the retriever actually returns</td><td>Distinct from a coverage gap: the fact is present somewhere in the corpus, but this run's candidate set missed it</td></tr>
+<tr><td>Augmentation failure</td><td>The needed evidence chunk is present in the candidate set, but does not survive intact and legible into the exact context ultimately sent to the model — dropped by truncation, reordering, or consolidation</td><td>Distinct from generation failure: the model never had a fair chance, because the evidence it needed was never actually in front of it</td></tr>
+<tr><td>Generation failure</td><td>The needed evidence is confirmed present, intact, in the model's context, and the generated answer still contradicts or ignores it</td><td>This is Concept 04's grounded-misread mechanism by another name — a soft attention re-weighting failure, not a hard constraint violation</td></tr>
+<tr><td>The RAG failure chain</td><td>The claim that, on an answerable question, a wrong or missing answer traces to exactly one of these three links, in the fixed order retrieval → augmentation → generation</td><td>Presupposes Concept 10's answerability check already returned "answerable" — the chain has nothing to say about unanswerable questions</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing all four outcomes of one query</h2></div></header>
+<div class="lane-flow">
+<div><b>Intact run —</b> retrieval surfaces the remote-work chunk at rank 1; augmentation assembles it intact into context; generation states "3 days," matching the evidence. All three links hold.</div>
+<div><b>Run A, retrieval breaks —</b> the remote-work chunk never enters the candidate set at all (vocabulary mismatch). Augmentation and generation never get a fair chance — there is nothing correct to assemble or use.</div>
+<div><b>Run B, augmentation breaks —</b> the remote-work chunk is retrieved at rank 1, but a consolidation bug discards it before the prompt is built. Retrieval held; the model, correctly, never saw the fact.</div>
+<div><b>Run C, generation breaks —</b> the remote-work chunk is retrieved and sits intact in context. Retrieval and augmentation both held. The model states "5 days" anyway — Concept 04's grounded-misread, replayed.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One diagnostic hub, three possible verdicts</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the assembled-context-first diagnostic routing to three failure verdicts">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Retrieval failure</b><small>evidence absent from the candidate set — check first, cheapest to rule out</small></div>
+<div class="diagram-node hub-center"><b>Inspect the assembled context actually sent to the model</b><small>Section 04's fastest branch point</small></div>
+<div class="diagram-node"><b>Augmentation failure</b><small>evidence retrieved, dropped before reaching context</small></div>
+<div class="diagram-node"><b>Generation failure</b><small>evidence intact in context, model still wrong</small></div>
+</div>
+</div>
+<p>The hub above is the required flow: inspecting the exact assembled context first is the fastest branch point, because its presence or absence of the needed fact instantly rules two of the three links in or out. Section 14's lab makes this concrete across four runs of the same query.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Three failure-prone boxes inside one unchanged skeleton</h2></div></header>
+<p class="flow-instruction">THE CHAIN — overlaid on Concept 06's nine boxes, not replacing them</p>
+<div class="pipeline-preview">
+<span>Query</span><i>↓</i><span class="hot">Retrieval — Link 1</span><i>↓</i><span class="hot">Context — Link 2</span><i>↓</i><span class="hot">LLM — Link 3</span><i>↓</i><span>Answer</span>
+</div>
+<p class="flow-instruction">WHAT EACH LINK'S FAILURE LOOKS LIKE, SIDE BY SIDE</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram comparing what a break at each of the three links produces">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Retrieval breaks</b><small>candidate set never contains the fact — augmentation and generation never get a fair input</small></div>
+<div class="diagram-node"><b>Augmentation breaks</b><small>candidate set had the fact; final context does not — generation never gets a fair input</small></div>
+<div class="diagram-node active"><b>Generation breaks</b><small>context has the fact, intact — the only link where the model itself is the root cause</small></div>
+</div>
+</div>
+<p>Only a generation-link break implicates the model's own behavior. The other two links can fail with a flawless model doing exactly what it should with whatever it was actually handed.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A conjunction, not a disjunction</h2></div></header>
+<p>Concept 10's answerability predicate was a disjunction — a question was answerable if either of two conditions held. This concept's predicate is the opposite shape: a conjunction, because every link must hold for a correct answer. Let <code>R(q)</code> be 1 if the needed evidence chunk is in the retrieved candidate set, <code>A(q)</code> be 1 if that evidence survives intact into the assembled context, and <code>G(q)</code> be 1 if the generated answer correctly uses evidence present in context. Then, given <code>Answerable(q, C) = 1</code> from Concept 10:</p>
+<div class="equation">Correct(q) = R(q) ∧ A(q) ∧ G(q)</div>
+<p>Read left to right: a correct answer requires all three terms to be true at once. A single false term — anywhere — drives the whole expression to false, exactly like a physical chain: strength is bounded by the weakest link, not averaged across the others. Locating which term is false is Section 04 and Section 07's diagnostic; this equation only states why checking all three, in order, is necessary rather than optional.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Four runs, one query, one truth table</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Run</th><th>R (retrieved?)</th><th>A (survives to context?)</th><th>G (used correctly?)</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Intact run</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Correct — "3 days"</td></tr>
+<tr><td>Run A</td><td>No</td><td>—</td><td>—</td><td>Retrieval failure</td></tr>
+<tr><td>Run B</td><td>Yes</td><td>No</td><td>—</td><td>Augmentation failure</td></tr>
+<tr><td>Run C</td><td>Yes</td><td>Yes</td><td>No</td><td>Generation failure — "5 days"</td></tr>
+</tbody>
+</table>
+<p>A dash marks a check that becomes moot once an earlier link has already failed — there is no meaningful "did the model use evidence correctly" question to ask about evidence that was never in its context in the first place.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Run C, from Section 06</h3><p>Retrieval and augmentation both confirmed intact by inspection; the wrong answer is unambiguously the generation link's fault — exactly the case Concept 04's grounded-misread mechanism was built to explain.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>The evidence is split across two chunks, only one retrieved</h3><p>If a fact requires combining two separate chunks and only one is retrieved, is that a retrieval failure or a partial one? By this concept's definition, yes — the full needed evidence was not in the candidate set, so it is a retrieval failure, even though part of it arrived.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A wrong answer that is actually Concept 10's territory</h3><p>If the fact is genuinely absent from the whole corpus, running this chain at all is a mistake — that is a coverage gap, decided before this concept ever applies, not a retrieval-link failure inside it.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Diagnosing generation failure from the final answer alone</h3><p>Runs A and B in Section 06 produce the same visible symptom as each other. Only inspecting the actual assembled context — not just the final answer — distinguishes a generation failure from the other two.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The failure-chain diagnostic, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · LOCALIZE A BROKEN RUN TO EXACTLY ONE LINK</span>
+<pre><code>def diagnose_failure(evidence_in_candidates, evidence_in_context, answer_matches_evidence):
+    # Section 09's conjunction, spelled out as ordered branches --
+    # the branch taken doubles as the localized link. Assumes
+    # Concept 10 already confirmed the question is answerable.
+    if not evidence_in_candidates:
+        return "retrieval_failure"
+    if not evidence_in_context:
+        return "augmentation_failure"
+    if not answer_matches_evidence:
+        return "generation_failure"
+    return "correct"
+
+
+# Section 10's four runs, as boolean facts about each one
+runs = [
+    dict(evidence_in_candidates=True,  evidence_in_context=True,  answer_matches_evidence=True),   # intact
+    dict(evidence_in_candidates=False, evidence_in_context=False, answer_matches_evidence=False),  # run A
+    dict(evidence_in_candidates=True,  evidence_in_context=False, answer_matches_evidence=False),  # run B
+    dict(evidence_in_candidates=True,  evidence_in_context=True,  answer_matches_evidence=False),  # run C
+]
+
+for run in runs:
+    print(diagnose_failure(**run))
+# correct
+# retrieval_failure
+# augmentation_failure
+# generation_failure
+
+assert diagnose_failure(False, False, False) == "retrieval_failure"
+assert diagnose_failure(True, False, False) == "augmentation_failure"
+assert diagnose_failure(True, True, False) == "generation_failure"
+assert diagnose_failure(True, True, True) == "correct"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where the three-link taxonomy comes from</h2></div></header>
+<p>Gao, Xiong, Gao et al. (2023/2024) structure their whole survey of RAG techniques around exactly this split — retrieval, augmentation, and generation as the three stages every improvement technique targets — which is the taxonomy this concept adopts directly rather than inventing a new one. Barnett, Kurniawan, Thudumu, Brannelly & Abdelrazek (2024) enumerate seven concrete failure points from production RAG systems that map onto this concept's three links: "missed the top-ranked documents" and "missing content" are retrieval-side; "not in context — consolidation strategy limitations" is exactly this concept's augmentation link, described at production scale; "not extracted," "wrong format," and "incorrect specificity" are generation-side, alongside Concept 04's grounded-misread. Chen, Lin, Han & Sun (2023), the RGB benchmark, isolates one of those generation-side failure modes for direct measurement — testing whether a model can resist noisy retrieved passages and correctly reject a question when the retrieved evidence doesn't actually support an answer, a generation-link capability distinct from anything retrieval or augmentation controls.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Failure Chain Diagnostic</h2></div></header>
+<div class="lab">
+<p>The query is fixed: "How many remote workdays per week are employees allowed?" — the true fact is 3 days, from the remote-work policy. Inspect the three checkpoints below in any order, then diagnose which link, if any, actually broke for the current run.</p>
+<div class="sample-output" id="chainQueryLine0311" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Inspection checkpoints">
+<button type="button" class="secondary" data-inspect="retrieval">Inspect the retrieval log</button>
+<button type="button" class="secondary" data-inspect="context">Inspect the assembled context</button>
+<button type="button" class="secondary" data-inspect="answer">Inspect the generated answer</button>
+</div>
+<div class="context-demo" id="chainInspectPanels0311">
+<div id="chainPanelRetrieval0311" hidden><span>RETRIEVAL LOG</span><p></p></div>
+<div id="chainPanelContext0311" hidden><span>ASSEMBLED CONTEXT</span><p></p></div>
+<div id="chainPanelAnswer0311" hidden><span>GENERATED ANSWER</span><p></p></div>
+</div>
+<div class="lab-actions" role="group" aria-label="Diagnosis: which link broke?" id="chainDiagnosisGroup0311">
+<button type="button" class="secondary" data-diagnosis="retrieval_failure">Retrieval failure</button>
+<button type="button" class="secondary" data-diagnosis="augmentation_failure">Augmentation failure</button>
+<button type="button" class="secondary" data-diagnosis="generation_failure">Generation failure</button>
+<button type="button" class="secondary" data-diagnosis="correct">No failure — correct</button>
+</div>
+<div class="sample-output" id="chainResult0311" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="chainNext0311">Next run →</button>
+<span id="chainScore0311" class="fine-print">Score: 0 / 0</span>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Two diagnostic strategies, two different costs</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Strategy</th><th>How it works</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Link-by-link from the start</td><td>Check retrieval first, then augmentation, then generation, in strict order</td><td>Always correct, but wastes effort inspecting later links when an early one already broke and made them moot</td></tr>
+<tr><td>Context-first (Section 07's hub)</td><td>Inspect the final assembled context first; its content instantly rules two links in or out</td><td>Faster in practice, but requires the context itself to be logged and inspectable — see Section 18</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of the diagnostic itself</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SKIPPED GATE</span><h3>Running this chain before confirming answerability</h3><p>Section 11's counterexample is the risk here — a genuine coverage gap can look like a chain failure until Concept 10's whole-corpus check rules it out first.</p></article>
+<article class="info-card"><span>SYMPTOM-ONLY DIAGNOSIS</span><h3>Judging the link from the final answer alone</h3><p>Section 06's Runs A and B produce an identical visible symptom for different underlying reasons — the final answer alone cannot distinguish them.</p></article>
+<article class="info-card"><span>UNVERIFIED CONTEXT</span><h3>Assuming "context was assembled" means the fact survived</h3><p>A context can be non-empty and still be missing exactly the sentence that mattered — confirm the specific needed text, not just that some text made it through.</p></article>
+<article class="info-card"><span>MULTI-LINK BLINDNESS</span><h3>Stopping at the first plausible-looking link</h3><p>This concept's checks are ordered so an earlier failure makes later ones moot — but jumping straight to a guess about generation without confirming retrieval and augmentation first can misattribute a break that happened earlier in the chain.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A wrong answer on an answerable question is always retrieval's fault</td><td>Section 10's truth table shows three distinct ways a correct chain can still produce a wrong answer — retrieval is only one of three possible root causes.</td></tr>
+<tr><td>Augmentation failures and generation failures are the same problem</td><td>An augmentation failure means the model never had the evidence in front of it; a generation failure means it did and still got it wrong — different owners, different fixes.</td></tr>
+<tr><td>If the final answer is wrong, the failure chain always applies</td><td>The chain presupposes answerability. A genuinely unanswerable question — Concept 10's territory — is not a failure-chain case at all, no matter how wrong the final answer looks.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>This entire diagnostic depends on logging that most systems don't get for free: the exact retrieved candidate list, the exact assembled context, and the exact model response — all three, per query, not just the final answer shown to the user.</li>
+<li>Without context-level logging specifically, Section 07's fast hub check is unavailable, and every diagnosis falls back to the slower link-by-link strategy from Section 15 — or, worse, becomes a guess.</li>
+<li>Module 19's distributed tracing gives each link its own observable span in a production system — forward-referenced here only, since building that instrumentation is out of this concept's scope.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the three links of the failure chain, in the order a query passes through them.</summary><div>Retrieval, then augmentation, then generation — a query is retrieved, the retrieved evidence is assembled into context, and the model generates from that context, in that fixed order.</div></details>
+<details class="quiz"><summary>Why do Runs A and B in Section 06 produce the same visible symptom despite breaking at different links?</summary><div>In both runs the model ends up with no usable evidence for the fact — in Run A because retrieval never found it, in Run B because augmentation dropped it after retrieval succeeded. The final answer alone can't reveal which happened; only inspecting the intermediate retrieval log and assembled context can.</div></details>
+<details class="quiz"><summary>Why is a generation-link failure the only one of the three that implicates the model itself?</summary><div>Retrieval and augmentation failures both mean the model was never given a fair input — it behaved correctly given what it received. Only when the correct evidence is confirmed intact in context and the answer is still wrong does the failure trace to the model's own use of that evidence.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new run of the parental-leave question ("How many weeks of paid parental leave are available after one year of employment?") produces this evidence trail: the parental-leave document is retrieved at rank 1 with a strong similarity score; the assembled context, when inspected directly, contains the full sentence "12 weeks of paid leave are available after 1 year of employment"; the generated answer states "employees are eligible for 12 weeks of paid parental leave after one year." Run Section 09's three checks in order and name the verdict.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>Check 1: the parental-leave document is confirmed in the candidate set — retrieval holds. Check 2: the exact needed sentence is confirmed present, intact, in the assembled context — augmentation holds. Check 3: the generated answer restates the fact correctly, matching the evidence — generation holds. All three links hold, so the verdict is "correct," not a failure at all — this run is Section 10's intact case, replayed with a different query from the same corpus.</div>
+</details>
+<p>Teach-back: explain, in your own words, why confirming all three checks was still necessary here even though the final answer already looked right.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Three links, one fixed order</h3><ul><li><b>Retrieval:</b> wrong or no evidence in the candidate set</li><li><b>Augmentation:</b> right evidence found, dropped before reaching context</li><li><b>Generation:</b> right evidence in context, model still wrong — Concept 04's grounded-misread</li></ul></div>
+<div><h3>Memorable example</h3><p>The Oracle assistant's remote-workdays question, broken three separate ways, produces the same wrong or hedging answer from three completely different root causes — only inspecting the retrieval log and assembled context, not the final answer alone, tells them apart.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A user reports a wrong answer from a RAG system on a question you've confirmed is answerable. Walk through how you would localize the failure to one of three links before changing any code.</summary><div>Inspect the exact assembled context first — its content instantly rules two of three links in or out. If the needed fact is absent from context, check the retrieval log next to distinguish a retrieval failure (never in the candidate set) from an augmentation failure (retrieved, then dropped). If the fact is confirmed present and intact in context and the answer still contradicts it, it's a generation failure — only then does prompting or model choice become the right lever.</div></details>
+<details class="quiz"><summary>Why would "add a reranker" fix a retrieval-link problem but do nothing for a generation-link problem?</summary><div>A reranker only reorders candidates that retrieval already found — it can improve which evidence makes it into the top-k, addressing a retrieval-link failure. It has no effect once the correct evidence is already in context and intact; a generation-link failure happens after reranking's job is already done.</div></details>
+<details class="quiz"><summary>Design question: what logging would you add to a production RAG system specifically to make this three-link diagnosis possible without manual reproduction?</summary><div>Log, per query: the full ranked candidate list with scores (for the retrieval check), the exact final assembled context string sent to the model (for the augmentation check), and the raw model response alongside which context it was conditioned on (for the generation check). Without all three captured per request, diagnosing a failure after the fact requires reproducing it live, which isn't always possible.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2312.10997"><b>Gao, Xiong, Gao et al. — Retrieval-Augmented Generation for Large Language Models: A Survey</b><br><span>Source of the retrieval / augmentation / generation three-stage taxonomy this concept adopts directly — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2401.05856"><b>Barnett, Kurniawan, Thudumu, Brannelly & Abdelrazek — Seven Failure Points When Engineering a Retrieval Augmented Generation System</b><br><span>Production failure points mapped onto this concept's three links, especially the augmentation-link "not in context — consolidation strategy limitations" case — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2309.01431"><b>Chen, Lin, Han & Sun — Benchmarking Large Language Models in Retrieval-Augmented Generation</b><br><span>RGB benchmark isolating generation-link robustness to noisy or unsupportive retrieved evidence — behind Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 11 · COMPLETE</span>
+<h3>Diagnose the parental-leave run before moving on</h3>
+<p>Before moving on, work through Section 20's exercise and state, in one sentence, why an augmentation failure and a generation failure require inspecting different evidence to tell apart, even though both can produce a wrong final answer.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Failure Chain Diagnostic lab ↑</a>
+</div>
+<p class="fine-print">Next after completion: When RAG should not be used.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 11 · Complete</p>
+<a href="module-03-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

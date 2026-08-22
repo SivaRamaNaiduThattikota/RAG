@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Names the exact shape Concepts 01-08 built — retrieve top-k, then generate — as 'naive RAG,' then introduces two more sophisticated shapes as silhouettes only: 'advanced RAG' (adds pre- and post-retrieval steps) and 'modular RAG' (swappable, composable pipeline components).">
+<title>Naive, advanced and modular RAG taxonomy — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 09</p>
+<h1>Naive, advanced and<br><em>modular RAG taxonomy.</em></h1>
+<p class="lesson-lead">Concepts 01 through 08 built one specific shape of RAG — retrieve the top-k most similar chunks, then generate — without ever naming that shape as a category. This concept turns inward and gives it a name: <b>naive RAG</b>. It then introduces two more sophisticated shapes as silhouettes only, not builds: <b>advanced RAG</b> adds steps before retrieval (like query rewriting) and after it (like re-ranking), still as one fixed sequence. <b>Modular RAG</b> goes further and treats each pipeline stage as a swappable, composable component rather than a fixed sequence at all. Modules 11 through 17, and Module 23 onward, build the two newer shapes for real — this concept only gives all three their names and the criteria that tell them apart.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's two-box RAG definition; Concept 06's naive pipeline (both cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Given a RAG pipeline description, name which of the three shapes it is and state the exact criterion that decides it</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You named the exact shape Concepts 01-08 built without ever calling it anything — naive RAG — and previewed two more sophisticated shapes, advanced RAG and modular RAG, as named silhouettes with the criteria that tell all three apart, without building either newer shape yet. Concept 10 now turns to a different question entirely: whether a specific question against a specific corpus is answerable at all, regardless of which of these three shapes retrieves for it.</p>
+<b>9 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">RAG is not one shape</h2>
+</div>
+<p>Every RAG system Concepts 01-08 described worked the same way: retrieve top-k, then generate. That shape now gets a name, plus two more sophisticated names for shapes this course hasn't built yet.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three shapes, one family</h3>
+<div class="mental-compare">
+<div><span>NAIVE RAG</span><p>The exact shape Concepts 01-08 built, now given a name: retrieve the top-k most similar chunks, then generate an answer from them. One fixed sequence — nothing before retrieval, nothing after it.</p></div>
+<div><span>ADVANCED RAG</span><p>The same fixed sequence, with steps added around retrieval — a pre-retrieval step like query rewriting before it, a post-retrieval step like re-ranking after it. Named here only; Modules 15-17 build these steps for real.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>MODULAR RAG</span><p>Treats retrieval, generation, and every other stage as a swappable, composable component rather than one fixed sequence at all. Named here only; Module 23 and later modules design it for real.</p></div>
+<div><span>THE COMMON GROUND</span><p>All three still retrieve, then generate — Concept 01's two boxes, unbroken. The taxonomy names what changes around that core, not a departure from it.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> naive, advanced, and modular RAG are three shapes of the same idea, not three competing techniques — Concept 08's fine-tuning/search/tool-use boundary lines are a completely different comparison and don't apply here.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A name for the shape you already built, before two more</h3>
+<p>Concepts 01 through 08 built and defended one working shape of RAG without ever calling it anything. That's fine for learning it once, but it breaks down the moment this course needs to compare that shape against something more sophisticated in Modules 11 through 23, or the moment you read a paper or a vendor's claims that use "naive," "advanced," and "modular" as load-bearing terms. Without the names, every comparison has to be re-explained from scratch. With them, "this system is still naive RAG" is a precise, checkable claim.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THE TAXONOMY</span><p>Every RAG system looks the same from a distance — "it retrieves, then generates" — with no vocabulary for how much more a more sophisticated pipeline is actually doing.</p></div>
+<div><span>WITH THE TAXONOMY</span><p>Three names, each with a checkable criterion, let you place any RAG system precisely — including the one this course has been quietly building since Concept 06.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same Oracle assistant, three ways it could be shaped</h3>
+<p>Concept 06's Oracle policy assistant retrieves the top-k most relevant policy chunks for an employee's question and generates an answer from them — nothing more. That is naive RAG, exactly as built. Now imagine two upgrades, neither built yet: first, a step that rewrites a vague employee question ("what about travel?") into a specific one before retrieval even runs, plus a step that re-ranks the retrieved chunks for relevance before they reach generation — that upgraded shape is advanced RAG. Second, imagine the retrieval step itself could be swapped out per request — a policy retriever for HR questions, a different retriever for IT questions, routed dynamically — with re-ranking optionally skipped when there's only one candidate chunk. That reconfigurable shape is modular RAG.</p>
+<div class="context-demo">
+<div><span>AS BUILT</span><p>Retrieve top-k policy chunks, generate — Concept 06's assistant, exactly. Naive RAG.</p></div>
+<div><span>HYPOTHETICAL UPGRADE 1</span><p>Add query rewriting before retrieval, re-ranking after it — still one fixed order. Advanced RAG.</p></div>
+<div><span>HYPOTHETICAL UPGRADE 2</span><p>Swap which retriever runs per request, skip re-ranking when it isn't needed — no single fixed order. Modular RAG.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What actually changes between the three shapes</h3>
+<div class="example-grid">
+<article class="info-card"><span>NAIVE RAG</span><h3>One fixed sequence, two stages</h3><p>Retrieve, then generate. Nothing runs before retrieval; nothing runs between retrieval and generation.</p></article>
+<article class="info-card"><span>ADVANCED RAG</span><h3>Same fixed sequence, more stages</h3><p>A pre-retrieval step, a post-retrieval step, or both — inserted into the same fixed order naive RAG already used.</p></article>
+<article class="info-card"><span>MODULAR RAG</span><h3>Not a fixed sequence at all</h3><p>Stages become swappable, composable components — added, removed, reordered, or routed differently per request.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0309-visual-title">
+<strong class="concept-visual-title" id="c0309-visual-title">VISUAL · THREE SHAPES OF RAG</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram comparing naive, advanced, and modular RAG by pipeline shape">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>Naive RAG</b><small>query → retrieve top-k → generate. One fixed sequence — Concept 06's pipeline, named.</small></div>
+<div class="diagram-node"><b>Advanced RAG</b><small>query → pre-retrieval → retrieve → post-retrieval → generate. Same fixed order, more stages — named, not built.</small></div>
+<div class="diagram-node"><b>Modular RAG</b><small>a set of swappable components — retriever(s), rankers, generator — composed per request, not one fixed line. Named, not built.</small></div>
+</div>
+</div>
+<figcaption>Naive RAG is a specific, complete pipeline — not an unfinished one. Advanced RAG keeps naive RAG's fixed order and inserts named steps around it. Modular RAG stops being a single line altogether.</figcaption>
+<ol class="diagram-key"><li><b>Naive RAG:</b> exactly two stages, always in the same order — this course's baseline since Concept 06.</li><li><b>Advanced RAG:</b> the same two stages plus at least one pre- or post-retrieval addition, still one fixed order.</li><li><b>Modular RAG:</b> stages are composable and swappable — the defining criterion is structure, not stage count.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where each shape sits on the nine-box skeleton</h3>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i><span class="hot">Parsing</span><i>↓</i><span class="hot">Chunking</span><i>↓</i><span class="hot">Embedding model</span><i>↓</i><span class="hot">Vectors / index</span><i>↓</i><span class="hot">Retrieval</span><i>↓</i><span class="hot">Context</span><i>↓</i><span class="hot">LLM</span><i>↓</i><span class="hot">Answer</span>
+</div>
+<p><b>Naive RAG</b> uses every one of these nine boxes exactly as drawn — no additions, in the fixed order shown. <b>Advanced RAG</b> keeps every one of those nine boxes and inserts named steps at two specific points: a pre-retrieval step between the query and "Retrieval," and a post-retrieval step between "Retrieval" and "Context." <b>Modular RAG</b> can no longer be drawn as one line at all — it needs a different diagram, which is exactly why Section 08 of the advanced layer gives it one.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners flatten three names into one axis</h3>
+<div class="distinction-table" role="table" aria-label="Naive, advanced and modular RAG distinguished from common misreadings">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Naive RAG</span><span role="cell">An inferior or broken technique</span><span role="cell">It names the exact working shape Concepts 01-08 already built and defended — a baseline in the taxonomy, not a slur</span></div>
+<div role="row"><span role="cell">Advanced RAG</span><span role="cell">A completely different technique from naive RAG</span><span role="cell">It is naive RAG's own fixed sequence with pre- and/or post-retrieval steps added, not a replacement for the retrieve-then-generate core</span></div>
+<div role="row"><span role="cell">Modular RAG</span><span role="cell">Advanced RAG under a fancier name</span><span role="cell">Modularity is a structural claim about swappability, not about which steps are present — a modular pipeline with zero extra steps is still modular</span></div>
+<div role="row"><span role="cell">This taxonomy</span><span role="cell">Another alternative to RAG, like Concept 08's four techniques</span><span role="cell">All three names classify shapes of RAG itself; Concept 08 compared RAG against non-RAG techniques — a different axis entirely</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Naive RAG means bad or wrong RAG."</b><p>It's a name for a shape, not a judgment — Concept 06's pipeline is a complete, working system that happens to be naive RAG's exact definition.</p></div>
+<div><b>"Advanced RAG always produces better answers than naive RAG."</b><p>Not guaranteed — added steps cost latency and complexity; whether they help is an evaluation question (Module 18), not something the label settles by itself.</p></div>
+<div><b>"Modular means using every available module."</b><p>Modular means components can be swapped, added, or removed — not that a system must use as many of them as possible.</p></div>
+<div><b>"Every system must climb naive → advanced → modular."</b><p>Not addressed here — whether a given system needs to move up this ladder at all depends on requirements this concept doesn't evaluate.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>One Oracle assistant, three possible shapes</h3>
+<div class="project-map">
+<div><span>NAIVE RAG</span><b>The assistant exactly as Concept 06 built it</b><p>Retrieve top-k policy chunks, generate — nothing added, nothing removed.</p></div>
+<div><span>ADVANCED RAG</span><b>A hypothetical version with rewriting and re-ranking</b><p>Named only — Modules 15 and 16 build query rewriting and re-ranking for real.</p></div>
+<div><span>MODULAR RAG</span><b>A hypothetical version with swappable, routed retrievers</b><p>Named only — Module 23 and later modules design that composability for real.</p></div>
+<div><span>THE POINT</span><b>Naming doesn't rebuild anything yet</b><p>This concept only gives the shape you already have, and the two you don't yet have, their correct names.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Naive RAG</b><p>Retrieve top-k, generate — one fixed sequence, exactly Concept 06's pipeline.</p></div>
+<div><b>Advanced RAG</b><p>Naive RAG's fixed sequence plus at least one pre- or post-retrieval step.</p></div>
+<div><b>Modular RAG</b><p>Stages become swappable, composable components — not one fixed sequence at all.</p></div>
+<div><b>What stays deferred</b><p>How query rewriting, re-ranking, or module composition actually work — Modules 15-17 and 23 onward.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is calling Concept 06's pipeline "naive RAG" not an insult?</li>
+<li>What is the exact criterion that separates advanced RAG from naive RAG?</li>
+<li>Why could a pipeline with very few steps still count as modular RAG?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 09 is complete.</b> Continue to Knowledge-intensive tasks and answerability.</h3>
+<p>This concept named three shapes of RAG without building the two newer ones. Concept 10 turns to a different question entirely: which tasks actually need any of these shapes at all, and how to recognize a question RAG cannot answer no matter which shape retrieves for it.</p>
+<div class="beginner-memory"><b>Concept 09 is complete.</b> Continue to Knowledge-intensive tasks and answerability.</div>
+<a class="button primary" href="module-03-concept-10.html">Start Concept 10 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Three names, one checkable criterion each.</h2>
+<p>Master the three shapes and their criteria first. Open the formal definitions, the from-scratch classifier, and The RAG Shape Classifier lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Name</b><small>Naive RAG is Concept 06's pipeline. Advanced and modular RAG are two more sophisticated shapes, named as silhouettes.</small></a>
+<a href="#b04"><span>02</span><b>Distinguish</b><small>Fixed sequence versus fixed sequence plus added steps versus no fixed sequence at all.</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>One Oracle assistant, three possible shapes — only one of them actually built.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch classifier, and The RAG Shape Classifier lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Concept 06's unnamed pipeline → named as naive RAG → two more sophisticated shapes named as silhouettes, advanced RAG and modular RAG → the criteria that separate all three, without building either newer shape yet.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the RAG taxonomy deep dive</b><em>Formal definitions, a from-scratch shape classifier, and The RAG Shape Classifier lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The last outward comparison ends; RAG's own taxonomy begins</h2></div></header>
+<p>Concept 08 drew the last of four boundary lines against techniques outside RAG entirely. This concept turns inward: RAG itself is not one shape. It names the exact shape Concepts 01-08 built — retrieve top-k, then generate — as "naive RAG," and previews two more sophisticated shapes as named silhouettes only: "advanced RAG" (pre- and post-retrieval steps added) and "modular RAG" (swappable, composable components). It does not build either newer shape; Modules 11-17 and Module 23 onward do that. Concept 10 turns to a different question next: which tasks need any of these shapes at all.</p>
+<div class="flow">
+<div class="flow-node">Concept 08 — RAG vs. non-RAG techniques</div>
+<div class="flow-node hot">RAG's own taxonomy: naive, advanced, modular</div>
+<div class="flow-node">Concept 10 — knowledge-intensive tasks and answerability</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Assign the correct shape</h3><p>Given a RAG pipeline description, say whether it is naive, advanced, or modular RAG.</p></article>
+<article class="info-card"><span>CRITERIA</span><h3>State the exact deciding test</h3><p>Fixed two-stage sequence versus fixed sequence plus added steps versus no fixed sequence at all.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>How query rewriting, re-ranking, or module composition actually work is out of scope here — Modules 15-17 and 23 build them.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Identify which shape the built Oracle assistant is, and which shapes two hypothetical upgrades would be.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's two-box RAG definition:</b> cited directly — retrieval plus generation is the core every one of the three shapes preserves.</li>
+<li><b>Concept 06's naive pipeline:</b> cited directly, as the concrete referent this concept finally names — retrieve top-k, generate, nothing else.</li>
+<li>Query rewriting and query expansion (Module 15), re-ranking and fusion (Module 16), and modular/agentic composition mechanics (Module 23 onward) are explicitly out of scope — named here only as silhouettes, not built.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>An assembly line, an assembly line with inspection stations, and a factory floor</h2></div></header>
+<p>A simple assembly line takes a part through the same fixed stations in the same fixed order, every time — that's naive RAG. Add two inspection stations — one before assembly to check the part is the right one, one after to check the result — and the line still runs in one fixed order, just with more stations — that's advanced RAG. Now imagine a factory floor where stations can be added, removed, or rerouted depending on what's being built that day, with no single fixed order at all — that's modular RAG.</p>
+<div class="callout warning"><b>Analogy boundary</b>A factory floor still has physical constraints an RAG pipeline doesn't share. The point of the analogy is the structural claim only — fixed order versus fixed order with additions versus no fixed order — not anything about factories, robotics, or scheduling.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Naive RAG</td><td>A RAG pipeline consisting of exactly retrieval (Concept 01, Concept 06) followed by generation, with no additional pre- or post-retrieval steps, in one fixed order</td><td>Not a partial or unfinished pipeline — a complete, named baseline shape</td></tr>
+<tr><td>Advanced RAG</td><td>Naive RAG's fixed sequence with at least one pre-retrieval step (e.g. query rewriting, query expansion) and/or post-retrieval step (e.g. re-ranking, filtering) inserted</td><td>Still executes in one fixed order; which specific steps exist is a Module 15-17 question, not this concept's</td></tr>
+<tr><td>Modular RAG</td><td>A RAG architecture in which pipeline stages — retrieval, generation, and any others — are swappable, composable, and can be added, removed, reordered, or routed differently per request</td><td>Defined by structural composability, not by which or how many steps happen to be present at any one time</td></tr>
+</tbody>
+</table>
+<p>This three-way naming follows the taxonomy introduced by Gao, Xiong, Gao et al. (2023) in their RAG survey — Section 13 cites it directly.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The same core, three different structures around it</h2></div></header>
+<div class="lane-flow">
+<div><b>Naive RAG —</b> query → retrieval → generation. Concept 06's pipeline, unchanged, in one fixed order.</div>
+<div><b>Advanced RAG, pre-retrieval only —</b> query → [pre-retrieval step] → retrieval → generation. Still one fixed order, one stage added before retrieval.</div>
+<div><b>Advanced RAG, post-retrieval only —</b> query → retrieval → [post-retrieval step] → generation. Still one fixed order, one stage added after retrieval.</div>
+<div><b>Advanced RAG, both —</b> query → [pre-retrieval] → retrieval → [post-retrieval] → generation. Still one fixed order — the deciding fact is that an order still exists at all.</div>
+<div><b>Modular RAG —</b> the same stages, plus routing, become swappable components with no single required order — which stages run, and in what sequence, can change per request.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One criterion, three outcomes</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the fixed-sequence-versus-composable criterion routing to naive, advanced, or modular RAG">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Naive RAG</b><small>fixed sequence, no additions</small></div>
+<div class="diagram-node hub-center"><b>Is the pipeline a fixed sequence, and are steps added around retrieval?</b><small>Section 05's criteria</small></div>
+<div class="diagram-node"><b>Advanced RAG</b><small>fixed sequence, steps added</small></div>
+<div class="diagram-node"><b>Modular RAG</b><small>no fixed sequence at all</small></div>
+</div>
+</div>
+<p>The hub above is the required flow. Section 14's lab makes it concrete: toggle pre-retrieval, post-retrieval, and swappable-composition on or off, and watch the classification and its justification change live.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Three skeletons, from one fixed line to no line at all</h2></div></header>
+<p class="flow-instruction">NAIVE RAG — every box used exactly as drawn, nothing added</p>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i><span class="hot">Parsing</span><i>↓</i><span class="hot">Chunking</span><i>↓</i><span class="hot">Embedding model</span><i>↓</i><span class="hot">Vectors / index</span><i>↓</i><span class="hot">Retrieval</span><i>↓</i><span class="hot">Context</span><i>↓</i><span class="hot">LLM</span><i>↓</i><span class="hot">Answer</span>
+</div>
+<p class="flow-instruction">ADVANCED RAG — the same nine boxes, plus two named insertion points</p>
+<div class="pipeline-preview">
+<span>…Vectors / index</span><i>↓</i><span class="hot">Pre-retrieval (e.g. query rewriting)</span><i>↓</i><span class="hot">Retrieval</span><i>↓</i><span class="hot">Post-retrieval (e.g. re-ranking)</span><i>↓</i><span>Context…</span>
+</div>
+<p class="flow-instruction">MODULAR RAG — no single line; a diagram-family-grid stands in for a fixed sequence</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram of modular RAG's swappable components with no fixed order">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Router</b><small>decides which components run for this request</small></div>
+<div class="diagram-node"><b>Retriever A / Retriever B</b><small>swappable — either, both, or neither, per request</small></div>
+<div class="diagram-node"><b>Re-ranker (optional)</b><small>composable — present for some requests, skipped for others</small></div>
+<div class="diagram-node active"><b>Generator</b><small>the one stage every request still reaches</small></div>
+</div>
+</div>
+<p>Naive RAG's line and advanced RAG's line both still have exactly one valid reading order. Modular RAG's grid does not — which components run, and in what order, is a per-request decision, which is the entire reason it needs its own diagram instead of an insertion point on the fixed line above.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A light configuration-count argument, not a new derivation</h2></div></header>
+<p>This concept stays at the naming level, but one count is worth making precise: how many distinct pipelines does each shape actually allow? Naive RAG allows exactly one: retrieve, then generate, always. Advanced RAG, with <code>p</code> possible pre-retrieval step types and <code>q</code> possible post-retrieval step types, each independently included or excluded but still executed in one fixed relative order, allows:</p>
+<div class="equation">Distinct advanced-RAG configurations ≈ 2<sup>p</sup> × 2<sup>q</sup></div>
+<p>With <code>p</code> = 2 (say, query rewriting and query expansion) and <code>q</code> = 2 (say, re-ranking and filtering), that's 2² × 2² = 16 distinct fixed-order configurations — still just one order per selection. Modular RAG adds a further, harder-to-count dimension: which components run, and in what order, can be decided per request rather than fixed at design time, so the same architecture can realize many different configurations across different queries without being redesigned. Neither number is a rigorous complexity bound — it's an illustration of exactly why "modular" is the right word: composability multiplies the space of realizable pipelines, not just the count of optional steps.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Six pipeline descriptions, six classifications</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Description</th><th>Pre-retrieval step?</th><th>Post-retrieval step?</th><th>Swappable components?</th><th>Shape</th></tr></thead>
+<tbody>
+<tr><td>Concept 06's Oracle assistant</td><td>No</td><td>No</td><td>No</td><td>Naive RAG</td></tr>
+<tr><td>Adds query rewriting only</td><td>Yes</td><td>No</td><td>No</td><td>Advanced RAG</td></tr>
+<tr><td>Adds re-ranking only</td><td>No</td><td>Yes</td><td>No</td><td>Advanced RAG</td></tr>
+<tr><td>Adds both, fixed order</td><td>Yes</td><td>Yes</td><td>No</td><td>Advanced RAG</td></tr>
+<tr><td>Retriever swappable per request, no extra steps</td><td>No</td><td>No</td><td>Yes</td><td>Modular RAG</td></tr>
+<tr><td>Rewriting, re-ranking, and swappable retrievers</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Modular RAG</td></tr>
+</tbody>
+</table>
+<p>Note the fifth row: zero extra steps, yet still modular RAG, because the criterion is composability, not stage count — exactly Section 05's boundary column.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Concept 06's Oracle assistant, correctly labeled</h3><p>A complete, working baseline that happens to be naive RAG's exact definition — not an unfinished system.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A small deduplication step on retrieved chunks</h3><p>Does removing duplicates before generation count as a "post-retrieval step"? By this concept's criterion, yes — any step inserted between retrieval and generation makes the fixed sequence advanced RAG's shape, regardless of how small the step is.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A modular codebase that always runs steps in the same order</h3><p>Modular code organization is not the same claim as a modular pipeline — if the running system never actually varies which steps execute or in what order, it is naive or advanced RAG by whichever steps it has, not modular RAG.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Labeling by framework instead of by structure</h3><p>Building a pipeline in LangGraph doesn't make it modular RAG, and a plain script doesn't make it naive RAG — the classification depends on the pipeline's own structure, not which tool built it.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The three-way classifier, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · CLASSIFY A PIPELINE DESCRIPTION AS NAIVE, ADVANCED, OR MODULAR</span>
+<pre><code>def classify_rag_shape(has_pre_retrieval, has_post_retrieval, is_composable):
+    # Composability dominates the classification -- it is a structural
+    # claim, independent of how many pre/post steps happen to exist.
+    if is_composable:
+        return "modular"
+    if has_pre_retrieval or has_post_retrieval:
+        return "advanced"
+    return "naive"
+
+
+# The six s10 rows, as boolean facts about each pipeline
+pipelines = [
+    dict(has_pre_retrieval=False, has_post_retrieval=False, is_composable=False),  # Concept 06's assistant
+    dict(has_pre_retrieval=True,  has_post_retrieval=False, is_composable=False),  # + rewriting only
+    dict(has_pre_retrieval=False, has_post_retrieval=True,  is_composable=False),  # + re-ranking only
+    dict(has_pre_retrieval=True,  has_post_retrieval=True,  is_composable=False),  # + both, fixed order
+    dict(has_pre_retrieval=False, has_post_retrieval=False, is_composable=True),   # swappable retrievers only
+    dict(has_pre_retrieval=True,  has_post_retrieval=True,  is_composable=True),   # rewriting + re-ranking + swappable
+]
+
+for p in pipelines:
+    print(classify_rag_shape(**p))
+# naive
+# advanced
+# advanced
+# advanced
+# modular
+# modular
+
+assert classify_rag_shape(False, False, False) == "naive"
+assert classify_rag_shape(True, False, False) == "advanced"
+assert classify_rag_shape(False, False, True) == "modular"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where this taxonomy comes from</h2></div></header>
+<p>Gao, Xiong, Gao, Jia, Pan, Bi, Dai, Sun, Wang & Wang (2023), a widely cited RAG survey, is the direct source of the naive/advanced/modular three-way split this concept teaches — it defines naive RAG as the basic retrieve-then-generate process, advanced RAG as adding pre-retrieval and post-retrieval optimizations, and modular RAG as a more flexible, composable framework. Gao, Xiong, Wang & Wang (2024), Modular RAG, develops the third shape in much more depth, reframing RAG systems as LEGO-like reconfigurable modules with defined routing and orchestration patterns — exactly what Module 23 and later modules build on, and exactly what this concept only names.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The RAG Shape Classifier</h2></div></header>
+<div class="lab">
+<p>Toggle pre-retrieval, post-retrieval, and swappable-composition on or off, or load one of the three named presets, and watch the classification, its justification, and the pipeline diagram update live.</p>
+<div class="lab-actions" role="group" aria-label="Load a named preset" id="shapePresets0309">
+<button type="button" class="secondary" data-preset="naive">Load naive RAG (Concept 06's baseline)</button>
+<button type="button" class="secondary" data-preset="advanced">Load advanced RAG (rewriting + re-ranking)</button>
+<button type="button" class="secondary" data-preset="modular">Load modular RAG (swappable stages)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Toggle pipeline features" id="shapeToggles0309">
+<button type="button" class="secondary" data-flag="pre" aria-pressed="false">Pre-retrieval step (e.g. query rewriting)</button>
+<button type="button" class="secondary" data-flag="post" aria-pressed="false">Post-retrieval step (e.g. re-ranking)</button>
+<button type="button" class="secondary" data-flag="modular" aria-pressed="false">Stages are swappable / composable</button>
+</div>
+<div class="diagram-scroll" tabindex="0" aria-label="Live pipeline diagram reflecting the current toggle state">
+<div class="diagram-family-grid" id="shapeDiagram0309"></div>
+</div>
+<div class="sample-output" id="shapeResult0309" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three shapes, by structure, flexibility, and cost</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Shape</th><th>Structure</th><th>Flexibility</th><th>Engineering cost</th></tr></thead>
+<tbody>
+<tr><td>Naive RAG</td><td>One fixed two-stage sequence</td><td>None — same steps, every request</td><td>Lowest — Concept 06's pipeline, as built</td></tr>
+<tr><td>Advanced RAG</td><td>One fixed sequence, more stages</td><td>Low — the added steps still run every time, in the same order</td><td>Moderate — Modules 15-17's mechanics, added on top</td></tr>
+<tr><td>Modular RAG</td><td>Swappable, composable components</td><td>High — which components run can vary per request</td><td>Highest — routing, orchestration, and testing every valid combination</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of using the taxonomy itself</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISLABELING</span><h3>Calling a system "advanced" because it feels sophisticated</h3><p>The label depends on Section 05's exact criteria — a pre- or post-retrieval step present — not on general complexity or polish.</p></article>
+<article class="info-card"><span>MARKETING RETROFIT</span><h3>Applying "modular" to justify a design choice after the fact</h3><p>Modularity is a structural, checkable property of the running pipeline — Section 12's classifier either confirms it or it doesn't.</p></article>
+<article class="info-card"><span>FORCED PROGRESSION</span><h3>Assuming every system must eventually become modular</h3><p>This concept names three shapes; it does not claim one is always the correct destination — that depends on requirements outside this concept's scope.</p></article>
+<article class="info-card"><span>IGNORED COST</span><h3>Treating modularity as free flexibility</h3><p>Section 15's cost column is real — composability has to be built, routed, and tested, not just declared.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"Naive" is a put-down for a weak system</td><td>It's this taxonomy's name for the exact baseline shape Concepts 01-08 built and validated — a category, not a criticism.</td></tr>
+<tr><td>Advanced RAG is a strict upgrade that always beats naive RAG</td><td>It adds steps and cost; whether it actually improves answers on a given task is an evaluation question (Module 18), not a fact the label guarantees.</td></tr>
+<tr><td>Modular RAG needs every possible extra step turned on</td><td>Modularity means components can be swapped or omitted — a modular pipeline can run with very few steps active for a given request.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Track which named shape a system actually is, so later evaluation (Module 18) and cost analysis (Module 19) compare against the correct baseline instead of an assumed one.</li>
+<li>Treat naive → advanced → modular as an available path, not a mandatory one — Section 16's "forced progression" failure mode is a real risk to avoid.</li>
+<li>The label is a communication tool for engineers and stakeholders, not a target metric to optimize toward on its own.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What is the exact criterion that separates naive RAG from advanced RAG?</summary><div>Whether at least one pre-retrieval or post-retrieval step has been inserted into the fixed sequence — naive RAG has neither; advanced RAG has at least one.</div></details>
+<details class="quiz"><summary>Why can a pipeline with very few steps still count as modular RAG?</summary><div>Modularity is defined by structural composability — components can be swapped, added, or removed — not by how many steps happen to be active for any one request.</div></details>
+<details class="quiz"><summary>Which concept supplies naive RAG's concrete referent, and why?</summary><div>Concept 06 — its offline indexing and online query pipelines are the exact retrieve-then-generate shape this concept names naive RAG.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A description arrives: "The system rewrites every incoming question into a fuller, standalone version before searching, then always searches with the same single retriever and generates directly from whatever comes back — no re-ranking, no swapping." Classify this pipeline using Section 05's criteria and name the exact fact that decides it.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>There is exactly one pre-retrieval step (the rewriting), no post-retrieval step, and no swappable or composable components — the retriever and the order never vary. By Section 12's classifier, is_composable is false and has_pre_retrieval is true, so the pipeline is advanced RAG. The deciding fact is the presence of the pre-retrieval step alone; the absence of swapping rules out modular RAG regardless of anything else in the description.</div>
+</details>
+<p>Teach-back: explain, in your own words, why "no swapping happens" is enough by itself to rule out modular RAG, even before checking whether any pre- or post-retrieval steps exist.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Three shapes, one criterion each</h3><ul><li><b>Naive RAG:</b> retrieve top-k, generate — one fixed sequence, nothing added</li><li><b>Advanced RAG:</b> the same fixed sequence, plus at least one pre- or post-retrieval step</li><li><b>Modular RAG:</b> swappable, composable components — no single fixed sequence</li></ul></div>
+<div><h3>Memorable example</h3><p>Concept 06's Oracle assistant was naive RAG the entire time — it just didn't have a name until this concept gave it one.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>How would you explain the difference between advanced RAG and modular RAG to a teammate who conflates them?</summary><div>Advanced RAG still runs in one fixed order every time, just with more steps in it; modular RAG's defining property is that which components run, and in what order, can change per request — a structural difference, not a difference in step count.</div></details>
+<details class="quiz"><summary>A stakeholder says a system is "modular" because it's built with LangGraph. How do you evaluate that claim?</summary><div>Check whether the running pipeline actually varies which components execute or their order across requests — the framework used to build it doesn't determine the classification; the observed behavior of the pipeline does.</div></details>
+<details class="quiz"><summary>Design question: given a naive RAG baseline, what is the minimal change that would make it advanced RAG, and what would additionally be required to make it modular RAG?</summary><div>Adding a single pre- or post-retrieval step (e.g. re-ranking) makes it advanced RAG. Reaching modular RAG additionally requires making stages swappable and routable — e.g. a router deciding per request which retriever or re-ranker, if any, actually runs.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2312.10997"><b>Gao, Xiong, Gao, Jia, Pan, Bi, Dai, Sun, Wang & Wang — Retrieval-Augmented Generation for Large Language Models: A Survey</b><br><span>The direct source of the naive/advanced/modular RAG taxonomy this concept teaches — behind Sections 05 and 13.</span></a>
+<a href="https://arxiv.org/abs/2407.21059"><b>Gao, Xiong, Wang & Wang — Modular RAG: Transforming RAG Systems into LEGO-like Reconfigurable Frameworks</b><br><span>Develops modular RAG's composable-module framing in depth — named here, built starting Module 23 — behind Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 · COMPLETE</span>
+<h3>Classify six pipelines before moving on</h3>
+<p>Before moving on, work through Section 20's exercise and state, in one sentence, why the absence of swapping rules out modular RAG on its own.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The RAG Shape Classifier lab ↑</a>
+</div>
+<p class="fine-print">Next after completion: Knowledge-intensive tasks and answerability.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 09 · Complete</p>
+<a href="module-03-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

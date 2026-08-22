@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Asks a sharper question than Concept 08's architecture choice: for one specific question against one specific corpus, is an answer even possible? Names two independent failure reasons -- the task isn't knowledge-intensive, or the fact genuinely isn't in the corpus (a coverage gap) -- before Concept 11's failure chain diagnoses pipeline breakage.">
+<title>Knowledge-intensive tasks and answerability — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 10 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 10</p>
+<h1>Knowledge-intensive tasks<br><em>and answerability.</em></h1>
+<p class="lesson-lead">Concepts 02 and 03 argued, in general, why an LLM alone cannot be trusted with company-specific or fast-changing facts. Concept 08 then asked whether RAG is the right architecture for a task at all. This concept asks a narrower, sharper question that sits before both: for one specific question against one specific corpus, is an answer even possible — no matter which architecture retrieves for it? Two independent reasons can say no. First, the task may not be knowledge-intensive at all — a request like "write a haiku" needs no fact lookup, so no retrieval, however excellent, could help it. Second, the task may be knowledge-intensive but the fact genuinely is not in the corpus — a coverage gap, not a retrieval bug. Confirming answerability first is what keeps Concept 11's failure chain honest: it only makes sense to ask where a pipeline broke once you already know the question could have been answered at all.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concepts 02-03's general case for external knowledge; Concept 08's RAG-vs-alternatives boundary (both cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Given a specific question and a specific corpus, decide whether an answer is possible at all, and if not, name which of the two independent reasons applies</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You sorted any (question, corpus) pair into three outcomes before letting any pipeline stage take the blame — not knowledge-intensive, a coverage gap, or genuinely answerable — and named the two independent reasons an answer can be impossible regardless of architecture. Concept 11 now turns to a different question entirely: given an answerable question that still comes back wrong, at which of three links — retrieval, augmentation, generation — did that specific run actually break?</p>
+<b>10 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Answerable is not the same as retrieved well</h2>
+</div>
+<p>A wrong or missing answer can look exactly like a broken pipeline from the outside. This concept sorts that appearance into three real outcomes before any pipeline stage gets blamed.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two different questions, one gate before both</h3>
+<div class="mental-compare">
+<div><span>KNOWLEDGE-INTENSIVE</span><p>A task whose correct answer depends on a specific fact that lives outside the model's general ability and outside whatever the requester already supplied — a number, a date, a policy line, a name. If no outside fact is needed, retrieval has nothing to contribute, no matter how good it is.</p></div>
+<div><span>ANSWERABLE (FOR THIS QUESTION, THIS CORPUS)</span><p>A knowledge-intensive question is answerable only if the specific corpus being retrieved from actually contains the fact it needs. A perfect retriever over the wrong corpus still can't produce a fact that was never there.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>FAILURE REASON 1</span><p>The task simply isn't knowledge-intensive — "write a haiku," "translate this phrase." No corpus, however complete, changes the answer.</p></div>
+<div><span>FAILURE REASON 2</span><p>The task is knowledge-intensive, but the fact genuinely isn't in the corpus — a coverage gap. This is a fact about the corpus, not a flaw in how retrieval searched it.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> before blaming retrieval, ranking, or generation for a bad answer, ask whether the question could ever have been answered given what the corpus actually contains — two independent reasons can say no, and neither one is a pipeline bug.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Diagnosing before debugging</h3>
+<p>Concepts 02 and 03 already argued, in general, why an LLM's built-in knowledge isn't enough for company-specific or fast-changing facts. That argument explains why RAG exists at all — it doesn't tell you whether one particular question, against one particular corpus, can actually be answered. Skip that check and a wrong or missing answer looks like a pipeline failure every time, even when the real cause is that nobody could have answered the question with this corpus, or the question never needed a corpus in the first place. Concept 11's failure chain — which stage broke: chunking, embedding, retrieval, ranking, generation — only makes sense once you already know the question was answerable in principle.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THE ANSWERABILITY CHECK</span><p>Every wrong or missing answer triggers the same reflex: re-tune retrieval, re-chunk documents, swap the reranker — even when no pipeline change could ever have produced the fact.</p></div>
+<div><span>WITH THE ANSWERABILITY CHECK</span><p>A wrong or missing answer first gets sorted: not knowledge-intensive, a coverage gap, or genuinely a pipeline problem — and only the third case belongs to Concept 11.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three questions, one small Oracle HR corpus</h3>
+<p>Suppose the Oracle assistant's entire corpus is three short policy documents: a remote-work policy, a parental-leave policy, and an expense-reimbursement policy. Nothing else has been ingested yet.</p>
+<div class="context-demo">
+<div><span>REMOTE-WORK POLICY</span><p>Employees may work remotely up to 3 days per week with manager approval.</p></div>
+<div><span>PARENTAL-LEAVE POLICY</span><p>12 weeks of paid leave are available after 1 year of employment.</p></div>
+<div><span>EXPENSE-REIMBURSEMENT POLICY</span><p>Travel expenses must be submitted within 30 days, with receipts.</p></div>
+</div>
+<p>Three questions arrive. Each one fails, or succeeds, for a different reason:</p>
+<div class="context-demo">
+<div><span>"Write a two-line note congratulating a promoted employee."</span><p>Not knowledge-intensive — no policy fact is needed to write this at all. Unanswerable by retrieval, but not because of the corpus.</p></div>
+<div><span>"How many remote workdays per week are employees allowed?"</span><p>Knowledge-intensive, and the remote-work document states it directly: 3 days. Answerable.</p></div>
+<div><span>"Does the company offer unlimited PTO?"</span><p>Knowledge-intensive, but none of the three documents mentions PTO limits at all. A coverage gap — unanswerable with this corpus, no matter how well it's searched.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The two-question test</h3>
+<div class="example-grid">
+<article class="info-card"><span>QUESTION 1</span><h3>Is this knowledge-intensive?</h3><p>Does answering correctly require a specific outside fact — not something the model already reliably knows in general, not something the requester already supplied? If no, stop here: unanswerable by any retrieval, for reasons that have nothing to do with the corpus.</p></article>
+<article class="info-card"><span>QUESTION 2</span><h3>Is that fact in the corpus?</h3><p>Only asked if question 1 is yes. Does the specific corpus you have actually contain the fact, anywhere, in any document? If no, it's a coverage gap: unanswerable with this corpus, though it might become answerable if the corpus grows.</p></article>
+<article class="info-card"><span>BOTH YES</span><h3>Then, and only then, it's a fair test</h3><p>Knowledge-intensive and covered — the question is answerable in principle. Whether one specific pipeline run actually finds and uses that fact is Concept 11's separate question.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0310-visual-title">
+<strong class="concept-visual-title" id="c0310-visual-title">VISUAL · TWO QUESTIONS, THREE OUTCOMES</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram showing the two-question answerability test and its three outcomes">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Not knowledge-intensive</b><small>"Write a haiku." No fact needed — retrieval has nothing to contribute.</small></div>
+<div class="diagram-node"><b>Knowledge-intensive, not covered</b><small>"Unlimited PTO?" A real fact is needed, but it isn't anywhere in the corpus — a coverage gap.</small></div>
+<div class="diagram-node active"><b>Knowledge-intensive, covered</b><small>"Remote workdays per week?" The fact is needed and it's in the corpus — a fair test of the pipeline.</small></div>
+</div>
+</div>
+<figcaption>Only the third outcome is a fair test of retrieval, ranking, or generation. The first two are unanswerable for reasons that have nothing to do with how well any pipeline stage runs.</figcaption>
+<ol class="diagram-key"><li><b>Not knowledge-intensive:</b> no corpus, however complete, changes the answer.</li><li><b>Coverage gap:</b> the corpus is missing the fact — ingest more, don't re-tune retrieval.</li><li><b>Covered and knowledge-intensive:</b> the only case where a wrong answer is actually the pipeline's fault.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A gate before the skeleton runs, not a box inside it</h3>
+<div class="pipeline-preview">
+<span>Query</span><i>↓</i><span class="hot">Answerability check (this concept)</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This check doesn't replace or reorder any of Concept 06's nine boxes — it's a question asked about the query and the corpus before the pipeline runs at all. A "yes" on both questions lets the query proceed into retrieval exactly as before. A "no" on either one means running the rest of the pipeline can't produce a correct, grounded answer — the right response is to route elsewhere (direct generation, for a non-knowledge-intensive task) or to flag the gap (for a coverage gap), not to push a doomed query further down the line.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners collapse three separate questions into one</h3>
+<div class="distinction-table" role="table" aria-label="Answerability distinguished from architecture choice and pipeline failure diagnosis">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Answerability (this concept)</span><span role="cell">Concept 08's "is RAG the right architecture"</span><span role="cell">Concept 08 compares RAG against fine-tuning, search, and tool use in general; this concept asks whether one specific question against one specific corpus has an answer at all, regardless of architecture</span></div>
+<div role="row"><span role="cell">A coverage gap</span><span role="cell">A retrieval bug</span><span role="cell">A coverage gap means the fact was never in the corpus; a retrieval bug means the fact was there but the pipeline failed to surface it — Concept 11 diagnoses the second, not the first</span></div>
+<div role="row"><span role="cell">Not knowledge-intensive</span><span role="cell">Hard to retrieve</span><span role="cell">"Hard to retrieve" still needs a fact and could in principle be answered with better search (Module 16); "not knowledge-intensive" needs no fact at all, so no amount of better search helps</span></div>
+<div role="row"><span role="cell">This concept's two questions</span><span role="cell">Concept 11's failure chain</span><span role="cell">This concept decides whether an answer is possible at all; Concept 11 assumes the answer is possible and asks where in the pipeline it went missing</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"If RAG gives a wrong or missing answer, the pipeline is broken."</b><p>Not necessarily — check answerability first. Two of the three outcomes in Section 04's test mean the pipeline was never going to succeed, regardless of how well it ran.</p></div>
+<div><b>"Knowledge-intensive means difficult."</b><p>It means fact-dependent, not hard. "What is 2 + 2" needs no outside fact and isn't knowledge-intensive; "what did our Q3 policy memo say" is knowledge-intensive even if the memo is short and simple.</p></div>
+<div><b>"A creative-sounding request never needs the corpus."</b><p>Watch for an embedded factual constraint — "write a haiku that states our exact PTO cap" is knowledge-intensive despite its creative framing, because the number has to come from somewhere real.</p></div>
+<div><b>"If the top-k results don't contain the fact, it's automatically a coverage gap."</b><p>Not automatically — the fact might be in a different document that just wasn't retrieved this time. That's a retrieval bug, Concept 11's territory, not a coverage gap; confirming the fact is truly absent from the whole corpus is what actually proves a coverage gap.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Sorting the Oracle assistant's hardest questions before blaming the pipeline</h3>
+<div class="project-map">
+<div><span>NOT KNOWLEDGE-INTENSIVE</span><b>"Draft a farewell message for a departing teammate."</b><p>No policy fact needed — route straight to generation, don't run retrieval at all.</p></div>
+<div><span>COVERAGE GAP</span><b>"Does the company offer unlimited PTO?"</b><p>The three ingested policies never mention PTO — flag as an ingestion gap (Module 6's job), not a retrieval tuning problem.</p></div>
+<div><span>ANSWERABLE</span><b>"How many remote workdays per week are employees allowed?"</b><p>Knowledge-intensive and covered — a fair test. If this comes back wrong, Concept 11's failure chain is the right next step.</p></div>
+<div><span>THE POINT</span><b>Sorting comes before debugging</b><p>The same assistant, the same three questions — but only one of them is actually the pipeline's responsibility to get right.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Knowledge-intensive</b><p>The answer depends on a specific outside fact — not general ability, not something already supplied.</p></div>
+<div><b>Coverage gap</b><p>A knowledge-intensive question whose fact genuinely isn't anywhere in the corpus — not a retrieval bug.</p></div>
+<div><b>The two-question test</b><p>Is this knowledge-intensive? If yes, is the fact in the corpus? Only "yes, yes" is a fair test of the pipeline.</p></div>
+<div><b>What stays deferred</b><p>Where exactly a pipeline breaks on an answerable question — Concept 11's failure chain, next.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is "the corpus doesn't mention it" a different claim from "retrieval didn't find it"?</li>
+<li>Give a request that sounds creative but is secretly knowledge-intensive, and explain why.</li>
+<li>Why does answerability have to be checked before Concept 11's failure chain, and not the other way around?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 10 is complete.</b> Continue to The RAG failure chain.</h3>
+<p>This concept sorted questions into three outcomes before any pipeline ran. Concept 11 picks up only the third outcome — a knowledge-intensive question whose fact is genuinely in the corpus — and asks a new question: if that question still comes back wrong, at which of the pipeline's stages did it actually break?</p>
+<div class="beginner-memory"><b>Concept 10 is complete.</b> Continue to The RAG failure chain.</div>
+<a class="button primary" href="module-03-concept-11.html">Start Concept 11 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One test, two failure reasons, three outcomes.</h2>
+<p>Master the two-question test and its outcomes first. Open the formal definitions, the from-scratch checker, and The Answerability Triage lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Knowledge-intensive and answerable, precisely, before any pipeline runs.</small></a>
+<a href="#b04"><span>02</span><b>Test</b><small>Is this knowledge-intensive? If so, does the corpus cover it?</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Sort three Oracle questions before deciding any of them is the pipeline's fault.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch checker, and The Answerability Triage lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> Concept 08's architecture question, set aside → a sharper per-question, per-corpus test → two independent failure reasons named and told apart → only the surviving case handed to Concept 11's failure chain.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the answerability deep dive</b><em>Formal definitions, a from-scratch checker, and The Answerability Triage lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From naming RAG's own shapes to diagnosing one question at a time</h2></div></header>
+<p>Concept 09 named three shapes RAG's own pipeline can take — naive, advanced, modular — without asking whether any shape could answer a given question. This concept steps back further than architecture entirely: for one specific question against one specific corpus, is an answer even possible, no matter which shape retrieves for it? Two independent reasons can say no: the task might not be knowledge-intensive at all, or it might be knowledge-intensive but genuinely uncovered by the corpus — a coverage gap. Concept 11 picks up only the cases this concept clears as answerable in principle, and asks where in the pipeline an answerable question still went wrong.</p>
+<div class="flow">
+<div class="flow-node">Concept 09 — naive, advanced, modular RAG</div>
+<div class="flow-node hot">Concept 10 — is this question answerable at all?</div>
+<div class="flow-node">Concept 11 — the RAG failure chain</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State what "knowledge-intensive" means</h3><p>A task depends on a specific outside fact — not general ability, not something the requester already supplied.</p></article>
+<article class="info-card"><span>TEST</span><h3>Run the two-question test</h3><p>Is this knowledge-intensive? If so, is the fact in the corpus? Classify any (question, corpus) pair with both answers.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>Where a pipeline breaks on an answerable question is Concept 11's job, not this one's; what to do about a confirmed gap (abstain, escalate, ingest more) is named only, not built, until Module 6 and Module 17.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Sort three real questions against the assistant's small corpus into "not knowledge-intensive," "coverage gap," and "answerable" before deciding any of them is the pipeline's fault.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concepts 02-03's general case for external knowledge:</b> cited directly — they establish why RAG exists at all; this concept asks whether one specific question can be answered, not why the architecture exists.</li>
+<li><b>Concept 08's RAG-vs-alternatives boundary:</b> cited directly, as the different axis this concept must not be confused with — Concept 08 compares architectures; this concept diagnoses one question against one corpus.</li>
+<li>Concept 11's failure chain, Module 6's ingestion mechanics, and Module 17's abstention and calibrated uncertainty are explicitly out of scope — named here only as forward pointers, not built.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A reference librarian, asked three different kinds of question</h2></div></header>
+<p>Ask a reference librarian to write you a poem, and no amount of searching the shelves helps — the request never needed a book in the first place. Ask a different question — "what does the book on shelf 12 say about topic X" — and if the library genuinely never acquired that book, searching harder changes nothing either; the fact simply isn't on any shelf. Only the third case is a fair test of the librarian's search skill: a question that needs a fact, from a book the library actually owns.</p>
+<div class="callout warning"><b>Analogy boundary</b>A library has shelves and acquisition budgets that a RAG corpus doesn't share in the same way. The point of the analogy is the structural claim only — no fact needed, fact needed but absent, fact needed and present — not anything about physical libraries or librarians.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Knowledge-intensive task</td><td>A task whose correct completion depends on a specific fact external to the model's general ability and to whatever the requester already supplied in the prompt</td><td>Not a claim about difficulty — a short, simple fact still makes a task knowledge-intensive</td></tr>
+<tr><td>Corpus coverage</td><td>A corpus covers a fact if that fact appears, explicitly or by direct inference, in at least one document actually ingested into the corpus</td><td>Coverage is a property of the corpus's contents, independent of whether any particular retrieval run actually surfaces the fact</td></tr>
+<tr><td>Answerable (question, corpus)</td><td>A question is answerable against a corpus if it is knowledge-intensive and the corpus covers every fact it depends on — or if it is not knowledge-intensive at all, in which case the corpus is irrelevant to it</td><td>Answerability says an answer is possible in principle; it makes no claim about whether one specific pipeline run will actually produce it</td></tr>
+</tbody>
+</table>
+<p>The term "knowledge-intensive" itself is not new to this concept — Lewis, Perez, Piktus et al. (2020) used "knowledge-intensive NLP tasks" to describe exactly the category RAG was built for; Section 13 cites it directly for this framing rather than for coining "RAG," as Concept 01 did.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing the test against three questions</h2></div></header>
+<div class="lane-flow">
+<div><b>"Write a two-line congratulations note" —</b> question 1: no fact needed. Stop. Not knowledge-intensive; the corpus was never relevant.</div>
+<div><b>"Does the company offer unlimited PTO?" —</b> question 1: yes, a specific policy fact is needed. Question 2: search every ingested document; none mentions PTO limits. Coverage gap.</div>
+<div><b>"How many remote workdays per week?" —</b> question 1: yes, a specific number is needed. Question 2: the remote-work document states it directly. Both yes — answerable in principle.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One test, three outcomes</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the two-question answerability test routing to three outcomes">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Not knowledge-intensive</b><small>no fact needed — unanswerable, corpus irrelevant</small></div>
+<div class="diagram-node hub-center"><b>Is this knowledge-intensive, and does the corpus cover the fact it needs?</b><small>Section 05's two-question test</small></div>
+<div class="diagram-node"><b>Coverage gap</b><small>fact needed, absent from the corpus</small></div>
+<div class="diagram-node"><b>Answerable</b><small>fact needed, present in the corpus</small></div>
+</div>
+</div>
+<p>The hub above is the required flow. Section 14's lab makes it concrete: pick a question, answer the two questions yourself, and check your classification against the actual corpus.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>A gate in front of the skeleton, then three routes out of it</h2></div></header>
+<p class="flow-instruction">THE GATE — asked once, before retrieval runs at all</p>
+<div class="pipeline-preview">
+<span>Query</span><i>↓</i><span class="hot">Answerability check</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p class="flow-instruction">THREE ROUTES — what happens after the gate, by outcome</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram of the three routes leaving the answerability gate">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Not knowledge-intensive</b><small>skip retrieval entirely — generate directly, as Concept 08's non-RAG case</small></div>
+<div class="diagram-node"><b>Coverage gap</b><small>skip retrieval — flag for ingestion (Module 6) or abstain (Module 17), don't force an answer</small></div>
+<div class="diagram-node active"><b>Answerable</b><small>proceed into retrieval exactly as Concept 06 built it</small></div>
+</div>
+</div>
+<p>Only the third route re-enters the nine-box skeleton unchanged. The other two are deliberately routed away from it — pushing an unanswerable query through retrieval anyway wastes latency and, worse, invites the model to guess.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A boolean predicate, not a new derivation</h2></div></header>
+<p>This concept stays at the diagnostic level, but its test is precise enough to write as a small boolean formula. Let <code>K(q)</code> be 1 if question <code>q</code> is knowledge-intensive and 0 otherwise, and let <code>Covers(C, q)</code> be 1 if corpus <code>C</code> contains every fact <code>q</code> depends on. Then:</p>
+<div class="equation">Answerable(q, C) = ¬K(q) ∨ (K(q) ∧ Covers(C, q))</div>
+<p>Read left to right: a question is answerable either because it needed no fact at all (the first term), or because it needed a fact and the corpus has it (the second term). The two terms are exactly Section 04's two failure reasons, negated: <code>¬K(q)</code> false and <code>Covers(C, q)</code> false are the only two ways the whole expression comes out false. Nothing here measures how well a retriever ranks candidates — that's a separate, later question about a system's behavior, not about the (question, corpus) pair's underlying possibility.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Five questions, five classifications</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Question</th><th>Knowledge-intensive?</th><th>Covered by the corpus?</th><th>Outcome</th></tr></thead>
+<tbody>
+<tr><td>"Write a two-line congratulations note."</td><td>No</td><td>—</td><td>Not knowledge-intensive</td></tr>
+<tr><td>"How many remote workdays per week?"</td><td>Yes</td><td>Yes</td><td>Answerable</td></tr>
+<tr><td>"Does the company offer unlimited PTO?"</td><td>Yes</td><td>No</td><td>Coverage gap</td></tr>
+<tr><td>"Weeks of paid parental leave after one year?"</td><td>Yes</td><td>Yes</td><td>Answerable</td></tr>
+<tr><td>"Translate 'thank you for your patience' into French."</td><td>No</td><td>—</td><td>Not knowledge-intensive</td></tr>
+</tbody>
+</table>
+<p>Note the fourth row and the second: both answerable, both knowledge-intensive, both covered — but by two different documents. The test doesn't care which document, only whether the needed fact is present somewhere in the corpus.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>"How many remote workdays per week?" against the shown corpus</h3><p>Knowledge-intensive, and the fact is stated directly — a fair test of retrieval, ranking, and generation, exactly as Concept 11 will assume.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A fact stated only by implication, not by an exact sentence</h3><p>If the remote-work document said "employees work from the office two days a week" without ever saying "three days remote," does the corpus cover "how many remote days"? By this concept's definition, yes — direct inference counts as coverage, not only an exact quoted sentence.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Write a haiku about our exact PTO cap."</h3><p>Sounds creative, but the requested haiku has to contain a real number — the request is knowledge-intensive despite its creative framing, and subject to the same coverage check as any other fact-dependent question.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Trusting the model's own guess as proof of coverage</h3><p>If the model answers a PTO question confidently from pretrained knowledge, that isn't evidence the corpus covers it — it's a sign the model may be answering from memory instead of the corpus, a hallucination risk this concept doesn't resolve, only flags.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The answerability check, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · CLASSIFY A (QUESTION, CORPUS) PAIR AS ANSWERABLE OR NOT, AND WHY</span>
+<pre><code>def check_answerability(is_knowledge_intensive, fact_in_corpus):
+    # Section 09's boolean test, spelled out as branches instead of
+    # a single expression -- the branch taken doubles as the reason.
+    if not is_knowledge_intensive:
+        return "not_knowledge_intensive"
+    if not fact_in_corpus:
+        return "coverage_gap"
+    return "answerable"
+
+
+# The five s10 rows, as boolean facts about each question
+questions = [
+    dict(is_knowledge_intensive=False, fact_in_corpus=None),  # congratulations note
+    dict(is_knowledge_intensive=True,  fact_in_corpus=True),  # remote workdays
+    dict(is_knowledge_intensive=True,  fact_in_corpus=False), # unlimited PTO
+    dict(is_knowledge_intensive=True,  fact_in_corpus=True),  # parental leave
+    dict(is_knowledge_intensive=False, fact_in_corpus=None),  # translation
+]
+
+for q in questions:
+    print(check_answerability(q["is_knowledge_intensive"], q["fact_in_corpus"]))
+# not_knowledge_intensive
+# answerable
+# coverage_gap
+# answerable
+# not_knowledge_intensive
+
+assert check_answerability(False, None) == "not_knowledge_intensive"
+assert check_answerability(True, False) == "coverage_gap"
+assert check_answerability(True, True) == "answerable"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where "knowledge-intensive" and "unanswerable" come from</h2></div></header>
+<p>Lewis, Perez, Piktus et al. (2020) frame RAG itself around "knowledge-intensive NLP tasks" — Section 05 reuses their term directly, this time for its diagnostic content rather than for coining RAG's name, as Concept 01 used it. Petroni, Piktus, Fan et al. (2020), KILT, turns "knowledge-intensive" into a benchmark category with eleven separate tasks, all sharing the same property this concept isolates: correctness depends on an external knowledge source, not on the model alone. Rajpurkar, Jia & Liang (2018) built the second reason this concept names into a benchmark of its own — SQuAD 2.0 deliberately added questions with no answer in the passage at all, so that a system's ability to recognize a coverage gap, not just retrieve well, could be measured directly.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Answerability Triage</h2></div></header>
+<div class="lab">
+<p>The corpus below is fixed — three short policy documents, nothing else. Read the question, answer the two-question test yourself, and check your classification against what the corpus actually contains.</p>
+<div class="context-demo" id="answerabilityCorpus0310">
+<div><span>REMOTE-WORK POLICY</span><p>Employees may work remotely up to 3 days per week with manager approval.</p></div>
+<div><span>PARENTAL-LEAVE POLICY</span><p>12 weeks of paid leave are available after 1 year of employment.</p></div>
+<div><span>EXPENSE-REIMBURSEMENT POLICY</span><p>Travel expenses must be submitted within 30 days, with receipts.</p></div>
+</div>
+<div class="sample-output" id="answerabilityQuestion0310" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Question 1: is this task knowledge-intensive?" id="answerabilityStep1_0310">
+<button type="button" class="secondary" data-value="yes">Yes — it needs a specific fact</button>
+<button type="button" class="secondary" data-value="no">No — no fact is needed</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Question 2: does the shown corpus contain that fact?" id="answerabilityStep2_0310" hidden>
+<button type="button" class="secondary" data-value="yes">Yes — it's in one of the three documents</button>
+<button type="button" class="secondary" data-value="no">No — none of the three documents say it</button>
+</div>
+<div class="sample-output" id="answerabilityResult0310" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="answerabilityNext0310">Next question →</button>
+<span id="answerabilityScore0310" class="fine-print">Score: 0 / 0</span>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three outcomes, three different next moves</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Outcome</th><th>What it means</th><th>What to do about it (named only)</th></tr></thead>
+<tbody>
+<tr><td>Not knowledge-intensive</td><td>No fact needed — retrieval was never relevant</td><td>Route to direct generation, Concept 08's non-RAG case; don't run retrieval at all</td></tr>
+<tr><td>Coverage gap</td><td>A fact is needed, but the corpus never had it</td><td>Ingest the missing source (Module 6) or abstain and say so (Module 17) — not covered here</td></tr>
+<tr><td>Answerable</td><td>A fact is needed and the corpus has it</td><td>Let the pipeline run; if the answer is still wrong, Concept 11's failure chain is next</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of the answerability check itself</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSED FACT</span><h3>Calling a request "creative" without checking for an embedded fact</h3><p>Section 11's counterexample is the risk here — a request can look purely generative while still depending on a real number or name buried inside it.</p></article>
+<article class="info-card"><span>UNVERIFIED COVERAGE</span><h3>Assuming the corpus covers a fact without checking</h3><p>"Covers" means the fact is actually present in an ingested document — assuming it must be there because the topic seems related isn't verification.</p></article>
+<article class="info-card"><span>MISDIAGNOSED GAP</span><h3>Calling a retrieval bug a coverage gap</h3><p>If the fact is genuinely present somewhere in the corpus but a specific run's top-k missed it, that's Concept 11's territory — confirm absence from the whole corpus before naming a coverage gap.</p></article>
+<article class="info-card"><span>SKIPPED GATE</span><h3>Jumping straight to Concept 11's failure chain</h3><p>The failure chain presupposes answerability — running it on an unanswerable question wastes debugging effort on a question no pipeline change could have fixed.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A wrong answer always means the pipeline is broken</td><td>Two of Section 07's three outcomes mean the question was never answerable in the first place — no pipeline change would have fixed it.</td></tr>
+<tr><td>"Knowledge-intensive" is a synonym for "hard question"</td><td>It names fact-dependency, not difficulty — a one-word factual lookup is knowledge-intensive; a long creative-writing task usually isn't.</td></tr>
+<tr><td>A coverage gap and a retrieval bug are the same problem with different names</td><td>A coverage gap means the fact was never ingested; a retrieval bug means it was ingested but a specific run failed to surface it — different causes, different fixes.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Log confirmed coverage gaps as an ingestion signal — a recurring gap points at a real document the corpus is missing, feeding Module 6's ingestion work rather than a retrieval re-tune.</li>
+<li>Confirmed unanswerable questions — both kinds — make useful negative examples for the evaluation sets Module 18 builds, distinct from questions that are answerable but were answered wrong.</li>
+<li>Treat this check as a triage step, not a one-time audit — new questions arrive continuously, and a corpus that covered yesterday's questions may not cover tomorrow's.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What are the two independent reasons a question can be unanswerable, and how are they different?</summary><div>Not knowledge-intensive (no outside fact needed at all) and a coverage gap (a fact is needed but genuinely absent from the corpus) — the first makes the corpus irrelevant, the second is a fact about what the corpus is missing.</div></details>
+<details class="quiz"><summary>Why isn't "the top-k results didn't contain the fact" proof of a coverage gap?</summary><div>The fact might exist in a different document that this particular run simply failed to retrieve — that's a retrieval bug, Concept 11's question, not proof the fact is absent from the whole corpus.</div></details>
+<details class="quiz"><summary>Why must this concept's check run before Concept 11's failure chain, not after?</summary><div>The failure chain diagnoses where in the pipeline an answerable question went wrong — it presupposes an answer was possible, which is exactly the fact this concept's two-question test establishes first.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A fourth question arrives for the Oracle assistant: "What's the exact per diem rate for international travel?" The expense-reimbursement document only says travel expenses must be submitted within 30 days with receipts — it never mentions a per diem rate. Run Section 05's two-question test on this question and name the exact outcome, plus the one additional fact that would change it.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>Question 1: yes, a specific rate is a fact, so this is knowledge-intensive. Question 2: the only document that could plausibly cover it — expense-reimbursement — says nothing about a per diem rate, so the fact is absent from the whole corpus as shown. Outcome: a coverage gap, not a retrieval bug, because there's no rate anywhere to retrieve. The one additional fact that would change the outcome: ingesting a document that actually states a per diem rate would flip this to answerable.</div>
+</details>
+<p>Teach-back: explain, in your own words, why confirming a coverage gap here required checking the whole corpus's contents, not just re-running retrieval a second time.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Two questions, three outcomes</h3><ul><li><b>Not knowledge-intensive:</b> no outside fact needed — retrieval was never relevant</li><li><b>Coverage gap:</b> a fact is needed, but it's genuinely absent from the corpus</li><li><b>Answerable:</b> a fact is needed and the corpus has it — the only fair test of the pipeline</li></ul></div>
+<div><h3>Memorable example</h3><p>The Oracle assistant's PTO question and its remote-workdays question look equally "hard" from the outside — only checking the corpus's actual contents reveals that one is a coverage gap and the other is a fair test.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A user reports that a RAG system "hallucinated" an answer to a question your corpus never covers. Walk through how you'd confirm whether this is a coverage gap before touching the retrieval or generation code.</summary><div>Confirm the question is knowledge-intensive, then search the full corpus — not just one run's top-k — for the fact. If it's genuinely absent everywhere, it's a coverage gap and the fix is ingestion, not a retrieval or prompt change; if the fact exists elsewhere in the corpus, it's a retrieval bug instead.</div></details>
+<details class="quiz"><summary>How would you explain to a product manager why "just add more re-ranking" won't fix every bad answer?</summary><div>Re-ranking can only reorder candidates that retrieval already found among the corpus's actual contents — it can't manufacture a fact the corpus never had, and it adds nothing when the task never needed a fact in the first place.</div></details>
+<details class="quiz"><summary>Design question: how would you build a lightweight, ongoing signal for coverage gaps in a live system, without building a full evaluation pipeline?</summary><div>Log knowledge-intensive queries where the system abstains or where user feedback flags a wrong answer, then periodically check whether the underlying fact is confirmed absent from the whole corpus — a recurring absent-fact pattern is a strong ingestion-backlog signal even without a formal eval suite.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.11401"><b>Lewis, Perez, Piktus et al. — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</b><br><span>Reused a third time, here for its "knowledge-intensive" framing itself rather than for coining RAG (Concept 01) or the parametric-knowledge argument (Concept 02) — behind Section 05.</span></a>
+<a href="https://arxiv.org/abs/2009.02252"><b>Petroni, Piktus, Fan et al. — KILT: a Benchmark for Knowledge Intensive Language Tasks</b><br><span>Turns "knowledge-intensive" into a checkable benchmark category across eleven tasks — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/1806.03822"><b>Rajpurkar, Jia & Liang — Know What You Don't Know: Unanswerable Questions for SQuAD</b><br><span>Built the coverage-gap failure reason into a benchmark of its own, by design — behind Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 10 · COMPLETE</span>
+<h3>Classify the per diem question before moving on</h3>
+<p>Before moving on, work through Section 20's exercise and state, in one sentence, why a coverage gap and a retrieval bug need different fixes even though both can look identical from the outside.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Answerability Triage lab ↑</a>
+</div>
+<p class="fine-print">Next after completion: The RAG failure chain.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 10 · Complete</p>
+<a href="module-03-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>

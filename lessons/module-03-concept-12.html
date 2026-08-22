@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 11 assumed RAG was the right tool and diagnosed where an already-answerable query's pipeline broke. This concept asks the harder question first: even implemented well, is RAG the right tool at all? Names four independent disqualifying gates -- not knowledge-intensive (Concept 10's first reason, reused as a gate), no domain coverage at all (Concept 10's second reason, reused and widened from one fact to a whole domain), query volume and latency making retrieval's overhead not worth it, and zero tolerance for Concept 11's residual failure-chain risk -- closing Module 03 and Phase 1.">
+<title>When RAG should not be used — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-12.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 12 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 12</p>
+<h1>When RAG<br><em>should not be used.</em></h1>
+<p class="lesson-lead">Concepts 02, 07, and 08 each ruled out one alternative to RAG by name — asking the model directly, stretching the context window, fine-tuning, search, or tool use — always in RAG's favor. Concept 11 then assumed RAG was the right tool and diagnosed where an already-answerable query's pipeline actually broke. This concept asks the mirror question neither of those settled: even implemented well, with every one of Concept 11's three links holding, is RAG ever the wrong tool to reach for in the first place? Four independent conditions can each say yes on their own — the task isn't knowledge-intensive at all, the corpus has no coverage of the domain whatsoever, the query volume or latency budget makes retrieval's overhead not worth paying, or the answer must be guaranteed correct with zero tolerance for the residual risk Concept 11's chain describes. Any single gate is enough; a perfect pipeline doesn't rescue a task that never needed one.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Twelfth and final concept of Module 03, closing Phase 1</b></div>
+<div><span>PREREQUISITE</span><b>Concepts 02, 07 and 08's ruled-out alternatives; Concept 10's knowledge-intensive and coverage-gap reasons; Concept 11's failure chain (all cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Given a task, check four independent gates and decide whether RAG should be attempted at all, before worrying about implementing it well</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concept 11 assumed an answerable question and localized where one specific run's pipeline broke. This concept steps back before any pipeline runs at all: given a task, should RAG even be attempted? Four independent gates can each say no on their own, regardless of how well retrieval, augmentation, and generation would perform.</p>
+<b>CONCEPT 11 COMPLETE · CONCEPT 12 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A well-built pipeline doesn't rescue a task that never needed one</h2>
+</div>
+<p>Concept 11 showed how to fix a RAG pipeline once something inside it breaks. This concept comes first, logically, and asks a harder question: should this task even be handed to RAG, however well it ends up built?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Four independent gates, any one enough</h3>
+<div class="mental-compare">
+<div><span>GATE 1 · NOT KNOWLEDGE-INTENSIVE</span><p>The task doesn't depend on a specific outside fact at all — Concept 10's first failure reason, now used up front as a disqualifying gate instead of a diagnostic applied after the fact. No fact needed means retrieval has nothing to retrieve for.</p></div>
+<div><span>GATE 2 · NO DOMAIN COVERAGE AT ALL</span><p>Every source that could possibly answer this whole class of question is absent from any corpus available to build — not one missing fact inside an otherwise-covered domain (Concept 10's coverage gap), but an entire domain nobody has ingested for any question at all.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>GATE 3 · OVERHEAD NOT WORTH IT</span><p>Embedding a query, searching an index, and assembling context all cost time on every single call. At high enough volume or tight enough latency budgets, that fixed overhead can cost more than it returns — even when retrieval works perfectly.</p></div>
+<div><span>GATE 4 · ZERO TOLERANCE FOR RESIDUAL RISK</span><p>Concept 11 showed that any of three links can still break even in a well-built pipeline. A task that needs a guaranteed-correct answer with no room for that residual risk is the wrong shape for RAG, no matter how rarely the chain actually fails.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> RAG being implemented well is a separate question from whether RAG belongs here at all — any single one of four independent conditions is enough to say no, regardless of how the other three come out.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Ruling out the tool itself, not just its rivals</h3>
+<p>Concepts 02, 07, and 08 each ruled out one specific alternative to RAG by name — asking the model directly, stretching the context window, fine-tuning, search, or tool use — always in RAG's favor. None of them asked the question this concept asks: whether RAG itself, compared against not building a retrieval system at all, is worth the cost for a given task. Concept 11 already gave one reason this question is worth asking before implementation rather than after: a well-diagnosed, well-fixed pipeline still can't rescue a task it should never have been asked to do in the first place.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THIS GATE</span><p>Every task defaults to "build a RAG pipeline for it," and Concept 11's failure chain gets used later to explain why it underperforms — even when no version of that pipeline was ever going to be worth its cost.</p></div>
+<div><span>WITH THIS GATE</span><p>A task is checked against four independent conditions before any retrieval, chunking, or embedding work begins. Only a task that clears all four is worth building RAG for at all.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Four new requests for the Oracle assistant, each disqualified a different way</h3>
+<p>None of these four requests reuse Concept 10's or Concept 11's remote-workdays, PTO, or farewell-note examples — they're new tasks, chosen so each one trips exactly one gate.</p>
+<div class="context-demo">
+<div><span>"REWRITE THIS SELF-REVIEW IN A FRIENDLIER TONE"</span><p>Gate 1 trips: the full text to rewrite is already in the request. No outside fact is needed, so no corpus, however complete, changes the output.</p></div>
+<div><span>"WHAT DOES OUR PATENT PORTFOLIO SAY ABOUT WATERMARKING?"</span><p>Gate 2 trips: the assistant's entire corpus is three HR policy documents. Nothing about patents has ever been ingested, for any question in that domain — not just this one.</p></div>
+<div><span>LIVE TYPEAHEAD SUGGESTIONS WHILE TYPING, SUB-50MS, THOUSANDS OF TIMES A SECOND</span><p>Gate 3 trips: even if every keystroke's tiny query needed a fact, embedding and searching on every keystroke at this volume and latency budget costs more than it could ever return.</p></div>
+<div><span>"CALCULATE AND ISSUE THIS PAYCHECK'S EXACT FEDERAL TAX WITHHOLDING"</span><p>Gate 4 trips: the number has legal consequences and needs one deterministic calculation, with zero room for Concept 11's grounded-misread risk.</p></div>
+</div>
+<p>Four different tasks, four different reasons — and none of them are fixed by chunking better, embedding better, or improving the reranker.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Four independent checks, in any order</h3>
+<div class="example-grid">
+<article class="info-card"><span>CHECK 1</span><h3>Does this need an outside fact?</h3><p>If no, stop — Gate 1 trips regardless of what any corpus contains. This is Concept 10's first failure reason, reused as an up-front disqualifier.</p></article>
+<article class="info-card"><span>CHECK 2</span><h3>Does any corpus cover this whole domain?</h3><p>If nothing has ever been ingested for this class of question — not just this one fact — Gate 2 trips. Wider than Concept 10's per-question coverage gap.</p></article>
+<article class="info-card"><span>CHECK 3</span><h3>Does volume and latency clear retrieval's overhead?</h3><p>If the query rate or latency budget can't absorb an embedding-plus-search round trip, Gate 3 trips, even with a perfectly correct retriever.</p></article>
+<article class="info-card"><span>CHECK 4</span><h3>Can this tolerate any residual chain risk?</h3><p>If the answer must be guaranteed correct with zero tolerance for Concept 11's three-link residual risk, Gate 4 trips.</p></article>
+<article class="info-card"><span>ANY ONE TRIPS</span><h3>Then RAG shouldn't be attempted here</h3><p>The four checks don't have to run in this order and don't require each other — one "yes" to any of them is already a complete answer, no matter how the other three come out.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0312-visual-title">
+<strong class="concept-visual-title" id="c0312-visual-title">VISUAL · FOUR GATES, ANY ONE STOPS RAG</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing the four independent disqualifying gates for attempting RAG">
+<div class="diagram-strip">
+<div class="diagram-node"><b>Gate 1 · Not knowledge-intensive</b><small>No outside fact needed at all</small></div>
+<div class="diagram-node"><b>Gate 2 · No domain coverage</b><small>Nothing ingested covers this domain</small></div>
+<div class="diagram-node"><b>Gate 3 · Overhead not worth it</b><small>Volume or latency rules out retrieval</small></div>
+<div class="diagram-node"><b>Gate 4 · Zero tolerance</b><small>No room for the failure chain's residual risk</small></div>
+</div>
+</div>
+<figcaption>Unlike Concept 11's ordered chain, these four gates don't have to be checked in this exact sequence — checking them in any order reaches the same verdict, because a single "yes" to any one is already enough to stop RAG before it starts.</figcaption>
+<ol class="diagram-key"><li><b>Gate 1 trips:</b> route straight to direct generation — no retrieval step belongs in this feature.</li><li><b>Gate 2 trips:</b> route to ingestion of a new source (Module 6) before revisiting this domain at all.</li><li><b>Gate 3 trips:</b> route to a cache or precomputed lookup instead of a per-call retrieval round trip.</li><li><b>Gate 4 trips:</b> route to a deterministic rule or database calculation, not a generated answer.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A gate that decides whether the skeleton gets built at all</h3>
+<div class="pipeline-preview">
+<span>Task request</span><i>↓</i><span class="hot">RAG-fit gate (this concept)</span><i>↓</i><span>Concept 06's nine-box skeleton</span><i>↓</i><span>Answer</span>
+</div>
+<p>Concept 10's answerability gate and Concept 11's failure chain both assume a pipeline already exists to run the check against. This concept's gate sits one level earlier: before any of Concept 06's nine boxes are even proposed for a task, these four conditions decide whether building that skeleton is worth attempting at all. A "no" on all four sends the task into the skeleton exactly as later modules build it; a "yes" on any one sends it to a non-RAG alternative instead — direct generation, better ingestion, a cache, or a deterministic rule, depending on which gate tripped.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners collapse a build decision into a diagnosis</h3>
+<div class="distinction-table" role="table" aria-label="This concept's four gates distinguished from answerability, the failure chain, and architecture comparisons">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">This concept's four gates</span><span role="cell">Concept 10's answerability test</span><span role="cell">Concept 10 checks one question against one corpus after a RAG system already exists; this concept checks whether building a RAG system for a task is worth it at all, before any corpus-specific question is even asked</span></div>
+<div role="row"><span role="cell">Gate 2 — no domain coverage at all</span><span role="cell">Concept 10's coverage gap</span><span role="cell">Concept 10's coverage gap is one fact missing from a corpus that otherwise covers the domain; Gate 2 is the whole domain never having been ingested for any question at all</span></div>
+<div role="row"><span role="cell">Gate 4 — zero tolerance for residual risk</span><span role="cell">Concept 11's failure chain</span><span role="cell">Concept 11 diagnoses which link broke after a failure happens; Gate 4 asks, before building anything, whether the task can tolerate that any link might break at all — a task that can't is disqualified regardless of how good the pipeline turns out to be</span></div>
+<div role="row"><span role="cell">This concept</span><span role="cell">Concepts 07-08's RAG-vs-alternatives comparisons</span><span role="cell">Concepts 07 and 08 compare RAG against a specific named rival architecture; this concept is a pure disqualification check that doesn't require naming which alternative wins, only that RAG itself doesn't clear the bar</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"If RAG can technically retrieve something relevant, it must be worth using."</b><p>Section 03's typeahead example retrieves something relevant to every keystroke and still trips Gate 3 — relevance doesn't mean the overhead is worth paying.</p></div>
+<div><b>"A coverage gap and 'no domain coverage at all' are the same thing."</b><p>Concept 10's coverage gap is one fact missing from an otherwise-covered domain; Gate 2 is a whole domain that was never ingested for any question — a much stronger condition.</p></div>
+<div><b>"High query volume is only a cost problem, not a fit problem."</b><p>At Section 03's scale, no amount of caching the embedding call changes the architecture decision — the fix is to not run per-call retrieval, not to make it cheaper.</p></div>
+<div><b>"If the pipeline usually gets it right, zero-tolerance tasks are fine."</b><p>"Usually" isn't "guaranteed" — Concept 11 showed even a well-built chain has three separate places to fail, and Gate 4 is exactly about tasks that can't absorb any of them.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Routing four Oracle assistant requests to their real fix</h3>
+<div class="project-map">
+<div><span>GATE 1 TRIPPED</span><b>Friendlier-tone rewrite of a self-review</b><p>Route straight to generation; no retrieval step belongs in this feature at all.</p></div>
+<div><span>GATE 2 TRIPPED</span><b>Patent and watermarking questions</b><p>Out of scope for this assistant until a legal corpus is ingested — Module 6's job, not a reason to force the HR corpus to answer.</p></div>
+<div><span>GATE 3 TRIPPED</span><b>Sub-50ms, high-volume typeahead</b><p>A cached or precomputed suggestion list serves this better than a per-keystroke retrieval call.</p></div>
+<div><span>GATE 4 TRIPPED</span><b>Exact tax-withholding calculation</b><p>A deterministic lookup and formula, not a generated answer — no amount of grounding removes all residual risk.</p></div>
+</div>
+<p class="project-inline"><b>The point:</b> the Oracle assistant's job isn't to run RAG everywhere it might apply — it's to run RAG only where all four gates clear.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Four independent gates</b><p>Not knowledge-intensive, no domain coverage at all, overhead not worth it, zero tolerance for residual risk — checkable in any order.</p></div>
+<div><b>Any one is enough</b><p>A single "yes" disqualifies RAG for a task; the other three gates don't need to be checked afterward for the verdict to hold.</p></div>
+<div><b>Gates 1-2 reuse Concept 10, widened</b><p>Gate 1 is Concept 10's first reason unchanged; Gate 2 widens Concept 10's one-fact coverage gap to an entire uningested domain.</p></div>
+<div><b>What stays deferred</b><p>How to actually implement each gate's alternative — direct generation, ingestion, caching, deterministic rules — is named only as a pointer here, not built.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is Gate 2 a stricter condition than Concept 10's coverage gap?</li>
+<li>Give a task that would trip Gate 3 but pass every other gate.</li>
+<li>Why doesn't a low historical failure rate on Concept 11's chain answer Gate 4's question?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 12 is complete.</b> Module 03 (12 of 12 concepts) and Phase 1 are complete.</h3>
+<p>That closes all twelve concepts of Module 03, RAG mental model &amp; problem framing, and with it, Phase 1, Generative AI &amp; retrieval foundations. You now have the full boundary case for RAG: what it is, why it beats or loses to each alternative, its own internal taxonomy, how to tell an answerable question from an unanswerable one, where a pipeline actually breaks, and now, whether to build the pipeline at all. Module 04, "Mathematics for retrieval," opens Phase 2 next: building the linear algebra, probability, and optimization intuition needed to reason about retrieval systems — the vector geometry Concept 06's skeleton has been assuming all along.</p>
+<div class="beginner-memory"><b>Concept 12 is complete.</b> Module 03 and Phase 1 are complete. Continue to Module 04, Mathematics for retrieval.</div>
+<a class="button primary" href="../roadmap.html#module-04">See Module 04 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Four independent gates. Any one is enough to say no.</h2>
+<p>Master the four gates and their examples first. Open the formal definitions, the from-scratch checker, and The RAG Fit Console lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Four independent, order-free conditions that disqualify RAG regardless of implementation quality.</small></a>
+<a href="#b04"><span>02</span><b>Test</b><small>Not knowledge-intensive? No domain coverage? Overhead not worth it? Zero tolerance for residual risk?</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>Route four Oracle-assistant requests to their real fix — none of them a retrieval or reranking change.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal definitions, the from-scratch checker, and The RAG Fit Console lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 12 path:</b> Concepts 02/07/08's ruled-out alternatives, and Concept 11's failure chain, both cited rather than re-derived → four independent disqualifying gates named → four Oracle requests routed to their real fix → Module 03 and Phase 1 closed, Module 04's retrieval mathematics previewed next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the RAG-fit deep dive</b><em>Formal definitions, a from-scratch checker, and The RAG Fit Console lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From diagnosing a broken pipeline to questioning whether to build one</h2></div></header>
+<p>Concept 11 assumed a question was answerable and localized which of three links — retrieval, augmentation, generation — actually broke on one specific run. This concept sits logically before that entire chain: for a given task, independent of any specific run, should a RAG pipeline be attempted at all? Four conditions can each say no on their own, and none of them are about whether the pipeline would be built well — they are about whether building it is worth attempting in the first place. Two of the four reuse and widen Concept 10's reasons; two are new. Closing this question closes Module 03 and Phase 1 together, and Module 04 opens the mathematics that Concept 06's skeleton has assumed all along.</p>
+<div class="flow">
+<div class="flow-node">Concept 11 — which link, if any, broke?</div>
+<div class="flow-node hot">Concept 12 — should RAG be attempted at all?</div>
+<div class="flow-node">Module 04 — the mathematics retrieval assumes</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State the four gates precisely</h3><p>Not knowledge-intensive, no domain coverage at all, overhead not worth it, zero tolerance for residual risk — including which two reuse and widen Concept 10's reasons.</p></article>
+<article class="info-card"><span>TEST</span><h3>Run the four-gate check</h3><p>Check a task against all four gates, in any order, and reach a build-or-don't-build verdict.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what stays deferred</h3><p>Implementing each gate's alternative route, and any pipeline-internal diagnosis once a task clears all four, stay out of scope — Concept 11's territory, not this one's.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Route four Oracle-assistant requests to their real fix, none of them a retrieval, chunking, or reranking change.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concepts 02, 07 and 08's ruled-out alternatives:</b> cited directly — they each show RAG winning against one named rival; this concept asks whether RAG beats not building a retrieval system at all.</li>
+<li><b>Concept 10's knowledge-intensive and coverage-gap reasons:</b> cited directly as the source of Gates 1 and 2, with Gate 2 explicitly widened from one missing fact to an entire uningested domain.</li>
+<li><b>Concept 11's failure chain:</b> cited directly as the source of Gate 4's "residual risk" — the chain's three links are what a zero-tolerance task can't accept, however rarely any one of them actually breaks.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Deciding whether to hire a researcher, before judging how well they'd work</h2></div></header>
+<p>Before hiring a research assistant to answer your questions, four checks come before judging how good a hire they'd be. Does the question need research at all, or just a quick reply from what you already know? Does any library even hold material on the topic? Do you need the answer faster than any researcher, however skilled, could physically search for it? And can you tolerate a competent researcher occasionally citing the wrong page? A "no" to research being needed, to any library existing, to the timeline allowing a search, or to any risk of a wrong citation — any single one — and the hire doesn't make sense, no matter how good the researcher would turn out to be once hired.</p>
+<div class="callout warning"><b>Analogy boundary</b>A research assistant doesn't have embeddings, token budgets, or a retrieval index. The point of the analogy is the structural claim only — four independent reasons a hire could be the wrong call before ever judging the hire's skill — not anything about staffing decisions.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Gate 1 — not knowledge-intensive</td><td>The task's correct completion depends on no fact external to the model's general ability or to what the requester already supplied</td><td>Identical to Concept 10's first failure reason; reused here as a pre-build disqualifier rather than a post-hoc diagnosis</td></tr>
+<tr><td>Gate 2 — no domain coverage at all</td><td>No source available to ingest covers this entire class of question, for any instance of it, not merely the one currently being asked</td><td>Strictly wider than Concept 10's coverage gap, which concerns one fact missing from a domain the corpus otherwise covers</td></tr>
+<tr><td>Gate 3 — overhead not worth it</td><td>The task's required query volume or latency budget makes the fixed per-call cost of embedding, searching, and assembling context exceed the value retrieval could add</td><td>A property of the deployment's volume and latency requirements, not of retrieval quality — a perfect retriever still can't clear this gate if it's too slow or too costly per call</td></tr>
+<tr><td>Gate 4 — zero tolerance for residual risk</td><td>The task requires a guaranteed-correct answer with no acceptable probability of Concept 11's retrieval, augmentation, or generation links failing</td><td>Concerns the task's error tolerance, not the pipeline's actual failure rate — a pipeline that fails rarely still fails this gate if the task can't accept any failure at all</td></tr>
+<tr><td>RAG-fit decision</td><td>A task should have RAG attempted only if all four gates fail to trip — none of the four disqualifying conditions holds</td><td>Order-independent: any single tripped gate is sufficient to disqualify, regardless of the state of the other three</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing all four gates against four tasks</h2></div></header>
+<div class="lane-flow">
+<div><b>Self-review rewrite —</b> Gate 1: no outside fact is needed, the text is already supplied. Trips immediately; Gates 2-4 are moot once Gate 1 has already disqualified the task.</div>
+<div><b>Patent and watermarking question —</b> Gate 1: passes, a real fact is needed. Gate 2: no source on patents has ever been ingested for any question in that domain. Trips.</div>
+<div><b>Sub-50ms, high-volume typeahead —</b> Gates 1-2: pass, a fact is needed and covered. Gate 3: the volume and latency budget can't absorb a retrieval round trip on every keystroke. Trips.</div>
+<div><b>Exact tax-withholding calculation —</b> Gates 1-3: pass. Gate 4: the task needs a guaranteed-correct number with no room for the failure chain's residual risk. Trips.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One question, two outcomes</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the four-gate check routing to two build-or-not outcomes">
+<div class="diagram-hub">
+<div class="diagram-node active"><b>No gate trips</b><small>proceed to Concept 06's skeleton, unchanged</small></div>
+<div class="diagram-node hub-center"><b>Do any of the four gates trip?</b><small>Section 05's order-independent check</small></div>
+<div class="diagram-node"><b>One or more gates trip</b><small>route to the matching alternative — never force the pipeline anyway</small></div>
+</div>
+</div>
+<p>The hub above is the required flow. Unlike Concept 10's or Concept 11's hubs, there are only two outcomes here, because all four gates share one disqualifying effect — which specific gate tripped only changes which alternative is correct, never whether RAG should be attempted.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>A gate in front of the skeleton, then one route per tripped gate</h2></div></header>
+<p class="flow-instruction">THE GATE — asked once, before the skeleton is even proposed</p>
+<div class="pipeline-preview">
+<span>Task request</span><i>↓</i><span class="hot">RAG-fit gate</span><i>↓</i><span>Concept 06's nine-box skeleton</span><i>↓</i><span>Answer</span>
+</div>
+<p class="flow-instruction">FOUR TRIPPED-GATE ROUTES — what happens instead of the skeleton</p>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram of the four alternative routes leaving the RAG-fit gate">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Gate 1 trips</b><small>route to direct generation — no retrieval anywhere in this feature</small></div>
+<div class="diagram-node"><b>Gate 2 trips</b><small>route to ingestion of a new source before revisiting this domain</small></div>
+<div class="diagram-node"><b>Gate 3 trips</b><small>route to a cache or precomputed lookup instead of per-call retrieval</small></div>
+<div class="diagram-node active"><b>Gate 4 trips</b><small>route to a deterministic rule or database calculation, not a generated answer</small></div>
+</div>
+</div>
+<p>Only a task that clears all four gates ever re-enters Concept 06's nine boxes unchanged. Every tripped gate has its own separate downstream owner — none of the four alternatives is "try RAG anyway, more carefully."</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A four-term disjunction, and Phase 1's math motifs meeting at the door</h2></div></header>
+<p>Let <code>G1(t)</code> through <code>G4(t)</code> each be 1 if gate <i>i</i> trips for task <code>t</code>, and 0 otherwise. Whether RAG should be attempted is:</p>
+<div class="equation">UseRAG(t) = ¬G1(t) ∧ ¬G2(t) ∧ ¬G3(t) ∧ ¬G4(t)</div>
+<p>Read left to right: RAG is worth attempting only if none of the four gates trips — every term must be the negation of a trip for the whole expression to hold. Equivalently, by De Morgan's law, the disqualifying condition itself is a plain disjunction over the four gates:</p>
+<div class="equation">¬UseRAG(t) = G1(t) ∨ G2(t) ∨ G3(t) ∨ G4(t)</div>
+<p>This is worth noticing precisely because it closes a small loop across Module 03's math: Concept 10's answerability predicate was a disjunction over two terms (not knowledge-intensive, or covered), and Concept 11's correctness predicate was a conjunction over three terms (retrieved, survived, used correctly). This concept's disqualifying condition is the De Morgan dual of its own "worth attempting" conjunction — the same underlying structure, at a fourth scale, closing the module's last new mathematical idea on the same note it opened with.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Five tasks, five gate traces, one verdict each</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Task</th><th>G1 trips?</th><th>G2 trips?</th><th>G3 trips?</th><th>G4 trips?</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Self-review rewrite</td><td>Yes</td><td>—</td><td>—</td><td>—</td><td>Skip RAG — Gate 1</td></tr>
+<tr><td>Patent / watermarking question</td><td>No</td><td>Yes</td><td>—</td><td>—</td><td>Skip RAG — Gate 2</td></tr>
+<tr><td>Sub-50ms, high-volume typeahead</td><td>No</td><td>No</td><td>Yes</td><td>—</td><td>Skip RAG — Gate 3</td></tr>
+<tr><td>Exact tax-withholding calculation</td><td>No</td><td>No</td><td>No</td><td>Yes</td><td>Skip RAG — Gate 4</td></tr>
+<tr><td>Remote workdays per week</td><td>No</td><td>No</td><td>No</td><td>No</td><td>Use RAG — all four clear</td></tr>
+</tbody>
+</table>
+<p>A dash marks a gate that becomes moot once an earlier one already tripped — exactly as in Concept 11's truth table, checking further gates can't change a verdict that a single "yes" has already settled.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Remote workdays per week, from Section 10</h3><p>A real fact is needed, the corpus covers it, the volume and latency budget leave room for retrieval, and the task can tolerate the chain's small residual risk — the one case genuinely worth building Concept 06's skeleton for.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A task at "medium" query volume, with no stated latency ceiling</h3><p>Gate 3 isn't naturally binary — someone still has to pick a volume and latency threshold below which retrieval's overhead is acceptable. Treat this as a deployment decision to make explicitly, not a fact to discover.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A calculated number that a human always reviews before it's final</h3><p>Looks like it should trip Gate 4, but if a mandatory human-review step absorbs the residual risk before the number becomes binding, the task's actual tolerance for the chain's risk is higher than the model's output alone suggests — the gate is about the full system's tolerance, not the model's.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Stopping the analysis the instant one gate trips</h3><p>The verdict is already settled once any gate trips, but skipping the other three checks in production planning can hide a second, independently disqualifying reason that would matter if the first one were later engineered away.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The RAG-fit checker, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · DECIDE WHETHER TO ATTEMPT RAG FOR A TASK</span>
+<pre><code>def should_use_rag(is_knowledge_intensive, domain_is_covered,
+                    overhead_is_acceptable, tolerates_residual_risk):
+    # Section 09's disjunction, spelled out as ordered branches --
+    # any single "no" is a complete, sufficient answer on its own.
+    if not is_knowledge_intensive:
+        return "skip_rag", "gate_1_not_knowledge_intensive"
+    if not domain_is_covered:
+        return "skip_rag", "gate_2_no_domain_coverage"
+    if not overhead_is_acceptable:
+        return "skip_rag", "gate_3_overhead_not_worth_it"
+    if not tolerates_residual_risk:
+        return "skip_rag", "gate_4_zero_tolerance"
+    return "use_rag", "all_four_gates_clear"
+
+
+# Section 10's five tasks, as boolean facts about each one
+tasks = [
+    dict(is_knowledge_intensive=False, domain_is_covered=True,  overhead_is_acceptable=True,  tolerates_residual_risk=True),   # self-review rewrite
+    dict(is_knowledge_intensive=True,  domain_is_covered=False, overhead_is_acceptable=True,  tolerates_residual_risk=True),   # patent question
+    dict(is_knowledge_intensive=True,  domain_is_covered=True,  overhead_is_acceptable=False, tolerates_residual_risk=True),   # sub-50ms typeahead
+    dict(is_knowledge_intensive=True,  domain_is_covered=True,  overhead_is_acceptable=True,  tolerates_residual_risk=False),  # tax withholding
+    dict(is_knowledge_intensive=True,  domain_is_covered=True,  overhead_is_acceptable=True,  tolerates_residual_risk=True),   # remote workdays
+]
+
+for task in tasks:
+    print(should_use_rag(**task))
+# ('skip_rag', 'gate_1_not_knowledge_intensive')
+# ('skip_rag', 'gate_2_no_domain_coverage')
+# ('skip_rag', 'gate_3_overhead_not_worth_it')
+# ('skip_rag', 'gate_4_zero_tolerance')
+# ('use_rag', 'all_four_gates_clear')
+
+assert should_use_rag(False, True, True, True) == ("skip_rag", "gate_1_not_knowledge_intensive")
+assert should_use_rag(True, True, True, True) == ("use_rag", "all_four_gates_clear")
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where each gate's grounding comes from</h2></div></header>
+<p>Mallen, Asai, Zhong et al. (2022) sharpen Gate 1 beyond a binary fact-needed test: they show parametric memory already answers questions about popular entities about as well as retrieval-augmented models do, and retrieval only reliably helps on long-tail, less-popular facts — meaning "knowledge-intensive" is itself a matter of degree relative to what a given model already knows reliably, not a fixed property of the question's wording. Li, Li, Zhang et al. (2024) ground Gate 3 directly: their comparison of RAG against long-context LLMs finds each one winning under different volume, latency, and context-length conditions, with RAG's extra retrieval machinery paying off only when those conditions favor it — a controlled empirical version of this concept's overhead check. Asai, Wu, Wang et al. (2023), Self-RAG, previews Module 23's territory rather than this concept's: they train a model to decide, per query, whether retrieval is worth invoking at all — turning Gate 3's per-task, human-made judgment into a per-query, learned one, forward-referenced here only.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The RAG Fit Console</h2></div></header>
+<div class="lab">
+<p>Read the scenario, answer all four gates yourself using the buttons below, then check your answers against the correct trace. The console readout updates live as you set each gate.</p>
+<div class="sample-output" id="fitScenario0312" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Gate 1: does this task need a specific outside fact?" id="fitGate1_0312">
+<button type="button" class="secondary" data-gate="g1" data-value="yes">Yes — needs a specific outside fact</button>
+<button type="button" class="secondary" data-gate="g1" data-value="no">No — no outside fact needed</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Gate 2: does any available corpus cover this domain at all?" id="fitGate2_0312">
+<button type="button" class="secondary" data-gate="g2" data-value="yes">Yes — some corpus covers this domain</button>
+<button type="button" class="secondary" data-gate="g2" data-value="no">No — nothing ingested covers this domain</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Gate 3: does the volume and latency budget clear retrieval's overhead?" id="fitGate3_0312">
+<button type="button" class="secondary" data-gate="g3" data-value="yes">Yes — volume and latency leave room for retrieval</button>
+<button type="button" class="secondary" data-gate="g3" data-value="no">No — volume or latency rules out retrieval's overhead</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Gate 4: can this task tolerate any residual failure-chain risk?" id="fitGate4_0312">
+<button type="button" class="secondary" data-gate="g4" data-value="yes">Yes — some residual risk is tolerable</button>
+<button type="button" class="secondary" data-gate="g4" data-value="no">No — zero tolerance for residual risk</button>
+</div>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable console readout showing the live status of all four gates">
+<div class="diagram-family-grid" id="fitConsole0312">
+<div class="diagram-node" id="fitLight1_0312"><b>Gate 1</b><small>Not yet set</small></div>
+<div class="diagram-node" id="fitLight2_0312"><b>Gate 2</b><small>Not yet set</small></div>
+<div class="diagram-node" id="fitLight3_0312"><b>Gate 3</b><small>Not yet set</small></div>
+<div class="diagram-node" id="fitLight4_0312"><b>Gate 4</b><small>Not yet set</small></div>
+</div>
+</div>
+<div class="sample-output" id="fitVerdict0312" aria-live="polite">Set all four gates to compute a live verdict.</div>
+<div class="lab-actions" role="group" aria-label="Lab controls">
+<button type="button" class="secondary" id="fitCheck0312">Check my four answers</button>
+<button type="button" class="secondary" id="fitNext0312">Next scenario →</button>
+<span id="fitScore0312" class="fine-print">Score: 0 / 0</span>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>A fixed per-task check versus a learned per-query decision</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>How it decides</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>This concept's four gates</td><td>A human evaluates a task once, against four explicit conditions, before any system is built</td><td>Transparent and cheap to apply, but static — it doesn't adapt as volume, coverage, or tolerance shift over time</td></tr>
+<tr><td>Self-RAG-style learned retrieval decisions (Module 23)</td><td>A trained model decides per query, at inference time, whether retrieval is worth invoking</td><td>Adapts automatically to changing conditions, but requires training data and adds its own failure mode if the learned decision itself is wrong</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes — of the gate check itself</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>REFLEXIVE BUILD</span><h3>Skipping the gate and building RAG by default</h3><p>Section 02's risk: a task that would fail Gate 1 or Gate 3 gets a full pipeline anyway, then Concept 11's failure chain is misapplied to explain underperformance no pipeline change could fix.</p></article>
+<article class="info-card"><span>CONFLATED GATES</span><h3>Treating Gate 2 as Concept 10's coverage gap</h3><p>Confirming one fact is missing is not the same as confirming an entire domain was never ingested — Section 06's distinction table is the check to rerun here.</p></article>
+<article class="info-card"><span>STALE THRESHOLD</span><h3>Treating Gate 3's threshold as fixed forever</h3><p>Section 11's boundary case applies over time too — a volume or latency budget that clears Gate 3 today can trip it after traffic grows, without anyone revisiting the decision.</p></article>
+<article class="info-card"><span>ASSUMED SAFETY NET</span><h3>Assuming human review always covers Gate 4</h3><p>Section 11's counterexample only holds if a review step genuinely exists and is enforced — assuming one is there without confirming it is a different mistake from confirming it correctly.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A task must be creative to fail Gate 1</td><td>Any task lacking a genuine dependency on an outside fact fails Gate 1, including plain factual-sounding requests whose needed fact was already supplied by the requester.</td></tr>
+<tr><td>Gate 3 is only ever a cost-optimization concern</td><td>Past a certain volume or latency budget, no amount of caching or cheaper embeddings changes the underlying fit decision — it becomes an architecture choice, not a tuning parameter.</td></tr>
+<tr><td>Passing three gates makes the fourth less important</td><td>Section 10's truth table shows each gate is an independent sufficient condition — three passes and one trip still produces "skip RAG," with no averaging across gates.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Revisit all four gates on a fixed schedule, not only at initial design time — Section 16's stale-threshold risk means a task that once cleared Gate 3 can later trip it as traffic grows, without any code change triggering a review.</li>
+<li>Document which gate, if any, disqualified a task that was considered and rejected for RAG — this record prevents the same rejected idea from being reconsidered without re-checking whether the disqualifying condition has actually changed.</li>
+<li>Gate 4 decisions have compliance and legal weight in regulated domains (payroll, benefits eligibility, medical guidance) — treat a "zero tolerance" determination as a decision worth a paper trail, not just an engineering judgment call.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the four gates, and state which two directly reuse Concept 10's reasons.</summary><div>Not knowledge-intensive, no domain coverage at all, overhead not worth it, and zero tolerance for residual risk. Gates 1 and 2 reuse Concept 10's two reasons — Gate 1 unchanged, Gate 2 widened from one missing fact to an entire uningested domain.</div></details>
+<details class="quiz"><summary>Why is checking all four gates in a fixed order unnecessary, unlike Concept 11's failure chain?</summary><div>Concept 11's links are causally ordered — a query passes through retrieval before augmentation before generation. This concept's four gates are independent conditions about the task itself, so any single "yes" disqualifies RAG regardless of which gate is checked first.</div></details>
+<details class="quiz"><summary>Why doesn't a low historical failure rate on Concept 11's chain satisfy Gate 4?</summary><div>Gate 4 is about the task's tolerance for any failure at all, not the pipeline's observed failure rate. A chain that fails rarely still fails Gate 4 if the task requires a guaranteed-correct answer with zero acceptable risk.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new request arrives for the Oracle assistant: "Summarize every open expense report older than 90 days, flagging any that are missing a receipt, for a quarterly compliance sweep run once per quarter." The relevant facts live in the expense-reimbursement corpus, the sweep runs a handful of times a year with no real-time latency requirement, and a compliance officer reviews every flagged report before any action is taken. Run Section 05's four-gate check on this request and name the verdict, plus which gate — if any — you checked most carefully and why.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>Gate 1: passes — the facts needed (report age, receipt status) are specific outside facts, not something already supplied. Gate 2: passes — the expense-reimbursement corpus covers exactly this domain. Gate 3: passes easily — a handful of runs per year has essentially no latency pressure. Gate 4: passes — a mandatory compliance-officer review before any action absorbs the failure chain's residual risk, similar to Section 11's counterexample card. All four gates clear, so the verdict is "use RAG" — a good candidate for Concept 06's skeleton, unlike Section 03's tax-withholding example, which failed Gate 4 specifically because no review step was described.</div>
+</details>
+<p>Teach-back: explain, in your own words, why the same kind of task (a number with financial consequences) can pass Gate 4 here but trip it in Section 03's tax-withholding example.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Four independent gates, any one enough</h3><ul><li><b>Gate 1:</b> not knowledge-intensive — no outside fact needed</li><li><b>Gate 2:</b> no domain coverage at all — nothing ingested for this whole domain</li><li><b>Gate 3:</b> overhead not worth it — volume or latency rules out retrieval</li><li><b>Gate 4:</b> zero tolerance — no room for the failure chain's residual risk</li></ul></div>
+<div><h3>Memorable example</h3><p>The Oracle assistant's exact tax-withholding request and its quarterly compliance sweep both involve financially consequential numbers — only checking whether a mandatory review step exists tells you which one clears Gate 4 and which one doesn't.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A product manager asks you to add RAG to a new feature. Walk through how you'd decide whether to, before writing any retrieval code.</summary><div>Check the feature against four independent gates: does it need a specific outside fact at all, does any available corpus cover that domain, does the expected query volume and latency budget leave room for a retrieval round trip, and can the task tolerate any residual risk from a well-built pipeline still occasionally failing. Any single "yes" is enough to route the feature to an alternative — direct generation, more ingestion, caching, or a deterministic rule — without building a RAG pipeline first and discovering the mismatch later.</div></details>
+<details class="quiz"><summary>Why can't a lower observed error rate ever fully satisfy a genuinely zero-tolerance requirement?</summary><div>A zero-tolerance requirement is about acceptable risk, not measured frequency — Concept 11 showed a well-built chain still has three places it can fail. No non-zero failure rate, however small, satisfies a requirement that accepts none, so the correct response is to remove the probabilistic step entirely rather than to keep improving its accuracy.</div></details>
+<details class="quiz"><summary>Design question: how would you build a lightweight review process so Gate 3's volume and latency threshold doesn't silently go stale as a feature's traffic grows?</summary><div>Log the feature's actual query volume and observed latency against the threshold that justified the original RAG-fit decision, and set a recurring review trigger — for example, a quarterly check or an alert when traffic crosses some fraction of the original threshold — so the fit decision gets revisited on a schedule instead of only when someone happens to notice degraded performance.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2212.10511"><b>Mallen, Asai, Zhong et al. — When Not to Trust Language Models: Investigating Effectiveness of Parametric and Non-Parametric Memories</b><br><span>Sharpens Gate 1 into a matter of degree relative to entity popularity, rather than a fixed binary — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2407.16833"><b>Li, Li, Zhang et al. — Retrieval Augmented Generation or Long-Context LLMs? A Comprehensive Study and Hybrid Approach</b><br><span>Empirically compares RAG against long-context alternatives across volume and latency conditions — direct grounding for Gate 3, behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2310.11511"><b>Asai, Wu, Wang et al. — Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection</b><br><span>Trains a model to make Gate 3's kind of judgment per query rather than per task — a forward pointer to Module 23, behind Section 13 and Section 15.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 03 COMPLETE · PHASE 1 COMPLETE · CONCEPT 12 DONE</span>
+<h3>All twelve concepts of Module 03 are done — Phase 1 is complete, Module 04 starts retrieval mathematics next</h3>
+<p>Before moving on, work through Section 20's exercise and state, in one sentence, why the same kind of financially consequential task can pass Gate 4 in one setting and trip it in another. Module 04, "Mathematics for retrieval," begins Phase 2 next: building the linear algebra, probability, and optimization intuition needed to reason about retrieval systems — the vector geometry every later module has been assuming.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The RAG Fit Console lab ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Module 04 — Mathematics for retrieval.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 12 · Active</p>
+<a href="module-03-concept-11.html">← Concept</a>
+</footer>
+</body>
+</html>
