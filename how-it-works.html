@@ -89,6 +89,7 @@
 <h2>Every lesson starts with a written dedup note, not just a title</h2>
 <p>Before any writing happens, each lesson's brief spells out exactly what the immediately preceding lesson already covered and what this one must not repeat — by name, by formula, by example. This is the single mechanism keeping 284 lessons from ever teaching the same thing twice.</p>
 <div class="hiw-real"><b>Real example:</b> the lesson on Euclidean and other distance functions was explicitly briefed to reuse the exact same three example vectors the cosine-similarity lesson before it had already used — on purpose, to prove that raw distance and cosine similarity disagree on which candidate ranks closest, until the vectors are normalized. That connection was written into the brief before either lesson existed.</div>
+<div class="hiw-real"><b>Newer optimization — a running ledger:</b> checking for repeats used to mean re-reading the entire previous lesson every time. A compact ledger file now holds a short summary of every lesson built so far — the dedup check runs against that full history in one pass instead.</div>
 </div>
 
 <div class="hiw-step" id="hiw2">
@@ -96,7 +97,8 @@
 <p class="stage-eyebrow">Research &amp; verify</p>
 <h2>This is the slow part, on purpose</h2>
 <p>Before writing a word, the agent reads the previous lesson in full, reads this site's lesson-template spec, and finds 2–4 external references — then verifies every single one with a live HTTP request before it's allowed into the text. Every numeric worked example gets independently recomputed, not trusted from memory.</p>
-<div class="hiw-real"><b>Why it takes so long:</b> a live network call for each reference, plus a full re-read of the previous lesson (often 40,000+ characters), plus hand-verifying every formula and every worked example — for every single lesson. A concept with real math in it, like anything in the retrieval-mathematics module, routinely takes 15–30 minutes before a single word of the lesson itself gets written.</div>
+<div class="hiw-real"><b>Why it takes so long:</b> a live network call for each reference, plus hand-verifying every formula and every worked example — for every single lesson. A concept with real math in it, like anything in the retrieval-mathematics module, routinely takes 15–30 minutes before a single word of the lesson itself gets written.</div>
+<div class="hiw-real"><b>Newer optimization — a reference cache:</b> the same sources get cited across many lessons. A shared cache now remembers which URLs were already verified and when — a repeat citation skips the network call instead of re-checking a page already confirmed live.</div>
 </div>
 
 <div class="hiw-step" id="hiw3">
@@ -137,8 +139,8 @@
 <p>Lessons in the two most recent math-module batches got cut off mid-run — after finishing all their research and verification, and sometimes after writing the interactive lab's code, but before writing the actual lesson page. Each time, the already-verified research and code were reused directly rather than redone; only the missing lesson page got hand-written.</p>
 </div>
 <div class="hiw-honesty">
-<span class="num">2 strikes</span>
-<p>The retry policy: if the same lesson fails twice in a row, or a single attempt makes zero forward progress for 20 minutes, the automatic retries stop and a person finishes it by hand instead of waiting indefinitely.</p>
+<span class="num">1 strike</span>
+<p>The retry policy (tightened from an earlier 2-attempts/20-minute rule): if a lesson's first attempt fails, or makes zero forward progress for 15 minutes, the automatic retries stop immediately and a person finishes it by hand — a second automated attempt was rarely doing any better anyway.</p>
 </div>
 <div class="hiw-honesty">
 <span class="num">1 stray fact</span>
