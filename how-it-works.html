@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How RAG Atlas is actually built: one lesson at a time, by an AI coding agent working from a detailed brief, with the real numbers on how often that goes smoothly and what happens when it doesn't.">
+<title>How this is built — RAG Atlas</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="roadmap.css">
+<script defer src="shell.js"></script>
+<style>
+.hiw-wrap{max-width:760px;margin:0 auto;padding:150px clamp(20px,4vw,40px) 100px}
+.hiw-kicker{font:500 11px DM Mono;text-transform:uppercase;letter-spacing:.14em;display:flex;gap:10px;align-items:center;color:var(--muted)}
+.hiw-kicker span{width:26px;height:2px;background:var(--orange)}
+.hiw-wrap h1{font-size:clamp(38px,5.5vw,64px);line-height:1;letter-spacing:-.04em;margin:20px 0 18px}
+.hiw-wrap h1 em{font-family:'Playfair Display',serif;font-weight:600;color:var(--green)}
+.hiw-lede{font-size:16px;line-height:1.7;color:var(--muted);max-width:620px;margin-bottom:20px}
+.hiw-stats{display:flex;gap:0;margin:36px 0 50px;flex-wrap:wrap}
+.hiw-stats div{padding:0 30px;border-left:1px solid var(--line)}
+.hiw-stats div:first-child{padding-left:0;border:0}
+.hiw-stats strong{font-size:26px;display:block}
+.hiw-stats span{font:10px DM Mono;color:var(--muted);text-transform:uppercase}
+.hiw-rail{display:flex;gap:8px;overflow-x:auto;padding:2px 0 30px;margin-bottom:6px}
+.hiw-rail a{flex:none;border:1px solid var(--line);border-radius:99px;padding:7px 14px;font:11px DM Mono;color:var(--ink);text-decoration:none;white-space:nowrap}
+.hiw-rail a:hover{background:var(--lime)}
+.hiw-timeline{position:relative;padding-left:36px;border-left:2px solid var(--line);margin-bottom:60px}
+.hiw-step{position:relative;padding:0 0 40px 20px}
+.hiw-step:last-child{padding-bottom:0}
+.hiw-step-num{position:absolute;left:-49px;top:0;width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--lime);font:800 12px DM Mono;display:flex;align-items:center;justify-content:center}
+.hiw-step .stage-eyebrow{font:10px DM Mono;color:var(--orange);text-transform:uppercase;letter-spacing:.1em}
+.hiw-step h2{font-size:22px;margin:6px 0 10px;letter-spacing:-.02em}
+.hiw-step p{font-size:14.5px;line-height:1.7;color:var(--muted);margin:8px 0}
+.hiw-step ul{margin:10px 0 4px;padding-left:20px}
+.hiw-step li{font-size:14px;line-height:1.65;color:var(--muted);margin-bottom:6px}
+.hiw-step li b{color:var(--ink)}
+.hiw-real{margin-top:12px;padding:14px 18px;border-left:3px solid var(--ink);background:var(--white)}
+.hiw-real b{color:var(--ink)}
+.hiw-real p{margin:0;font-size:13.5px;line-height:1.6;color:var(--muted)}
+.hiw-section-title{font-size:26px;letter-spacing:-.03em;margin:0 0 6px}
+.hiw-section-sub{font-size:14px;color:var(--muted);margin:0 0 26px}
+.hiw-honesty{display:grid;grid-template-columns:110px 1fr;gap:20px;align-items:start;border:1px solid var(--line);border-radius:2px;padding:20px;margin-bottom:16px;background:var(--white)}
+.hiw-honesty .num{font-size:32px;font-weight:800;color:var(--orange);line-height:1}
+.hiw-honesty p{margin:0;font-size:13.5px;line-height:1.65;color:var(--muted)}
+.hiw-back{font:10px DM Mono;color:var(--muted);text-decoration:none;display:inline-block;margin-top:40px}
+@media(max-width:620px){.hiw-honesty{grid-template-columns:1fr}.hiw-timeline{padding-left:26px}.hiw-step{padding-left:14px}.hiw-step-num{left:-39px;width:26px;height:26px}}
+</style>
+</head>
+<body class="course-shell">
+<a class="skip-link" href="#hiw-main">Skip to content</a>
+<header class="topbar solid-bar">
+<a class="brand" href="index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="index.html">Home</a>
+<a href="roadmap.html">Roadmap</a>
+<a href="concept-structure.html">Lesson anatomy</a>
+<a href="projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Behind the scenes</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="hiw-main">
+<div class="hiw-wrap">
+<p class="hiw-kicker"><span></span>BEHIND THE SCENES</p>
+<h1>How RAG Atlas<br><em>is actually built.</em></h1>
+<p class="hiw-lede">Not a generic description — this page has the real numbers, including the parts that don't go perfectly. Every lesson on this site is written by an AI coding agent working from a detailed, concept-specific brief, one lesson at a time, never in parallel.</p>
+
+<div class="hiw-stats">
+<div><strong>24</strong><span>Modules planned</span></div>
+<div><strong>284</strong><span>Lessons planned</span></div>
+<div><strong>1</strong><span>Agent per lesson, strictly sequential</span></div>
+</div>
+
+<nav class="hiw-rail" aria-label="Jump to a stage">
+<a href="#hiw1">01 · Brief</a>
+<a href="#hiw2">02 · Research</a>
+<a href="#hiw3">03 · Write</a>
+<a href="#hiw4">04 · Self-check</a>
+<a href="#hiw5">05 · Re-link</a>
+<a href="#hiw6">06 · Batch</a>
+<a href="#hiw-breaks">When it breaks</a>
+</nav>
+
+<div class="hiw-timeline">
+<div class="hiw-step" id="hiw1">
+<span class="hiw-step-num">1</span>
+<p class="stage-eyebrow">Brief</p>
+<h2>Every lesson starts with a written dedup note, not just a title</h2>
+<p>Before any writing happens, each lesson's brief spells out exactly what the immediately preceding lesson already covered and what this one must not repeat — by name, by formula, by example. This is the single mechanism keeping 284 lessons from ever teaching the same thing twice.</p>
+<div class="hiw-real"><b>Real example:</b> the lesson on Euclidean and other distance functions was explicitly briefed to reuse the exact same three example vectors the cosine-similarity lesson before it had already used — on purpose, to prove that raw distance and cosine similarity disagree on which candidate ranks closest, until the vectors are normalized. That connection was written into the brief before either lesson existed.</div>
+</div>
+
+<div class="hiw-step" id="hiw2">
+<span class="hiw-step-num">2</span>
+<p class="stage-eyebrow">Research &amp; verify</p>
+<h2>This is the slow part, on purpose</h2>
+<p>Before writing a word, the agent reads the previous lesson in full, reads this site's lesson-template spec, and finds 2–4 external references — then verifies every single one with a live HTTP request before it's allowed into the text. Every numeric worked example gets independently recomputed, not trusted from memory.</p>
+<div class="hiw-real"><b>Why it takes so long:</b> a live network call for each reference, plus a full re-read of the previous lesson (often 40,000+ characters), plus hand-verifying every formula and every worked example — for every single lesson. A concept with real math in it, like anything in the retrieval-mathematics module, routinely takes 15–30 minutes before a single word of the lesson itself gets written.</div>
+</div>
+
+<div class="hiw-step" id="hiw3">
+<span class="hiw-step-num">3</span>
+<p class="stage-eyebrow">Write</p>
+<h2>A fixed template, filled in fresh every time</h2>
+<p>Every lesson follows the same shape: a 10-step guided "beginner core" and an optional 24-section "advanced deep dive," plus one genuinely new interactive lab widget per lesson — never copy-pasted from an earlier lesson's lab, even when the underlying idea is closely related.</p>
+</div>
+
+<div class="hiw-step" id="hiw4">
+<span class="hiw-step-num">4</span>
+<p class="stage-eyebrow">Self-check</p>
+<h2>The lesson has to pass its own structural exam</h2>
+<p>Before anything is considered finished: every HTML tag has to balance, every required section ID has to appear exactly once, and the lab's JavaScript has to parse cleanly. This catches malformed pages before they ever reach the site.</p>
+</div>
+
+<div class="hiw-step" id="hiw5">
+<span class="hiw-step-num">5</span>
+<p class="stage-eyebrow">Re-link the site</p>
+<h2>The previous lesson gets edited too, not just the new one</h2>
+<p>Finishing a lesson means going back and flipping the previous one's status from "active" to "complete," bumping the module's progress counter, and updating the homepage's "what's active right now" summary — three separate files touched by every single lesson.</p>
+<div class="hiw-real"><b>A real bug this caused:</b> during the mathematics-for-retrieval module, one lesson got left marked "complete" while the lesson meant to supersede it hadn't actually been written yet — and separately, a lesson got written directly in "complete" state even though it was still the newest one on the site. Both were caught by checking for exactly this kind of contradiction (a lesson marked one way when the site's own progress counter said otherwise) and fixed by hand.</div>
+</div>
+
+<div class="hiw-step" id="hiw6">
+<span class="hiw-step-num">6</span>
+<p class="stage-eyebrow">Batch &amp; push</p>
+<h2>2–4 lessons per unattended run, one push per finished module</h2>
+<p>An orchestration layer runs a short queue of these agents, one at a time, as a single background job. This repo only gets pushed to GitHub once a full module — 8 to 12 lessons — is completely done, not after every single lesson, so the commit history reads as real milestones rather than noise.</p>
+</div>
+</div>
+
+<h2 class="hiw-section-title" id="hiw-breaks">When it breaks — the honest numbers</h2>
+<p class="hiw-section-sub">This isn't a hypothetical caveat. Here's what's actually happened across recent batches on this exact site.</p>
+
+<div class="hiw-honesty">
+<span class="num">3 of 8</span>
+<p>Lessons in the two most recent math-module batches got cut off mid-run — after finishing all their research and verification, and sometimes after writing the interactive lab's code, but before writing the actual lesson page. Each time, the already-verified research and code were reused directly rather than redone; only the missing lesson page got hand-written.</p>
+</div>
+<div class="hiw-honesty">
+<span class="num">2 strikes</span>
+<p>The retry policy: if the same lesson fails twice in a row, or a single attempt makes zero forward progress for 20 minutes, the automatic retries stop and a person finishes it by hand instead of waiting indefinitely.</p>
+</div>
+<div class="hiw-honesty">
+<span class="num">1 stray fact</span>
+<p>A lesson's closing checkpoint once claimed "Phase 1 is complete" at the end of a module — incorrect, since Phase 1 actually spans five modules, not one. Caught during a routine check and corrected directly in the lesson text, in three separate places it had been repeated.</p>
+</div>
+
+<a class="hiw-back" href="index.html">← Back to RAG Atlas</a>
+</div>
+</main>
+<footer><div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div><p>Build systems that know what they know—and show their work.</p><a href="roadmap.html">Course roadmap →</a></footer>
+</body>
+</html>
