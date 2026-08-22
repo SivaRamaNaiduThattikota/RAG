@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 01 fixed the vocabulary -- corpus, document, query, relevance -- without building anything. This concept builds the first real data structure of lexical retrieval: an inverted index, mapping each term to the sorted list of documents containing it, and shows exactly why a sorted-list merge beats scanning every document for every query.">
+<title>Inverted indexes and postings lists — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 02</p>
+<h1>The inverted index.<br><em>Flip the mapping, skip the scan.</em></h1>
+<p class="lesson-lead">Concept 01 defined a corpus, a document, a query, and relevance — but built nothing. Parsing a document naturally gives you a <b>forward index</b>: document → the words it contains. An <b>inverted index</b> flips that mapping around: term → the sorted list of documents containing it, called a <b>postings list</b>. That flip is the entire idea, and it's why a query for one term never has to read a single document's text — it jumps straight to that term's postings list. No scoring, no ranking yet — this concept only builds the data structure and proves it beats a full scan.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's corpus, document, query and relevance — cited directly, nothing re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Build an inverted index by hand and explain why it beats scanning every document for every query</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 01 named the corpus, document, query and relevance without building any mechanism. This concept built the first one: an inverted index mapping each term to a sorted postings list, and a two-pointer merge that answers a multi-term query without ever touching a document's text.</p>
+<b>2 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One flip, one data structure, one big speed-up</h2>
+</div>
+<p>Everything in this concept follows from a single move: instead of asking "what words does this document contain?" (easy to produce while parsing, useless for search), ask "what documents contain this word?" — and precompute the answer for every word, once, before any query arrives.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Term → documents, not documents → terms</h3>
+<div class="mental-compare">
+<div><span>FORWARD INDEX</span><p>Document → its words. D8 → {boolean, search, over, an, inverted, index}. This is what parsing gives you for free — and it's the wrong direction for a query.</p></div>
+<div><span>INVERTED INDEX</span><p>Term → the documents containing it. "index" → [D2, D4, D5, D8]. This is what a query actually needs — and it doesn't exist until you build it.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> an inverted index is just the forward index, flipped and sorted by term instead of by document — a dictionary of terms, each pointing to a postings list of document IDs.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A query shouldn't have to read every document</h3>
+<p>Without an inverted index, answering "which documents contain the term <i>index</i>?" means opening every one of the corpus's N documents and scanning its full text for a match — work that repeats, from scratch, for every single query, even when the corpus never changed between queries. An inverted index pays that scanning cost exactly once, while the corpus is being ingested, and turns every future query for that term into a direct lookup — no document text touched at query time at all.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same eight-document corpus, indexed</h3>
+<p>Concept 01's corpus, unchanged. Tokenizing all eight documents and flipping the mapping produces this inverted index (partial — full table in Section 10):</p>
+<div class="context-demo">
+<div><span>"index" →</span><p>[D2, D4, D5, D8] — 4 documents, out of 8 total</p></div>
+<div><span>"search" →</span><p>[D1, D3, D4, D5, D8] — 5 documents</p></div>
+<div><span>"inverted" →</span><p>[D2, D4, D8] — 3 documents</p></div>
+<div><span>"dense" →</span><p>[D1, D3, D6] — 3 documents</p></div>
+</div>
+<p>A query for "index" now costs one dictionary lookup plus reading a 4-entry list — never opening D1, D3, D6, or D7, whose text is completely irrelevant to that term and was never touched.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0502-beginner-visual-title">
+<strong class="concept-visual-title" id="c0502-beginner-visual-title">VISUAL · THE FORWARD INDEX, FLIPPED</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0502-svg-title c0502-svg-desc">
+<title id="c0502-svg-title">A forward index of documents to words, flipped by an arrow into an inverted index of words to document lists</title>
+<desc id="c0502-svg-desc">On the left, three documents each list their own words. An arrow labelled invert points right to a dictionary of three terms, each now listing the document IDs that contain it -- the same information, reorganized by term instead of by document.</desc>
+<text x="95" y="20" font-size="9" text-anchor="middle" fill="#5c6a63">FORWARD INDEX — DOCUMENT → WORDS</text>
+<rect x="10" y="28" width="170" height="30" fill="#fff" stroke="#8a978f"/><text x="95" y="47" font-size="9.5" text-anchor="middle" fill="#14241f">D2 → {sparse, retrieval, inverted, index}</text>
+<rect x="10" y="64" width="170" height="30" fill="#fff" stroke="#8a978f"/><text x="95" y="83" font-size="9.5" text-anchor="middle" fill="#14241f">D4 → {keyword, search, inverted, index}</text>
+<rect x="10" y="100" width="170" height="30" fill="#fff" stroke="#8a978f"/><text x="95" y="119" font-size="9.5" text-anchor="middle" fill="#14241f">D8 → {boolean, search, inverted, index}</text>
+<line x1="190" y1="74" x2="250" y2="74" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0502)"/>
+<defs><marker id="arrow0502" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<text x="220" y="66" font-size="8.5" text-anchor="middle" fill="#14241f">invert</text>
+<text x="345" y="20" font-size="9" text-anchor="middle" fill="#5c6a63">INVERTED INDEX — TERM → DOCUMENT LIST</text>
+<rect x="260" y="28" width="190" height="30" fill="#a7d97a" stroke="#14241f"/><text x="355" y="47" font-size="9.5" text-anchor="middle" fill="#14241f">"index" → [D2, D4, D5, D8]</text>
+<rect x="260" y="64" width="190" height="30" fill="#a7d97a" stroke="#14241f"/><text x="355" y="83" font-size="9.5" text-anchor="middle" fill="#14241f">"inverted" → [D2, D4, D8]</text>
+<rect x="260" y="100" width="190" height="30" fill="#a7d97a" stroke="#14241f"/><text x="355" y="119" font-size="9.5" text-anchor="middle" fill="#14241f">"search" → [D1, D3, D4, D5, D8]</text>
+<text x="230" y="160" font-size="8.5" text-anchor="middle" fill="#5c6a63">every document ID on the right came from the same eight documents on the left</text>
+<text x="230" y="176" font-size="8.5" text-anchor="middle" fill="#5c6a63">only the direction of the mapping changed — no information was added or lost</text>
+</svg>
+<figcaption>The forward index (left) is a byproduct of parsing; the inverted index (right) is built deliberately, once, by re-sorting every (document, word) pair by word instead of by document. A query only ever looks at the right side.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two moving parts: a dictionary, and postings lists</h3>
+<div class="context-demo">
+<div><span>THE DICTIONARY</span><p>Every distinct term seen across the corpus, held in a structure that supports fast lookup (a hash table or sorted tree) — "does this term exist, and where is its list?"</p></div>
+<div><span>THE POSTINGS LIST</span><p>For each term, a list of document IDs, kept in sorted order. Sorted order is not cosmetic — it's exactly what makes Section 06's merge algorithm work in one pass.</p></div>
+<div><span>ANSWERING A SINGLE-TERM QUERY</span><p>Look up the term in the dictionary (fast), then return its postings list directly — no document text is read at query time.</p></div>
+<div><span>ANSWERING A MULTI-TERM QUERY</span><p>Look up each term's postings list, then merge the sorted lists — intersect for AND, union for OR — walking each list with a pointer instead of comparing every pair.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where the inverted index sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — built once, offline, from every chunk's terms</span><i>↓</i><span>Retrieval — term lookup + merge, at query time</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Module 09 will build an analogous structure for dense vectors — an approximate nearest-neighbor index, also built once offline and queried fast. Same shape, different mechanism: this concept's index maps terms to documents; Module 09's maps geometry to documents.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs this concept depends on keeping separate</h3>
+<div class="distinction-table" role="table" aria-label="Forward index versus inverted index, term versus token, postings list versus relevance score, and Boolean versus ranked retrieval distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Inverted index</span><span role="cell">The forward index</span><span role="cell">The forward index (document → words) is what parsing produces; the inverted index (term → documents) is a deliberately built, separate structure — b01's flip.</span></div>
+<div role="row"><span role="cell">Term</span><span role="cell">A token, in general</span><span role="cell">This concept treats "term" and "word" as interchangeable for a simple example; real systems apply tokenization rules (Module 02, Concept 02) before a word becomes an index term — not rebuilt here.</span></div>
+<div role="row"><span role="cell">Postings list</span><span role="cell">A relevance score</span><span role="cell">A postings list only answers "does this document contain the term?" — it says nothing about how important that term is to the document. That starts at Concept 04's term frequency.</span></div>
+<div role="row"><span role="cell">Boolean retrieval</span><span role="cell">Ranked retrieval</span><span role="cell">This concept's merge produces an unordered set of matching documents (in or out) — not a ranking. Ranking by relevance begins once term weighting exists, Concept 04 onward.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"An inverted index also stores how relevant each document is."</b><p>A plain postings list only stores document IDs — no counts, no weights. Concept 04 adds term frequency as a separate number stored alongside each posting.</p></div>
+<div><b>"Intersecting two postings lists means comparing every pair of entries."</b><p>That would be O(|A|·|B|). Because both lists are sorted, Section 06's two-pointer merge does it in O(|A|+|B|) — never re-comparing an entry twice.</p></div>
+<div><b>"Building the index happens at query time, just like the lookup."</b><p>Index construction happens once, offline, during ingestion. Query time only ever does dictionary lookups and list merges — that split is the entire performance argument.</p></div>
+<div><b>"This is how Module 04's vector retrieval works too, just with different data."</b><p>No — vector retrieval has no discrete terms to invert; it needs a geometric structure (approximate nearest-neighbor search, Module 09), a genuinely different mechanism, not a relabeled version of this one.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lives in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT</span><b>An inverted index, maintained by the database</b><p>Oracle Text builds and maintains exactly this term-to-document structure over stored text columns — the mechanism this concept just built by hand, running inside the database engine (Module 10, Concept 07, forward reference).</p></div>
+<div><span>KEYWORD FILTERING IN TEXT-TO-SQL</span><b>LIKE and CONTAINS lean on this structure</b><p>A generated SQL clause that filters rows by keyword is, underneath, a query against a database-maintained inverted index — this concept names the mechanism those SQL functions hide.</p></div>
+<div><span>WHAT'S STILL MISSING</span><b>Any notion of ranking or weighting</b><p>This concept can only say "in" or "out" for a query term — Concepts 04-06 add the term-frequency and BM25 machinery needed to rank the "in" set by how relevant each document actually is.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The flip</b><p>Inverted index = term → sorted list of document IDs (a postings list) — the reverse of the forward index parsing naturally produces.</p></div>
+<div><b>Why it's fast</b><p>Built once offline; every later query is a dictionary lookup plus a list read, never a full document scan.</p></div>
+<div><b>The merge</b><p>Sorted postings lists intersect (AND) or union (OR) with a pointer walk in O(|A|+|B|), not a pairwise comparison.</p></div>
+<div><b>What's not here yet</b><p>No term weights, no relevance scores, no ranking — this is Boolean retrieval only, membership in or out.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why is scanning every document for every query too slow, and what specifically does the inverted index avoid re-doing?</li>
+<li>Using b03's postings lists, what documents match "dense" AND "search"? Walk the merge yourself before checking Section 10.</li>
+<li>Why does a plain postings list fail to tell you which of its documents is <i>most</i> relevant to the query term?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 03: sparse retrieval and dense retrieval</h3>
+<p>The inverted index is the core data structure behind sparse (term-based) retrieval. The next concept steps back and compares that whole family of methods directly against the dense (vector-based) retrieval Module 04 already covered — same "Retrieval" box, two different mechanisms, compared head to head for the first time.</p>
+<div class="beginner-memory"><b>Concept 02 is complete.</b> Continue to Concept 03, "Sparse retrieval and dense retrieval."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One flip. One merge. Zero documents read at query time.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>The flip</b><small>Forward index (document → words) inverted into term → postings list.</small></a>
+<a href="#b04"><span>02</span><b>The merge</b><small>Sorted postings lists intersect or union with a pointer walk, not pairwise comparison.</small></a>
+<a href="#b07"><span>03</span><b>What's still missing</b><small>Membership only — no weights, no ranking, until Concept 04.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The merge's complexity proof, from-scratch code, and the Postings List Intersection Race lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> flip the forward index into term → postings lists → merge sorted lists for multi-term queries → prove the merge beats a full scan → Concept 03 compares this whole sparse mechanism against Module 04's dense one.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the inverted index deep dive</b><em>The merge's complexity proof, from-scratch code, and the Postings List Intersection Race lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first mechanism of lexical retrieval</h2></div></header>
+<p>Concept 01 defined the relationship between a corpus, a document, a query, and relevance, but never built a way to compute anything. This concept builds the first computable mechanism of Module 05: an inverted index, the data structure underneath every Boolean and ranked lexical retrieval method the rest of this module covers. It introduces no scoring formula — that is explicitly Concept 04's job.</p>
+<div class="flow">
+<div class="flow-node">Concept 01 — vocabulary only</div>
+<div class="flow-node hot">Concept 02 — the inverted index</div>
+<div class="flow-node">Concept 04 — term weighting (TF-IDF)</div>
+<div class="flow-node">Concept 06 — BM25 scoring</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>BUILD</span><h3>Construct an inverted index from a small corpus by hand</h3><p>Tokenize every document, flip the mapping, and produce a sorted postings list per term.</p></article>
+<article class="info-card"><span>MERGE</span><h3>Intersect two sorted postings lists correctly</h3><p>Walk both lists with two pointers, producing the AND result in a single pass.</p></article>
+<article class="info-card"><span>ARGUE</span><h3>Explain, with a cost comparison, why this beats a full scan</h3><p>State the brute-force document-scan cost against the postings-lookup-and-merge cost, on the same corpus.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what this concept does not build</h3><p>No term weights, no relevance scores, no ranking — Boolean membership only.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01 — corpus, document, query, relevance.</b> This concept assumes those four words and adds nothing new to their definitions.</li>
+<li><b>Module 04, Concept 09 — time and space complexity.</b> Section 09 below reuses Concept 09's O(·) notation directly rather than re-teaching it.</li>
+<li><b>Out of scope here:</b> term frequency, TF-IDF, and BM25 (Concepts 04-06) are named only as forward references, never computed in this concept.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A book's index at the back, not its table of contents</h2></div></header>
+<p>A table of contents is a forward index: chapter → what it covers, in the order the book was written. The index at the back of a textbook is inverted: a term, alphabetically, followed by every page number where it appears. Nobody reads a textbook front to back looking for a term — they check the back index and jump straight to the listed pages. An inverted index is that back-of-the-book index, built for an entire corpus instead of one book, with the "page numbers" being document IDs instead.</p>
+<div class="callout warning"><b>Analogy boundary</b>A book's back index doesn't tell you which listed page is <i>most</i> important — neither does a plain postings list. That limitation carries over exactly, which is why Concept 04 exists.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Vocabulary</td><td>The set of distinct terms across the whole corpus</td><td>V = {t₁, t₂, …, t_M}</td></tr>
+<tr><td>Dictionary</td><td>A lookup structure mapping each term in V to its postings list</td><td>dict(t) → postings(t)</td></tr>
+<tr><td>Postings list</td><td>The sorted list of document IDs containing term t</td><td>postings(t) = [d : t ∈ d], sorted ascending</td></tr>
+<tr><td>Boolean AND query</td><td>Documents containing every query term</td><td>result = postings(t₁) ∩ postings(t₂) ∩ …</td></tr>
+<tr><td>Boolean OR query</td><td>Documents containing any query term</td><td>result = postings(t₁) ∪ postings(t₂) ∪ …</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Building the index, then merging two postings lists</h2></div></header>
+<div class="lane-flow">
+<div><b>Tokenize every document —</b> D1…D8 each become a set of terms (Concept 01's corpus, unchanged).</div>
+<div><b>For each (document, term) pair, append the document ID to that term's list —</b> the forward index, inverted one pair at a time.</div>
+<div><b>Sort and deduplicate every term's list —</b> postings("index") becomes [2, 4, 5, 8], ready for merging.</div>
+<div><b>A query for "search" AND "inverted" arrives —</b> look up both postings lists: [1,3,4,5,8] and [2,4,8].</div>
+<div><b>Walk both lists with two pointers, i and j, starting at 0 —</b> advance whichever pointer is behind; record a match when the values are equal.</div>
+<div><b>Stop when either pointer runs off the end of its list —</b> result = [4, 8], found in 6 comparisons, never opening a single document.</div>
+</div>
+<figure class="concept-visual" aria-labelledby="c0502-merge-visual-title">
+<strong class="concept-visual-title" id="c0502-merge-visual-title">VISUAL · THE TWO-POINTER MERGE, FROZEN AT ITS TWO MATCHES</strong>
+<svg class="vector-plane" viewBox="0 0 460 150" role="img" aria-labelledby="c0502-merge-svg-title c0502-merge-svg-desc">
+<title id="c0502-merge-svg-title">Two sorted postings lists with matching entries highlighted at document 4 and document 8</title>
+<desc id="c0502-merge-svg-desc">The postings list for search -- 1, 3, 4, 5, 8 -- sits above the postings list for inverted -- 2, 4, 8. Vertical lines connect the two entries both lists share, 4 and 8, which is the AND query's result.</desc>
+<text x="15" y="18" font-size="9" fill="#5c6a63">postings("search")</text>
+<g font-size="10" text-anchor="middle">
+<rect x="180" y="26" width="34" height="26" fill="#fff" stroke="#8a978f"/><text x="197" y="44" fill="#14241f">1</text>
+<rect x="222" y="26" width="34" height="26" fill="#fff" stroke="#8a978f"/><text x="239" y="44" fill="#14241f">3</text>
+<rect x="264" y="26" width="34" height="26" fill="#3aa876" stroke="#14241f"/><text x="281" y="44" fill="#fff">4</text>
+<rect x="306" y="26" width="34" height="26" fill="#fff" stroke="#8a978f"/><text x="323" y="44" fill="#14241f">5</text>
+<rect x="348" y="26" width="34" height="26" fill="#3aa876" stroke="#14241f"/><text x="365" y="44" fill="#fff">8</text>
+</g>
+<text x="15" y="98" font-size="9" fill="#5c6a63">postings("inverted")</text>
+<g font-size="10" text-anchor="middle">
+<rect x="222" y="86" width="34" height="26" fill="#fff" stroke="#8a978f"/><text x="239" y="104" fill="#14241f">2</text>
+<rect x="264" y="86" width="34" height="26" fill="#3aa876" stroke="#14241f"/><text x="281" y="104" fill="#fff">4</text>
+<rect x="348" y="86" width="34" height="26" fill="#3aa876" stroke="#14241f"/><text x="365" y="104" fill="#fff">8</text>
+</g>
+<line x1="281" y1="52" x2="281" y2="86" stroke="#14241f" stroke-width="1.5" stroke-dasharray="3 2"/>
+<line x1="365" y1="52" x2="365" y2="86" stroke="#14241f" stroke-width="1.5" stroke-dasharray="3 2"/>
+<text x="230" y="135" font-size="8.5" fill="#5c6a63">green = shared entries, the AND result [4, 8] — every other box is read once and never revisited</text>
+</svg>
+<figcaption>Six comparisons across two short lists find both matches, and the merge never revisits an entry — the live version of this exact walk is Section 14's lab.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Query terms in, matching documents out — the two-stage path</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of query terms feeding a dictionary lookup and postings merge">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Query terms</b><small>e.g. "search" and "inverted" — no document text involved</small></div>
+<div class="diagram-node hub-center"><b>Dictionary lookup</b><small>term → its postings list, built once during ingestion</small></div>
+<div class="diagram-node"><b>Sorted-list merge</b><small>AND = intersect, OR = union, in O(|A|+|B|)</small></div>
+</div>
+</div>
+<p>Both stages above only ever touch the dictionary and the postings lists — never a document's raw text. Section 14's lab lets you pick any two terms from this concept's vocabulary and step through exactly this two-stage path yourself.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — built offline, once</span><i>↓</i><span>Retrieval — dictionary lookup + merge, at query time</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept builds the offline structure that makes the "Retrieval" box's lexical path fast. Module 04 already built a parallel offline structure — embeddings and, eventually, a vector index — for the dense path through the same box.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why the merge is O(|A|+|B|), not O(|A|·|B|) or O(N)</h2></div></header>
+<p>Using Module 04 Concept 09's own complexity notation, applied to this concept's mechanism for the first time:</p>
+<div class="equation">brute_force_scan(N, L) = O(N · L)         -- read every one of N documents, each of length L
+dictionary_lookup(t)   = O(1) or O(log M)  -- hash table or sorted tree over M vocabulary terms
+merge(A, B)            = O(|A| + |B|)      -- one pointer pass over two sorted postings lists, never O(|A|·|B|)</div>
+<p>The merge is linear in the combined length of the two lists because each comparison advances at least one pointer, and neither pointer ever moves backward or revisits an index — a strict decrease in remaining work every single step, which is exactly why the loop is guaranteed to terminate within |A|+|B| steps.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full index, then the full merge trace</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Term</th><th>Postings list</th></tr></thead>
+<tbody>
+<tr><td>search</td><td>[1, 3, 4, 5, 8]</td></tr>
+<tr><td>inverted</td><td>[2, 4, 8]</td></tr>
+<tr><td>index</td><td>[2, 4, 5, 8]</td></tr>
+<tr><td>dense</td><td>[1, 3, 6]</td></tr>
+<tr><td>embeddings</td><td>[1, 3, 7]</td></tr>
+<tr><td>vector</td><td>[1, 5]</td></tr>
+<tr><td>sparse</td><td>[2, 6]</td></tr>
+<tr><td>retrieval</td><td>[2, 6]</td></tr>
+</tbody>
+</table>
+<p>Merging postings("search") AND postings("inverted"), step by step:</p>
+<table class="worked-table">
+<thead><tr><th>Step</th><th>i pointer</th><th>j pointer</th><th>Comparison</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1</td><td>2</td><td>1 &lt; 2</td><td>advance i</td></tr>
+<tr><td>2</td><td>3</td><td>2</td><td>3 &gt; 2</td><td>advance j</td></tr>
+<tr><td>3</td><td>3</td><td>4</td><td>3 &lt; 4</td><td>advance i</td></tr>
+<tr><td>4</td><td>4</td><td>4</td><td>4 = 4</td><td>MATCH — advance both</td></tr>
+<tr><td>5</td><td>5</td><td>8</td><td>5 &lt; 8</td><td>advance i</td></tr>
+<tr><td>6</td><td>8</td><td>8</td><td>8 = 8</td><td>MATCH — advance both</td></tr>
+</tbody>
+</table>
+<p>List A (length 5) is now exhausted — the merge stops. Result: <b>[4, 8]</b>, found in 6 comparisons — at most |A|+|B| = 8, confirming Section 09's bound. Both numbers were independently recomputed for this lesson, not copied from an earlier draft.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Multi-keyword search over log files or tickets</h3><p>"error" AND "timeout" over millions of support tickets is exactly Section 06's merge, at real scale — never opening a ticket that lacks either word.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Filtering an Oracle Text or Elasticsearch query</h3><p>A CONTAINS or match_phrase clause is answered by walking a database-maintained inverted index, not by scanning table rows.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A term that appears in every document</h3><p>If postings(t) = every document ID, intersecting with it changes nothing — the merge still runs correctly, it just does no useful narrowing (Section 16 names this directly).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming an unsorted postings list still merges in one pass</h3><p>Section 09's O(|A|+|B|) bound relies entirely on both lists being sorted — an unsorted list forces re-scanning, losing the guarantee.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Building the index and merging, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>corpus = {
+    1: "vector search over dense embeddings",
+    2: "sparse retrieval with an inverted index",
+    3: "dense embeddings for semantic search",
+    4: "keyword search using an inverted index",
+    5: "vector index for approximate search",
+    6: "sparse and dense retrieval combined",
+    7: "embeddings from a neural encoder",
+    8: "boolean search over an inverted index",
+}
+
+def build_inverted_index(corpus):
+    index = {}
+    for doc_id, text in corpus.items():
+        for term in set(text.split(" ")):          # set() avoids duplicate postings within one doc
+            index.setdefault(term, []).append(doc_id)
+    for term in index:
+        index[term].sort()                          # sorted order is required by intersect() below
+    return index
+
+def intersect(postings_a, postings_b):
+    i, j, result = 0, 0, []
+    comparisons = 0
+    while i < len(postings_a) and j < len(postings_b):
+        comparisons += 1
+        if postings_a[i] == postings_b[j]:
+            result.append(postings_a[i])
+            i += 1
+            j += 1
+        elif postings_a[i] < postings_b[j]:
+            i += 1
+        else:
+            j += 1
+    return result, comparisons
+
+index = build_inverted_index(corpus)
+assert index["search"] == [1, 3, 4, 5, 8]
+assert index["inverted"] == [2, 4, 8]
+
+result, comparisons = intersect(index["search"], index["inverted"])
+assert result == [4, 8]
+assert comparisons == 6
+
+# Edge case: a term that appears in no document at all.
+empty_result, empty_comparisons = intersect(index.get("summarization", []), index["search"])
+assert empty_result == [] and empty_comparisons == 0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production systems run the identical structure</h2></div></header>
+<p>Apache Lucene (and the search engines built on it, like Elasticsearch and Solr) stores an inverted index per field, with postings lists that add positions and term frequencies alongside the bare document IDs this concept used. Oracle Text builds and maintains the same structure directly inside the database, queryable through SQL's CONTAINS operator (Module 10, Concept 07, forward reference). PostgreSQL's GIN indexes serve the identical purpose for full-text search columns. None of these change the core idea from Section 06 — they add compression, positions, and scoring on top of the same term-to-postings mapping.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Postings List Intersection Race</h2></div></header>
+<div class="lab">
+<p>Pick two terms from this concept's vocabulary. Step through the merge one comparison at a time and watch the pointers, the running comparison count, and the result build up — then compare that cost against a brute-force scan of the whole corpus for the same two terms.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgTermA_0502">Term A</label>
+<select id="wgTermA_0502"></select></div>
+<div class="control"><label for="wgTermB_0502">Term B</label>
+<select id="wgTermB_0502"></select></div>
+</div>
+<div class="lab-actions">
+<button type="button" id="wgStep_0502">Step forward</button>
+<button type="button" id="wgRun_0502" class="secondary">Run to end</button>
+<button type="button" id="wgReset_0502" class="secondary">Reset</button>
+</div>
+<div class="norm-readout">
+<div><span>POSTINGS(A) — POINTER i</span><b id="wgListA_0502"></b></div>
+<div><span>POSTINGS(B) — POINTER j</span><b id="wgListB_0502"></b></div>
+<div><span>COMPARISONS SO FAR</span><b id="wgComparisons_0502">0</b></div>
+<div><span>AND RESULT SO FAR</span><b id="wgResult_0502">—</b></div>
+</div>
+<div class="callout" id="wgVerdict_0502">Pick two terms and press "Step forward" to begin the merge.</div>
+<div class="fine-print" id="wgCost_0502"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Boolean set retrieval vs. what comes next</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it returns</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>This concept's Boolean AND/OR merge</td><td>An unordered set: every document matching the query terms, or none</td><td>Exact filtering — logs, tickets, structured keyword search where "matches" is the whole answer</td></tr>
+<tr><td>Ranked lexical retrieval (Concepts 04-06)</td><td>The same candidate set, ordered by an estimated relevance score</td><td>Open-ended search where some matches clearly matter more than others</td></tr>
+<tr><td>Dense retrieval (Module 04, compared directly in Concept 03)</td><td>A ranking by geometric similarity, with no discrete terms at all</td><td>Meaning-based matches where the exact words differ (synonyms, paraphrase)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>USELESS TERM</span><h3>A term whose postings list is nearly the whole corpus</h3><p>Intersecting with a term everyone shares narrows almost nothing — the mechanism still works, but its filtering value depends on how selective the term actually is (a preview of Concept 04's idf, which quantifies exactly this).</p></article>
+<article class="info-card"><span>VOCABULARY MISMATCH</span><h3>The relevant document uses a different word entirely</h3><p>A postings list can only ever be found by the exact term used to build it — a synonym or a paraphrase produces zero matches, a limitation dense retrieval (Concept 03) doesn't share.</p></article>
+<article class="info-card"><span>UNSORTED POSTINGS</span><h3>A postings list that isn't kept sorted</h3><p>Breaks the two-pointer merge's correctness and its O(|A|+|B|) guarantee alike — Section 09's bound assumes sorted order, not just any order.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"Inverted" means the documents are stored backwards or reversed</td><td>False — "inverted" describes flipping the document→term mapping into a term→document one; nothing about a document's content is reversed.</td></tr>
+<tr><td>Postings list order doesn't affect correctness, only speed</td><td>False — Section 06's two-pointer merge produces a wrong or incomplete result on unsorted lists, not just a slower one.</td></tr>
+<tr><td>An inverted index tells you how relevant a document is to a term</td><td>False — a plain postings list encodes membership only; Concept 04 is the first concept to attach a relevance-related number to a posting.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Index construction is a batch cost paid during ingestion, amortized across every future query — the same trade this concept's b02 argument makes, now with a name: pay once, benefit on every subsequent lookup.</li>
+<li>Postings lists at real scale (millions of documents) are compressed, not stored as plain integer lists, since storing every document ID in full is expensive at that size — a forward reference to Module 09's storage trade-offs, not solved by this concept.</li>
+<li>Adding or removing a document means updating every postings list for every term that document contains — an update-cost concern with a direct analogue in Module 09, Concept 08 ("Updates, deletes and tombstones") for vector indexes.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What does an inverted index map, and in which direction?</summary><div>Term → the sorted list of document IDs containing that term (a postings list) — the reverse of the document → words mapping parsing naturally produces.</div></details>
+<details class="quiz"><summary>Why must both postings lists be sorted for the two-pointer merge to work correctly?</summary><div>Because the merge advances whichever pointer is behind and never revisits an entry — that only produces a correct intersection when both lists are in the same, consistent order (Section 09).</div></details>
+<details class="quiz"><summary>Does a postings list, on its own, tell you which matching document is most relevant?</summary><div>No — it only encodes membership (in or out). Ranking by relevance requires term weights, which Concept 04 adds on top of this exact structure.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Section 10's full index, compute the AND query "vector" AND "search" by hand: write out both postings lists, walk the two-pointer merge step by step exactly like Section 10's table, and state the final result and the total number of comparisons.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>postings("vector") = [1, 5]. postings("search") = [1, 3, 4, 5, 8]. Merge: i=0(1) vs j=0(1) → equal, MATCH (doc 1), advance both. i=1(5) vs j=1(3) → 5&gt;3, advance j. i=1(5) vs j=2(4) → 5&gt;4, advance j. i=1(5) vs j=3(5) → equal, MATCH (doc 5), advance both. List A (length 2) is now exhausted — stop. Result: [1, 5], found in 4 comparisons.</div>
+</details>
+<p>Teach-back: explain, in your own words, why this merge needed only 4 comparisons even though postings("search") has 5 entries — name the specific rule that let the merge skip comparing against document 3 and document 4 a second time.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Inverted indexes and postings lists</h3><ul><li><b>The flip:</b> term → sorted postings list of document IDs, reversing the forward index</li><li><b>The cost argument:</b> O(N·L) full scan, once per query, vs. O(1)/O(log M) lookup + O(|A|+|B|) merge</li><li><b>The merge:</b> two sorted pointers, never revisiting an entry, correctness depends on sort order</li><li><b>What's missing:</b> term weights and ranking — Concept 04 onward</li></ul></div>
+<div><h3>Memorable example</h3><p>postings("search") ∩ postings("inverted") = [4, 8], found in 6 comparisons across two short lists — D1, D2, D3, D5, D6, D7 were never opened at all.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain what an inverted index is to someone who has never heard the term, in under thirty seconds.</summary><div>It's a lookup table built the opposite way from how you'd naturally read a document: instead of "this document contains these words," it stores "this word appears in these documents," so a search for a word jumps straight to its list instead of scanning every document.</div></details>
+<details class="quiz"><summary>Why is intersecting two sorted postings lists O(|A|+|B|) instead of O(|A|·|B|)?</summary><div>Because a single pass with two pointers, each only ever advancing forward, is enough — comparing every pair would waste time re-checking relationships already resolved by sort order.</div></details>
+<details class="quiz"><summary>Write the pseudocode for intersecting two sorted lists with a two-pointer merge.</summary><div>Initialize i=j=0; while both pointers are in range, compare a[i] and b[j]: if equal, record a match and advance both; if a[i] is smaller, advance i; otherwise advance j; stop when either pointer runs past the end of its list — Section 12's intersect() function is exactly this.</div></details>
+<details class="quiz"><summary>Design question: a colleague wants to skip building an inverted index and just grep every document at query time. When, if ever, is that a reasonable choice?</summary><div>Only when the corpus is small enough, or queried rarely enough, that the full-scan cost per query is acceptable — Section 18's amortization argument only pays off once query volume or corpus size makes the one-time build cost worth it; for a handful of documents queried occasionally, a full scan can be entirely reasonable.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Inverted_index"><b>Inverted index — Wikipedia</b><br><span>A general overview of the term → postings-list structure and its use in search engines, confirming this concept's core definition.</span></a>
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/a-first-take-at-building-an-inverted-index-1.html"><b>Manning, Raghavan &amp; Schütze — "A first take at building an inverted index" (Introduction to Information Retrieval)</b><br><span>The canonical textbook derivation of building a dictionary and postings lists from a document collection, behind Section 06.</span></a>
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/processing-boolean-queries-1.html"><b>Manning, Raghavan &amp; Schütze — "Processing Boolean queries" (Introduction to Information Retrieval)</b><br><span>The source for the sorted two-pointer postings-list merge algorithm used in Sections 06, 09, 10 and the Section 14 lab.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 COMPLETE · CONCEPT 03 NEXT</span>
+<h3>The first mechanism is built — Concept 03 compares it against dense retrieval directly</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can build a postings list and merge two of them without looking back. Concept 03, "Sparse retrieval and dense retrieval," puts this concept's mechanism side by side with Module 04's vector geometry for the first time.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Postings List Intersection Race ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 03, Sparse retrieval and dense retrieval.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 02 · Complete</p>
+<a href="module-05-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

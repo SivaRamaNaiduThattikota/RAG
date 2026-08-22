@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06 opens the knowledge layer by naming what has to exist before any parsing, cleaning or embedding can start: a source inventory of every place knowledge lives, and an authority rule for what wins when two sources disagree.">
+<title>Source inventory and authority — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 01</p>
+<h1>Before you parse anything,<br><em>know what you're parsing — and who to believe.</em></h1>
+<p class="lesson-lead">Module 05 closed Phase 1 by giving retrieval a vocabulary and its first mechanisms. Module 06 opens Phase 2 — building the knowledge layer — at a different, earlier point in the pipeline: before a single document is parsed, chunked, or embedded, a real system has to know <i>where its knowledge actually lives</i>. A <b>source inventory</b> is the catalog of every place that counts — wikis, ticket systems, shared drives, databases, PDFs sitting in an email attachment. And because different sources routinely disagree about the same fact, an ingestion pipeline needs an <b>authority</b> rule: when two sources conflict, which one is trusted, and why. No parsing, cleaning, or embedding happens yet — this concept only names the raw material and the trust rule everything downstream will depend on.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First of nine concepts opening Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>None from Module 05 — a different, earlier pipeline stage with no shared mechanism</b></div>
+<div><span>BEGINNER GOAL</span><b>Define a source inventory and an authority rule, and tell each apart from parsing, cleaning and dedup — this module's later concepts</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You defined a source inventory (the catalog of every place knowledge lives) and authority (a fixed, source-type-then-recency ranking for resolving conflicting facts) — no parsing, cleaning, or dedup yet. Concept 02 opens real format-specific parsing next.</p>
+<b>1 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A catalog, and a rule for disagreement</h2>
+</div>
+<p>Every later concept in this module assumes there's already a known list of sources to work with, and a way to decide whose facts win when they conflict. This concept builds both, before any format-specific parsing begins.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A list of places, and a rule for whose facts win</h3>
+<div class="mental-compare">
+<div><span>SOURCE INVENTORY</span><p>The catalog of every place knowledge actually lives — a wiki, a ticket system, a shared drive full of PDFs, a database table, a Slack channel — before any of it has been touched.</p></div>
+<div><span>AUTHORITY</span><p>When two sources state the same fact differently, authority is the answer to "which one do we trust, and why" — a policy decision, not a coin flip.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> you cannot ingest what you haven't inventoried, and you cannot trust an ingested fact without a rule for what wins when sources disagree.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Real knowledge is scattered, and it contradicts itself</h3>
+<p>A toy RAG demo often assumes one clean folder of text files. A real organization's knowledge is spread across a wiki, a ticketing system, a code repository, spreadsheets on someone's laptop, and PDFs attached to three-year-old emails — and several of those places disagree about the same fact, because one was updated and the others weren't. If you skip the inventory step, you silently ingest whatever's easiest to reach and miss whatever isn't. If you skip authority, your system will confidently answer a question using a stale Slack message when a current policy PDF says something else — and it will have no way of knowing that's what happened.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One fact, three sources, one contradiction</h3>
+<p>A new hire asks the Oracle-backed assistant: "how many vacation days do I get?" Three places in the organization mention it:</p>
+<div class="context-demo">
+<div><span>SLACK MESSAGE, 3 DAYS OLD</span><p>A teammate writes, "I think it's 18 days now?" — informal, uncertain, not an authored policy.</p></div>
+<div><span>WIKI PAGE, 14 MONTHS OLD</span><p>"New hires receive 15 vacation days per year." — written once, never revisited.</p></div>
+<div><span>HR POLICY PDF, v4, 2 MONTHS OLD</span><p>"New hires accrue 18 vacation days per year, effective this version." — the official, current, versioned policy document.</p></div>
+</div>
+<p>All three get ingested if the source inventory includes Slack, the wiki, and the HR document store. Only an authority rule decides that the answer given to the new hire should come from the HR PDF, not the wiki or the Slack message.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0601-beginner-visual-title">
+<strong class="concept-visual-title" id="c0601-beginner-visual-title">VISUAL · FOUR KINDS OF SOURCE, ONE INVENTORY</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0601-svg-title c0601-svg-desc">
+<title id="c0601-svg-title">A source inventory box containing four kinds of source, feeding into a funnel toward later ingestion stages</title>
+<desc id="c0601-svg-desc">Four labeled boxes -- wiki, tickets, database, file share -- sit inside a dashed inventory boundary. Arrows converge from all four toward a funnel labeled parsing, cleaning, dedup, ahead, which this concept does not build.</desc>
+<rect x="8" y="10" width="444" height="90" fill="none" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="230" y="24" font-size="9" text-anchor="middle" fill="#5c6a63">SOURCE INVENTORY — WHAT THIS CONCEPT CATALOGS</text>
+<g font-size="10" text-anchor="middle">
+<rect x="20" y="34" width="96" height="44" fill="#fff" stroke="#8a978f"/><text x="68" y="52" fill="#14241f">Wiki</text><text x="68" y="66" font-size="8" fill="#5c6a63">pages, docs</text>
+<rect x="128" y="34" width="96" height="44" fill="#fff" stroke="#8a978f"/><text x="176" y="52" fill="#14241f">Tickets</text><text x="176" y="66" font-size="8" fill="#5c6a63">support, issues</text>
+<rect x="236" y="34" width="96" height="44" fill="#fff" stroke="#8a978f"/><text x="284" y="52" fill="#14241f">Database</text><text x="284" y="66" font-size="8" fill="#5c6a63">structured rows</text>
+<rect x="344" y="34" width="96" height="44" fill="#fff" stroke="#8a978f"/><text x="392" y="52" fill="#14241f">File share</text><text x="392" y="66" font-size="8" fill="#5c6a63">PDFs, slides</text>
+</g>
+<line x1="68" y1="78" x2="230" y2="110" stroke="#14241f" stroke-width="1.5"/>
+<line x1="176" y1="78" x2="230" y2="110" stroke="#14241f" stroke-width="1.5"/>
+<line x1="284" y1="78" x2="230" y2="110" stroke="#14241f" stroke-width="1.5"/>
+<line x1="392" y1="78" x2="230" y2="110" stroke="#14241f" stroke-width="1.5"/>
+<rect x="150" y="112" width="160" height="34" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="126" font-size="9" text-anchor="middle" fill="#14241f">PARSING · CLEANING · DEDUP</text>
+<text x="230" y="140" font-size="8" text-anchor="middle" fill="#14241f">Concepts 02-06, not this one</text>
+<line x1="230" y1="146" x2="230" y2="170" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0601)"/>
+<defs><marker id="arrow0601" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<text x="230" y="184" font-size="8" text-anchor="middle" fill="#5c6a63">the inventory names the boxes; it never opens them</text>
+</svg>
+<figcaption>A source inventory names every kind of place knowledge lives, without yet touching what's inside any of them. Concepts 02-04 open the file, database, and API boxes; Concept 05 onward cleans, dedups and versions what comes out.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What a source inventory records, and what authority resolves</h3>
+<div class="context-demo">
+<div><span>SOURCE INVENTORY RECORDS</span><p>For each source: its location, its type (wiki, ticket system, database, file share, API), who owns it, how often it changes, and how to reach it — nothing about its content yet.</p></div>
+<div><span>AUTHORITY RESOLVES</span><p>Given two or more sources that state the same fact differently, which one the system should prefer, using a rule fixed in advance — not decided fact-by-fact at query time.</p></div>
+<div><span>WHAT'S DEFERRED</span><p>Actually opening and parsing each source's content (Concepts 02-04), cleaning it (05), deduplicating repeated facts (06), tracking versions (07), and recording provenance (08) all come later in this module.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span class="hot">Sources — this concept's inventory and authority rule</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The familiar skeleton begins at "Documents." This concept sits one step earlier, before anything is even a document — deciding which raw places count as sources at all, and which one wins when they disagree.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three pairs beginners routinely blur</h3>
+<div class="distinction-table" role="table" aria-label="Source inventory versus parsing, authority versus recency, and cataloging versus deduplication distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Source inventory</span><span role="cell">Parsing</span><span role="cell">The inventory says a PDF exists and where; parsing (Concepts 02-04) opens it and extracts text — the inventory step can be complete while zero files have been read.</span></div>
+<div role="row"><span role="cell">Authority</span><span role="cell">Just picking the newest one</span><span role="cell">Recency is one input to authority, not the whole rule — an outdated official policy PDF can still outrank a fresh but informal Slack guess, depending on the policy.</span></div>
+<div role="row"><span role="cell">Cataloging sources</span><span role="cell">Deduplication</span><span role="cell">Cataloging lists distinct places knowledge lives; dedup (Concept 06) removes repeated or near-identical content once it's already been pulled from those places.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"We'll just ingest whatever we can easily find."</b><p>Easy-to-reach sources (a shared drive) and authoritative sources (a versioned policy system) aren't always the same places — skipping a deliberate inventory means the system's knowledge is shaped by convenience, not by what actually matters.</p></div>
+<div><b>"Newer always means more trustworthy."</b><p>A recent but off-the-cuff Slack message isn't automatically more trustworthy than an older, official document — authority depends on the source's type and role, with recency as one factor among several.</p></div>
+<div><b>"Authority is decided per answer, at query time."</b><p>Deciding trust fact-by-fact, on the fly, is inconsistent and unauditable — a real system fixes an authority policy in advance, so the same conflict resolves the same way every time.</p></div>
+<div><b>"This is the same problem as deduplication."</b><p>Dedup asks "are these two pieces of content the same thing said twice?" Authority asks "these two pieces of content disagree about a fact — which do I believe?" — related, but not the same question, and Concept 06 handles the first.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Naming the Oracle RAG project's sources and authority rule</h3>
+<div class="project-map">
+<div><span>SOURCE INVENTORY</span><b>Every place the Oracle-backed assistant is allowed to pull from</b><p>Its own tables, an internal wiki, a ticket system, and any policy documents — named and scoped before ingestion begins.</p></div>
+<div><span>AUTHORITY RULE</span><b>Official documents and the database outrank chat and informal notes</b><p>A fixed policy: structured database rows and versioned official documents win over tickets, wikis, and chat, with recency breaking ties within the same source type.</p></div>
+<div><span>PARSING, CLEANING, DEDUP — DEFERRED</span><b>How each source's content actually gets extracted and reconciled</b><p>Starts with Concept 02's format-specific parsing, well after this concept's inventory and authority decisions are already fixed.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Two definitions</b><p>A source inventory (the catalog of every place knowledge lives) and authority (a fixed rule for which source wins when facts disagree).</p></div>
+<div><b>Inventory before parsing</b><p>Cataloging a source is complete before any of its content is opened or extracted — that's Concepts 02-04's job.</p></div>
+<div><b>Authority is a policy, not a vibe</b><p>Fixed in advance, based on source type and role, with recency as a tiebreaker — not decided per query.</p></div>
+<div><b>Nothing cleaned or deduped yet</b><p>Authority resolves disagreement between sources; it doesn't remove duplicate or near-duplicate content, which is Concept 06's job.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why is "the newest source always wins" not a sufficient authority rule?</li>
+<li>Using b03's example, name one additional source your own organization might have that isn't a wiki, ticket system, database, or file share.</li>
+<li>What's the difference between cataloging a source and parsing it?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 02: PDF, HTML, Word, Excel and Markdown parsing</h3>
+<p>The inventory and authority rule are fixed. The next concept opens the boxes this one only named — extracting usable text and structure out of the five most common document formats a source inventory actually contains.</p>
+<div class="beginner-memory"><b>Concept 01 is complete.</b> Continue to PDF, HTML, Word, Excel and Markdown parsing.</div>
+<a class="button primary" href="module-06-concept-02.html">Start Concept 02 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A catalog and a trust rule — nothing parsed, cleaned, or deduped yet</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>The two ideas</b><small>Source inventory and authority, defined and distinguished from parsing and dedup.</small></a>
+<a href="#b03"><span>02</span><b>One worked conflict</b><small>Three sources, one vacation-policy fact, one authority decision.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>No parsing, cleaning, dedup, versioning, or provenance — those are Concepts 02-08.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal definitions, an authority-ranking scheme, and the Authority Arbiter lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> name the source types and the authority problem → ground it in one worked conflict → name what's explicitly out of scope → Concept 02 opens with real format-specific parsing.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the source inventory and authority deep dive</b><em>Formal definitions, an authority-ranking scheme, and the Authority Arbiter lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Phase 2 opens a step earlier than Phase 1 ended</h2></div></header>
+<p>Module 05 closed Phase 1 by giving classical retrieval a full vocabulary and its first mechanisms — inverted indexes, TF-IDF, sparse versus dense scoring. Module 06 opens Phase 2, "building the knowledge layer," at a different and earlier point in the system: before retrieval can score anything, there has to be a known set of sources and a rule for reconciling what they say. This concept builds neither an index nor a scoring function; it builds the inventory and the trust policy that everything else in this module — parsing, cleaning, dedup, versioning, provenance — will operate on.</p>
+<div class="flow">
+<div class="flow-node">Module 05 — classical retrieval's vocabulary and mechanisms</div>
+<div class="flow-node hot">Module 06, Concept 01 — source inventory and authority</div>
+<div class="flow-node">Concept 02 — format-specific parsing</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State both terms precisely</h3><p>Source inventory and authority — what each records or resolves, in a sentence each.</p></article>
+<article class="info-card"><span>CATALOG</span><h3>Build a source inventory entry</h3><p>Given a description of an organization, list its distinct knowledge sources with type, owner, and update cadence.</p></article>
+<article class="info-card"><span>RANK</span><h3>Apply an authority ranking to a conflict</h3><p>Given two or more disagreeing sources, decide which wins using a fixed source-type-then-recency rule, and justify it.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what this concept does not build</h3><p>No parsing, cleaning, dedup, versioning, or provenance tracking — those begin at Concept 02 onward.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 03's RAG pipeline overview.</b> "Documents" was already named as the pipeline's starting stage; this concept asks where those documents actually come from before they're documents at all.</li>
+<li><b>No mechanism from Module 05.</b> This concept runs in parallel with Module 05 by design — inventorying and trusting sources shares no mechanism with inverted indexes or TF-IDF scoring, so nothing there is assumed.</li>
+<li><b>Nothing about parsing, cleaning, or dedup is assumed</b> — those terms are defined for the first time in this module's later concepts, not recalled here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A librarian's shelving list, before a single book is read</h2></div></header>
+<p>Imagine a librarian tasked with building a reference desk. Before reading a single book, they first need a list of every room, cabinet, and box that might contain something worth shelving — the archive room, the donated-boxes closet, the digital catalog, the pamphlet drawer. That list is the source inventory. Now imagine two donated encyclopedias disagree about a fact: one says a bridge opened in 1932, the other in 1936. The librarian needs a standing rule — perhaps "prefer the more recently published, professionally edited source over the older, self-published one" — rather than flipping a coin each time a patron asks. That standing rule is authority.</p>
+<div class="callout warning"><b>Analogy boundary</b>The librarian's shelving list only names the boxes; it says nothing about what's readable inside them. A real ingestion pipeline hits exactly the same gap — cataloging a file share doesn't tell you whether the files inside are scanned images, clean text, or corrupted exports, which is precisely why parsing needs its own concept next.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Source</td><td>One distinct system, repository, or channel where knowledge originates</td><td>s ∈ S</td></tr>
+<tr><td>Source inventory</td><td>The complete catalog of sources an ingestion pipeline is scoped to draw from</td><td>S = {s₁, s₂, …, s_M}</td></tr>
+<tr><td>Source metadata</td><td>Per-source attributes recorded at inventory time: type, owner, location, update cadence</td><td>meta(s) = (type, owner, location, cadence)</td></tr>
+<tr><td>Authority</td><td>A fixed ranking function over sources, used to resolve conflicting claims about the same fact</td><td>auth: S → rank, lower rank wins a conflict</td></tr>
+</tbody>
+</table>
+<p>auth is defined over sources, not over individual facts — it's a standing policy applied consistently, which is exactly what separates it from ad hoc, per-query trust decisions (Section 17's first misconception).</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>From scattered knowledge to a resolvable conflict</h2></div></header>
+<div class="lane-flow">
+<div><b>Knowledge exists across many systems</b> — wikis, tickets, databases, file shares, chat — before anyone has organized them for ingestion.</div>
+<div><b>A source inventory is built</b> — each system is named, typed, and scoped as in or out of what the pipeline will draw from.</div>
+<div><b>Later concepts pull content from each source</b> — parsing (02-04), cleaning (05), dedup (06), all out of this concept's scope.</div>
+<div><b>Two sources are found to disagree about a fact</b> — the trigger for authority to matter at all.</div>
+<div><b>auth(s) resolves the conflict</b> — the higher-ranked source's claim is used; the loss is recorded, not silently discarded (a forward reference to Concept 08's provenance).</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The authority ranking as an ordered ladder</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable ladder diagram ranking four source types by authority, live system of record highest, chat message lowest">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Rank 1 · highest</b><small>Live system of record, current official policy document</small></div>
+<div class="diagram-node"><b>Rank 2 · middle</b><small>Wiki page, email thread — authored but not continuously maintained</small></div>
+<div class="diagram-node"><b>Rank 3 · lowest</b><small>Chat message, informal note — fast, but unauthored and unversioned</small></div>
+</div>
+</div>
+<p>The ladder is the rule Section 10 and the lab both apply: rank by source type first; only break ties within the same rank using recency. A rank-1 source that's slightly older still beats a rank-3 source that's brand new.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Sources — inventoried and ranked by authority here</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept fixes what feeds the pipeline's first labeled stage, "Documents," and how conflicting facts among those feeds get resolved before they ever reach parsing, chunking, or embedding.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A ranking as a total order, deliberately simple</h2></div></header>
+<p>Authority as used here is a total order over source types, with recency as an explicit tiebreaker — no probabilities or learned weights yet:</p>
+<div class="equation">auth(s) = (type_rank(s), -recency(s))
+prefer s over s'  if  auth(s) &lt; auth(s')   (lexicographic: type first, then more-recent wins)</div>
+<p>type_rank groups sources into tiers (e.g. 1 = system of record or current official document, 2 = authored-but-static wiki or email, 3 = informal chat); recency is compared only within the same tier. This concept deliberately stops at a fixed, hand-set ranking — Module 20's governance material is where confidence scores and per-tenant overrides would extend it, out of scope here.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Resolving b03's vacation-days conflict by the rule</h2></div></header>
+<p>Applying auth(s) = (type_rank, -recency) to the three sources from b03:</p>
+<table class="worked-table">
+<thead><tr><th>Source</th><th>Type</th><th>type_rank</th><th>Age</th><th>auth(s)</th></tr></thead>
+<tbody>
+<tr><td>HR policy PDF, v4</td><td>Current official policy document</td><td>1</td><td>2 months</td><td>(1, -2mo) — wins</td></tr>
+<tr><td>Wiki page</td><td>Authored, not continuously maintained</td><td>2</td><td>14 months</td><td>(2, -14mo)</td></tr>
+<tr><td>Slack message</td><td>Informal chat</td><td>3</td><td>3 days</td><td>(3, -3d) — loses despite being newest</td></tr>
+</tbody>
+</table>
+<p>The Slack message has the best recency of all three, and still loses, because type_rank is compared first: rank 1 beats rank 2 and rank 3 regardless of age. That's the entire point of stating the rule as lexicographic rather than "just pick the newest" — it's the exact mistake named in Section 17.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cases: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Corporate policy assistant</h3><p>Inventory: HR system, wiki, ticket archive, Slack. Authority: current official documents and the HR database outrank wiki and chat, unambiguously.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Engineering on-call assistant</h3><p>Inventory: a live scheduling API, a team wiki, email threads. Authority: the live system of record always outranks the wiki, even though both are "official-sounding."</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Two sources of the same rank, same age</h3><p>If two rank-1 sources genuinely disagree with no recency difference, the authority rule as stated doesn't resolve it — this is a real gap that forces either a manual override or a stricter ranking, not a flaw to paper over silently.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Ranking by how confident the text sounds</h3><p>A Slack message that says "I'm 100% sure it's 18 days" is not more authoritative for sounding certain — authority is a property of the source's type and role, never of the claim's wording or tone.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Modeling sources and applying the authority rule — no parsing yet</h2></div></header>
+<p>This concept's code represents an inventory and applies the auth(s) ranking to a conflict; it does not open, parse, or extract text from any real file — that begins at Concept 02.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · SOURCE INVENTORY AND AUTHORITY RESOLUTION, NO PARSING</span>
+<pre><code>from dataclasses import dataclass
+
+@dataclass
+class Source:
+    name: str
+    type_rank: int      # 1 = system of record / current official doc, 2 = authored-static, 3 = informal
+    age_days: int        # smaller is more recent
+    claim: str
+
+def authority_key(s: Source):
+    # Lexicographic: type_rank ascending first, then more-recent (smaller age_days) wins.
+    return (s.type_rank, s.age_days)
+
+sources = [
+    Source("HR policy PDF v4", type_rank=1, age_days=60,  claim="18 days"),
+    Source("Wiki page",        type_rank=2, age_days=420, claim="15 days"),
+    Source("Slack message",    type_rank=3, age_days=3,   claim="18 days (uncertain)"),
+]
+
+winner = min(sources, key=authority_key)
+assert winner.name == "HR policy PDF v4"          # rank 1 wins despite not being newest
+assert winner.claim == "18 days"
+
+# The Slack message is newest by far but still loses -- type_rank is compared first.
+newest = min(sources, key=lambda s: s.age_days)
+assert newest.name == "Slack message"
+assert newest.name != winner.name
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same two ideas, inside real ingestion tooling</h2></div></header>
+<p>Enterprise data-catalog tools (data governance platforms, source registries) exist specifically to maintain a source inventory at scale — recording ownership, sensitivity, and refresh cadence for every connected system, the same fields Section 05's meta(s) names generically. Connector frameworks used by RAG tooling (LangChain document loaders, LlamaIndex readers) each correspond to one inventoried source type; authority itself is rarely built into these frameworks directly and is usually a deliberate design decision layered on top, exactly the gap this concept is naming before Module 20 revisits it as governance.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Authority Arbiter</h2></div></header>
+<div class="lab">
+<p>Pick a scenario, then choose which source you'd trust for the fact in question. Reveal the lesson's authority ranking and see whether your pick matches the source-type-then-recency rule.</p>
+<div class="lab-controls" id="wgScenarioControls_0601">
+<div class="control"><label for="wgScenario_0601">Scenario</label>
+<select id="wgScenario_0601">
+<option value="vacation">Vacation policy — HR PDF vs. wiki vs. Slack</option>
+<option value="refund">Refund window — current PDF vs. superseded PDF vs. a support ticket</option>
+<option value="oncall">On-call engineer — live scheduling API vs. wiki vs. email</option>
+</select>
+</div>
+</div>
+<div class="lab-actions" id="wgSourceCards_0601"></div>
+<div class="lab-actions">
+<button type="button" id="wgCheck_0601">Reveal the lesson's ranking</button>
+<button type="button" id="wgReset_0601" class="secondary">Reset my pick</button>
+</div>
+<div class="norm-readout" id="wgReadout_0601" hidden>
+<div><span>YOU PICKED</span><b id="wgPick_0601"></b></div>
+<div><span>AUTHORITY RANKING PICKS</span><b id="wgWinner_0601"></b></div>
+</div>
+<div class="callout" id="wgVerdict_0601" hidden></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Fixed authority ranking vs. confidence-scored trust</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it captures</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>Fixed authority ranking (this concept)</td><td>A hand-set, auditable order of source types with recency as tiebreaker</td><td>Most ingestion pipelines — simple, explainable, and enough to resolve the common cases</td></tr>
+<tr><td>Confidence-scored trust</td><td>A learned or continuously updated score per source, blending recency, corroboration, and historical accuracy</td><td>Large-scale, high-stakes systems where a fixed ranking proves too coarse — a governance-layer extension, not built in this module</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSING SOURCE</span><h3>A real knowledge location was never inventoried</h3><p>No authority rule can rescue a fact that was never ingested because its source wasn't on the list — an inventory-completeness problem, not an authority problem.</p></article>
+<article class="info-card"><span>UNDEFINED RANK</span><h3>A new source type shows up with no assigned rank</h3><p>Without a rank, auth(s) can't compare it to anything — a real pipeline needs a default rank and a process for classifying unfamiliar sources, or conflicts involving it silently misresolve.</p></article>
+<article class="info-card"><span>SILENT OVERRIDE</span><h3>A losing source's claim is discarded with no record</h3><p>If the loser of a conflict isn't logged anywhere, nobody can audit why the system answered one way instead of another — Concept 08's provenance concept exists specifically to prevent this.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The newest source is always the most authoritative</td><td>False — Section 10's worked example: the newest source (Slack) loses to an older, higher-type-rank source (the HR PDF).</td></tr>
+<tr><td>A confident-sounding claim is a more trustworthy claim</td><td>False — Section 11's mistake case: tone or certainty in the text has nothing to do with the source's structural authority.</td></tr>
+<tr><td>Cataloging sources and parsing their content are the same step</td><td>False — Section 06's mechanism: the inventory can be complete while zero files have been opened; parsing is Concept 02 onward.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>An incomplete source inventory is invisible until someone asks a question the system can't answer well — inventory gaps surface as answer-quality gaps much later, making the connection hard to trace back.</li>
+<li>Authority rankings need an owner and a review process; treating them as "set once, forget forever" lets stale rankings quietly misresolve new kinds of conflicts as an organization's tools change.</li>
+<li>Some organizations must retain a record of which source lost a conflict and why, for compliance or dispute-resolution reasons — a forward reference to Concept 08's provenance and lineage tracking.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Is authority decided per query, or fixed in advance as a policy?</summary><div>Fixed in advance — Section 05 defines auth(s) as a standing ranking function over sources, applied consistently, not re-decided each time a question is asked.</div></details>
+<details class="quiz"><summary>In auth(s) = (type_rank, -recency), which factor is compared first?</summary><div>type_rank — recency only breaks ties between sources that already share the same type_rank, which is exactly why the newest source can still lose in Section 10.</div></details>
+<details class="quiz"><summary>What's the difference between a source inventory being complete and a source being fully parsed?</summary><div>A complete inventory only means every relevant source has been identified and cataloged; parsing (Concept 02 onward) is the separate step of actually opening a source and extracting usable content from it.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A small company has these knowledge sources: a customer support ticket system, a company handbook PDF (updated quarterly), a shared spreadsheet nobody officially owns, and a live inventory-management database. Assign each a type_rank (1, 2, or 3) with one sentence of justification, then resolve this conflict: the spreadsheet says a product has "42 units in stock," and the live database says "17 units in stock." State which source wins and why.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Live inventory database — type_rank 1, it is a system of record updated continuously. Handbook PDF — type_rank 1 or a close 2, it is official and versioned but only quarterly, so it's less current than a live system for fast-changing facts. Support ticket system — type_rank 2, authored records but not the source of truth for stock or policy facts themselves. Unowned spreadsheet — type_rank 3, informal and unmaintained despite looking structured. For the stock conflict: the live database wins over the spreadsheet regardless of which number looks more specific or recent-sounding, because a live system of record outranks an unowned spreadsheet by type — 17 units is the trusted answer.</div>
+</details>
+<p>Teach-back: explain, in your own words, why "the spreadsheet number looks more precise" is not a valid reason to trust it over the live database.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Source inventory and authority</h3><ul><li><b>Source inventory:</b> the catalog of every place knowledge lives, before any parsing</li><li><b>Authority:</b> auth(s) — a fixed ranking, type first, recency second, resolving conflicts between sources</li><li><b>Never:</b> confidence of tone, or "just pick the newest"</li></ul></div>
+<div><h3>Memorable example</h3><p>A three-day-old Slack guess loses to a two-month-old official policy PDF — proof that recency alone never overrides source type in a properly stated authority rule.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define a source inventory without using the word "list."</summary><div>A deliberately scoped catalog of every distinct system or repository an ingestion pipeline is authorized to draw knowledge from, recorded before any of that content is opened or extracted.</div></details>
+<details class="quiz"><summary>Why isn't "always trust the newest source" a sufficient authority policy?</summary><div>Because recency says nothing about a source's type, ownership, or role — an informal, unauthored source can be the newest and still be the least trustworthy, as shown by the Slack-versus-HR-PDF conflict.</div></details>
+<details class="quiz"><summary>A stakeholder asks why your ingestion pipeline needs an authority rule at all if every source is "generally accurate." What's your answer?</summary><div>Because "generally accurate" sources still disagree with each other on specific facts, and without a standing rule the system's answer to the same conflict becomes inconsistent and unauditable — exactly the failure mode in Section 16's silent-override case.</div></details>
+<details class="quiz"><summary>Design question: how would you extend this concept's fixed ranking if two sources of identical type_rank and identical age still disagreed?</summary><div>The stated rule as given doesn't resolve it (Section 11's boundary case) — a real extension needs either a manual override process, an additional tiebreaker field, or escalation to a human reviewer, which is the kind of governance extension Module 20 covers.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Single_source_of_truth"><b>Single source of truth — Wikipedia</b><br><span>Names the general principle behind treating one designated source as authoritative when others might disagree, the concept this lesson's authority rule applies concretely.</span></a>
+<a href="https://en.wikipedia.org/wiki/Data_governance"><b>Data governance — Wikipedia</b><br><span>Covers the broader organizational practice of cataloging, owning, and setting policy over data sources, of which this concept's source inventory and authority rule are a working slice.</span></a>
+<a href="https://en.wikipedia.org/wiki/System_of_record"><b>System of record — Wikipedia</b><br><span>Defines the highest-authority source type used throughout this concept's examples and the worked ranking in Section 09-10.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 · COMPLETE</span>
+<h3>Sources cataloged, authority fixed — real parsing opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can state auth(s) as type-rank-first, recency-second. Concept 02, "PDF, HTML, Word, Excel and Markdown parsing," opens this module's real extraction work.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-02.html">Start Concept 02 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 02, PDF, HTML, Word, Excel and Markdown parsing.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 01 · Complete</p>
+<a href="../index.html">← Back to home</a>
+</footer>
+</body>
+</html>

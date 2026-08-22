@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 08 covers provenance, lineage and timestamps: where a fact came from, which pipeline stages a record passed through on its way here, and when each of those events happened — plus the ingestion-lag metric that measures the gap between a source's own edit and the pipeline noticing it.">
+<title>Provenance, lineage and timestamps — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 08</p>
+<h1>Every fact has<br><em>a paper trail.</em></h1>
+<p class="lesson-lead">Concept 07 gave POLICY-REFUND-001 a stable identity that survives its own edits. This concept asks three questions Concept 07 never had to: WHERE did that policy text actually come from, WHICH steps did it pass through on the way into the index, and WHEN did each of those events really happen? Provenance answers the first, lineage the second, timestamps the third — three separate fields, bundled into one concept because a real audit, or a real debugging session, needs all three at once.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 07's effective_at timestamp for POLICY-REFUND-001, reused directly as one lineage event, and Concept 01's auth(s) formula, now shown as a consumer of this concept's fields</b></div>
+<div><span>BEGINNER GOAL</span><b>Tell provenance, lineage and authority apart, and compute an ingestion lag from a source timestamp and a pipeline timestamp</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Where it came from, what it passed through, when it happened</h2>
+</div>
+<p>Concept 06 asked whether two records existing right now were really the same thing. Concept 07 asked how one document's own content changes across its version history. This concept asks a third, different question: for any single fact sitting in the index, can you point to the exact source it came from, the exact chain of stages it passed through to get here, and the exact moments each of those things happened?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three separate questions, bundled into one concept</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Provenance — WHERE a fact came from: which source, which author or team. Lineage — the chain of transformation STEPS a record passed through: source → parse → clean → dedup → version, spanning Concepts 02 through 07. Timestamps — WHEN each of those events happened: source-created, source-last-modified, ingested.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Concept 07's within-one-doc_id version history. That story is reused here as one link in the larger chain — it is not re-taught from scratch.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> provenance answers WHERE, lineage answers WHICH STEPS, timestamps answer WHEN. Three different questions with three different fields, because a real audit needs all three answered at once, not just one of them.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Authority needs an input, debugging needs a trail, audits need a clock</h3>
+<p>Concept 01's auth(s) = (type_rank(source_type), −recency) formula has been running since Module 06 opened — but it has never had anywhere to get source_type and recency FROM. This concept is exactly where those two fields get captured and named: they are provenance fields, and authority is simply a formula that consumes them, not a separate thing that reinvents them. Without a lineage chain, a bad chunk surfacing at query time cannot be traced back to which single stage — parsing, cleaning, or dedup — actually introduced the problem. And without timestamps, a question as basic as "is this evidence still fresh" or "who is accountable for this fact, and since when" has no real answer at all.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>POLICY-REFUND-001, traced back to where it actually lives</h3>
+<p>Concept 07 gave POLICY-REFUND-001 a stable doc_id and two versions. This concept adds the story Concept 07 never told: where that policy text actually lives, and when each real-world event around it happened. source_type = <b>internal_wiki</b>, source_id = <b>wiki:legal-compliance/refund-policy</b>, author = <b>Legal &amp; Compliance team</b>. The wiki page itself was first authored on source_created_at = <b>2024-10-28</b> — a property of the page as a whole, not of either version sitting on top of it.</p>
+<div class="example-grid">
+<article class="info-card"><span>V1 · SUPERSEDED</span><h3>No edit yet</h3><p>source_last_modified_at = 2024-10-28, the same day as creation. The pipeline's ingested_at = 2024-11-02 — a 5-day ingestion lag between the page settling and the pipeline noticing.</p></article>
+<article class="info-card"><span>V2 · CURRENT</span><h3>Legal's 45-day edit</h3><p>source_last_modified_at = 2025-06-10. The pipeline's ingested_at = 2025-06-18 — an 8-day ingestion lag, and exactly the effective_at Concept 07 already published for this same version.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0608-beginner-visual-title">
+<strong class="concept-visual-title" id="c0608-beginner-visual-title">VISUAL · SOURCE-SIDE EDITS, PIPELINE-SIDE INGESTION, ONE 220-DAY GAP</strong>
+<svg class="vector-plane" viewBox="0 0 460 234" role="img" aria-labelledby="c0608-svg-title c0608-svg-desc">
+<title id="c0608-svg-title">Timeline of POLICY-REFUND-001's source and pipeline timestamps, with the 220-day gap between versions compressed by a break mark</title>
+<desc id="c0608-svg-desc">A horizontal axis marks four events left to right: source_created_at together with v1's source_last_modified_at on 2024-10-28 (day 0), v1's ingested_at five days later on 2024-11-02 (day 5), then a break in the axis representing 220 days in which the wiki page sat unedited, then v2's source_last_modified_at on 2025-06-10 (day 225), then v2's ingested_at eight days later on 2025-06-18 (day 233). A dashed continuation past the last marker is labeled plus 431 days to today, 2026-08-23. A curved annotation above connects the two ingested_at points and labels the gap 228 days, matching Concept 07's own published version-one lifespan exactly. Two dimension lines below the axis label the two ingestion lags: 5 days for v1 and 8 days for v2.</desc>
+<path d="M130,144 Q260,38 390,144" fill="none" stroke="#14241f" stroke-width="1.5"/>
+<text x="260" y="30" font-size="8" fill="#14241f" text-anchor="middle" font-weight="700">228 days — matches Concept 07's v1 lifespan exactly</text>
+<line x1="40" y1="150" x2="300" y2="150" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="1 5"/>
+<line x1="300" y1="150" x2="390" y2="150" stroke="#14241f" stroke-width="2"/>
+<line x1="40" y1="150" x2="130" y2="150" stroke="#14241f" stroke-width="2"/>
+<line x1="390" y1="150" x2="430" y2="150" stroke="#14241f" stroke-width="2" stroke-dasharray="3 4" marker-end="url(#arrow0608)"/>
+<line x1="204" y1="143" x2="214" y2="157" stroke="#14241f" stroke-width="2"/>
+<line x1="216" y1="143" x2="226" y2="157" stroke="#14241f" stroke-width="2"/>
+<text x="210" y="132" font-size="7.5" fill="#5c6a63" text-anchor="middle">220 days, page unedited</text>
+<text x="210" y="176" font-size="7.5" fill="#5c6a63" text-anchor="middle">(2024-11-02 → 2025-06-10)</text>
+<circle cx="40" cy="150" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="130" cy="150" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="300" cy="150" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="390" cy="150" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<g font-size="7.5" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="40" y="88">2024-10-28</text><text x="40" y="99">day 0</text>
+<text x="40" y="172">source_created_at</text><text x="40" y="182">= v1 source_last_modified_at</text>
+<text x="130" y="88">2024-11-02</text><text x="130" y="99">day 5</text>
+<text x="130" y="172">ingested_at (v1)</text>
+<text x="300" y="88">2025-06-10</text><text x="300" y="99">day 225</text>
+<text x="300" y="172">source_last_modified_at</text><text x="300" y="182">(v2, Legal's edit)</text>
+<text x="390" y="88">2025-06-18</text><text x="390" y="99">day 233</text>
+<text x="390" y="172">ingested_at (v2)</text><text x="390" y="182">= Concept 07's effective_at</text>
+<text x="412" y="99" fill="#ff7957" font-weight="700">+431d</text><text x="412" y="110" fill="#ff7957">→ today</text>
+</g>
+<line x1="40" y1="195" x2="40" y2="205" stroke="#ff7957" stroke-width="1.5"/>
+<line x1="130" y1="195" x2="130" y2="205" stroke="#ff7957" stroke-width="1.5"/>
+<line x1="40" y1="200" x2="130" y2="200" stroke="#ff7957" stroke-width="1.5"/>
+<text x="85" y="216" font-size="8" fill="#ff7957" text-anchor="middle" font-weight="700">ingestion_lag(v1) = 5 days</text>
+<line x1="300" y1="195" x2="300" y2="205" stroke="#ff7957" stroke-width="1.5"/>
+<line x1="390" y1="195" x2="390" y2="205" stroke="#ff7957" stroke-width="1.5"/>
+<line x1="300" y1="200" x2="390" y2="200" stroke="#ff7957" stroke-width="1.5"/>
+<text x="345" y="216" font-size="8" fill="#ff7957" text-anchor="middle" font-weight="700">ingestion_lag(v2) = 8 days</text>
+<defs><marker id="arrow0608" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+</svg>
+<figcaption>White dots mark source-side events; lime dots mark pipeline-side ingested_at events — the same colour split as the distinction in Step 06. The axis break compresses 220 quiet days into one mark so both 5-day and 8-day ingestion lags stay readable at the same scale. Not drawn to scale: the total lineage span from source_created_at to v2's ingested_at is 233 days, and today, 2026-08-23, sits 431 days past v2's ingested_at — the same 431 days Concept 07 already published as v2's current lifespan.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Seven fields, captured once and never guessed at</h3>
+<table class="compare-table">
+<thead><tr><th>Field</th><th>Meaning</th><th>This document's values</th></tr></thead>
+<tbody>
+<tr><td>source_id</td><td>Which specific source record this fact came from</td><td>wiki:legal-compliance/refund-policy</td></tr>
+<tr><td>source_type</td><td>Concept 01's own authority input</td><td>internal_wiki</td></tr>
+<tr><td>author</td><td>Who or which team is accountable for the content</td><td>Legal &amp; Compliance team</td></tr>
+<tr><td>lineage[]</td><td>Ordered list of {stage, concept_ref, timestamp} events, one per pipeline step</td><td>parse (Concept 02) → clean (Concept 05) → dedup (Concept 06) → version (Concept 07)</td></tr>
+<tr><td>source_created_at</td><td>When the underlying source record was first authored</td><td>2024-10-28</td></tr>
+<tr><td>source_last_modified_at</td><td>When the source itself was last edited</td><td>2024-10-28 (v1) → 2025-06-10 (v2)</td></tr>
+<tr><td>ingested_at</td><td>When the pipeline actually picked the change up</td><td>2024-11-02 (v1) → 2025-06-18 (v2)</td></tr>
+</tbody>
+</table>
+<p>ingested_at is not a new fact invented by this concept — it IS Concept 07's effective_at, the same real-world event viewed from the lineage side instead of the versioning side. Same timestamp, two names, two different jobs.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Captured alongside every earlier stage, not reconstructed after the fact</h3>
+<div class="pipeline-preview">
+<span>Concept 06 — dedup + canonicalization</span><i>↓</i><span>Concept 07 — identity and versioning</span><i>↓</i><span class="hot">Concept 08 — provenance, lineage and timestamps</span><i>↓</i><span>Module 07 — chunking</span>
+</div>
+<p>This concept's fields are not bolted onto a finished record after the fact. Every stage from Concept 02 onward appends its own lineage event live, as it runs — the parser logs its own event when it parses, the cleaner logs its own event when it cleans, and so on. This concept's job is naming that accumulating trail and the source-side facts sitting above it, not reconstructing it after the fact from logs — that reconstruction path exists too, but only as a fallback (Section 06's backfill lane, in the advanced material).</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Provenance and lineage distinguished from authority and from versioning">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Provenance (this concept)</span><span role="cell">Authority (Concept 01)</span><span role="cell">Provenance supplies source_type and recency; authority is the ranking formula that consumes those two fields. Confusing the two makes it sound like there are two competing rules instead of one rule fed by one set of facts.</span></div>
+<div role="row"><span role="cell">Lineage (this concept, the step CHAIN)</span><span role="cell">Versioning (Concept 07, WITHIN one doc_id only)</span><span role="cell">Concept 07's version history is one link inside this concept's larger multi-stage chain, not a competing concept. Lineage spans Concepts 02 through 07; versioning is only Concept 07's own piece of it.</span></div>
+<div role="row"><span role="cell">This concept's 3 timestamps (source-side + pipeline-side)</span><span role="cell">Concept 07's 2 timestamps (pipeline-side only)</span><span role="cell">effective_at/superseded_at track a version's own lifespan inside the pipeline. source_created_at and source_last_modified_at track the SOURCE's own history, upstream of the pipeline entirely — a distinction the ingestion-lag metric depends on.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Provenance and authority are the same thing."</b><p>False — authority is a formula; provenance is one of its inputs. A source can have excellent provenance metadata and still rank low on authority if its source_type is weak.</p></div>
+<div><b>"Lineage just means where it came from."</b><p>False — that's provenance alone. Lineage is the whole multi-stage trail a record passed through, not just its starting point.</p></div>
+<div><b>"ingested_at and source_last_modified_at are always close together."</b><p>False — the gap between them (ingestion_lag) is itself a useful staleness signal. A large gap means the pipeline is slow to notice real-world edits, exactly what this concept's lab measures.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>CITATION ATTRIBUTION</span><b>Provenance fields power "which source said this"</b><p>source_id and author are exactly what a later citation needs to point a generated claim back to something real, not just an internal doc_id.</p></div>
+<div><span>DEBUGGING</span><b>Lineage powers "which stage introduced this artifact"</b><p>A bad chunk surfacing at query time can be walked back through its own lineage[] list to the exact stage that produced the defect.</p></div>
+<div><span>FRESHNESS + AUDITS</span><b>Timestamps power monitoring and compliance, both named forward</b><p>ingestion_lag feeds Module 19's freshness SLOs; the full timestamp set feeds Module 20's "Auditability, governance and compliance," both previewed only, not built yet.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Provenance feeds authority, it doesn't replace it</b><p>source_type and recency are provenance fields; auth(s) is the formula that ranks sources using them.</p></div>
+<div><b>Lineage is the whole chain, not just the start</b><p>Provenance names where a fact started; lineage names every stage it passed through afterward, Concepts 02 through 07 included.</p></div>
+<div><b>Three timestamps, not two</b><p>source_created_at and source_last_modified_at live upstream of the pipeline; ingested_at is where Concept 07's effective_at re-enters this concept's own vocabulary.</p></div>
+<div><b>The gap itself is a signal</b><p>ingestion_lag = ingested_at − source_last_modified_at measures how quickly the pipeline notices real-world change — not a fixed, always-small number.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does auth(s) from Concept 01 need this concept's provenance fields to run at all?</li>
+<li>POLICY-REFUND-001 v2's source_last_modified_at is 2025-06-10 and its ingested_at is 2025-06-18. What is ingestion_lag(v2), and why is that number a genuinely different fact from Concept 07's own "431 days current" figure?</li>
+<li>Why does a lineage chain vary in length between two different documents ingested through the same pipeline?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 09: Incremental and event-driven ingestion</h3>
+<p>This concept named where a fact came from, what it passed through, and when each of those events happened. The next concept closes Module 06 by asking how the pipeline notices that any of this needs to happen again — polling a source on a schedule versus reacting the moment a source actually changes.</p>
+<div class="beginner-memory"><b>Concept 08 is active.</b> Continue to Concept 09, "Incremental and event-driven ingestion," once it's built.</div>
+<a class="button primary" href="module-06-concept-07.html">← Back to Concept 07</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Where, which steps, and when — for one running example</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>POLICY-REFUND-001, traced to its source</b><small>Same running example as Concept 07, now with three real timestamps.</small></a>
+<a href="#b04"><span>02</span><b>The seven-field table</b><small>source_id, source_type, author, lineage[], and three timestamps.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Authority (Concept 01) and versioning (Concept 07) stay separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Lineage Latency Ledger lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concept 07's own boundary -- provenance and lineage are a separate, later job -- → the wiki page's own history, captured for the first time → ingestion_lag computed and cross-checked twice against Concept 07's published numbers → Concept 09 opens incremental ingestion next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the provenance, lineage and timestamps deep dive</b><em>Formal notation, from-scratch code, and the Lineage Latency Ledger lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From one document's version history to every fact's own paper trail</h2></div></header>
+<p>Concept 07 tracked one document's own content changing across time, held together by a persistent doc_id. This concept widens the lens: where the underlying source actually lives, which stages a record passed through to reach the index at all, and when each of those events happened — spanning Concepts 02 through 07 as one connected trail rather than seven separate stories.</p>
+<div class="flow">
+<div class="flow-node">Concept 06 — deduplication and canonicalization</div>
+<div class="flow-node">Concept 07 — document identity and versioning</div>
+<div class="flow-node hot">Concept 08 — provenance, lineage and timestamps</div>
+<div class="flow-node">Concept 09 — incremental and event-driven ingestion</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>STATE</span><h3>State the provenance-to-authority relationship</h3><p>Authority's inputs, source_type and recency, are literally provenance fields — authority consumes them, it does not redefine them.</p></article>
+<article class="info-card"><span>CONSTRUCT</span><h3>Construct a lineage chain from earlier concepts' own stages</h3><p>Given Concepts 02-07's own outputs, lay out an ordered {stage, concept_ref, timestamp} list for one document.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Distinguish source-side from pipeline-side timestamps</h3><p>source_created_at/source_last_modified_at live upstream of the pipeline; ingested_at is where Concept 07's effective_at re-enters this concept's vocabulary.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute an ingestion lag and flag a non-monotonic chain</h3><p>ingestion_lag = ingested_at − source_last_modified_at; a chain whose timestamps don't strictly increase is itself a lineage-integrity error.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's auth(s) formula, reused unchanged.</b> This concept shows what feeds it — source_type and recency are both provenance fields — without altering the formula itself.</li>
+<li><b>Concepts 02 through 07, complete.</b> Each becomes exactly one link in this concept's lineage chain: parsing (02/03), OCR when it ran (04), cleaning (05), dedup/canonicalization (06), and versioning (07).</li>
+<li><b>Concept 07's effective_at, reused directly.</b> It is not re-derived here — it IS this concept's ingested_at, the same real-world event under a different name.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>An evidence bag, signed and timestamped at every hand-off</h2></div></header>
+<p>A chain of custody is what keeps a piece of physical evidence admissible: every person who touches the evidence bag signs it and timestamps the hand-off, so nobody can later claim the bag was tampered with, swapped, or altered without it showing up in the record. A document's lineage plays exactly that role for a fact moving through this pipeline — every stage that touches the record appends its own signed, timestamped event, so the fact arriving at the index can be traced back through every hand-off that produced it.</p>
+<div class="callout warning"><b>Analogy boundary</b>The chain-of-custody analogy explains why an unbroken, ordered trail matters. It does not explain how to compute an ingestion lag in days, or what a non-monotonic timestamp actually looks like — Sections 05 and 09 give both formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Provenance record</td><td>The set of fields identifying where a fact came from: source_id, source_type, author</td><td>prov(doc_id)</td></tr>
+<tr><td>Lineage chain</td><td>An ordered list of {stage, concept_ref, timestamp} events a record passed through</td><td>L(doc_id) = (e1, …, en)</td></tr>
+<tr><td>source_created_at</td><td>When the underlying source record was first authored</td><td>t_src_created</td></tr>
+<tr><td>source_last_modified_at</td><td>When the source itself was last edited</td><td>t_src_mod</td></tr>
+<tr><td>ingested_at</td><td>When the pipeline picked the change up — the same event as Concept 07's effective_at</td><td>t_ingest</td></tr>
+<tr><td>ingestion_lag</td><td>The gap between a source edit and the pipeline noticing it</td><td>t_ingest − t_src_mod</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: capture it live, or reconstruct it after the fact</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>CAPTURE-AT-EACH-STAGE LANE</span><p>Each of Concepts 02-07's own stages appends its own lineage event the moment it runs — the parser logs itself when it parses, the cleaner logs itself when it cleans. This is the default lane: accurate, but it depends on every stage actually being instrumented to log its own event.</p></div>
+<div class="lane"><span>BACKFILL LANE</span><p>When live capture was missed at some stage, a lineage chain can be best-effort reconstructed afterward from logs, timestamps on stored artifacts, or process metadata. This is a real fallback, not a preferred path — it is vulnerable to exactly the gaps Section 16 diagnoses.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Every earlier concept, converging into one provenance-attached chain</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing provenance fields attached while the lineage chain converges through Concepts 02, 05, 06 and 07">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Provenance + lineage captured live</b><small>source_id, source_type, author attached throughout</small></div>
+<div class="diagram-node"><b>Concept 02/03 — Parse</b><small>Appends the first lineage event</small></div>
+<div class="diagram-node"><b>Concept 05 — Clean</b><small>Appends its own event, timestamp &gt; parse's</small></div>
+<div class="diagram-node"><b>Concept 06 — Dedup / canonicalize</b><small>Appends its own event, timestamp &gt; clean's</small></div>
+<div class="diagram-node"><b>Concept 07 — Version</b><small>Contributes effective_at as this concept's ingested_at</small></div>
+</div>
+</div>
+<p>Every one of Concepts 02 through 07 was already producing an output record. What this concept adds is the recognition that each of those stages was also, the whole time, generating exactly one lineage event — and that the provenance fields (source_id, source_type, author) travel alongside every one of them rather than being attached only at the very end.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span>Extraction — Concepts 02-04</span><i>↓</i><span>Cleaning — Concept 05</span><i>↓</i><span>Dedup + canonicalization — Concept 06</span><i>↓</i><span>Identity + versioning — Concept 07</span><i>↓</i><span class="hot">Provenance + lineage — converging here</span><i>↓</i><span>Chunks</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept doesn't sit downstream of Concepts 02-07 as a separate pass — it runs alongside every one of them, collecting the trail each stage already leaves behind. Concept 09 closes Module 06 by asking how the pipeline notices a source needs to be walked through this whole chain again in the first place.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Lag, span, and the monotonicity a valid chain must satisfy</h2></div></header>
+<div class="equation">ingestion_lag = ingested_at − source_last_modified_at<br>total_lineage_span = final_stage_timestamp − source_created_at</div>
+<p>A lineage chain L(doc_id) = (e1, …, en) is only valid if its timestamps are monotonic: t(e1) ≤ t(e2) ≤ … ≤ t(en). This is a new formal point this concept adds on top of Concept 07's own math — Concept 07 needed exactly two ordered timestamps per version; this concept needs an entire chain to hold that same ordering property across every stage, not just two. Any inversion — a later stage's timestamp landing before an earlier stage's — is itself a lineage-integrity error, not a value judgment about the data (Section 16 diagnoses exactly this failure mode).</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two ingestion lags, and two numbers that cross-check against Concept 07</h2></div></header>
+<p>doc_id = POLICY-REFUND-001. source_type = internal_wiki, source_id = wiki:legal-compliance/refund-policy, author = Legal &amp; Compliance team, source_created_at = 2024-10-28. v1: source_last_modified_at = 2024-10-28, ingested_at = 2024-11-02. v2: source_last_modified_at = 2025-06-10, ingested_at = 2025-06-18.</p>
+<table class="worked-table">
+<thead><tr><th>Computation</th><th>Formula</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>ingestion_lag(v1)</td><td>2024-11-02 − 2024-10-28</td><td>5 days</td></tr>
+<tr><td>ingestion_lag(v2)</td><td>2025-06-18 − 2025-06-10</td><td>8 days</td></tr>
+<tr><td>ingested_at(v1) → ingested_at(v2)</td><td>2025-06-18 − 2024-11-02</td><td>228 days — cross-checks Concept 07's published v1 lifespan exactly</td></tr>
+<tr><td>total_lineage_span</td><td>2025-06-18 − 2024-10-28</td><td>233 days, source_created_at to v2's ingested_at</td></tr>
+<tr><td>ingested_at(v2) → today</td><td>2026-08-23 − 2025-06-18</td><td>431 days — cross-checks Concept 07's published "431 days current" exactly</td></tr>
+</tbody>
+</table>
+<p>Every figure here was computed once via an executed Node.js script (plain UTC <code>Date</code> arithmetic, millisecond difference divided by 86400000) and independently reproduced via an executed Python script (<code>datetime.date</code> subtraction, run through the <code>py</code> launcher). Both printed identical results for all five numbers, and the 228-day and 431-day figures are not fresh assertions — they are the same two numbers Concept 07 already published, arrived at from the lineage side instead of the versioning side, a genuine cross-concept consistency check rather than a coincidence.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A regulatory audit needing "who said this and when"</h3><p>Provenance and timestamps together answer exactly that question, tying directly into Module 20's "Auditability, governance and compliance," named forward only.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Debugging a bad chunk by walking its lineage back</h3><p>A malformed value can be traced to the exact stage — parse, clean, or dedup — whose lineage event's timestamp brackets when the defect appeared.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A record ingested via an aggregator that scraped an original source</h3><p>Two provenance layers exist at once: the aggregator's own retrieval timestamp, and the original author's timestamp underneath it. Losing track of which is which is a real failure mode, covered in Section 16.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating ingested_at as the fact's real-world creation time</h3><p>ingested_at only says when the pipeline noticed. source_created_at and source_last_modified_at, not ingested_at, describe when the fact actually came into being or last changed at the source.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A lineage chain with a monotonicity guard, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES BEYOND DATETIME</span>
+<pre><code>from datetime import date
+
+def append_event(chain, stage, concept_ref, day):
+    if chain and day < chain[-1]["day"]:
+        raise AssertionError(
+            f'non-monotonic lineage: "{stage}" at {day} '
+            f'precedes "{chain[-1]["stage"]}" at {chain[-1]["day"]}'
+        )
+    chain.append({"stage": stage, "concept_ref": concept_ref, "day": day})
+
+def ingestion_lag(source_last_modified, ingested):
+    return (ingested - source_last_modified).days
+
+def total_lineage_span(source_created, final_stage_day):
+    return (final_stage_day - source_created).days
+
+chain = []
+append_event(chain, "Source",             None,         date(2024, 10, 28))
+append_event(chain, "Parse",               "Concept 02", date(2025, 6, 18))
+append_event(chain, "Clean",               "Concept 05", date(2025, 6, 18))
+append_event(chain, "Dedup/Canonicalize",  "Concept 06", date(2025, 6, 18))
+append_event(chain, "Version",             "Concept 07", date(2025, 6, 18))
+
+lag_v2 = ingestion_lag(date(2025, 6, 10), date(2025, 6, 18))
+span = total_lineage_span(date(2024, 10, 28), date(2025, 6, 18))
+assert lag_v2 == 8
+assert span == 233
+
+try:
+    append_event(chain, "Broken stage", "n/a", date(2025, 1, 1))
+except AssertionError as e:
+    print("caught expected error:", e)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same mechanism, in real standards and tools</h2></div></header>
+<p>The W3C PROV Model is the formal, real standard for representing provenance: it defines entities (the facts and records themselves), activities (the transformation steps that acted on them), and agents (who or what was responsible) — the same three ideas this concept's fields cover informally as source_id/lineage[]/author. OpenLineage is an open industry standard and toolset built specifically to auto-capture pipeline lineage as jobs run, the production parallel to Section 06's capture-at-each-stage lane rather than the backfill lane.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Lineage Latency Ledger</h2></div></header>
+<div class="lab">
+<p>v2's source_last_modified_at is fixed at 2025-06-10, from the worked example. Two delay sliders chain forward into a live-computed sequence of downstream timestamps, and a checkbox controls whether an OCR stage is even part of the chain — toggle it and watch the chip chain itself change shape, not just the numbers on it.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgIngestDelay_0608">Ingestion delay (days) <output id="wgIngestDelayOut_0608">8</output></label>
+<input type="range" id="wgIngestDelay_0608" min="0" max="30" step="1" value="8"></div>
+<div class="control"><label for="wgDetectDelay_0608">Processing / detection delay (days) <output id="wgDetectDelayOut_0608">0</output></label>
+<input type="range" id="wgDetectDelay_0608" min="0" max="14" step="1" value="0"></div>
+</div>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace;margin:16px 0">
+<input type="checkbox" id="wgOcrToggle_0608" style="width:auto;accent-color:var(--orange)">
+<span>Source is a scanned PDF (adds an OCR stage)</span>
+</label>
+<div class="rank-chip-row" id="wgLedgerChain_0608"></div>
+<div class="norm-readout" id="wgLedgerReadout_0608"></div>
+<div class="callout" id="wgLedgerVerdict_0608"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Live-captured lineage vs. backfilled lineage</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Live-captured (Section 06's default lane)</td><td>Accurate — every stage's own event is recorded the moment it happens</td><td>Requires every stage to actually be instrumented to log itself; a missed instrumentation point leaves a real gap</td></tr>
+<tr><td>Backfilled / reconstructed (Section 06's fallback lane)</td><td>Works retroactively, even for records ingested before instrumentation existed</td><td>Vulnerable to the exact gaps Section 16 diagnoses — logs can be incomplete, timestamps can be approximate</td></tr>
+</tbody>
+</table>
+<p>Decision framework: default to live capture whenever a stage is still being built or maintained — instrument it once, and every future record benefits. Reach for backfill only for records that already passed through before instrumentation existed, and treat its output as best-effort, not authoritative.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSING TIMESTAMP</span><h3>One stage in the chain never logged an event</h3><p>Breaks the lag math directly — ingestion_lag and total_lineage_span both need every timestamp they reference to actually exist.</p></article>
+<article class="info-card"><span>CLOCK SKEW</span><h3>Cross-service clocks disagree, scoped to lineage timestamps specifically</h3><p>Distinct from Concept 07's version-timestamp skew — here the risk is that two different SERVICES (the source system, the ingestion pipeline) disagree on the current time, corrupting ingestion_lag itself rather than an as-of query.</p></article>
+<article class="info-card"><span>PROVENANCE DROPPED AT A PROXY</span><h3>An aggregator or proxy strips the original source's own fields</h3><p>The exact boundary case from Section 11 — losing track of which provenance layer (aggregator vs. original author) a fact actually belongs to.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Provenance is the authority score</td><td>False — provenance is authority's input (source_type, recency); the auth(s) formula itself lives entirely in Concept 01.</td></tr>
+<tr><td>Lineage only matters for compliance</td><td>False — Section 11's debugging use case (tracing a bad chunk back to its introducing stage) is a day-to-day engineering payoff, not just an audit-time one.</td></tr>
+<tr><td>ingested_at ≈ source_last_modified_at, always</td><td>False — the worked example's own two lags (5 days, 8 days) already differ from each other; the gap is a variable signal, not a constant.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>A full per-record event log has a real storage cost that grows with every document and every stage — older lineage is often summarized or rolled up rather than kept at full per-event granularity forever.</li>
+<li>ingestion_lag is directly monitorable as a metric, feeding Module 19's freshness SLOs, named forward only here.</li>
+<li>The complete provenance/lineage/timestamp record is exactly what Module 20's "Auditability, governance and compliance" builds on top of, also named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't provenance alone answer the question authority answers?</summary><div>Provenance only supplies the raw facts — source_type, recency. Authority is the separate ranking rule, auth(s) = (type_rank(source_type), −recency), that decides how those facts should be compared across competing sources.</div></details>
+<details class="quiz"><summary>Why must a valid lineage chain's timestamps be monotonic?</summary><div>Each event represents a real stage a record physically passed through, in order. A later stage's timestamp landing before an earlier stage's is not a data quirk — it means the recorded trail contradicts the order the pipeline actually ran in, which is itself an integrity error.</div></details>
+<details class="quiz"><summary>Why do two documents ingested through the same pipeline end up with lineage chains of different lengths?</summary><div>Not every stage runs for every document — OCR (Concept 04) only runs for sources that need it, like scanned PDFs. A born-digital source can skip straight from parsing to cleaning, producing a genuinely shorter chain.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new document, doc_id = "TICKET-88421", is a support ticket. source_type = ticketing_system, source_id = zendesk:ticket-88421, author = "customer support agent — J. Alvarez." source_created_at = 2026-02-01 (ticket opened). source_last_modified_at = 2026-02-03 (final comment added, ticket closed). ingested_at = 2026-02-05. Its recorded lineage[] log holds exactly three entries, in this order: {stage: Parse, concept_ref: Concept 02/03, timestamp: 2026-02-05}, {stage: Dedup/Canonicalize, concept_ref: Concept 06, timestamp: 2026-02-06}, {stage: Version, concept_ref: Concept 07, timestamp: 2026-02-06}. Compute ingestion_lag for this document, and name the one lineage stage that is conspicuously missing from the log.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>ingestion_lag = ingested_at − source_last_modified_at = 2026-02-05 − 2026-02-03 = 2 days. The missing stage is Clean (Concept 05) — the log jumps directly from Parse straight to Dedup/Canonicalize with no clean-stage event recorded in between, even though every earlier worked example in this module (and Concept 06's own dependency on already-cleaned input) assumes cleaning always runs before dedup. That gap is exactly Section 16's "missing timestamp" failure mode in practice.</div>
+</details>
+<p>Teach-back: explain, in your own words, why a missing Clean-stage event is a lineage problem even if the ticket's final text looks perfectly clean anyway.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Provenance, lineage and timestamps</h3><ul><li><b>Provenance:</b> source_id, source_type, author — WHERE a fact came from, and authority's own input</li><li><b>Lineage:</b> an ordered {stage, concept_ref, timestamp} chain spanning Concepts 02-07 — WHICH steps a record passed through</li><li><b>Timestamps:</b> source_created_at, source_last_modified_at, ingested_at — WHEN each of those events happened</li><li><b>Core relation:</b> ingested_at IS Concept 07's effective_at; ingestion_lag = ingested_at − source_last_modified_at</li></ul></div>
+<div><h3>Memorable example</h3><p>POLICY-REFUND-001's v2 took 8 days between Legal's edit landing on the wiki and the pipeline actually noticing it — the same 8-day ingestion lag that, once you cross it, changes nothing about WHAT the policy says, only how quickly the system found out.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>How does provenance relate to a source-authority ranking system?</summary><div>Provenance captures the raw facts about a source — its type, its recency. Authority is a separate ranking formula built on top of those facts. Design the two as producer and consumer, never as the same rule duplicated twice.</div></details>
+<details class="quiz"><summary>What does the chain-of-custody analogy get right, and where does it stop being useful?</summary><div>It correctly conveys why an unbroken, ordered, signed trail matters for trust. It says nothing about how to compute a numeric lag or detect a broken (non-monotonic) chain programmatically — that requires the formal definitions and code, not the analogy alone.</div></details>
+<details class="quiz"><summary>Why would two documents from the same pipeline have lineage chains of different lengths?</summary><div>Some stages are conditional on source type — OCR only runs for sources without a native text layer. A chain's length is a function of what that specific document actually needed, not a fixed pipeline constant.</div></details>
+<details class="quiz"><summary>How would you design a query to find documents whose ingestion lag exceeds a freshness budget?</summary><div>Store ingested_at and source_last_modified_at per document, compute the difference per row, and filter for anything past the budget threshold — exactly the computation Section 14's lab performs live, generalized from one document to a whole corpus.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.w3.org/TR/prov-overview/"><b>PROV Model Primer — W3C</b><br><span>The authoritative, real standard for representing provenance as entities, activities and agents — cited in Section 13's ecosystem note as the formal counterpart to this concept's informal source_id/lineage[]/author fields.</span></a>
+<a href="https://en.wikipedia.org/wiki/Data_lineage"><b>Data lineage — Wikipedia</b><br><span>Grounds this concept's own definition of a lineage chain as an ordered trail of transformation steps a record passed through, behind Section 05's precision and Section 09's mathematics.</span></a>
+<a href="https://en.wikipedia.org/wiki/Chain_of_custody"><b>Chain of custody — Wikipedia</b><br><span>Source for Section 04's new analogy — an evidence bag signed and timestamped at every hand-off — deliberately different from Concept 07's passport analogy.</span></a>
+<a href="https://openlineage.io/docs/"><b>OpenLineage documentation</b><br><span>A real, open industry tool that auto-captures pipeline lineage, cited in Section 13 as the production parallel to Section 06's capture-at-each-stage lane.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 COMPLETE · CONCEPT 09 NEXT</span>
+<h3>Where, which steps, when — answered. Incremental ingestion opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can spot a missing lineage stage from a real log without looking back at Section 06. Concept 09, "Incremental and event-driven ingestion," closes Module 06 next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-07.html">← Back to Concept 07</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 09, Incremental and event-driven ingestion.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 08 · Complete</p>
+<a href="module-06-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>

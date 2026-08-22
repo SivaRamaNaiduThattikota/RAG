@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 05 multiplied tf and idf together and named two flaws it left unfixed: unbounded growth from raw term frequency, and no correction for document length. This concept fixes the first flaw completely -- BM25 replaces raw tf with a saturating version controlled by a parameter k1, so repeating a term has diminishing returns. It writes the full BM25 formula, including a length-normalization parameter b, but treats b as a given knob for now -- Concept 07 derives why the length term is needed.">
+<title>BM25 derivation and parameters — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 06</p>
+<h1>Let repetition<br><em>run out of steam.</em></h1>
+<p class="lesson-lead">Concept 05 multiplied tf and idf together and, on its way out, named exactly two things it left broken: raw tf grows without any ceiling, and nothing in the formula adjusts for document length. This concept fixes the first one completely. <b>BM25</b> keeps Concept 04's idf untouched and replaces the raw tf factor with a saturating version, controlled by a parameter <b>k1</b>, so that a term's tenth occurrence adds far less than its second did. The full BM25 formula also contains a second parameter, <b>b</b>, that adjusts for document length — this concept writes it into the formula and uses it, but every worked example here deliberately holds document length equal to the corpus average, so b has no visible effect yet. Concept 07 removes that simplification and derives, with real numbers, why b is there at all.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 04's idf(t) and Concept 05's tf-idf(t,d) = tf(t,d) × idf(t) — both cited directly, idf unchanged, tf about to be replaced</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute BM25's saturating term-frequency factor by hand for several tf values, show that it approaches a ceiling instead of growing forever, and state which parameter controls how fast that ceiling is approached</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 05 combined tf and idf into tf-idf and named two unfixed flaws: unbounded tf growth and no length correction. This concept fixed the first flaw with BM25's saturating tf factor and parameter k1, and wrote the length-normalization parameter b into the formula without deriving it yet.</p>
+<b>6 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Diminishing returns, on purpose.</h2>
+</div>
+<p>Every idea in this concept reduces to one replacement: swap raw tf for a version that saturates. Everything else — the worked numbers, the mistakes, the project mapping — exists to show exactly how that saturation behaves and why it needed its own parameter.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Same idf, a smarter tf, one new knob</h3>
+<div class="mental-compare">
+<div><span>BEFORE — CONCEPT 05</span><p>tf-idf(t, d) = tf(t, d) × idf(t). Raw tf, multiplied straight through — no limit on how large it can get.</p></div>
+<div><span>NOW — CONCEPT 06</span><p>BM25(t, d) = idf(t) × [ tf(t,d) × (k1+1) ] / [ tf(t,d) + k1 × L(d) ]. idf is untouched; tf is replaced by a fraction that saturates toward k1+1 as tf grows; L(d) is a length term this concept holds at exactly 1 for every document.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> BM25 doesn't touch idf at all — it only replaces how tf is used, and adds two dials, k1 and b, to control that replacement.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A term's twentieth occurrence isn't worth twenty times its first</h3>
+<p>Concept 05's Section 07 already named the problem in passing: raw tf-idf lets a term repeated 50 times contribute 50 times the weight of appearing once, with no ceiling anywhere. In practice, that's a bad model of relevance — once a document has used a term five or six times, you already know it's on-topic for that term; a seventh, eighth, or fiftieth repetition tells you almost nothing new, and may just mean the document is long or repetitive. BM25 exists to make the score behave that way: rewarding the first few occurrences strongly, then flattening out.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>"Refund" in ticket T3, both ways</h3>
+<p>Reusing Concept 05's five-ticket corpus and idf("refund") ≈ 0.9163, and holding L(d) = 1 for now (this concept's simplification):</p>
+<div class="context-demo">
+<div><span>RAW TF-IDF (CONCEPT 05)</span><p>tf("refund", T3) = 2 → score = 2 × 0.9163 ≈ 1.8326. If T3 had repeated "refund" 10 times instead, the score would be 10 × 0.9163 ≈ 9.163 — five times larger, in direct proportion.</p></div>
+<div><span>BM25, k1 = 1.2</span><p>tf = 2 → saturating factor = 2×(1.2+1) / (2+1.2×1) = 4.4/3.2 = 1.375 → BM25 score = 1.375 × 0.9163 ≈ 1.2599. If tf were 10 instead, the factor only reaches 1.9643 → BM25 score ≈ 1.7999 — nowhere near five times larger.</p></div>
+</div>
+<p>Raw tf-idf treats occurrence 10 as worth exactly as much as occurrence 1. BM25 treats occurrence 10 as worth a small fraction of what occurrence 1 was worth, because the ratio is already most of the way to its ceiling.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0506-beginner-visual-title">
+<strong class="concept-visual-title" id="c0506-beginner-visual-title">VISUAL · RAW TF GROWS IN A STRAIGHT LINE, BM25 BENDS TOWARD A CEILING</strong>
+<svg class="vector-plane" viewBox="0 0 460 220" role="img" aria-labelledby="c0506-svg-title c0506-svg-desc">
+<title id="c0506-svg-title">A chart comparing raw term-frequency growth against BM25's saturating curve as term frequency increases from 1 to 10</title>
+<desc id="c0506-svg-desc">The raw term frequency line rises in a straight diagonal with no limit, reaching ten at a term frequency of ten. The BM25 saturating curve rises quickly at first, from one at term frequency one toward roughly two, then flattens and barely moves as term frequency continues up to ten, approaching but never reaching a ceiling of k1 plus 1, which is 2.2 when k1 is 1.2.</desc>
+<line x1="40" y1="10" x2="40" y2="190" stroke="#8a978f"/>
+<line x1="40" y1="190" x2="440" y2="190" stroke="#8a978f"/>
+<text x="10" y="14" font-size="9" fill="#5c6a63">weight</text>
+<text x="420" y="205" font-size="9" fill="#5c6a63">tf</text>
+<line x1="40" y1="190" x2="416" y2="14" stroke="#7ab8d9" stroke-width="2"/>
+<text x="330" y="40" font-size="9.5" fill="#3f7fa3">raw tf (unbounded)</text>
+<path d="M52,178 C 90,60 180,34 416,30" fill="none" stroke="#14241f" stroke-width="2.4"/>
+<text x="270" y="86" font-size="9.5" fill="#14241f">BM25 saturating factor</text>
+<line x1="40" y1="30" x2="440" y2="30" stroke="#e08a3c" stroke-dasharray="4 4"/>
+<text x="330" y="24" font-size="8.5" fill="#e08a3c">ceiling = k1+1 = 2.2</text>
+</svg>
+<figcaption>Raw tf keeps climbing forever (blue diagonal); BM25's saturating factor (black curve) rises fast near tf=1 then flattens, approaching but never reaching k1+1.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The full formula, with one term held fixed on purpose</h3>
+<div class="context-demo">
+<div><span>FULL FORMULA</span><p>BM25(t, d) = idf(t) × [ tf(t,d) × (k1+1) ] / [ tf(t,d) + k1 × L(d) ], where L(d) = (1 − b + b × dl / avgdl), dl is document d's length, and avgdl is the corpus's average document length.</p></div>
+<div><span>WHAT THIS CONCEPT HOLDS FIXED</span><p>Every worked example in this concept assumes dl = avgdl for the document in question, which makes L(d) = 1 − b + b × 1 = 1 exactly, <i>regardless of what b is set to</i>. That collapses the denominator to tf(t,d) + k1, isolating k1's saturation effect with nothing from b visible yet.</p></div>
+<div><span>WHAT'S STILL NOT HAPPENING</span><p>b is a real parameter of a real formula being used correctly here — it just has nothing to do while L(d) = 1. Concept 07 varies document length for real and shows exactly what b changes.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Same box, tf factor swapped out</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — per-document score now uses BM25's saturating tf instead of raw tf</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Nothing new is stored in the index — the same tf counts, idf values, and (as of this concept) document lengths that Concept 02's postings lists already imply. This concept only changes the arithmetic applied to tf before it's multiplied by idf.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs this concept depends on keeping separate</h3>
+<div class="distinction-table" role="table" aria-label="raw tf-idf versus BM25, k1 versus b, this concept's L(d)=1 simplification versus Concept 07's real lengths, and saturation versus a hard cutoff">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">BM25's tf factor</span><span role="cell">Raw tf-idf's tf factor</span><span role="cell">BM25 saturates toward k1+1; raw tf-idf has no ceiling at all. They agree only at tf = 1, where both equal idf(t) exactly.</span></div>
+<div role="row"><span role="cell">k1 (saturation speed)</span><span role="cell">b (length normalization strength)</span><span role="cell">k1 controls how quickly repeated occurrences of a term stop mattering. b controls how strongly document length adjusts the score. Changing one does not change the other.</span></div>
+<div role="row"><span role="cell">This concept's L(d) = 1</span><span role="cell">Concept 07's real L(d)</span><span role="cell">Holding dl = avgdl was a deliberate simplification to isolate k1. Concept 07 removes it and computes L(d) for documents of genuinely different lengths.</span></div>
+<div role="row"><span role="cell">Saturation (BM25)</span><span role="cell">A hard cutoff</span><span role="cell">BM25 never stops rewarding extra occurrences entirely — the factor keeps inching toward k1+1 forever, just by smaller and smaller amounts. It approaches a ceiling; it does not hit a wall.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A smaller k1 means less saturation."</b><p>Backwards. A smaller k1 saturates <i>faster</i> — with k1 = 0, the factor equals 1 for any tf ≥ 1 immediately, as if the term were just present or absent. A larger k1 lets tf matter over a wider range before flattening, behaving more like raw tf-idf.</p></div>
+<div><b>"BM25 has no upper bound, like raw tf-idf."</b><p>It does, per term: the saturating factor can never exceed k1+1, no matter how large tf grows. Section 09 proves this algebraically.</p></div>
+<div><b>"Since b appears in the formula, it must be doing something in every example."</b><p>Not in this concept's examples — every worked case here assumes dl = avgdl, which forces L(d) = 1 regardless of b's value. b only has a visible effect once document lengths actually differ, which is Concept 07's job.</p></div>
+<div><b>"BM25 replaces idf too."</b><p>It doesn't — idf(t) in this concept's formula is exactly Concept 04's idf, unchanged. Only the tf factor is replaced.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lives in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT</span><b>SCORE() is closer to BM25-family than raw tf-idf</b><p>Modern Oracle Text scoring (Module 10, Concept 07, forward reference) and most production lexical engines use a BM25-family formula specifically because of the saturation this concept derives — a support ticket that says "refund" fifty times should not automatically outrank one that says it three times.</p></div>
+<div><span>SUPPORT-TICKET SEARCH</span><b>Repetitive tickets stop gaming the ranking</b><p>Under Concept 05's raw tf-idf, a ticket that pasted the word "refund" many times to be found more easily would climb the ranking without limit. BM25 caps how much that trick can help.</p></div>
+<div><span>TEXT-TO-SQL</span><b>Still not a substitute for exact filters</b><p>BM25 ranks by saturating relevance; a query like "tickets opened in the last 7 days" needs an exact structured filter, not a saturating score — this course keeps that boundary from Concept 05 intact.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The formula</b><p>BM25(t,d) = idf(t) × [tf(t,d)(k1+1)] / [tf(t,d) + k1×L(d)], with L(d) = 1 in every example this concept used.</p></div>
+<div><b>What k1 controls</b><p>How fast the saturating factor approaches its ceiling of k1+1 as tf grows.</p></div>
+<div><b>What b controls</b><p>How strongly document length adjusts the score — named and used in the formula, but not yet visible, since every example held length equal to the average.</p></div>
+<div><b>What's still missing</b><p>Real, differing document lengths and the resulting nonzero effect of b — Concept 07's job specifically.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's numbers, explain why BM25's score for tf=10 is so much closer to its score for tf=2 than raw tf-idf's scores are for the same two tf values.</li>
+<li>If k1 were set to a very large number (say 1000), how would BM25's saturating factor behave compared to raw tf, and why?</li>
+<li>Why does changing b in this concept's examples produce no visible change in any score?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 07: Document-length normalization</h3>
+<p>This concept held every document's length equal to the corpus average, so L(d) always came out to exactly 1 and b never did anything visible. Real documents aren't all the same length — a document twice as long naturally accumulates more term matches and higher raw tf without necessarily being more relevant. The next concept removes this simplification, computes L(d) for a genuinely short and a genuinely long document, and shows precisely what b changes.</p>
+<div class="beginner-memory"><b>Concept 06 is complete.</b> Continue to Concept 07, "Document-length normalization."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Replace tf, cap its growth, leave length alone for now.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>One replacement</b><small>Raw tf becomes a saturating fraction — idf stays exactly as Concept 04 defined it.</small></a>
+<a href="#b02"><span>02</span><b>One reason</b><small>Repetition should have diminishing returns — a term's fiftieth occurrence isn't worth its first.</small></a>
+<a href="#b04"><span>03</span><b>One simplification, named honestly</b><small>Every example here holds document length equal to the corpus average, so b's effect stays invisible on purpose.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, saturation proof, from-scratch code, and the BM25 Saturation Curve lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> restate tf-idf's two named flaws → replace raw tf with a saturating fraction controlled by k1 → write the full formula including b → hold length fixed so b stays invisible → name exactly what Concept 07 removes.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the BM25 derivation deep dive</b><em>Formal notation, saturation proof, from-scratch code, and the BM25 Saturation Curve lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where BM25 sits between tf-idf and length normalization</h2></div></header>
+<p>Concept 05 produced the first working ranking formula, tf-idf, and named two flaws on its way out: unbounded tf growth and missing length correction. This concept fixes the first flaw with BM25's saturating tf factor and parameter k1. It writes the second parameter, b, into the formula honestly, but defers explaining it — every example holds document length equal to the corpus average so b's effect stays exactly zero, leaving Concept 07 a clean, unclaimed derivation.</p>
+<div class="flow">
+<div class="flow-node">Concept 04 — tf and idf, separate</div>
+<div class="flow-node">Concept 05 — tf × idf, unbounded</div>
+<div class="flow-node hot">Concept 06 — saturating tf, k1</div>
+<div class="flow-node">Concept 07 — real lengths, b</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DERIVE</span><h3>Write BM25's saturating tf factor and explain each symbol</h3><p>tf(t,d), k1, and the L(d) term, distinguished from Concept 05's raw tf.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute the saturating factor by hand for several tf values</h3><p>Show that it approaches, but never reaches, a ceiling of k1+1.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Show numerically how much slower BM25 grows than raw tf-idf</h3><p>Using the same corpus and term as Concept 05, at tf values from 1 to 10.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name exactly what this concept does not derive</h3><p>Why b and L(d) exist — deferred cleanly to Concept 07 by holding dl = avgdl throughout.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 04 — idf(t).</b> Reused completely unchanged; this concept never touches how idf is computed.</li>
+<li><b>Concept 05 — tf-idf(t,d) and score(q,d).</b> BM25 keeps the same "sum a per-term weight across the query" structure — only the per-term weight itself changes.</li>
+<li><b>Out of scope here:</b> what L(d) equals for documents of genuinely different length, and what b changes as a result — both are Concept 07's job. Evaluation of whether BM25's ranking is actually better (Concepts 08–10) is also out of scope.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A judge who stops being impressed after the third repetition</h2></div></header>
+<p>Imagine the same judge from Concept 05, now scoring how many times a contestant mentions a keyword. The first mention earns full credit — clear evidence the contestant is on topic. The second and third mentions still earn real credit, but a little less each time. By the tenth mention, the judge is barely adjusting the score at all — the point was already made nine mentions ago, and the judge has learned not to reward pure repetition as if it were nine independent pieces of evidence.</p>
+<div class="callout warning"><b>Analogy boundary</b>The judge analogy explains why saturation is reasonable, but not the specific algebraic shape BM25 uses to produce it, or why that shape has an exact ceiling of k1+1 — Section 09 derives that with algebra, not analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Saturation parameter</td><td>Controls how quickly the tf factor approaches its ceiling as tf grows; larger k1 saturates more slowly</td><td>k1 (typically 1.2–2.0)</td></tr>
+<tr><td>Length-normalization parameter</td><td>Controls how strongly document length adjusts the score; named and used here, derived in Concept 07</td><td>b (typically 0.75; this concept's examples make its value irrelevant)</td></tr>
+<tr><td>Length-adjustment term</td><td>Compares one document's length to the corpus average; equals 1 whenever dl = avgdl, regardless of b</td><td>L(d) = 1 − b + b × dl / avgdl</td></tr>
+<tr><td>BM25 per-term weight</td><td>idf multiplied by a saturating version of tf, adjusted by L(d)</td><td>BM25(t,d) = idf(t) × [tf(t,d)(k1+1)] / [tf(t,d) + k1·L(d)]</td></tr>
+<tr><td>BM25 document score</td><td>Sum of the per-term weight over every term the query and document share</td><td>score(q,d) = Σ<sub>t∈q</sub> BM25(t,d)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Replace tf, cap the ratio, sum across the query</h2></div></header>
+<div class="lane-flow">
+<div><b>Start from Concept 04/05's numbers —</b> tf(t,d) and idf(t), already computed, nothing new.</div>
+<div><b>Compute L(d) —</b> L(d) = 1 − b + b×dl/avgdl. This concept sets dl = avgdl everywhere, so L(d) = 1 no matter what b is.</div>
+<div><b>Saturate tf —</b> replace tf(t,d) with tf(t,d)(k1+1) / [tf(t,d) + k1·L(d)] — a ratio that starts at 1 when tf=1 and rises toward k1+1 as tf grows.</div>
+<div><b>Multiply by idf, then sum across the query —</b> exactly Concept 05's structure, with the saturating ratio standing in for raw tf.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>tf goes in, a bounded ratio comes out</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing tf, k1 and L(d) feeding BM25's saturating ratio, which then multiplies idf">
+<div class="diagram-hub">
+<div class="diagram-node"><b>tf(t,d)</b><small>raw count, from Concept 04</small></div>
+<div class="diagram-node hub-center"><b>saturating ratio</b><small>tf(k1+1) / (tf + k1·L(d)), bounded by k1+1</small></div>
+<div class="diagram-node"><b>k1, L(d)=1</b><small>saturation speed; length term inert this concept</small></div>
+</div>
+</div>
+<p>idf(t) then multiplies this bounded ratio exactly as it multiplied raw tf in Concept 05 — the only structural change is what's being bounded before the multiplication happens.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where the saturating score sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — per-document score now saturates repeated terms instead of counting them raw</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Nothing new needs to be stored beyond what Concept 02's postings lists and Concept 05's per-document tf counts already provide, plus each document's length — a single extra number per document that Concept 07 will use for real.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Proving the ceiling exists</h2></div></header>
+<div class="equation">saturating ratio(tf) = tf(k1+1) / (tf + k1),  holding L(d) = 1
+
+As tf → ∞:  tf(k1+1) / (tf + k1)  →  (k1+1) / 1  =  k1+1</div>
+<p>Divide numerator and denominator by tf: the ratio becomes (k1+1) / (1 + k1/tf). As tf grows large, k1/tf shrinks toward 0, so the whole expression approaches (k1+1)/1 = k1+1 — the ceiling. At tf = 1 exactly, the ratio is (k1+1)/(1+k1) = 1, always, regardless of k1's value — every saturating curve starts at exactly 1 no matter how k1 is tuned; only the climb toward k1+1 afterward depends on k1.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>tf from 1 to 10, k1 = 1.2, idf("refund") ≈ 0.9163</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>tf</th><th>Saturating ratio</th><th>BM25 score</th><th>Raw tf-idf score</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1.0000</td><td>0.9163</td><td>0.9163</td></tr>
+<tr><td>2</td><td>1.3750</td><td>1.2599</td><td>1.8326</td></tr>
+<tr><td>4</td><td>1.6923</td><td>1.5506</td><td>3.6652</td></tr>
+<tr><td>8</td><td>1.9130</td><td>1.7529</td><td>7.3303</td></tr>
+<tr><td>10</td><td>1.9643</td><td>1.7999</td><td>9.1629</td></tr>
+</tbody>
+</table>
+<p>Every ratio was recomputed directly from tf(k1+1)/(tf+k1) with k1=1.2 and independently checked by script before being written here. At tf=1 the two formulas agree exactly (0.9163 both), because the saturating ratio equals 1 at tf=1 regardless of k1. By tf=10, raw tf-idf has grown to ten times its tf=1 value; BM25 has grown to less than double its tf=1 value and is closing in on its ceiling of (k1+1)×idf ≈ 2.2×0.9163 ≈ 2.0159.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A term repeated many times by coincidence or padding</h3><p>BM25's ceiling stops that repetition from dominating the score the way raw tf-idf would let it.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A term appearing exactly once</h3><p>Saturating ratio = 1 always at tf=1, so BM25 and raw tf-idf agree exactly for any term that appears exactly once — the two formulas only diverge once repetition starts.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>tf = 0</h3><p>The saturating ratio's numerator is 0×(k1+1) = 0, so BM25(t,d) = 0 exactly, matching raw tf-idf's behavior for an absent term — both formulas agree at the other boundary too.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Tuning k1 to "fix" a length problem</h3><p>k1 only controls how fast repetition saturates for a single document — it has no mechanism for comparing one document's length to another's. Reaching for k1 to fix a length-related ranking complaint is reaching for the wrong parameter; that's b's job, examined next.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>BM25's saturating term weight, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+tickets = {
+    "T1": "my order is late and my order never arrived",
+    "T2": "please refund my order immediately",
+    "T3": "the refund was processed but the refund amount is wrong",
+    "T4": "where is my order confirmation email",
+    "T5": "i need help resetting my password",
+}
+
+def term_frequency(term, text):
+    return text.split(" ").count(term)
+
+def document_frequency(term, corpus):
+    return sum(1 for text in corpus.values() if term in text.split(" "))
+
+def inverse_document_frequency(term, corpus):
+    df = document_frequency(term, corpus)
+    if df == 0:
+        return None
+    return math.log(len(corpus) / df)
+
+def bm25_term(term, doc_id, corpus, k1=1.2, b=0.75, length_term=1.0):
+    # length_term defaults to 1.0 here on purpose: this concept always
+    # assumes dl == avgdl, so b never changes the result. Concept 07
+    # computes a real length_term and passes it in instead of 1.0.
+    idf = inverse_document_frequency(term, corpus)
+    if idf is None:
+        return 0.0
+    tf = term_frequency(term, corpus[doc_id])
+    ratio = (tf * (k1 + 1)) / (tf + k1 * length_term)
+    return idf * ratio
+
+# tf=1 case: BM25 and raw tf-idf must agree exactly.
+raw_tfidf_t2 = term_frequency("refund", tickets["T2"]) * inverse_document_frequency("refund", tickets)
+assert abs(bm25_term("refund", "T2", tickets) - raw_tfidf_t2) < 1e-9
+
+# tf=2 case: BM25 must score lower than raw tf-idf once repetition saturates.
+bm25_t3 = bm25_term("refund", "T3", tickets)
+raw_tfidf_t3 = term_frequency("refund", tickets["T3"]) * inverse_document_frequency("refund", tickets)
+assert bm25_t3 < raw_tfidf_t3
+assert abs(bm25_t3 - 1.2599) < 0.001
+
+# Absent term: both formulas agree at exactly 0.
+assert bm25_term("shipping", "T3", tickets) == 0.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production systems run this exact formula</h2></div></header>
+<p>Elasticsearch and OpenSearch have used a BM25-family scoring function as their default similarity since Elasticsearch 5 (2017), with k1 defaulting to 1.2 and b defaulting to 0.75 — the same defaults used throughout this concept's examples. Apache Lucene's <code>BM25Similarity</code> class implements the identical formula this section derived, including the same length-adjustment term this concept has been holding at 1. Both systems expose k1 and b as tunable per-field parameters precisely because different document collections saturate and normalize differently.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The BM25 Saturation Curve</h2></div></header>
+<div class="lab">
+<p>Drag k1 and watch how quickly the saturating ratio climbs toward its ceiling of k1+1. Document length is held equal to the corpus average throughout — b has been deliberately left out of this control set, since it has no visible effect until Concept 07.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgK1_0506">k1 <output id="wgK1Out_0506">1.20</output></label>
+<input type="range" id="wgK1_0506" min="0.1" max="3" step="0.1" value="1.2"></div>
+</div>
+<div class="prob-bars" id="wgSatBars_0506"></div>
+<div class="norm-readout">
+<div><span>CEILING (k1+1)</span><b id="wgSatCeiling_0506">—</b></div>
+<div><span>SATURATING FACTOR AT tf=10</span><b id="wgSatTen_0506">—</b></div>
+</div>
+<div class="callout" id="wgVerdictSat_0506">Drag the k1 slider to see how fast the saturating factor approaches its ceiling.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Raw tf-idf, BM25 without length, and what's still ahead</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Does tf saturate?</th><th>Does length matter?</th></tr></thead>
+<tbody>
+<tr><td>Raw tf-idf (Concept 05)</td><td>No — grows without limit</td><td>No</td></tr>
+<tr><td>BM25 with L(d)=1 (this concept)</td><td>Yes — bounded by k1+1</td><td>No — deliberately held fixed</td></tr>
+<tr><td>Full BM25 (Concept 07)</td><td>Yes</td><td>Yes — L(d) computed from real document lengths</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISTUNED k1</span><h3>k1 too low flattens genuine signal</h3><p>An extremely low k1 makes every nonzero tf score nearly identical, discarding real evidence that a document discusses a term extensively versus in passing.</p></article>
+<article class="info-card"><span>MISTUNED k1</span><h3>k1 too high behaves like raw tf-idf again</h3><p>A very large k1 barely saturates within realistic tf ranges, reintroducing much of the padding vulnerability this concept exists to fix.</p></article>
+<article class="info-card"><span>STILL UNADDRESSED</span><h3>Length bias survives this concept untouched</h3><p>Because every example here holds dl = avgdl, a genuinely long document that racks up higher tf purely by being verbose would still be over-rewarded by this concept's formula — Concept 07 exists specifically because this gap is still open.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>BM25 fixes both of tf-idf's named flaws at once</td><td>False — this concept only fixes unbounded tf growth. Length normalization is written into the formula but produces no effect in any example here.</td></tr>
+<tr><td>A smaller k1 means less aggressive saturation</td><td>False — smaller k1 saturates faster, reaching close to its ceiling almost immediately.</td></tr>
+<tr><td>BM25 and raw tf-idf always disagree</td><td>False — they agree exactly at tf=0 and tf=1; they only diverge once a term repeats more than once.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>k1 and b are almost always left at their library defaults (1.2 and 0.75) unless a relevance-evaluation process (Concepts 08–10, and Module 18 later) provides evidence that retuning them measurably improves ranking quality on a specific collection.</li>
+<li>Computing the saturating ratio per (term, document) pair adds negligible cost over raw tf — it's a fixed handful of arithmetic operations per posting, not an extra pass over the corpus.</li>
+<li>Because BM25 is stateless per query (it doesn't need to see other candidate documents to score one), it composes cleanly with the inverted-index-driven retrieval Concept 02 already built — no architecture change is required to adopt it over raw tf-idf.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Write BM25's saturating ratio and state its ceiling.</summary><div>tf(k1+1) / (tf + k1·L(d)). As tf → ∞ (with L(d) fixed), the ratio approaches k1+1 and never exceeds it.</div></details>
+<details class="quiz"><summary>Why do BM25 and raw tf-idf produce identical scores at tf=1?</summary><div>At tf=1, the saturating ratio is (1)(k1+1)/(1+k1) = 1 for any k1, so BM25(t,d) = idf(t) × 1 = tf-idf(t,d) exactly.</div></details>
+<details class="quiz"><summary>Why does this concept's b parameter have no visible effect on any computed score?</summary><div>Every example holds document length equal to the corpus average, which forces L(d) = 1−b+b×1 = 1 regardless of b's value — b only changes the score once dl ≠ avgdl, which Concept 07 introduces.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using idf("order") ≈ 0.5108 (from Concept 04/05) and k1 = 1.2, holding L(d) = 1, compute BM25("order", d) for tf = 2 (ticket T1) and tf = 1 (ticket T2 or T4), then compare both to their raw tf-idf equivalents from Concept 05's Section 20. State, in one sentence, which formula rewards T1's second occurrence of "order" less, and by how much.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Saturating ratio at tf=2: 2×2.2/(2+1.2) = 4.4/3.2 = 1.375. BM25("order", T1) = 1.375 × 0.5108 ≈ 0.7024. Saturating ratio at tf=1 is always exactly 1, so BM25("order", T2 or T4) = 1 × 0.5108 = 0.5108, identical to their raw tf-idf scores. Raw tf-idf("order", T1) = 2 × 0.5108 ≈ 1.0217. BM25 rewards T1's second occurrence by only 0.7024 − 0.5108 ≈ 0.1916, versus raw tf-idf's full 1.0217 − 0.5108 ≈ 0.5109 — BM25 gives less than half the credit for that second occurrence that raw tf-idf did.</div>
+</details>
+<p>Teach-back: explain, in your own words, why BM25's "less than half credit" number for a second occurrence is not arbitrary — connect it back to k1's role in the saturating ratio.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>BM25 derivation and parameters</h3><ul><li><b>BM25(t,d) = idf(t) × tf(k1+1)/(tf+k1·L(d)):</b> idf unchanged from Concept 04; tf replaced by a saturating ratio.</li><li><b>k1:</b> controls saturation speed — smaller k1 saturates faster, toward a ceiling of k1+1.</li><li><b>b, L(d):</b> named and used in the formula, but invisible in this concept's examples, which hold dl = avgdl.</li><li><b>What's missing:</b> real document lengths and b's actual effect — Concept 07's job.</li></ul></div>
+<div><h3>Memorable example</h3><p>For "refund," BM25 and raw tf-idf agree exactly at tf=1 (≈0.9163 both) but diverge sharply by tf=10: raw tf-idf reaches ≈9.163, BM25 only reaches ≈1.7999, closing in on its ceiling of ≈2.0159.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain BM25 to someone who already understands tf-idf, in under thirty seconds.</summary><div>BM25 keeps idf exactly as it was, but replaces raw term frequency with a version that saturates — instead of a term's twentieth occurrence being worth twenty times its first, BM25 caps how much repetition can help, controlled by a parameter k1, and also adjusts for document length through a second parameter, b.</div></details>
+<details class="quiz"><summary>What is the ceiling of BM25's saturating ratio, and at what tf value does it equal exactly 1?</summary><div>The ceiling is k1+1, approached but never reached as tf grows. The ratio equals exactly 1 at tf=1, for any value of k1.</div></details>
+<details class="quiz"><summary>A teammate claims raising k1 will make BM25 handle very long, repetitive documents more fairly. Is that correct?</summary><div>No — k1 only controls how fast repetition of a single term saturates within one document; it has no notion of comparing that document's length to others. The parameter that addresses length is b, examined in Concept 07.</div></details>
+<details class="quiz"><summary>Design question: why do BM25 and raw tf-idf produce identical rankings whenever every candidate document's tf for the query term is either 0 or 1?</summary><div>Because the saturating ratio equals exactly 0 at tf=0 and exactly 1 at tf=1 regardless of k1 — with no tf value above 1 in play, BM25's score for every document is identical to its raw tf-idf score, so any ranking difference between the two formulas can only appear once some document's tf reaches 2 or more.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/okapi-bm25-a-non-binary-model-1.html"><b>Manning, Raghavan &amp; Schütze — "Okapi BM25: a non-binary model," Introduction to Information Retrieval (Stanford IR Book)</b><br><span>The canonical statement of the BM25 formula, including the saturating tf factor and the k1 and b parameters this concept and Concept 07 derive in turn.</span></a>
+<a href="https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf"><b>Robertson &amp; Zaragoza — "The Probabilistic Relevance Framework: BM25 and Beyond"</b><br><span>The full derivation history behind BM25's saturating term-frequency component and its parameters, cited here for k1's role specifically.</span></a>
+<a href="https://en.wikipedia.org/wiki/Okapi_BM25"><b>Okapi BM25 — Wikipedia</b><br><span>General background, typical parameter ranges for k1 and b, and the formula's relationship to earlier probabilistic retrieval models.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 COMPLETE · CONCEPT 07 NEXT</span>
+<h3>tf saturates now — Concept 07 makes length matter</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can state, precisely, why k1 controls saturation speed and why b did nothing in this concept's examples. Concept 07, "Document-length normalization," computes L(d) for a genuinely short and a genuinely long document and shows exactly what changes.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the BM25 Saturation Curve ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 07, Document-length normalization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 06 · Complete</p>
+<a href="module-05-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

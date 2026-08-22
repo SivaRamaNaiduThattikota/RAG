@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 03 covers extraction from sources that are not files at all: relational databases, REST/GraphQL APIs, support tickets, and code repositories, each queried or called rather than parsed.">
+<title>Databases, APIs, tickets and code repositories — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 03</p>
+<h1>Nothing here sits still<br><em>long enough to be opened.</em></h1>
+<p class="lesson-lead">Concept 02 opened five file formats, each one a fixed set of bytes with a format-specific parser. This concept covers four sources that are not files at all: a relational database (structured across tables, reachable only by a query), a REST or GraphQL API (a live system whose answer can change between two identical calls), a support ticket (structured fields wrapped around a free-text thread that keeps growing), and a code repository (source code plus a commit history, a very different kind of "prose" than a PDF). None of the four hand you their complete content by simply opening one thing.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02 — file parsing is done; this concept covers what isn't a file</b></div>
+<div><span>BEGINNER GOAL</span><b>Name what makes extracting usable knowledge from each of four non-file sources different from parsing a document</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Four sources, none of them a file you can just open</h2>
+</div>
+<p>Every source below gets one answer to the same question Concept 02 asked of each format: what stops a naive read from working, and what actually gets usable knowledge out? Nothing here decides whether the extracted text is clean (Concept 05), and nothing here touches a scanned page or an image (Concept 04) — both stay exactly where Concept 02 left them.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Extraction from a queried or called source, not a parsed file</h3>
+<div class="mental-compare">
+<div><span>QUERYING / CALLING (THIS CONCEPT)</span><p>Getting usable knowledge out of a database (by writing a query), an API (by making a call), a ticket system (by reading its object model), or a code repository (by reading its history) — none of which sit still as one static file waiting to be opened.</p></div>
+<div><span>NOT THIS CONCEPT (CONCEPT 02)</span><p>Opening a static file — PDF, HTML, .docx, .xlsx, or Markdown — that already contains everything it will ever tell you, and running a format-specific parser over its fixed bytes.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> four sources, none of them a file — a query, a call, a growing case thread, and a revision history — and each one hides its usable knowledge behind something a file parser was never built to touch.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Some knowledge only exists behind a question, not inside a file</h3>
+<p>Concept 01's source inventory already assumed knowledge doesn't only live in files. A refund policy might be a PDF, but the actual refund a specific customer received is a row in an orders database — nobody wrote it down anywhere else. The current shipping status of a package is whatever a carrier's API says right now, not a downloaded snapshot from this morning. The real fix for a tricky bug is often buried three comments deep in a support ticket, not in the product's official documentation. And the reason a piece of business logic is written the way it is might live in a two-year-old commit message, not in any onboarding guide. None of these four sit still as one static file with an internal format to parse — you have to ask a database a question, call a live system, read a whole case thread, or read a revision history, not just open one thing.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One fact, four sources, four reasons "just open it" doesn't apply</h3>
+<p>Suppose the fact you need is: "Customer #4471's refund was processed on day 40 of the 45-day window." That exact fact could live in any of these four sources, and none of them let you get it by simply opening something:</p>
+<div class="context-demo">
+<div><span>DATABASE</span><p>There is no "refund file" to open — the fact is a value split across columns in an <code>orders</code> table, invisible until a query with the right conditions and joins asks for it.</p></div>
+<div><span>API</span><p>Calling the same order-status endpoint twice can return two different answers. Yesterday it said "processing"; today it says "refunded." There is no static copy to parse — only whatever the live system currently reports.</p></div>
+<div><span>TICKET</span><p>The ticket's title says "Refund taking too long." The actual answer — "refunded on day 40, delay was our address-verification queue" — is comment #7 of 9, not the ticket's own summary field.</p></div>
+<div><span>CODE REPO</span><p>The number 45 lives in <code>refund_policy.py</code> as a bare constant. The reason it's 45 and not 30 is in a commit message from fourteen months ago, not anywhere in the code itself.</p></div>
+</div>
+<p>Four sources, one fact, four different reasons a naive "open it and read it" never gets you there.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0603-beginner-visual-title">
+<strong class="concept-visual-title" id="c0603-beginner-visual-title">VISUAL · FOUR SOURCES CONVERGING ON ONE OUTPUT</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0603-svg-title c0603-svg-desc">
+<title id="c0603-svg-title">Four non-file source boxes, each requiring a different active extraction action, converging into one structured-record output</title>
+<desc id="c0603-svg-desc">Four labeled boxes -- Database, API, Ticket system, Code repo -- each carry a short label naming what you must do to get anything out. Arrows lead from each into a shared box labeled query, call, thread-read, or history-read, then down into a highlighted output box labeled structured record out, no cleaning yet.</desc>
+<g font-size="8.5" text-anchor="middle">
+<rect x="6" y="30" width="105" height="46" fill="#fff" stroke="#8a978f"/><text x="58" y="46" fill="#14241f" font-size="10">DATABASE</text><text x="58" y="60" font-size="7.5" fill="#5c6a63">needs a query,</text><text x="58" y="70" font-size="7.5" fill="#5c6a63">often a join</text>
+<rect x="121" y="30" width="105" height="46" fill="#fff" stroke="#8a978f"/><text x="173" y="46" fill="#14241f" font-size="10">API</text><text x="173" y="60" font-size="7.5" fill="#5c6a63">live, current</text><text x="173" y="70" font-size="7.5" fill="#5c6a63">state only</text>
+<rect x="236" y="30" width="105" height="46" fill="#fff" stroke="#8a978f"/><text x="288" y="46" fill="#14241f" font-size="10">TICKET</text><text x="288" y="60" font-size="7.5" fill="#5c6a63">fields plus a</text><text x="288" y="70" font-size="7.5" fill="#5c6a63">growing thread</text>
+<rect x="351" y="30" width="103" height="46" fill="#fff" stroke="#8a978f"/><text x="402" y="46" fill="#14241f" font-size="10">CODE REPO</text><text x="402" y="60" font-size="7.5" fill="#5c6a63">syntax plus</text><text x="402" y="70" font-size="7.5" fill="#5c6a63">commit history</text>
+</g>
+<line x1="58" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="173" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="288" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="402" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<rect x="110" y="114" width="240" height="30" fill="#fff" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="133" font-size="9" text-anchor="middle" fill="#14241f">QUERY · CALL · THREAD-READ · HISTORY-READ</text>
+<line x1="230" y1="144" x2="230" y2="168" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0603)"/>
+<defs><marker id="arrow0603" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="130" y="170" width="200" height="30" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="189" font-size="9" text-anchor="middle" fill="#14241f">STRUCTURED RECORD OUT — not cleaned yet</text>
+</svg>
+<figcaption>Four sources, four different active extraction actions, none of them "open the file" — but every path still ends at the same place: a raw, unclean, unchunked record, exactly where Concept 02's five parsers also landed.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What's different, and the standard approach, per source</h3>
+<table class="compare-table">
+<thead><tr><th>Source</th><th>What makes it different from a file</th><th>Standard extraction approach</th></tr></thead>
+<tbody>
+<tr><td>Relational database</td><td>Data is normalized across tables — a single usable fact often needs a join across foreign keys, and the right query has to be written, not discovered by opening one thing</td><td>A database connector (e.g. python-oracledb, SQLAlchemy) running a SELECT/JOIN query, serializing each result row or grouped row-set into a text record</td></tr>
+<tr><td>REST / GraphQL API</td><td>Content reflects only the current state of a live system — the same call can return a different answer later, behind authentication, pagination, and rate limits</td><td>An HTTP or GraphQL client calling the endpoint, handling pagination and auth, and snapshotting the response with a capture timestamp</td></tr>
+<tr><td>Support ticket</td><td>Structured fields (status, priority, assignee) surround a free-text body — and the field worth retrieving is often a later comment, not the ticket's own summary</td><td>The ticketing system's own API (e.g. Jira, Zendesk, ServiceNow) read through its object model — the ticket plus its full comment thread, not just the title field</td></tr>
+<tr><td>Code repository</td><td>Source code is syntax, not prose — the useful knowledge is scattered across commit messages and comments, not one readable body of text</td><td>Version-control tooling (git log, GitPython, or a platform API) pulling commit history and messages, alongside a syntax-aware reader for docstrings and comments</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this concept sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Sources — inventoried in Concept 01</span><i>↓</i><span class="hot">Extraction — query, call, thread-read, history-read (this concept)</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept fills the same gap Concept 02 fills — turning a cataloged source into something with the label "Documents" — for sources that were never files to begin with. Nothing here decides how to cut the result into chunks; that's still Module 07.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Querying and calling distinguished from file parsing, OCR, and live tool-backed retrieval">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Querying / calling (this concept)</span><span role="cell">File parsing (Concept 02)</span><span role="cell">Those five formats already hold their complete content in one file; these four sources need an active request or a full history read, and the content can change between requests.</span></div>
+<div role="row"><span role="cell">Structured fields + a text thread (this concept)</span><span role="cell">OCR / layout extraction (Concept 04)</span><span role="cell">Concept 04 covers scanned images and visually laid-out tables inside documents. This concept's sources are already digital and directly queryable — no image recognition involved.</span></div>
+<div role="row"><span role="cell">Ingestion-time extraction (this concept)</span><span role="cell">Live Text-to-SQL / tool-backed retrieval (Module 21)</span><span role="cell">This concept builds the searchable corpus once, or on a schedule. Module 21 covers the LLM generating and running a query itself, live, at answer time — a different architecture, previewed here only by name.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A database is basically a big spreadsheet — read the whole table into one document."</b><p>Normalization means a single customer's full story is usually split across several joined tables, not sitting in one row of one table.</p></div>
+<div><b>"An API response can be captured once and treated like a downloaded file from then on."</b><p>That only holds if the underlying data is genuinely static. For anything that changes, a one-time capture goes stale, and someone has to decide a refresh cadence — Concept 09's job, not this one's.</p></div>
+<div><b>"A ticket's title and description are the whole story."</b><p>The real answer is very often in a later comment, not the opening fields — extracting only the summary can capture the problem and lose the fix.</p></div>
+<div><b>"The code itself is the knowledge worth indexing."</b><p>Often the commit messages, docstrings, and comments around the code carry more retrievable meaning than the syntax itself.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Matching extraction to the Oracle RAG project's own non-file sources</h3>
+<div class="project-map">
+<div><span>DATABASE · ORDERS AND CUSTOMER TABLES</span><b>python-oracledb runs a joined query, not a table dump</b><p>Account and order facts a policy PDF alone can't answer come from a query written against Module 10's Oracle schema.</p></div>
+<div><span>API · CARRIER TRACKING STATUS</span><b>A REST call is snapshotted with a timestamp, never treated as a static file</b><p>Live shipping status is captured at extraction time and re-pulled on a schedule, not parsed once and assumed permanent.</p></div>
+<div><span>TICKET · PAST SUPPORT CASES</span><b>Fields plus the resolving comment become one retrievable record per resolved case</b><p>Not per raw field — the case's outcome, not just its opening complaint, is what gets indexed.</p></div>
+<div><span>CODE REPO · THE PROJECT'S OWN CODEBASE</span><b>Docstrings and commit messages become an internal "why is this built this way" source</b><p>Read through git history, not through Concept 02's document parsers.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>None of these four sit still as a file</b><p>Each one requires an active query, call, thread-read, or history-read — not a fixed-byte open like Concept 02's five formats.</p></div>
+<div><b>Structure hides the real fact</b><p>A database needs a join, an API needs a fresh call, a ticket needs the right comment, and code needs the commit message read next to it.</p></div>
+<div><b>Extraction is not live querying</b><p>This concept builds the corpus once or on a schedule. Module 21's Text-to-SQL queries the source live, at answer time — a different mechanism, named here only.</p></div>
+<div><b>OCR and cleaning are still someone else's job</b><p>Concept 04's image-based extraction and Concept 05's cleaning apply after this concept's records exist, exactly as they do after Concept 02's parsed text.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why can't a single row of a normalized <code>orders</code> table always answer a customer's full question on its own?</li>
+<li>Name one reason an API response captured once can become wrong later, even though nothing about a "file" ever changed.</li>
+<li>Why might a ticket's own title field be actively misleading as a retrievable summary?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 04: OCR, layout, tables and images</h3>
+<p>Today's four sources were all digital and directly queryable or callable. The next concept covers the opposite problem within Concept 02's own file formats: pages that were scanned as images, with no extractable text layer at all, plus tables and figures that need layout-aware reading rather than plain text extraction.</p>
+<div class="beginner-memory"><b>Concept 03 is complete.</b> Continue to Concept 04, "OCR, layout, tables and images."</div>
+<a class="button primary" href="module-06-concept-02.html">← Back to Concept 02</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Four non-file sources, one active extraction action each, nothing cleaned</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One fact, four sources</b><small>The same fact, sitting in a database, an API, a ticket, and a repo, needs four different actions to reach.</small></a>
+<a href="#b04"><span>02</span><b>The difference/approach table</b><small>Database, API, ticket, code repo — one difference and one standard extraction approach each.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>OCR (Concept 04), cleaning (Concept 05), and live query-time retrieval (Module 21) are all explicitly out of scope.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Join fan-out mathematics, from-scratch code, and the Join Fan-Out Simulator lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> define querying/calling narrowly → show one fact failing four naive reads → name one difference and one approach per source → Concept 04 opens OCR and layout next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the structured-extraction deep dive</b><em>Join fan-out mathematics, from-scratch code, and the Join Fan-Out Simulator lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From opening files to querying and calling systems</h2></div></header>
+<p>Concept 02 opened five file formats, each a fixed set of bytes with its own format-specific parser. This concept covers four sources that were never files at all: a relational database, a REST/GraphQL API, a support ticket, and a code repository. Each one requires an active request — a query, a call, a thread read, or a history read — rather than a single open-and-parse. The scope stays just as narrow as Concept 02's: getting a usable, unclean record out of a source that already has one. What that record looks like once cleaned (Concept 05) or scanned from an image (Concept 04) stays out of scope here.</p>
+<div class="flow">
+<div class="flow-node">Concept 02 — format-specific file parsing: PDF, HTML, DOCX, XLSX, Markdown</div>
+<div class="flow-node hot">Concept 03 — non-file extraction: databases, APIs, tickets, code repos</div>
+<div class="flow-node">Concept 04 — OCR, layout, tables and images</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State what makes each source different from a file</h3><p>In one sentence each, for relational databases, APIs, tickets, and code repositories.</p></article>
+<article class="info-card"><span>MATCH</span><h3>Pick the standard extraction approach for a given source</h3><p>Given a source type, name the tool category or mechanism that addresses its specific difficulty.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Predict a join's row count, drops, and duplicates</h3><p>Given per-row match counts and a join type, compute how many rows a query returns and which rows vanish or repeat.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate ingestion-time extraction from live tool-backed retrieval</h3><p>State why this concept's queries build a corpus and Module 21's Text-to-SQL answers a question directly.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's source inventory.</b> This concept assumes a catalog already lists non-file sources alongside files, and opens what extracting from them actually takes.</li>
+<li><b>Concept 02's file-parsing boundary.</b> Knowing exactly what Concept 02 already covers is what makes this concept's "not a file" framing meaningful rather than vague.</li>
+<li><b>No mechanism from Module 21.</b> Text-to-SQL and tool-backed retrieval are named only as a forward reference; their actual mechanism is not taught here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A filing cabinet, a phone line, a growing case folder, a diary in code</h2></div></header>
+<p>A file is a sealed letter: open it once and you have everything it will ever tell you. A database is a filing cabinet with a clerk — the clerk won't hand you a whole drawer, only the specific slips you ask for by name and by relation to other slips; phrase the request slightly wrong and you get the wrong slips, or the same slip handed to you more than once. An API is a phone line to a live person, who might genuinely have a different answer if you call back in an hour, through no fault of the line itself. A support ticket is a case folder that keeps growing new pages after the first one was written, and it's very often the last page, not the first, that actually matters. A code repository is a diary written mostly in a foreign language — the code itself — except for margin notes (comments and docstrings) and the entry written beside each edit (the commit message), which are the parts actually written in the language you understand.</p>
+<div class="callout warning"><b>Analogy boundary</b>None of these four is inherently harder than a file, just differently shaped. Each one hands back exactly what you ask for, or exactly what happened, on its own terms — not on a fixed page you can simply turn to.</div>
+</section>
+<figure class="concept-visual" aria-labelledby="c0603-spectrum-title">
+<strong class="concept-visual-title" id="c0603-spectrum-title">VISUAL · HOW OFTEN THE UNDERLYING SOURCE CHANGES</strong>
+<svg class="vector-plane" viewBox="0 0 460 130" role="img" aria-labelledby="c0603-spectrum-svg-title c0603-spectrum-svg-desc">
+<title id="c0603-spectrum-svg-title">A horizontal spectrum from rarely-changing to constantly-changing, with the four sources placed along it</title>
+<desc id="c0603-spectrum-svg-desc">A left-to-right bar labeled past history is fixed to can change on every call. Code repository history sits at the far left, database sits next, ticket sits after that, and API sits at the far right, closest to changing on every single call.</desc>
+<line x1="20" y1="60" x2="440" y2="60" stroke="#8a978f" stroke-width="2"/>
+<text x="20" y="20" font-size="9" fill="#5c6a63">PAST HISTORY IS FIXED</text>
+<text x="440" y="20" font-size="9" text-anchor="end" fill="#5c6a63">CAN CHANGE EVERY CALL</text>
+<g font-size="9" text-anchor="middle">
+<circle cx="45" cy="60" r="5" fill="#14241f"/><text x="45" y="82" fill="#14241f">Code repo</text>
+<circle cx="175" cy="60" r="5" fill="#14241f"/><text x="175" y="82" fill="#14241f">Database</text>
+<circle cx="300" cy="60" r="5" fill="#14241f"/><text x="300" y="82" fill="#14241f">Ticket</text>
+<circle cx="420" cy="60" r="5" fill="#14241f"/><text x="420" y="82" fill="#14241f">API</text>
+</g>
+<text x="230" y="110" font-size="8" text-anchor="middle" fill="#5c6a63">position is illustrative, not a precise metric — every source still needs a refresh-cadence decision (Concept 09)</text>
+</svg>
+<figcaption>A commit's own history never changes once written, even though new commits keep arriving. A database changes whenever a business transaction happens. A ticket changes whenever an agent adds a comment. An API can change on every single call with no event to wait for at all — the same live system, asked twice, owes you no consistency between answers.</figcaption>
+</figure>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Query</td><td>A request expressed in a query language, matched against a database's stored rows and relations, returning a result set</td><td>Q(D) → R</td></tr>
+<tr><td>API call</td><td>A network request to a fixed endpoint, returning the current state of a resource at the moment of the call</td><td>call(endpoint, params, t) → response_t</td></tr>
+<tr><td>Ticket thread</td><td>One initiating record plus zero or more follow-up comments, all sharing one case identifier, ordered by time</td><td>ticket = (fields, [c₁,…,c_n])</td></tr>
+<tr><td>Commit</td><td>One atomic, timestamped change to a repository's tracked files, carrying an author-written message</td><td>commit = (diff, message, author, t)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Four branches, one shared shape</h2></div></header>
+<div class="lane-flow">
+<div><b>Identify the source type</b> — database, API, ticket system, or code repository — before choosing which extraction action applies.</div>
+<div><b>Database lane</b> — write a query, often a join across foreign keys, run it, and serialize each returned row or grouped row-set into a text record (Section 09's rule governs exactly what a join returns).</div>
+<div><b>API lane</b> — call the endpoint, handle authentication and pagination, and snapshot the response together with a capture timestamp.</div>
+<div><b>Ticket lane</b> — read the case's structured fields, then read the full comment thread in order, and decide the retrievable unit: the opening ticket alone, the resolving comment alone, or the whole thread.</div>
+<div><b>Code lane</b> — read the current file tree for structure, read the commit history for author-written messages, and keep code, comments, and commit messages as distinct signal types rather than one flattened blob.</div>
+<div><b>Handoff</b> — every lane still ends at the same place: raw, unclean, unchunked records, passed forward to Concept 05, exactly like Concept 02's five file lanes.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The extraction branch-point as a flowchart</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable branching diagram from source-type identification to four extraction mechanisms to one shared structured-record output">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Source type identified</b><small>Database, API, ticket system, or code repo picks one of four branches</small></div>
+<div class="diagram-node"><b>Database → query/join, then serialize rows</b><small>python-oracledb, SQLAlchemy</small></div>
+<div class="diagram-node"><b>API → call, paginate, snapshot</b><small>requests, httpx, a GraphQL client</small></div>
+<div class="diagram-node"><b>Ticket → fields + full comment thread</b><small>Jira, Zendesk, ServiceNow APIs</small></div>
+<div class="diagram-node"><b>Code repo → commit history + docstrings</b><small>git log, GitPython, platform APIs</small></div>
+</div>
+</div>
+<p>Every branch is a different active request solving a different difficulty, but all four converge on the same output shape: a raw structured record, still ahead of cleaning and chunking.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span class="hot">Extraction — four query/call mechanisms, converging here</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Alongside Concept 02, this concept finishes populating the gap between "Sources" and the pipeline's first labeled stage, "Documents" — this time for sources that never had an internal file format to parse in the first place.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>How many rows a join actually returns</h2></div></header>
+<p>Let a left-side table L have rows l₁,…,l_n, and let m(l) be the number of rows in a related table R that match row l on a foreign key. An INNER JOIN and a LEFT JOIN return different row counts from the exact same two tables:</p>
+<div class="equation">rows_inner = Σ m(l)         over all l where m(l) &gt; 0 contributes m(l), and m(l) = 0 contributes 0
+rows_left  = Σ max(m(l), 1)  every l contributes at least one row</div>
+<p>Two consequences follow directly from that sum. First, any row l with m(l) = 0 contributes exactly 0 to rows_inner — an INNER JOIN doesn't flag it, it simply never appears in the result at all, which is why the count of dropped rows is <code>|{l : m(l) = 0}|</code>. Second, any row l with m(l) &gt; 1 contributes more than one row to either join, repeating every one of l's own columns once per match — the count of duplicated rows is <code>|{l : m(l) &gt; 1}|</code>. This is the exact formal reason "one returned row = one retrievable document" is a shape mismatch whenever the underlying relationship isn't strictly one-to-one.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Joining customers to orders, by hand</h2></div></header>
+<p>Four customers, 101–104, with these order counts: m(101) = 2, m(102) = 1, m(103) = 0, m(104) = 3. Applying Section 09's formulas:</p>
+<table class="worked-table">
+<thead><tr><th>Customer</th><th>Orders m(l)</th><th>Rows in INNER JOIN</th><th>Rows in LEFT JOIN</th></tr></thead>
+<tbody>
+<tr><td>101</td><td>2</td><td>2</td><td>2</td></tr>
+<tr><td>102</td><td>1</td><td>1</td><td>1</td></tr>
+<tr><td>103</td><td>0</td><td>0</td><td>1 (with NULL order fields)</td></tr>
+<tr><td>104</td><td>3</td><td>3</td><td>3</td></tr>
+</tbody>
+</table>
+<p>rows_inner = 2 + 1 + 0 + 3 = <b>6</b>. rows_left = max(2,1) + max(1,1) + max(0,1) + max(3,1) = 2 + 1 + 1 + 3 = <b>7</b>. Listing the six INNER JOIN rows explicitly confirms it: (101,orderA), (101,orderB), (102,orderC), (104,orderD), (104,orderE), (104,orderF) — customer 103 never appears at all, and customers 101 and 104 each appear more than once. Treating "one row = one document" here would produce two near-duplicate documents repeating customer 101's own profile fields, three repeating customer 104's, and zero documents ever mentioning customer 103 — even though customer 103 exists in the source of truth.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cases: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A one-to-one lookup query</h3><p>"SELECT plan_name, price FROM plans WHERE plan_id = 7" returns exactly one row — no fan-out risk at all, because the match count is always exactly one by construction.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A ticket closed by its second comment</h3><p>Treating the fields plus the full two-comment thread as one retrievable unit loses nothing and adds no noise — the thread is short enough that "the whole thing" and "the resolution" are the same content.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A GraphQL query nesting related objects in one call</h3><p>Nesting avoids REST's multiple-round-trip pagination problem, but a single response can still mix several levels of one-to-many relationships at once — the same join-style duplication risk from Section 09 applies inside one API response, not only inside a SQL result set.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Feeding raw .py files through Concept 02's document parsers</h3><p>Source code is syntax, not prose; running it through an HTML or Markdown parser either produces meaningless "documents" or silently skips the commit messages and docstrings that actually carried the retrievable knowledge.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Join fan-out, from scratch</h2></div></header>
+<p>This is the mechanism behind Section 09's formulas, applied to Section 10's exact customer/order counts — not a real SQL engine, but the same row-multiplication logic a database performs internally when it executes a join.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · SIMULATING INNER AND LEFT JOIN ROW COUNTS</span>
+<pre><code>from collections import defaultdict
+
+customers = [101, 102, 103, 104]
+orders = [
+    (101, "orderA"), (101, "orderB"),
+    (102, "orderC"),
+    (104, "orderD"), (104, "orderE"), (104, "orderF"),
+]
+
+orders_by_customer = defaultdict(list)
+for cust_id, order_id in orders:
+    orders_by_customer[cust_id].append(order_id)
+
+def inner_join(customers, orders_by_customer):
+    return [(c, o) for c in customers for o in orders_by_customer.get(c, [])]
+
+def left_join(customers, orders_by_customer):
+    return [(c, o) for c in customers for o in (orders_by_customer.get(c) or [None])]
+
+inner_rows = inner_join(customers, orders_by_customer)
+left_rows = left_join(customers, orders_by_customer)
+
+assert len(inner_rows) == 6                       # 2 + 1 + 0 + 3
+assert len(left_rows) == 7                        # 2 + 1 + 1 + 3
+
+dropped = [c for c in customers if not orders_by_customer.get(c)]
+assert dropped == [103]                           # zero-order customer vanishes from INNER only
+
+duplicated = [c for c in customers if len(orders_by_customer.get(c, [])) &gt; 1]
+assert duplicated == [101, 104]                   # each appears once per order in either join
+
+# Edge case: a customer with exactly one order never drops or duplicates.
+assert orders_by_customer[102] == ["orderC"]
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same four branches, in real tools</h2></div></header>
+<p>Database: python-oracledb connects directly to Oracle and runs SQL; SQLAlchemy and pyodbc offer the same query-and-serialize pattern across other relational engines. API: requests and httpx handle REST calls, pagination, and auth headers; a GraphQL client (e.g. gql) issues nested queries in one round trip instead of many. Ticket systems: Jira, Zendesk, and ServiceNow each expose a REST API returning a ticket's structured fields alongside its comment thread as separate, readable objects. Code repositories: git log and GitPython read commit history and messages directly from a local clone; platform APIs (GitHub, GitLab) expose the same history remotely; a syntax-aware reader such as tree-sitter parses source code into a structure that can isolate docstrings and comments without treating the surrounding syntax as prose. Framework-level connectors (LangChain, LlamaIndex — Modules 12 and 14) wrap several of these behind one common loader interface, trading fine-grained query control for a consistent call shape across source types, the same trade Concept 02 named for file loaders.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Join Fan-Out Simulator</h2></div></header>
+<div class="lab">
+<p>Set an order count for each of four customers, pick a join type, and watch the row count, drop count, and duplicate count update live. This is a direct, interactive extension of Section 09's formula and Section 10's worked example — unlike Concept 01's Authority Arbiter (pick a winning source) and Concept 02's Format Extraction Bench (pick the right tool and reveal), this lab is a live calculator with no reveal step: every control changes the computed output immediately.</p>
+<div class="lab-controls" id="wgJoinControls_0603">
+<div class="control"><label for="wgOrdersA_0603">Customer A orders</label><input type="range" id="wgOrdersA_0603" min="0" max="5" step="1" value="2"><output id="wgOrdersAOut_0603">2</output></div>
+<div class="control"><label for="wgOrdersB_0603">Customer B orders</label><input type="range" id="wgOrdersB_0603" min="0" max="5" step="1" value="1"><output id="wgOrdersBOut_0603">1</output></div>
+<div class="control"><label for="wgOrdersC_0603">Customer C orders</label><input type="range" id="wgOrdersC_0603" min="0" max="5" step="1" value="0"><output id="wgOrdersCOut_0603">0</output></div>
+<div class="control"><label for="wgOrdersD_0603">Customer D orders</label><input type="range" id="wgOrdersD_0603" min="0" max="5" step="1" value="3"><output id="wgOrdersDOut_0603">3</output></div>
+<div class="control"><label for="wgJoinType_0603">Join type</label>
+<select id="wgJoinType_0603">
+<option value="inner">INNER JOIN</option>
+<option value="left">LEFT JOIN</option>
+</select>
+</div>
+</div>
+<div class="norm-readout" id="wgJoinReadout_0603">
+<div><span>ROWS RETURNED</span><b id="wgRowsOut_0603">6</b></div>
+<div><span>CUSTOMERS SILENTLY DROPPED</span><b id="wgDroppedOut_0603">1</b></div>
+<div><span>CUSTOMERS DUPLICATED ACROSS ROWS</span><b id="wgDupOut_0603">2</b></div>
+</div>
+<div class="callout" id="wgJoinVerdict_0603"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Extract-then-index vs. query live at answer time</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it captures</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>Extract-then-index (this concept)</td><td>A snapshot or scheduled re-pull of a source, turned into retrievable records ahead of any specific question</td><td>When the corpus needs to be searchable by semantic similarity alongside unstructured documents, or when the source is too slow, sensitive, or costly to query live per question</td></tr>
+<tr><td>Live query at answer time (Module 21's Text-to-SQL / tool-backed retrieval)</td><td>An LLM-generated query run directly against the current structured source, for one specific question</td><td>When the answer needs to reflect the exact current state and the question maps cleanly onto a structured query the model can generate reliably</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT ROW LOSS</span><h3>An INNER JOIN drops a zero-match row without any error</h3><p>Section 09 showed why: a row with m(l) = 0 contributes nothing to the sum and simply isn't in the output — indistinguishable from "this record was never in the source" unless someone checks the join type used.</p></article>
+<article class="info-card"><span>STALE SNAPSHOT</span><h3>A captured API response is never refreshed</h3><p>Nothing about a stored snapshot looks wrong, because there's no file to look wrong — it just keeps answering with an outdated state until a refresh cadence (Concept 09) is defined and run.</p></article>
+<article class="info-card"><span>WRONG RETRIEVABLE UNIT</span><h3>Only a ticket's opening description gets indexed</h3><p>Retrieval finds "the problem" described at the start but never "the fix," because the resolving comment several messages later was never made part of the retrievable record.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A database export is the same shape as a document</td><td>False — Section 10's worked example: a joined result set can duplicate rows for a one-to-many match and silently drop rows for a zero match, neither of which a file parser ever does.</td></tr>
+<tr><td>An API's response is a fixed thing, capturable once like a file</td><td>False — Section 04's intuition: unless the underlying resource is genuinely static, the exact same call can return a different answer at a later time, through no defect in the request.</td></tr>
+<tr><td>The code is the knowledge worth retrieving</td><td>False — Section 06's mechanism: for RAG purposes, the retrievable knowledge is very often the commit message or comment beside the code, not the syntax itself.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Query cost and load are real constraints — a poorly written join or a full-table export run on a schedule can put meaningful load on a production database, so ingestion queries usually run against a read replica or with explicit throttling, not directly against the live transactional system.</li>
+<li>Auth, pagination, and rate limits are first-class ingestion logic, not edge cases — every API-backed extraction has to handle token expiry, paginated responses, and rate-limit backoff as part of the extraction step itself.</li>
+<li>Refresh cadence is a real decision that has to be made explicitly — unlike a file, nothing forces anyone to notice when a database or API's underlying data changed, so "how often do we re-pull this" needs an actual answer, previewed by Concept 09's incremental and event-driven ingestion.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does an INNER JOIN between customers and orders silently drop a customer with zero orders?</summary><div>Because rows_inner = Σ m(l), and a customer with m(l) = 0 contributes exactly 0 to that sum — the customer never appears in the result set at all, with no error or warning marking the absence.</div></details>
+<details class="quiz"><summary>What can a second, identical API call return that a second read of a downloaded file never can?</summary><div>A different answer. A file's bytes don't change between two reads; a live API's underlying resource can change between two calls, so the same request can legitimately return two different current states.</div></details>
+<details class="quiz"><summary>Why might a ticket's opening description be the wrong field to treat as its retrievable summary?</summary><div>Because the actual resolution — the fact someone searching would actually want — is very often written in a later comment, not in the fields captured when the ticket was first opened.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A <code>students</code> table is joined to an <code>enrollments</code> table. Five students have these enrollment match counts: [3, 0, 1, 2, 0]. Using Section 09's formulas, compute rows_inner, rows_left, the number of dropped students, and the number of duplicated students. Then, separately, name the retrievable unit you would choose when extracting a ticket system to avoid Section 16's "wrong retrievable unit" failure, and justify your choice in one sentence.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Match counts [3, 0, 1, 2, 0]: rows_inner = 3+0+1+2+0 = 6. rows_left = max(3,1)+max(0,1)+max(1,1)+max(2,1)+max(0,1) = 3+1+1+2+1 = 8. Dropped students (m = 0): two of them, the second and fifth. Duplicated students (m &gt; 1): two of them, the first (3 matches) and the fourth (2 matches). Ticket retrievable unit: index each ticket's structured fields together with its final resolving comment, not just the opening description — Section 16 showed the actual fix usually arrives several messages after the initial report, so leaving the resolving comment out captures the problem but never the answer.</div>
+</details>
+<p>Teach-back: explain, in your own words, why "one retrievable document per returned row" is not automatically the right ingestion policy for a joined query result.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Non-file structured extraction</h3><ul><li><b>Database:</b> normalized across tables — a join is often required, and the query itself has to be written</li><li><b>API:</b> live current-state only — needs pagination/auth, and can change between two identical calls</li><li><b>Ticket:</b> structured fields plus a growing thread — the fix often lives in a later comment, not the opening description</li><li><b>Code repo:</b> syntax plus commit history — the retrievable knowledge is usually beside the code, not the code itself</li></ul></div>
+<div><h3>Memorable example</h3><p>An INNER JOIN between customers and orders can drop every customer with zero orders and duplicate every customer with several — the database version of Concept 02's "same sentence, five failures."</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can a SQL join change how many times a customer's data appears in your extracted output, and what's the fix?</summary><div>A one-to-many relationship makes a customer's row repeat once per matching row on the other side (fan-out) or vanish entirely under an INNER JOIN if there are zero matches. The fix is deciding the retrievable unit deliberately — e.g. aggregate all matches into one record per customer, or explicitly choose LEFT JOIN plus a "no matches" placeholder, rather than treating each returned row as automatically one document.</div></details>
+<details class="quiz"><summary>You need to ingest a support ticket system into a RAG corpus. What's wrong with treating each ticket's description field as its whole retrievable content?</summary><div>The description captures the reported problem at the moment the ticket was opened, but the actual resolution is very often written in a later comment. Indexing only the description means retrieval can surface the problem but never the answer that closed it.</div></details>
+<details class="quiz"><summary>Design question: how would you decide how often to re-extract from a REST API that updates several times a day?</summary><div>Weigh how quickly staleness actually harms answers against the API's rate limits and the extraction job's cost; for status-like data, an event-driven or short-interval poll (Concept 09) is often justified, while for slower-moving reference data a longer fixed schedule is enough — the decision has to be explicit rather than defaulted to "whenever we happened to run ingestion last."</div></details>
+<details class="quiz"><summary>A teammate wants to index a git repository by feeding every .py file through Concept 02's HTML/Markdown parser. What's wrong with that plan?</summary><div>Source code is syntax governed by a formal grammar, not prose — a document parser has no way to distinguish meaningful code structure from arbitrary text, and running one over .py files either yields meaningless extracted "documents" or silently skips the commit messages and docstrings that actually carry retrievable knowledge.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Relational_database"><b>Relational database — Wikipedia</b><br><span>Describes normalization across related tables, the basis for this concept's join fan-out and silent-drop problem in Sections 09–10.</span></a>
+<a href="https://en.wikipedia.org/wiki/Representational_state_transfer"><b>Representational state transfer — Wikipedia</b><br><span>Covers REST's request/response model against a live resource, the basis for framing an API's response as current-state rather than a static file in Section 04.</span></a>
+<a href="https://en.wikipedia.org/wiki/Issue_tracking_system"><b>Issue tracking system — Wikipedia</b><br><span>Documents the structured-fields-plus-comment-thread model shared by ticketing systems, the basis for this concept's "wrong retrievable unit" failure mode in Section 16.</span></a>
+<a href="https://en.wikipedia.org/wiki/Version_control"><b>Version control — Wikipedia</b><br><span>Describes the commit-history model — atomic, timestamped, author-messaged changes — behind this concept's code-repository extraction lane in Section 06.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 COMPLETE · CONCEPT 04 NEXT</span>
+<h3>Four non-file sources extracted in principle — OCR and layout open next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute a join's row count, drops, and duplicates without looking back at Section 09's formula. Concept 04, "OCR, layout, tables and images," opens this module's scanned-page and layout-aware extraction work.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-02.html">← Back to Concept 02</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 04, OCR, layout, tables and images.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 03 · Complete</p>
+<a href="../index.html">← Back to home</a>
+</footer>
+</body>
+</html>

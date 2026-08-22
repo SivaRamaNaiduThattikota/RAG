@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 06 covers three distinct techniques for content that enters a corpus more than once: exact deduplication (hash equality on cleaned content), near-deduplication (fuzzy shingle/Jaccard similarity for reworded copies), and canonicalization (picking one authoritative survivor, reusing Concept 01's authority ranking unchanged).">
+<title>Deduplication and canonicalization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 06</p>
+<h1>The same fact, said twice.<br><em>Which copy survives?</em></h1>
+<p class="lesson-lead">Concept 05 cleaned noise that existed WITHIN one record. This concept covers the same content entering a corpus more than once ACROSS records — the same PDF attached to two different tickets, or a policy mirrored on a wiki with a word or two changed. Three distinct techniques apply: exact deduplication (hash equality on already-cleaned content), near-deduplication (fuzzy similarity for copies that are close but not byte-identical), and canonicalization — picking one authoritative survivor once duplicates are found, reusing Concept 01's authority ranking exactly as it stands, not inventing a new rule.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 05's cleaned records and Concept 01's authority ranking — this concept compares ACROSS already-cleaned records, and reuses authority unchanged as its tiebreaker</b></div>
+<div><span>BEGINNER GOAL</span><b>Tell exact duplicates from near-duplicates from the choice of a canonical survivor, and compute all three for a concrete example</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Three records, one fact, one survivor</h2>
+</div>
+<p>Concept 05 fixed noise inside one record. This concept asks a question Concept 05 never could: when the exact same fact shows up more than once across different records, how do you notice, and which copy do you actually keep?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three separate techniques, one shared goal</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Exact dedup (hash equality across records), near-dedup (fuzzy similarity for reworded copies), and canonicalization (picking one authoritative survivor among duplicates or near-duplicates).</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Concept 05's within-record noise (encoding, boilerplate, whitespace) and Concept 07's same-document-over-time versioning — both different problems, named only as neighbors here.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> exact dedup asks "are these byte-identical?" Near-dedup asks "are these close enough to count as the same thing?" Canonicalization asks "given a cluster of duplicates, which one do we actually keep?" Three different questions, in that order.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>The same fact, indexed twice, wastes retrieval's limited budget</h3>
+<p>A support ticket's PDF attachment can get re-attached to a second, related ticket. A policy bulletin can get mirrored onto an internal wiki, with a word or two rephrased along the way. If both copies enter the corpus as separate records, retrieval can waste its limited top-k budget returning the same fact twice instead of two genuinely different pieces of evidence — and near-duplicates that drift slightly can even look like two sources quietly disagreeing, when they're really one fact said twice. This concept exists to catch both the exact and the near case, then resolve the resulting cluster down to one record worth trusting.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One retention bulletin, three copies, one survivor</h3>
+<p>R1: a PDF attached to Ticket #4821 ("...retained for 24 months <b>after</b> case closure"), an official policy document, 2 months old. R2: the exact same PDF re-attached to Ticket #5190, 3 weeks old. R3: the same policy mirrored on the internal wiki with one word changed ("...retained for 24 months <b>once</b> case closure"), 1 week old — the newest of the three.</p>
+<div class="example-grid">
+<article class="info-card"><span>EXACT DEDUP</span><h3>R1 and R2 hash identically</h3><p>Byte-for-byte identical content — a cryptographic hash of both produces the exact same fingerprint.</p></article>
+<article class="info-card"><span>NEAR DEDUP</span><h3>R1 and R3 are 50% similar, not identical</h3><p>One word changed out of eleven — close, but a hash treats them as completely unrelated.</p></article>
+</div>
+<p>Every number below was computed by an actual script (Node.js and Python, cross-checked against each other), not asserted from memory.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0606-beginner-visual-title">
+<strong class="concept-visual-title" id="c0606-beginner-visual-title">VISUAL · THREE RECORDS, ONE CLUSTER, ONE CANONICAL SURVIVOR</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0606-svg-title c0606-svg-desc">
+<title id="c0606-svg-title">Three record boxes converging through exact and near duplicate detection into one resolved cluster with one canonical record highlighted</title>
+<desc id="c0606-svg-desc">Three boxes labeled R1, R2 and R3 at the top. R1 and R2 are connected by a solid line labeled hash match. R1 and R3 are connected by a dashed line labeled Jaccard 0.50. All three converge into a cluster box, which points to a highlighted canonical record box labeled R2.</desc>
+<g font-size="9" text-anchor="middle">
+<rect x="20" y="20" width="110" height="40" fill="#fff" stroke="#8a978f"/><text x="75" y="38" fill="#14241f" font-size="10">R1</text><text x="75" y="52" font-size="7.5" fill="#5c6a63">Ticket #4821, 2mo</text>
+<rect x="175" y="20" width="110" height="40" fill="#fff" stroke="#8a978f"/><text x="230" y="38" fill="#14241f" font-size="10">R2</text><text x="230" y="52" font-size="7.5" fill="#5c6a63">Ticket #5190, 3wk</text>
+<rect x="330" y="20" width="110" height="40" fill="#fff" stroke="#8a978f"/><text x="385" y="38" fill="#14241f" font-size="10">R3</text><text x="385" y="52" font-size="7.5" fill="#5c6a63">Wiki mirror, 1wk</text>
+</g>
+<line x1="130" y1="40" x2="175" y2="40" stroke="#14241f" stroke-width="2"/><text x="152" y="34" font-size="7.5" fill="#14241f" text-anchor="middle">hash match</text>
+<line x1="130" y1="55" x2="330" y2="55" stroke="#ff7957" stroke-width="1.5" stroke-dasharray="4 3"/><text x="230" y="70" font-size="7.5" fill="#ff7957" text-anchor="middle">Jaccard 0.50</text>
+<line x1="75" y1="60" x2="230" y2="110" stroke="currentColor" stroke-width="1.2" opacity=".6"/>
+<line x1="230" y1="60" x2="230" y2="110" stroke="currentColor" stroke-width="1.2" opacity=".6"/>
+<line x1="385" y1="60" x2="230" y2="110" stroke="currentColor" stroke-width="1.2" opacity=".6"/>
+<rect x="150" y="112" width="160" height="28" fill="#fff" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="130" font-size="8.5" fill="#14241f" text-anchor="middle">ONE RESOLVED CLUSTER</text>
+<line x1="230" y1="140" x2="230" y2="158" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0606)"/>
+<defs><marker id="arrow0606" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="150" y="160" width="160" height="26" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="177" font-size="8.5" fill="#14241f" text-anchor="middle">CANONICAL: R2 (type beats recency)</text>
+</svg>
+<figcaption>R1 and R2 hash identically (exact dedup); R1 and R3 are near-duplicates at Jaccard 0.50, not caught by hashing at all. All three resolve into one cluster, and Concept 01's authority ranking (type first, then recency) picks R2 as canonical -- R3 is the newest record of the three, but its wiki-mirror type still ranks below an official document.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three lanes, one shared handoff</h3>
+<table class="compare-table">
+<thead><tr><th>Technique</th><th>What it checks</th><th>Standard approach</th></tr></thead>
+<tbody>
+<tr><td>Exact dedup</td><td>Are two records' cleaned content byte-for-byte identical?</td><td>Cryptographic hash (e.g. SHA-256) of normalized content; equal hashes mean equal content</td></tr>
+<tr><td>Near dedup</td><td>Are two records close enough to count as the same thing, without being byte-identical?</td><td>Word-shingle sets compared by Jaccard similarity: J(A,B) = |A∩B| / |A∪B|, flagged if J ≥ a chosen threshold</td></tr>
+<tr><td>Canonicalization</td><td>Given a resolved cluster of duplicates/near-duplicates, which one survives?</td><td>Concept 01's authority ranking, auth(s) = (type_rank(s), −recency(s)), applied unchanged — no new rule</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Cleaned records in, one record per fact out</h3>
+<div class="pipeline-preview">
+<span>Concept 05 — cleaned, single records</span><i>↓</i><span class="hot">Concept 06 — dedup + canonicalization</span><i>↓</i><span>Concept 07 — identity and versioning</span><i>↓</i><span>Documents</span>
+</div>
+<p>This concept assumes Concept 05's cleaning has already run — comparing across records only makes sense once noise within each record is already gone. Nothing here decides how a canonical record later changes over time; that hand-off belongs to Concept 07.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Deduplication distinguished from cleaning, from versioning, and from authority itself">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Dedup/canonicalization (this concept)</span><span role="cell">Cleaning (Concept 05)</span><span role="cell">Concept 05 fixes noise WITHIN one record. This concept compares ACROSS two or more already-cleaned records.</span></div>
+<div role="row"><span role="cell">Multiple copies at the SAME time (this concept)</span><span role="cell">One document changing over TIME (Concept 07)</span><span role="cell">R1/R2/R3 all coexist right now. Concept 07 covers a single document's own content changing across versions — a different axis entirely.</span></div>
+<div role="row"><span role="cell">Canonicalization's tiebreaker (this concept)</span><span role="cell">A new ranking rule</span><span role="cell">This concept reuses Concept 01's auth(s) formula verbatim — resolving a duplicate cluster is a new SITUATION, not a new RULE.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Hashing alone catches all duplicates."</b><p>A single changed word produces a completely unrelated hash (the avalanche effect) — hashing has zero tolerance for near-duplicates by design.</p></div>
+<div><b>"Any similarity threshold works for near-dedup."</b><p>Too loose a threshold merges genuinely distinct records; too strict a threshold lets true near-duplicates slip through as independent — Section 14's lab makes this trade-off directly visible.</p></div>
+<div><b>"Canonicalization means deleting the losing copies."</b><p>Usually the non-canonical records are tombstoned or pointed at the canonical one, not hard-deleted — the audit trail matters for later governance.</p></div>
+<div><b>"The newest copy is always the canonical one."</b><p>Section 03's own example: R3 is the newest of the three, but Concept 01's authority ranking checks type first — a wiki mirror still ranks below an official document regardless of recency.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>EXACT DEDUP</span><b>The same regulatory bulletin attached to two tickets</b><p>A byte-identical PDF re-attached to a related ticket is caught by hashing alone, no fuzzy matching needed.</p></div>
+<div><span>NEAR DEDUP</span><b>The same policy, mirrored and slightly reworded on a wiki</b><p>Caught by shingle/Jaccard similarity, using the identical technique Section 03 demonstrated on R1 vs. R3.</p></div>
+<div><span>PREVIEW — CONCEPT 07</span><b>What happens when the canonical record itself changes later</b><p>This concept resolves a cluster that exists right now. Document identity and versioning covers the same document's content changing over time — a different, later concept.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Three independent techniques</b><p>Exact dedup, near-dedup, and canonicalization each answer a different question, in that order.</p></div>
+<div><b>Dedup needs already-cleaned input</b><p>This concept assumes Concept 05's cleaning already ran — comparing dirty records across each other would confuse noise with genuine difference.</p></div>
+<div><b>The near-dedup threshold is a real trade-off</b><p>No single threshold is universally correct — too loose over-merges, too strict under-merges.</p></div>
+<div><b>Canonicalization reuses authority, it doesn't reinvent it</b><p>Concept 01's auth(s) = (type_rank, −recency) formula applies unchanged.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does changing a single word in a document produce a completely different hash, rather than a "slightly different" one?</li>
+<li>In Section 03's example, why does R3 lose to R2 despite being the newest record of the three?</li>
+<li>Why must Concept 05's cleaning happen before this concept's dedup check, and not after?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 07: Document identity and versioning</h3>
+<p>This concept resolved multiple copies of the same content existing at the same time. The next concept covers a different axis entirely: the same document's own content changing across versions over time, and giving it a stable identity that survives those changes.</p>
+<div class="beginner-memory"><b>Concept 06 is complete.</b> Continue to Concept 07, "Document identity and versioning."</div>
+<a class="button primary" href="module-06-concept-05.html">← Back to Concept 05</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Hash it, compare it, then let authority decide</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Three records, one fact</b><small>Byte-identical, near-identical, and the canonical pick, all in one scenario.</small></a>
+<a href="#b04"><span>02</span><b>The three-technique table</b><small>Hash equality, Jaccard similarity, and authority reuse, side by side.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Versioning (Concept 07) is a different axis, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Duplicate Cluster Resolver lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 05's own boundary -- across-record identity is a different problem -- → one fact, three records, three techniques → hash equality and Jaccard similarity computed by hand → authority reused, not reinvented, to pick a survivor → Concept 07 opens versioning next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the deduplication and canonicalization deep dive</b><em>Formal notation, from-scratch code, and the Duplicate Cluster Resolver lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From cleaning one record to comparing many</h2></div></header>
+<p>Concept 05 removed noise within one record. This concept compares across two or more already-cleaned records for the first time: exact duplicates caught by hashing, near-duplicates caught by fuzzy similarity, and a canonical survivor chosen by reusing Concept 01's authority ranking unchanged. Versioning -- the same document changing over time -- is Concept 07's separate job, named only.</p>
+<div class="flow">
+<div class="flow-node">Concept 04 — OCR, layout, tables and images</div>
+<div class="flow-node">Concept 05 — cleaning and normalization</div>
+<div class="flow-node hot">Concept 06 — deduplication and canonicalization</div>
+<div class="flow-node">Concept 07 — document identity and versioning</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State what each of the three techniques checks</h3><p>Exact equality, fuzzy similarity, and authoritative survivor selection, in that order.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute a hash-equality check and a Jaccard similarity by hand</h3><p>Given two short strings, determine exact match and near-duplicate similarity.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Apply Concept 01's authority ranking to a duplicate cluster</h3><p>Reuse auth(s) unchanged to pick one canonical survivor among several records.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate this concept from cleaning and from versioning</h3><p>State why dedup requires clean input first, and why versioning is a different axis entirely.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 05, complete.</b> Dedup assumes within-record noise (encoding, boilerplate, whitespace) is already fixed — comparing dirty records would confuse noise with genuine difference.</li>
+<li><b>Concept 01's auth(s) formula.</b> Reused verbatim as the canonicalization tiebreaker; this concept invents no new ranking rule.</li>
+<li><b>Out of scope here:</b> versioning (Concept 07) and chunking (Module 07) are both named only as forward references.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A fingerprint, a family resemblance, and a file clerk</h2></div></header>
+<p>Exact dedup is a fingerprint match — either two prints are identical, or they're not, with nothing in between. Near-dedup is a family resemblance — two photos of related people that share enough features to flag for a closer look, without being the same photo. Canonicalization is a file clerk who, once told "these three folders are about the same case," picks exactly one to keep on top of the stack, using a fixed, published rule rather than personal judgment.</p>
+<div class="callout warning"><b>Analogy boundary</b>The family-resemblance analogy explains why near-dedup needs a similarity score instead of a yes/no check. It doesn't explain how that score is actually computed -- Section 09 gives the exact Jaccard formula, not just the shape of the idea.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Exact duplicate</td><td>Two records whose normalized content produces identical cryptographic hashes</td><td>h(norm(a)) = h(norm(b))</td></tr>
+<tr><td>k-shingle</td><td>A contiguous sequence of k words, used as the unit of comparison for near-dedup</td><td>shingles(text, k)</td></tr>
+<tr><td>Jaccard similarity</td><td>The size of the intersection of two shingle sets divided by the size of their union</td><td>J(A,B) = |A∩B| / |A∪B|</td></tr>
+<tr><td>Canonical record</td><td>The single authoritative survivor of a resolved duplicate/near-duplicate cluster</td><td>canonical = argmin over auth(s), s in cluster</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Three lanes, one shared handoff</h2></div></header>
+<div class="lane-flow">
+<div><b>Exact-dedup lane</b> — normalize content, compute a cryptographic hash (e.g. SHA-256), and group records with identical hashes.</div>
+<div><b>Near-dedup lane</b> — build k-word shingle sets for records not already caught by exact matching, compute pairwise Jaccard similarity, and flag pairs above a chosen threshold.</div>
+<div><b>Canonicalization lane</b> — for every resolved cluster (exact or near), apply Concept 01's auth(s) = (type_rank, −recency) and keep the record with the best score.</div>
+<div><b>Handoff</b> — one canonical record per cluster moves forward; non-canonical records are tombstoned or pointed at the canonical one, not hard-deleted, preserving the audit trail.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>From raw cleaned records to one canonical survivor</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable branching diagram from cleaned records through exact and near-duplicate detection to a canonicalized survivor">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Cleaned records in</b><small>From Concept 05</small></div>
+<div class="diagram-node"><b>Exact-hash check</b><small>SHA-256 equality</small></div>
+<div class="diagram-node"><b>Near-dup shingle/Jaccard check</b><small>Threshold-based flag</small></div>
+<div class="diagram-node"><b>Resolved cluster → auth(s) tiebreak</b><small>Concept 01's formula, reused</small></div>
+</div>
+</div>
+<p>Every branch still converges on the same output shape as every prior Module 06 concept: a record ready to move forward, this time with duplicates and near-duplicates resolved down to one canonical survivor per cluster.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span>Extraction — Concepts 02-04</span><i>↓</i><span>Cleaning — Concept 05</span><i>↓</i><span class="hot">Dedup + canonicalization — converging here</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept is the last stop before a record is trusted as one authoritative unit — Concept 07 adds identity and versioning on top, and Module 07 decides how it eventually gets chunked.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why one changed word produces a completely different hash</h2></div></header>
+<p>A cryptographic hash function is designed for the avalanche effect: flipping even a single input bit changes roughly half the output bits, unpredictably. Formally, there is no relationship between h(x) and h(x′) for two inputs x, x′ that differ by even one character — h(x) ≠ h(x′) essentially always, with no partial credit for "almost the same." This is exactly why exact dedup needs a completely separate mechanism (shingling + Jaccard) for near-duplicates: hashing is designed to make similarity invisible, not to measure it. Jaccard similarity, by contrast, is explicitly a graded measure: J(A,B) = |A∩B| / |A∪B| ranges continuously from 0 (no shared shingles) to 1 (identical shingle sets), which is precisely why it can express "50% similar" in a way a hash never can.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Three records, computed by script, not by hand</h2></div></header>
+<p>R1 = "complaint records must be retained for 24 months after case closure" (official PDF, age 2 months). R2 = byte-identical copy of R1 (age 3 weeks). R3 = "complaint records must be retained for 24 months <b>once</b> case closure" (wiki mirror, age 1 week) — one word changed from R1.</p>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Check</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>R1 vs. R2</td><td>SHA-256 hash equality</td><td>3ad197ae…15105e02 = 3ad197ae…15105e02 → MATCH</td></tr>
+<tr><td>R1 vs. R3</td><td>SHA-256 hash equality</td><td>3ad197ae…15105e02 ≠ 1c109b99…a933de8 → NO MATCH</td></tr>
+<tr><td>R1 vs. R3</td><td>Word-trigram Jaccard</td><td>6 shared trigrams / 12 total = 0.50</td></tr>
+</tbody>
+</table>
+<p>Both R1 and R3 tokenize to 11 words, producing 9 overlapping word-trigrams each; 6 trigrams are shared (everything not touching the single changed word), and the union across both sets is 12, giving J = 6/12 = 0.50 exactly. Canonicalization over the full cluster {R1, R2, R3} using Concept 01's auth(s) = (type_rank, −recency): R1 and R2 share type_rank 1 (official document), beating R3's type_rank 2 (wiki mirror) regardless of R3 being the newest record. Within rank 1, R2 (3 weeks) beats R1 (2 months) on recency. Canonical record: R2. Every value here was computed via an executed Node.js script (crypto.createHash for the hashes, a hand-rolled shingle/Jaccard function) and independently cross-checked in Python.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A byte-identical PDF re-attached to a second ticket</h3><p>Caught immediately by exact hashing — no fuzzy matching needed at all.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A reworded wiki mirror of the same policy</h3><p>Caught by shingle/Jaccard similarity exactly as Section 10 demonstrated on R1 vs. R3.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Two genuinely different records that happen to share a lot of boilerplate</h3><p>Shared templated language can inflate Jaccard similarity between records that aren't actually duplicates — a real false-positive risk worth checking, not assuming away.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Skipping exact hashing and relying only on fuzzy matching</h3><p>Fuzzy matching is more expensive to compute and unnecessary for the (common) byte-identical case — always run the cheap exact check first.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Exact dedup, near dedup and canonicalization, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES BEYOND HASHLIB</span>
+<pre><code>import hashlib
+
+def content_hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def shingles(text, k=3):
+    words = text.split(" ")
+    return {" ".join(words[i:i+k]) for i in range(len(words) - k + 1)}
+
+def jaccard(a, b):
+    return len(a & b) / len(a | b)
+
+def authority_key(record):
+    return (record["type_rank"], -record["age_days"])
+
+def canonicalize(cluster):
+    return min(cluster, key=authority_key)
+
+R1 = "complaint records must be retained for 24 months after case closure"
+R2 = R1
+R3 = "complaint records must be retained for 24 months once case closure"
+
+assert content_hash(R1) == content_hash(R2)
+assert content_hash(R1) != content_hash(R3)
+
+j = jaccard(shingles(R1), shingles(R3))
+assert round(j, 2) == 0.50
+
+cluster = [
+    {"id": "R1", "type_rank": 1, "age_days": 60},
+    {"id": "R2", "type_rank": 1, "age_days": 21},
+    {"id": "R3", "type_rank": 2, "age_days": 7},
+]
+assert canonicalize(cluster)["id"] == "R2"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same three lanes, in real tools</h2></div></header>
+<p>Exact dedup: any language's standard cryptographic hash library (Python's <code>hashlib</code>, Node's <code>crypto</code>) computes SHA-256 directly. Near dedup at scale: computing pairwise Jaccard over every record pair is O(n²) and infeasible for large corpora — <code>datasketch</code>'s MinHash and LSH (locality-sensitive hashing) approximate Jaccard similarity while only comparing likely-similar candidates, the standard production technique named here but not derived. Canonicalization and broader entity resolution: record-linkage libraries formalize the "which record survives" decision at scale, generalizing Concept 01's simple two-factor ranking to richer scoring rules when needed.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Duplicate Cluster Resolver</h2></div></header>
+<div class="lab">
+<p>The same three records from Section 10. Drag the near-duplicate threshold and watch R3's fixed 0.50 Jaccard score cross it live; toggle a single-character edit into R2 and watch exact hashing's zero tolerance in action.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgThresh_0606">Near-dup threshold <output id="wgThreshOut_0606">0.50</output></label>
+<input type="range" id="wgThresh_0606" min="0" max="1" step="0.05" value="0.50"></div>
+</div>
+<label style="display:flex;gap:8px;align-items:center;margin:14px 0;font:13px DM Mono"><input type="checkbox" id="wgEditToggle_0606"> Introduce a single-character edit into R2</label>
+<div class="norm-readout" id="wgClusterReadout_0606"></div>
+<div class="callout" id="wgClusterVerdict_0606"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Exact vs. near dedup</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Technique</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Exact (hashing)</td><td>Cheap, zero false positives, trivial to scale</td><td>Zero recall on any near-duplicate, however small the difference</td></tr>
+<tr><td>Near (shingle/Jaccard)</td><td>Catches reworded, near-identical copies</td><td>Threshold-dependent, and naively O(n²) at corpus scale without LSH</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>THRESHOLD TOO LOOSE</span><h3>Distinct records get merged as duplicates</h3><p>A low similarity threshold can flag genuinely different records as near-duplicates purely from shared boilerplate.</p></article>
+<article class="info-card"><span>THRESHOLD TOO STRICT</span><h3>True near-duplicates slip through as independent</h3><p>A high threshold misses real near-duplicates, letting the same fact re-enter the corpus as if it were new evidence.</p></article>
+<article class="info-card"><span>STALE AUTHORITY INPUT</span><h3>A wrong canonical pick from outdated type/recency data</h3><p>If a record's type_rank or age is wrong or stale, canonicalization confidently picks the wrong survivor — the formula is only as good as its inputs.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Hashing alone solves deduplication</td><td>False — Section 09's avalanche-effect explanation: any near-duplicate produces a completely different hash, by design.</td></tr>
+<tr><td>A Jaccard score is a probability</td><td>False — it's a set-overlap ratio (shared shingles over total shingles), not a probability of anything.</td></tr>
+<tr><td>Canonicalization deletes the losing copies</td><td>False — Section 06's handoff: non-canonical records are typically tombstoned or pointed at the canonical one, preserving an audit trail.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Exact hashing is cheap enough to run on every ingested record with no real cost concern; near-dedup at real corpus scale needs LSH-style banding to avoid comparing every pair directly.</li>
+<li>A similarity threshold is a genuine tuning decision, not a fixed constant — it should be validated against real near-duplicate and non-duplicate pairs from the actual corpus, not assumed.</li>
+<li>Maintaining canonical-record pointers has to survive re-ingestion — if a source record changes, its cluster membership and canonical pick may need to be recomputed, not assumed permanent.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't hashing detect that R1 and R3 are 50% similar?</summary><div>Cryptographic hashes are designed for the avalanche effect -- any change to the input, however small, produces a completely unrelated output with no partial similarity preserved. Hashing can only answer "identical or not," never "how similar."</div></details>
+<details class="quiz"><summary>Why does R2, not R3, end up as the canonical record, even though R3 is the newest?</summary><div>Concept 01's authority ranking checks type first: R1 and R2 are official documents (type_rank 1), which beats R3's wiki-mirror status (type_rank 2) regardless of recency. Only within the same type rank does recency act as the tiebreaker.</div></details>
+<details class="quiz"><summary>Why must Concept 05's cleaning run before this concept's dedup check?</summary><div>Comparing records that still contain within-record noise (inconsistent whitespace, encoding artifacts) would make two truly identical records hash differently, or make two genuinely different records look artificially more similar -- dedup needs already-normalized input to produce meaningful results.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Two support-ticket notes: N1 = "the customer requested a refund and we processed it within two days" and N2 = "the customer requested a refund and we processed it within three days" (one word changed). Compute whether N1 and N2 hash-match, then compute their word-trigram Jaccard similarity by hand (tokenize, build trigrams, count intersection and union). State whether a 0.60 near-dup threshold would flag this pair.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>N1 and N2 differ by one word ("two" vs. "three"), so they do NOT hash-match. Both tokenize to 13 words, producing 11 trigrams each. The changed word affects 3 trigrams (the windows containing position 10 of 13), so 8 trigrams are shared; union = 11+11−8 = 14. Jaccard = 8/14 ≈ 0.571. At a 0.60 threshold, this pair would NOT be flagged as a near-duplicate (0.571 < 0.60) -- just under the line, illustrating exactly how sensitive the flag/no-flag verdict is to where the threshold sits.</div>
+</details>
+<p>Teach-back: explain, in your own words, why a single-word change near the middle of a sentence affects more trigrams than the same change at the very start or end.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Dedup and canonicalization</h3><ul><li><b>Exact dedup:</b> hash equality — byte-identical or not, no partial credit</li><li><b>Near dedup:</b> shingle/Jaccard similarity — a graded score against a chosen threshold</li><li><b>Canonicalization:</b> reuses Concept 01's auth(s) unchanged to pick one survivor per cluster</li><li><b>Handoff:</b> non-canonical records are tombstoned, not deleted, preserving an audit trail</li></ul></div>
+<div><h3>Memorable example</h3><p>R1 and R2 hash-match exactly; R1 and R3 share only 50% Jaccard similarity despite meaning the same thing; R2 wins canonicalization because type beats recency, even against R3's more recent timestamp.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't a hash-based deduplication pipeline catch a reworded near-duplicate?</summary><div>A cryptographic hash is designed so any input change, however small, produces a completely unrelated output (the avalanche effect) -- it can only answer "identical or not," with no notion of partial similarity. Catching reworded copies needs a separate, graded similarity measure like shingle-based Jaccard similarity.</div></details>
+<details class="quiz"><summary>How would you scale near-duplicate detection to millions of records without comparing every pair?</summary><div>Use locality-sensitive hashing techniques like MinHash/LSH banding, which approximate Jaccard similarity while only comparing candidate pairs likely to be similar, avoiding the O(n²) cost of direct pairwise comparison.</div></details>
+<details class="quiz"><summary>A teammate wants to permanently delete every non-canonical duplicate record immediately. What would you push back on?</summary><div>That deleting removes the audit trail and makes the decision irreversible -- tombstoning or pointing non-canonical records at the canonical one preserves the history while still keeping retrieval clean, and is recoverable if a canonicalization decision later turns out to be wrong.</div></details>
+<details class="quiz"><summary>How would you choose a near-duplicate similarity threshold for a real corpus?</summary><div>Validate it against a labeled sample of known near-duplicate and known-distinct pairs from the actual corpus, checking both false-merge and false-miss rates, rather than assuming a threshold that worked elsewhere transfers directly -- Section 16's threshold-too-loose/too-strict failure modes are exactly what that validation is meant to catch.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/SHA-2"><b>SHA-2 — Wikipedia</b><br><span>Describes the SHA-256 cryptographic hash family used for exact-dedup content fingerprinting in Section 06 and Section 10.</span></a>
+<a href="https://en.wikipedia.org/wiki/Jaccard_index"><b>Jaccard index — Wikipedia</b><br><span>Formal definition of the similarity measure this concept's near-dedup lane is built on, behind Section 05 and Section 09.</span></a>
+<a href="https://en.wikipedia.org/wiki/MinHash"><b>MinHash — Wikipedia</b><br><span>The standard scalable technique for approximating Jaccard similarity at corpus scale, named in Section 13's ecosystem note.</span></a>
+<a href="https://en.wikipedia.org/wiki/Record_linkage"><b>Record linkage — Wikipedia</b><br><span>Background on entity resolution and canonical-record selection at scale, behind Section 13's canonicalization note.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 COMPLETE · CONCEPT 07 NEXT</span>
+<h3>Duplicates resolved, one canonical record per cluster — identity and versioning open next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute a Jaccard similarity and apply Concept 01's authority ranking to a duplicate cluster without looking back at Section 09. Concept 07, "Document identity and versioning," opens next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-05.html">← Back to Concept 05</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 07, Document identity and versioning.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 06 · Complete</p>
+<a href="module-06-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

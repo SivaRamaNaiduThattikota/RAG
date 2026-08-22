@@ -235,3 +235,72 @@ html[data-theme=dark] .matrix-mini td,html[data-theme=dark] .matrix-input input,
 .prob-row.winner .bar-fill{background:var(--orange)}
 html[data-theme=dark] .mask-panel{background:#0c1f19}
 @media(max-width:480px){.mask-panels{gap:10px}.mask-panel{padding:14px}}
+
+/* Top-k Confusion Grid lab and rank/score visuals (Module 05, Concept 08) */
+.rank-chip-row{display:flex;gap:14px;margin:24px 0;overflow-x:auto;padding-bottom:4px}
+.rank-chip{flex:1 1 0;min-width:96px;padding:16px 12px;border:1px solid var(--line);background:var(--paper);text-align:center;transition:.2s}
+.rank-chip b{display:block;font-size:17px}
+.rank-chip>span{display:block;margin-top:6px;font:11px DM Mono;color:var(--muted)}
+.rank-chip small{display:block;margin-top:10px;font:10px DM Mono;letter-spacing:.06em;color:var(--muted)}
+.rank-chip.cutoff-edge{border-right:3px dashed var(--orange)}
+.rank-chip.tp{background:#d7ff53;border-color:#14241f}
+.rank-chip.tp small{color:#14241f;font-weight:800}
+.rank-chip.fn{border:2px solid var(--orange)}
+.rank-chip.fn small{color:var(--orange);font-weight:800}
+.rank-chip.fp{opacity:.55}
+.rank-chip.tn{opacity:.4}
+.relevance-toggles{display:flex;flex-wrap:wrap;gap:16px;margin:18px 0;padding:16px;border:1px solid var(--line);background:var(--paper)}
+.relevance-toggles legend{width:100%;font:11px DM Mono;color:var(--orange);margin-bottom:10px;padding:0}
+.relevance-toggles label{display:flex;align-items:center;gap:7px;font:13px DM Mono}
+.confusion-quadrant{border-collapse:collapse;margin:22px 0}
+.confusion-quadrant th,.confusion-quadrant td{border:1px solid var(--line);padding:14px 22px;text-align:center;font:13px DM Mono}
+.confusion-quadrant thead th{background:var(--white)}
+.confusion-quadrant tbody th{background:var(--paper);text-align:left}
+html[data-theme=dark] .rank-chip{background:#06130f}
+html[data-theme=dark] .confusion-quadrant thead th{background:#06130f}
+html[data-theme=dark] .confusion-quadrant tbody th{background:#0c1f19}
+html[data-theme=dark] .relevance-toggles{background:#06130f}
+@media(max-width:700px){.rank-chip{min-width:78px;padding:12px 8px}.confusion-quadrant th,.confusion-quadrant td{padding:10px 12px}}
+
+/* Rank-Position Payoff Board lab (Module 05, Concept 09) */
+.rank-chip.mover{outline:3px solid var(--orange);outline-offset:-3px}
+.metric-race{display:grid;gap:14px;margin:22px 0}
+.metric-race-row{display:grid;grid-template-columns:110px 1fr 64px;gap:14px;align-items:center;font:12px DM Mono}
+.metric-bar-track{height:20px;background:var(--paper);border:1px solid var(--line)}
+.metric-bar-fill{height:100%;background:var(--green);transition:width .25s}
+html[data-theme=dark] .metric-bar-track{background:#06130f}
+@media(max-width:480px){.metric-race-row{grid-template-columns:82px 1fr 54px;gap:8px}}
+
+/* Pool Coverage Grid lab (Module 05, Concept 10) */
+.system-toggle-row{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:18px}
+.system-toggle-row label{display:flex;align-items:center;gap:8px;font:12px DM Mono;cursor:pointer}
+.system-toggle-row input{accent-color:var(--orange)}
+.pool-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;margin:22px 0}
+.pool-cell{aspect-ratio:1;display:grid;place-items:center;border:1px solid var(--line);background:var(--paper);color:var(--muted);font:10px DM Mono;transition:.2s}
+.pool-cell.in-pool{background:var(--white);border-color:var(--ink);color:var(--ink)}
+.pool-cell.relevant-revealed{background:#d7ff53;border-color:#14241f;color:#14241f;font-weight:800}
+.pool-cell.not-relevant-revealed{background:var(--white);border-color:var(--line);opacity:.55}
+.pool-cell.escapee-revealed{border:2px dashed var(--orange);color:var(--orange);font-weight:800;opacity:1}
+.pool-readout{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 16px;margin-top:6px;border-left:4px solid var(--orange);background:var(--paper);font:12px DM Mono}
+html[data-theme=dark] .pool-cell{background:#06130f}
+html[data-theme=dark] .pool-cell.in-pool,html[data-theme=dark] .pool-cell.not-relevant-revealed{background:#0c1f18}
+@media(max-width:700px){.pool-grid{grid-template-columns:repeat(10,minmax(0,1fr));gap:3px}.pool-cell{font-size:9px}}
+.preset-chip-row{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 18px}
+.preset-chip{padding:9px 15px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);font:11px DM Mono;cursor:pointer;transition:.15s}
+.preset-chip:hover,.preset-chip:focus-visible{background:var(--white)}
+.vocab-tag{display:inline-block;padding:4px 9px;margin-right:2px;border:1px solid var(--line);font:10px DM Mono}
+.vocab-tag.iv{border-color:#5ee6c3;background:#eafff6;color:#14241f}
+.vocab-tag.oov{border-color:var(--orange);color:var(--orange)}
+.ticket-list{display:grid;gap:10px;margin:22px 0}
+.ticket-row{display:grid;grid-template-columns:40px minmax(0,1.7fr) minmax(90px,1fr) 74px;gap:16px;align-items:center;padding:14px;border:1px solid var(--line);background:var(--paper)}
+.ticket-row.top-ranked{border-color:var(--ink);background:var(--white)}
+.ticket-row .ticket-id{font:12px DM Mono;color:var(--orange);font-weight:800}
+.ticket-row .ticket-text{font-size:14px;line-height:1.6;color:var(--muted)}
+.ticket-row .ticket-text mark.term-hit{background:#d7ff53;color:#14241f;padding:0 3px;font-style:normal}
+.ticket-row .ticket-score{font:13px DM Mono;text-align:right;font-weight:700}
+.relevance-badge{display:inline-block;margin-top:7px;padding:3px 8px;font:9px DM Mono;letter-spacing:.04em}
+.relevance-badge.clean-match{background:#5ee6c3;color:#14241f}
+.relevance-badge.partial-match{background:#ff7957;color:#14241f}
+html[data-theme=dark] .preset-chip,html[data-theme=dark] .ticket-row{background:#06130f}
+html[data-theme=dark] .vocab-tag.iv{background:#0c1f18}
+@media(max-width:700px){.ticket-row{grid-template-columns:1fr;text-align:left}.ticket-row .ticket-score{text-align:left}}

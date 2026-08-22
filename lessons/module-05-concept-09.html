@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 08 measured precision@k, recall@k and F1@k as an unordered set — a relevant document at rank 1 scored identically to one at rank k. This concept adds the rank-aware family that fixes that: MRR (where the first relevant hit lands), MAP (precision averaged at every relevant rank), and DCG, normalized into nDCG (relevance discounted by a decreasing function of position), worked on a concrete two-query example.">
+<title>MRR, MAP, DCG and nDCG — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 09</p>
+<h1>It's not just whether —<br><em>it's where.</em></h1>
+<p class="lesson-lead">Concept 08 gave you precision@k, recall@k and F1@k — three numbers built entirely from an unordered top-k set, blind to whether a relevant document sits at rank 1 or rank k. This concept fixes exactly that blind spot with three rank-aware metrics: MRR looks at where the first relevant result lands, MAP averages precision at every relevant rank, and DCG — normalized into nDCG — discounts every relevant hit by a decreasing function of its position. None of these replace Concept 08's metrics; they're a complementary layer that finally lets position count.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 08's precision@k formula, reused directly inside MAP's per-rank terms — and Module 04 Concept 06's logarithm properties, reused for the DCG discount</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute MRR, MAP and nDCG by hand on a two-query worked example, and explain why raw DCG can't be compared across queries the way nDCG can</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concept 08 finished the set-based family — precision@k, recall@k, F1@k — all blind to where inside the top k a relevant document actually sits. This concept adds the rank-aware family that fixes exactly that.</p>
+<b>CONCEPT 09 COMPLETE · CONCEPT 10 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Same ranking, three new ways to grade it</h2>
+</div>
+<p>Concept 08 treated the top k as one unordered bag and asked how much of it overlapped with the relevant set. This concept keeps the same ranked lists and the same relevance judgments, but finally asks the question Concept 08 couldn't: exactly where inside that top k does each relevant document actually sit?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three metrics that finally care where, not just whether</h3>
+<div class="mental-compare">
+<div><span>CONCEPT 08 — SET-BASED</span><p>Precision@k and recall@k treat the top k as one unordered set. A relevant document at rank 1 and one at rank k score identically.</p></div>
+<div><span>CONCEPT 09 — RANK-AWARE</span><p>MRR, MAP and DCG/nDCG all weight a relevant hit by where inside the top k it actually sits — three different ways of making position count.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> precision/recall don't care if the one relevant hit is at rank 1 or rank 5 — these three metrics all do, in three different ways.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Nobody reads to the bottom of the results page</h3>
+<p>A real user — or an LLM's limited context window — only ever looks at the first few results. A relevant document buried at rank 20 is worth far less in practice than the same document at rank 1, even though Concept 08's metrics score them identically once both happen to land inside, or both happen to land outside, the same cutoff k. Something has to capture that difference. That's this concept's entire job.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Two queries, so "mean" actually means something</h3>
+<p>Query A reuses Concept 08's own eight-document list — relevant = positions {1, 2, 4, 7}. Query B is a new, shorter list: five documents, only position 3 is relevant.</p>
+<div class="example-grid">
+<article class="info-card"><span>QUERY A</span><h3>First relevant hit at rank 1</h3><p>Reciprocal rank RR_A = 1/1 = 1.000 — the very first result is already relevant.</p></article>
+<article class="info-card"><span>QUERY B</span><h3>First (and only) relevant hit at rank 3</h3><p>Reciprocal rank RR_B = 1/3 = 0.333 — the one relevant document is buried two spots down.</p></article>
+</div>
+<p>MRR is the mean of the two: MRR = mean(1.000, 0.333) = 0.667. A single query's RR isn't a metric anyone reports on its own — MRR only means something averaged over more than one query, which is exactly why Query B exists here.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0509-beginner-visual-title">
+<strong class="concept-visual-title" id="c0509-beginner-visual-title">VISUAL · WHERE EACH QUERY'S FIRST RELEVANT HIT LANDS</strong>
+<div class="rank-chip-row">
+<div class="rank-chip tp cutoff-edge"><b>1</b><span>relevant</span><small>FIRST HIT</small></div>
+<div class="rank-chip tp"><b>2</b><span>relevant</span></div>
+<div class="rank-chip tn"><b>3</b><span>not relevant</span></div>
+<div class="rank-chip tp"><b>4</b><span>relevant</span></div>
+<div class="rank-chip tn"><b>5</b><span>not relevant</span></div>
+<div class="rank-chip tn"><b>6</b><span>not relevant</span></div>
+<div class="rank-chip tp"><b>7</b><span>relevant</span></div>
+<div class="rank-chip tn"><b>8</b><span>not relevant</span></div>
+</div>
+<div class="rank-chip-row">
+<div class="rank-chip tn"><b>1</b><span>not relevant</span></div>
+<div class="rank-chip tn"><b>2</b><span>not relevant</span></div>
+<div class="rank-chip tp cutoff-edge"><b>3</b><span>relevant</span><small>FIRST HIT</small></div>
+<div class="rank-chip tn"><b>4</b><span>not relevant</span></div>
+<div class="rank-chip tn"><b>5</b><span>not relevant</span></div>
+</div>
+<figcaption>Top row: Query A, RR_A=1.000 — the dashed edge falls right after rank 1, because that's already where the first relevant hit lands. Bottom row: Query B, RR_B=0.333 — the dashed edge doesn't fall until rank 3. Reciprocal rank never looks past that first dashed edge, no matter how many more relevant documents might follow later in either list.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three formulas, three different questions</h3>
+<table class="compare-table">
+<thead><tr><th>Metric</th><th>Formula (per query, then averaged)</th><th>Question it answers</th></tr></thead>
+<tbody>
+<tr><td>MRR</td><td>RR = 1 / rank of first relevant hit; MRR = mean(RR) across queries</td><td>How far down the list did I have to go before hitting anything relevant, on average?</td></tr>
+<tr><td>MAP</td><td>AP = mean of precision@rank at every relevant rank; MAP = mean(AP) across queries</td><td>Once I found a relevant document, how clean was everything up to that point — averaged over every relevant hit, not just the first?</td></tr>
+<tr><td>DCG → nDCG</td><td>DCG@k = Σ 1/log2(rank+1) over relevant ranks; nDCG@k = DCG@k / IDCG@k</td><td>How much total, position-discounted credit did this ranking earn, compared to the best possible ordering for this exact query?</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Still after scoring, still after Concept 08</h3>
+<div class="pipeline-preview">
+<span>Query</span><i>↓</i><span>BM25 scoring — Concepts 04-07</span><i>↓</i><span>Ranked list produced</span><i>↓</i><span class="hot">Rank-aware evaluation — MRR/MAP/nDCG (this concept)</span><i>↓</i><span>Concept 10 — where the relevance judgments came from</span>
+</div>
+<p>Nothing here changes how a document gets ranked, same as Concept 08. This concept just measures the existing ranking with more care about position — and still assumes the relevance judgments themselves are given from somewhere else.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three distinctions worth keeping straight</h3>
+<div class="distinction-table" role="table" aria-label="MRR distinguished from MAP, DCG distinguished from nDCG, and binary relevance distinguished from graded relevance">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">MRR</span><span role="cell">MAP</span><span role="cell">MRR only ever looks at the first relevant hit and stops. MAP keeps going — it averages precision at every relevant rank, so a system that finds the first hit fast but buries the rest still gets penalized by MAP even though MRR wouldn't notice.</span></div>
+<div role="row"><span role="cell">DCG</span><span role="cell">nDCG</span><span role="cell">DCG is unbounded and grows with list length and how many relevant documents exist. nDCG divides by that same query's best-possible DCG (IDCG), producing a 0-1 score that's actually comparable across different queries.</span></div>
+<div role="row"><span role="cell">Binary relevance (all four metrics)</span><span role="cell">Graded relevance</span><span role="cell">MRR and MAP need a strict relevant/not-relevant flag. DCG and nDCG extend naturally to graded judgments (0-3 star helpfulness, say) — where those grades actually come from is Concept 10's job, previewed here only.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"MRR cares about every relevant document."</b><p>False — it only ever cares about the first one. A system that finds one relevant hit at rank 1 and then buries nine more relevant documents at rank 50 still scores a perfect MRR of 1.0.</p></div>
+<div><b>"DCG alone is comparable across queries."</b><p>False — only nDCG is. Two queries with different numbers of relevant documents have different maximum-possible DCG (IDCG), so their raw DCG scores answer different questions even when the numbers look similar.</p></div>
+<div><b>"Average precision averages over every rank in the list."</b><p>False — it only averages precision at the ranks where a relevant document actually sits, skipping every non-relevant rank entirely.</p></div>
+<div><b>"These replace precision, recall and F1."</b><p>False — they're a complementary, position-sensitive layer on top. Concept 08's metrics are still reported; this concept adds to them, it doesn't retire them.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT SEARCH</span><b>MRR as "how far did the analyst have to scroll"</b><p>MRR turns "did the analyst find a real answer fast" into one first-hit UX number, averaged across a set of test queries.</p></div>
+<div><span>RETRIEVAL TUNING</span><b>MAP as "did search surface all the good tickets, in a good order"</b><p>A system can nail the first hit and still bury the rest — MAP is what exposes that, by averaging precision at every relevant rank instead of just the first.</p></div>
+<div><span>PREVIEW — GRADED RELEVANCE</span><b>nDCG once tickets get helpfulness scores, not just a flag</b><p>The moment tickets are graded (say 0-3 stars) instead of flatly relevant/not-relevant, nDCG becomes the natural metric — Module 18's evaluation harness is where averaging this across a real query set actually happens.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>RR/MRR is first-hit-only</b><p>Reciprocal rank looks at the first relevant document and stops — nothing after it changes the score.</p></div>
+<div><b>AP/MAP averages precision at every relevant rank, then across queries</b><p>AP is a within-query average over relevant ranks; MAP is the further average of AP across a set of queries.</p></div>
+<div><b>DCG discounts by log-position; IDCG is the best-possible DCG for that query; nDCG is the ratio</b><p>Dividing by IDCG is what makes nDCG comparable across queries with different numbers of relevant documents — raw DCG alone is not.</p></div>
+<div><b>This is a strict superset of Concept 08, not a replacement</b><p>Position now counts, but nothing that mattered before (whether a document is relevant at all) stops mattering.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why is MRR completely blind to everything that happens after the first relevant hit?</li>
+<li>Why can't two queries' raw DCG scores be compared directly, even at the same cutoff k?</li>
+<li>What does an nDCG of exactly 1.0 mean, concretely, about a ranking?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 10: Relevance judgments and test collections</h3>
+<p>Both this concept and Concept 08 have quietly assumed that "positions 1, 2, 4, 7 are relevant" is simply given. The next concept covers where that ground truth actually comes from — how relevance judgments and test collections get built in the first place.</p>
+<div class="beginner-memory"><b>Concept 09 is complete.</b> Continue to Concept 10, "Relevance judgments and test collections."</div>
+<a class="button primary" href="module-05-concept-10.html">Continue to Concept 10 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One first-hit number, one all-hits average, one discounted score</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Two queries, one mean</b><small>Query A's rank-1 hit and Query B's rank-3 hit, averaged into MRR.</small></a>
+<a href="#b04"><span>02</span><b>The three formulas</b><small>MRR, MAP and DCG/nDCG, each answering a different question about position.</small></a>
+<a href="#b06"><span>03</span><b>What's still deferred</b><small>Graded relevance and where relevance judgments actually come from (Concept 10) are both out of scope here.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, from-scratch code, and the Rank-Position Payoff Board lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> add position to the picture → RR/MRR for the first hit → AP/MAP for every hit → DCG/nDCG for a log-discounted, cross-query-comparable score → Concept 10 covers where the ground truth itself comes from.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the MRR, MAP, DCG and nDCG deep dive</b><em>Formal notation, from-scratch code, and the Rank-Position Payoff Board lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From counting a set to weighing a position</h2></div></header>
+<p>Concept 08 fixed a cutoff k and counted four outcomes against ground truth — but every document inside the top k counted identically, wherever it happened to sit. This concept keeps the same ranked lists and the same relevance judgments and asks the one question Concept 08's formulas structurally cannot answer: where, exactly, inside the top k does each relevant document land? MRR answers it for the first hit only, MAP for every hit, and DCG/nDCG with a smooth, log-based discount. Graded relevance and where relevance judgments themselves come from stay out of scope — Concept 10's job.</p>
+<div class="flow">
+<div class="flow-node">Concept 07 — length normalization</div>
+<div class="flow-node">Concept 08 — precision, recall, F1 @ k</div>
+<div class="flow-node hot">Concept 09 — MRR, MAP, DCG, nDCG</div>
+<div class="flow-node">Concept 10 — relevance judgments</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COMPUTE</span><h3>Compute RR/MRR, AP/MAP and DCG/IDCG/nDCG by hand on a ranked list</h3><p>Given a ranked list and a relevance judgment, produce every one of these numbers from first principles.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Explain why raw DCG isn't cross-query-comparable but nDCG is</h3><p>State the mechanical reason (a query-specific IDCG denominator), not just the observed pattern.</p></article>
+<article class="info-card"><span>BOUND — BACKWARD</span><h3>State the boundary with Concept 08</h3><p>This concept is a strict superset — it adds position, it never stops caring about whether a document is relevant at all.</p></article>
+<article class="info-card"><span>BOUND — FORWARD</span><h3>State the boundary with Concept 10</h3><p>Relevance judgments — binary or graded — are still assumed given throughout; where they actually come from is the next concept's job.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 08's precision@k formula.</b> AP's per-rank terms are literally precision@rank computed at each relevant rank — reused directly here, not re-derived.</li>
+<li><b>Module 04 Concept 06's logarithm properties.</b> The DCG discount, 1/log2(rank+1), leans on the same monotonic, base-agnostic behavior of logarithms already established there.</li>
+<li><b>Out of scope here:</b> graded (non-binary) relevance and where relevance judgments themselves come from (Concept 10) are both named only as forward references.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>How far down the results page, and how much of a ramp</h2></div></header>
+<p>MRR is "how far down the results page did you have to scroll before finding one real answer" — nothing else about the page matters once you've found it. MAP is "did you find all the good answers, not just the first one" — it keeps grading the page past that first hit. DCG's discount is a ramp, not a cliff: results near the top count close to full value, and that value decays smoothly the further down the list a relevant document sits, rather than mattering fully inside a cutoff and not at all outside it.</p>
+<div class="callout warning"><b>Analogy boundary</b>These pictures explain the shape of each metric, not its exact arithmetic — Section 05 and Section 09 give the precise formulas and the reasoning the analogies alone can't supply.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Reciprocal rank</td><td>1 divided by the rank of the first relevant document for query q</td><td>RR_q = 1 / rank_q(first relevant)</td></tr>
+<tr><td>MRR</td><td>The mean of RR across a set of queries Q</td><td>MRR = (1/|Q|) Σ_q RR_q</td></tr>
+<tr><td>Average precision</td><td>The mean of precision@rank, taken only at the ranks where a relevant document sits, for query q</td><td>AP_q = (1/|Rel_q|) Σ_(relevant ranks) Precision@rank</td></tr>
+<tr><td>MAP</td><td>The mean of AP across a set of queries Q</td><td>MAP = (1/|Q|) Σ_q AP_q</td></tr>
+<tr><td>DCG@k</td><td>The sum of relevance, discounted by a decreasing function of rank, over the top k</td><td>DCG@k = Σ_(i=1)^k rel_i / log2(i+1)</td></tr>
+<tr><td>IDCG@k</td><td>DCG@k computed on the best-possible ordering for that same query</td><td>IDCG@k = DCG@k of the ideal ranking</td></tr>
+<tr><td>nDCG@k</td><td>DCG@k normalized by that query's own IDCG@k</td><td>nDCG@k = DCG@k / IDCG@k</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Scan, weight, and — for DCG — normalize</h2></div></header>
+<div class="lane-flow">
+<div><b>Scan top-down to the first relevant rank —</b> invert it. That's RR. Stop; nothing after this rank affects RR.</div>
+<div><b>At every relevant rank, compute precision@that rank —</b> average those within the query to get AP, then average AP across queries to get MAP.</div>
+<div><b>Weight every relevant hit by 1/log2(rank+1) and sum —</b> that's DCG@k, a single position-discounted score for this ranking.</div>
+<div><b>Compute the same sum for the ideal ordering —</b> that's IDCG@k, the best this exact query could possibly score.</div>
+<div><b>Divide DCG@k by IDCG@k —</b> that's nDCG@k, a 0-1 score that's finally comparable across different queries.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The scan-weight-normalize flow, and the discount curve itself</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram from a ranked list to rank-aware scoring to MRR, MAP and nDCG">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Ranked list</b><small>Same list, same relevance judgments as Concept 08</small></div>
+<div class="diagram-node hub-center"><b>Rank-aware scoring</b><small>RR / per-rank precision / log-discounted gain</small></div>
+<div class="diagram-node"><b>MRR / MAP / nDCG</b><small>Three different ways position gets to count</small></div>
+</div>
+</div>
+<table class="worked-table">
+<thead><tr><th>Rank i</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
+<tbody><tr><td>Weight 1/log2(i+1)</td><td>1.000</td><td>0.6309</td><td>0.500</td><td>0.4307</td><td>0.3869</td><td>0.3562</td><td>0.3333</td><td>0.3155</td></tr></tbody>
+</table>
+<figure class="concept-visual" aria-labelledby="c0509-adv-visual-title">
+<strong class="concept-visual-title" id="c0509-adv-visual-title">VISUAL · THE DCG DISCOUNT CURVE, RANK 1 THROUGH RANK 8</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 260" role="img" aria-labelledby="c0509-svg-title c0509-svg-desc">
+<title id="c0509-svg-title">The DCG discount weight plotted against rank position, from rank 1 to rank 8</title>
+<desc id="c0509-svg-desc">A line chart with rank position on the horizontal axis, 1 through 8, and discount weight on the vertical axis, 0 to 1. The curve starts at weight 1.000 for rank 1 and drops steeply at first, then flattens out near weight 0.3155 by rank 8, never reaching zero.</desc>
+<line x1="40" y1="220" x2="280" y2="220" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<line x1="40" y1="220" x2="40" y2="20" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+<polyline points="40,20 74,93.8 109,120 143,133.9 177,142.6 211,148.8 246,153.3 280,156.9" fill="none" stroke="#5ee6c3" stroke-width="3"/>
+<circle cx="40" cy="20" r="4.5" fill="#14241f"/>
+<circle cx="74" cy="93.8" r="4.5" fill="#14241f"/>
+<circle cx="109" cy="120" r="4.5" fill="#14241f"/>
+<circle cx="143" cy="133.9" r="4.5" fill="#14241f"/>
+<circle cx="177" cy="142.6" r="4.5" fill="#14241f"/>
+<circle cx="211" cy="148.8" r="4.5" fill="#14241f"/>
+<circle cx="246" cy="153.3" r="4.5" fill="#14241f"/>
+<circle cx="280" cy="156.9" r="4.5" fill="#14241f"/>
+<text x="18" y="18" font-size="11" fill="currentColor">1.000</text>
+<text x="252" y="172" font-size="11" fill="currentColor">0.3155</text>
+<text x="118" y="240" font-size="11" fill="currentColor">rank position, 1 → 8</text>
+</svg>
+</div>
+<figcaption>Each rank's discount weight is 1/log2(rank+1) — rank 1 is worth the full 1.000, and the curve falls fast at first, then flattens: by rank 8 a relevant document is still worth 0.3155, never zero. This smooth ramp is exactly what lets DCG and nDCG reward early ranks more, without the hard cutoff Concept 08's precision@k and recall@k impose.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where rank-aware evaluation sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Inverted index</span><i>↓</i><span>Retrieval — BM25 scoring, Concepts 04-07</span><i>↓</i><span class="hot">Evaluation — rank-aware metrics (this concept)</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Same as Concept 08, this concept never touches the "Retrieval" box's own mechanics — it only looks at what came out of it and scores that output, now with position taken into account.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why log2(i+1), why IDCG is per-query, and why MRR/MAP need no normalizing</h2></div></header>
+<p>The discount uses log2(i+1) rather than log2(i) so that rank 1 never divides by log2(1)=0 — the +1 shift keeps every rank's denominator strictly positive. Because log2(i+1) is strictly increasing in i, its reciprocal 1/log2(i+1) is strictly decreasing, which is exactly the guarantee that an earlier rank always weighs at least as much as a later one, never less.</p>
+<div class="equation">DCG@k = Σ_(i=1)^k rel_i / log2(i+1)   — strictly decreasing weight as rank i grows</div>
+<p>IDCG is query-specific: it depends on how many relevant documents (or, with graded relevance, how many high-grade documents) exist for that particular query, not on some fixed global constant. Two queries with different relevant-document counts have different best-possible DCG values, so their raw DCG scores are not answering the same question even at the same k. Dividing by each query's own IDCG is what makes nDCG, not raw DCG, the metric that's valid to compare across queries.</p>
+<p>MRR and MAP need no equivalent normalizing step, because they're built from precision terms that are each already bounded to [0,1] by construction — a mean of numbers already in [0,1] stays in [0,1]. DCG has no such built-in ceiling, which is precisely why it alone needs the extra IDCG division nDCG supplies.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two queries, four metrics, every number independently verified</h2></div></header>
+<p>Query A: 8 documents, relevant = {1, 2, 4, 7} (Concept 08's own base case). Query B: 5 documents, relevant = {3} only.</p>
+<table class="worked-table">
+<thead><tr><th>Query</th><th>Relevant ranks</th><th>RR</th><th>Precision terms for AP</th><th>AP</th></tr></thead>
+<tbody>
+<tr><td>A</td><td>1, 2, 4, 7</td><td>1.000</td><td>1.000, 1.000, 0.750, 0.5714</td><td>0.8304</td></tr>
+<tr><td>B</td><td>3</td><td>0.333</td><td>0.333</td><td>0.333</td></tr>
+</tbody>
+</table>
+<p>MRR = mean(1.000, 0.333) = 0.667. MAP = mean(0.8304, 0.333) = 0.5818.</p>
+<table class="worked-table">
+<thead><tr><th>Cutoff k (Query A)</th><th>DCG@k</th><th>IDCG@k</th><th>nDCG@k</th></tr></thead>
+<tbody>
+<tr><td>3</td><td>1.6309</td><td>2.1309</td><td>0.7654</td></tr>
+<tr><td>8</td><td>2.3949</td><td>2.5616</td><td>0.9349</td></tr>
+</tbody>
+</table>
+<p>DCG@3 sums the discount at ranks 1 and 2 (the only relevant ranks inside the top 3): 1.000+0.6309=1.6309. IDCG@3 is the best possible top-3 arrangement — since 4 relevant documents exist, all 3 slots could be relevant: 1.000+0.6309+0.500=2.1309. DCG@8 sums the discount at all four relevant ranks (1, 2, 4, 7): 1.000+0.6309+0.4307+0.3333=2.3949. IDCG@8 puts all 4 relevant documents in ranks 1-4: 1.000+0.6309+0.500+0.4307=2.5616. Every number here was computed by a from-scratch Python script and independently confirmed before being written.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>MRR for "did you mean" / first-correct-answer UX</h3><p>When only the top hit matters to the user — a chatbot's single best answer, a spell-correction suggestion — MRR is the metric shaped exactly like that experience.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>nDCG for graded, search-result-page evaluation</h3><p>Once relevance is a 0-3 star scale rather than a flat flag, nDCG is the metric built to use those grades directly, weighted by position.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>No relevant document appears anywhere in the list</h3><p>MRR is 0 by convention in this case — a different edge case from Concept 08's, where recall was undefined because zero relevant documents existed for the query at all. Here relevant documents exist; the ranking just never surfaced one.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Comparing two queries' raw DCG@k scores directly</h3><p>Valid only if both queries happen to have the same number of relevant documents. In general, only nDCG@k — normalized by each query's own IDCG — is safe to compare across queries.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>RR, AP, DCG, IDCG and nDCG, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def rr(relevant_ranks, n):
+    for i in range(1, n + 1):
+        if i in relevant_ranks:
+            return 1 / i
+    return 0.0
+
+def average_precision(relevant_ranks, n):
+    if not relevant_ranks:
+        return 0.0
+    seen = 0
+    total = 0.0
+    for i in range(1, n + 1):
+        if i in relevant_ranks:
+            seen += 1
+            total += seen / i
+    return total / len(relevant_ranks)
+
+def dcg_at_k(relevant_ranks, k):
+    return sum(1 / math.log2(i + 1) for i in range(1, k + 1) if i in relevant_ranks)
+
+def idcg_at_k(num_relevant, k):
+    ideal_hits = min(num_relevant, k)
+    return sum(1 / math.log2(i + 1) for i in range(1, ideal_hits + 1))
+
+def ndcg_at_k(relevant_ranks, k):
+    idcg = idcg_at_k(len(relevant_ranks), k)
+    return dcg_at_k(relevant_ranks, k) / idcg if idcg > 0 else 0.0
+
+relA, nA = {1, 2, 4, 7}, 8
+relB, nB = {3}, 5
+
+RR_A, RR_B = rr(relA, nA), rr(relB, nB)
+MRR = (RR_A + RR_B) / 2
+AP_A, AP_B = average_precision(relA, nA), average_precision(relB, nB)
+MAP = (AP_A + AP_B) / 2
+nDCG_8 = ndcg_at_k(relA, 8)
+
+assert RR_A == 1.0 and round(RR_B, 3) == 0.333
+assert round(MRR, 3) == 0.667
+assert round(AP_A, 3) == 0.830
+assert round(MAP, 3) == 0.582
+assert round(nDCG_8, 3) == 0.935
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same formulas, in real tools</h2></div></header>
+<p>TREC-style evaluation toolkits (<code>pytrec_eval</code>, <code>ranx</code>) compute <code>recip_rank</code>, <code>map</code> and <code>ndcg_cut_k</code> directly from a run file and a qrels file — the exact same two inputs Concept 08 already assumed. Scikit-learn's <code>sklearn.metrics.ndcg_score</code> and <code>label_ranking_average_precision_score</code> give library equivalents suited to graded or multi-label ranking. Exact k-cutoff conventions and metric names vary by library — always check the documentation before comparing numbers computed by two different tools.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Rank-Position Payoff Board</h2></div></header>
+<div class="lab">
+<p>An 8-slot ranked list, defaulting to relevant = {1, 2, 4, 7} — the same list from b03/s10. One of the four relevant documents, the one starting at rank 7, is the "mover." Drag it to a new rank and watch RR, AP and nDCG@8 react differently from Concept 08's own Precision@3 and Recall@3, on the exact same list.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgMoverSlider_0509">Move the marked relevant document to rank <output id="wgMoverOut_0509">7</output></label>
+<input type="range" id="wgMoverSlider_0509" min="1" max="8" step="1" value="7"></div>
+</div>
+<div class="lab-actions"><button type="button" class="secondary" id="wgResetBtn_0509">Reset to default</button></div>
+<div class="rank-chip-row" id="wgRankRow_0509"></div>
+<div class="norm-readout">
+<div><span>DCG@8</span><b id="wgDCG_0509">—</b></div>
+<div><span>IDCG@8</span><b id="wgIDCG_0509">—</b></div>
+</div>
+<div class="metric-race" id="wgMetricRace_0509">
+<div class="metric-race-row"><span>RR</span><div class="metric-bar-track"><div class="metric-bar-fill" id="wgBarRR_0509"></div></div><b id="wgValRR_0509">—</b></div>
+<div class="metric-race-row"><span>AP</span><div class="metric-bar-track"><div class="metric-bar-fill" id="wgBarAP_0509"></div></div><b id="wgValAP_0509">—</b></div>
+<div class="metric-race-row"><span>nDCG@8</span><div class="metric-bar-track"><div class="metric-bar-fill" id="wgBarNDCG_0509"></div></div><b id="wgValNDCG_0509">—</b></div>
+<div class="metric-race-row"><span>Precision@3</span><div class="metric-bar-track"><div class="metric-bar-fill" id="wgBarP3_0509"></div></div><b id="wgValP3_0509">—</b></div>
+<div class="metric-race-row"><span>Recall@3</span><div class="metric-bar-track"><div class="metric-bar-fill" id="wgBarR3_0509"></div></div><b id="wgValR3_0509">—</b></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Set-based vs. rank-aware, first-hit vs. all-hits, binary vs. graded</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it measures</th><th>What it ignores</th></tr></thead>
+<tbody>
+<tr><td>Precision/recall/F1@k (Concept 08)</td><td>Whether the top-k set overlaps with the relevant set, and how much</td><td>Where inside the top k each relevant document actually sits</td></tr>
+<tr><td>MRR (this concept)</td><td>Only the position of the first relevant hit</td><td>Every relevant hit after the first — MAP is what picks that up</td></tr>
+<tr><td>DCG/nDCG (this concept)</td><td>A position-discounted score that extends naturally to graded relevance</td><td>Nothing extra over MRR/MAP for binary relevance, but MRR and MAP have no graded-relevance extension of their own</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>APPLES-TO-ORANGES DCG</span><h3>Reporting raw DCG across differently-sized query sets</h3><p>Two queries with different numbers of relevant documents have different maximum-possible DCG. Comparing their raw DCG scores as if they meant the same thing is exactly the mistake nDCG exists to prevent.</p></article>
+<article class="info-card"><span>MRR-ONLY TUNNEL VISION</span><h3>Trusting MRR alone for a system that finds one hit fast but buries the rest</h3><p>A system can score a perfect MRR while completely failing to surface most of its relevant documents. Pair MRR with MAP or nDCG before declaring a system good.</p></article>
+<article class="info-card"><span>HARDCODED IDCG</span><h3>Using a fixed IDCG instead of computing it per query</h3><p>A real coding bug: IDCG depends on how many relevant documents that specific query actually has. Hardcoding it silently produces nDCG values that don't mean what they claim to.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>MRR going up always means retrieval got better overall</td><td>False — MRR only reflects the first hit's position. Every other relevant document in the list could have gotten worse while MRR still improves.</td></tr>
+<tr><td>nDCG is just a rounded or normalized display version of DCG, same information</td><td>False — nDCG is DCG divided by a different, per-query IDCG, not a display-scale conversion. Two rankings with the same DCG can have very different nDCG if their queries have different numbers of relevant documents.</td></tr>
+<tr><td>Average precision averages precision over every rank in the list</td><td>False — it only averages over the ranks where a relevant document actually sits, exactly as Section 05 defines it.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Averaging MRR, MAP and nDCG over a real held-out set of queries, with proper significance testing, is Module 18's job — same as Concept 08's own metrics, this concept works one query at a time on purpose to make the mechanics visible.</li>
+<li>nDCG@10 is the de facto standard cutoff in web-search-style evaluation and TREC tracks — worth knowing by name even before Module 18 covers the harness that computes it at scale.</li>
+<li>MRR is popular for QA and chat "first correct answer" UX, while nDCG dominates ranked search-result-page evaluation with graded judgments — the choice tends to track the product surface, not just mathematical preference.</li>
+<li>Collecting graded (not just binary) relevance judgments costs meaningfully more than binary ones — a real production trade-off, forward-referenced to Concept 10 without being taught here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does MRR ignore every relevant hit after the first?</summary><div>By definition, RR is 1 divided by the rank of the first relevant document — the moment that rank is found, the computation stops. Nothing about documents further down the list, relevant or not, changes the value.</div></details>
+<details class="quiz"><summary>Why isn't raw DCG comparable across two queries, while nDCG is?</summary><div>DCG's maximum possible value (IDCG) depends on how many relevant documents that specific query has — a query with more relevant documents can reach a higher raw DCG purely from having more to work with. nDCG divides by each query's own IDCG, cancelling that difference out.</div></details>
+<details class="quiz"><summary>You compute nDCG@10 = 1.3 for a query. What does that reveal?</summary><div>nDCG can never legitimately exceed 1.0, since DCG@k can never exceed IDCG@k by definition (IDCG is the best possible ordering). A value above 1.0 points to a bug — almost always an IDCG computed wrong or incomplete for that query.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different query returns 6 ranked documents; relevant = positions {1, 4, 5} (3 relevant total). Compute RR, AP, DCG@6, IDCG@6 and nDCG@6 by hand, using the same 1/log2(rank+1) discount weights from Section 07's table.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Relevant = {1, 4, 5}. RR = 1/1 = 1.000 (the very first document is relevant). Precision terms at each relevant rank: P@1=1/1=1.000, P@4=2/4=0.500, P@5=3/5=0.600; AP = (1.000+0.500+0.600)/3 = 0.700. DCG@6 sums the discount weights at ranks 1, 4 and 5: 1.000+0.4307+0.3869=1.8175. IDCG@6 puts all 3 relevant documents in the best possible ranks 1-3: 1.000+0.6309+0.500=2.1309. nDCG@6 = 1.8175/2.1309 = 0.8529. Every number here was independently confirmed by the same Python script used in Section 12.</div>
+</details>
+<p>Teach-back: explain, in your own words, why this query's AP (0.700) is lower than Query A's AP from Section 10 (0.8304) even though both queries have their first relevant document at rank 1.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>MRR, MAP, DCG and nDCG</h3><ul><li><b>RR/MRR:</b> 1/rank of the first relevant hit, then averaged — first-hit only</li><li><b>AP/MAP:</b> mean of precision@rank at every relevant rank, then averaged — all hits</li><li><b>DCG@k:</b> Σ 1/log2(rank+1) over relevant ranks — a position-discounted sum</li><li><b>nDCG@k:</b> DCG@k / IDCG@k — the cross-query-comparable, normalized version</li></ul></div>
+<div><h3>Memorable example</h3><p>Query A (rank 1 hit) and Query B (rank 3 hit): MRR=0.667, MAP=0.582. Query A alone at k=8: nDCG@8=0.935 — three numbers, three different ways of rewarding position.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why might a chatbot team prefer MRR over nDCG for evaluating retrieval?</summary><div>If the product only ever shows the user one answer, or only the top hit ever reaches the LLM's prompt, MRR is shaped exactly like that experience — it measures precisely the thing the user notices. nDCG would credit a system for surfacing relevant documents the user never actually sees.</div></details>
+<details class="quiz"><summary>Explain why the DCG discount uses log2(rank+1) rather than log2(rank).</summary><div>log2(1) is 0, which would make rank 1's term divide by zero. Shifting to log2(rank+1) keeps every rank's denominator strictly positive while preserving the same strictly-decreasing discount shape.</div></details>
+<details class="quiz"><summary>You compute nDCG@10 greater than 1.0 for a query — what's the most likely bug?</summary><div>An incorrect or incomplete IDCG@10 — most often computed from the wrong number of relevant documents for that query, or hardcoded rather than derived from that query's own relevance judgments. nDCG can never legitimately exceed 1.0.</div></details>
+<details class="quiz"><summary>Design question: how would you choose between reporting MRR, MAP or nDCG for a given product surface?</summary><div>Match the metric to what the product actually shows the user. If only the single best answer matters, MRR. If the product needs to surface every relevant result in a reasonable order, MAP. If relevance itself is graded rather than binary, nDCG — it's the only one of the three built to use grades directly.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Mean_reciprocal_rank"><b>Mean reciprocal rank — Wikipedia</b><br><span>Primary reference for the RR/MRR definitions used in Section 05 and Section 24's own worked numbers.</span></a>
+<a href="https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)"><b>Evaluation measures (information retrieval) — Wikipedia</b><br><span>Covers MAP and average precision definitions and the ranked-retrieval evaluation family more broadly, cited in Section 05 and Section 13.</span></a>
+<a href="https://en.wikipedia.org/wiki/Discounted_cumulative_gain"><b>Discounted cumulative gain — Wikipedia</b><br><span>Primary reference for DCG/IDCG/nDCG and the log2(i+1) discount convention used throughout Section 05, Section 07 and Section 09.</span></a>
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-of-ranked-retrieval-results-1.html"><b>Evaluation of ranked retrieval results — Stanford IR Book</b><br><span>Direct companion to the "evaluation of unranked retrieval sets" page Concept 08 already cited, covering this concept's rank-aware family in the same textbook.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 COMPLETE · CONCEPT 10 ACTIVE</span>
+<h3>Position now counts — where the ground truth comes from opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute RR, AP and nDCG on a ranked list you haven't seen before, without looking back at Section 10. Concept 10, "Relevance judgments and test collections," opens next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Rank-Position Payoff Board ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 10, Relevance judgments and test collections.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 09 · Complete</p>
+<a href="module-05-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

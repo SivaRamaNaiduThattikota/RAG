@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 02 built the inverted index and Module 04 separately built cosine similarity -- neither concept named the family it belonged to or compared it against the other. This concept names both explicitly: sparse retrieval (exact-term vectors over the vocabulary) versus dense retrieval (fixed-size embedding vectors compared by geometric similarity), on the same corpus, side by side, with no scoring formula derived yet.">
+<title>Sparse retrieval and dense retrieval — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 03</p>
+<h1>Two vector families.<br><em>One retrieval box.</em></h1>
+<p class="lesson-lead">Concept 02 built the inverted index without ever naming the family it belongs to. Module 04 separately built the dot product and cosine similarity without naming its family either. This concept names both explicitly and puts them side by side for the first time: <b>sparse retrieval</b> represents a query and a document as a vector over the whole vocabulary — almost all zeros, one entry per term actually present — and matches by exact term overlap. <b>Dense retrieval</b> represents them as a short, fully-populated embedding vector and matches by geometric similarity. No scoring formula is derived here — Concept 04 introduces the first two real weights, term frequency and inverse document frequency, for the sparse side specifically.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's inverted index and postings lists; Module 04 Concept 03's dot product and cosine similarity — both cited directly, nothing re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain, for one query on one corpus, why sparse and dense retrieval can return different document sets</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Current checkpoint:</b> Concept 02 built the inverted index but never named the family of methods it belongs to, or compared it to anything else. This concept names both families — sparse and dense retrieval — and compares them directly on the same eight-document corpus, with no scoring formula yet.</p>
+<b>3 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Same query, two mechanisms, two different result sets</h2>
+</div>
+<p>Every idea in this concept reduces to one question: what kind of vector represents a document, and how are two of those vectors compared? Sparse and dense retrieval answer that question completely differently, and the difference explains every disagreement between their results.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two words for two kinds of vector</h3>
+<div class="mental-compare">
+<div><span>SPARSE</span><p>A vector as long as the entire vocabulary, almost all zeros — one nonzero entry per term the document actually contains. Concept 02's postings lists are exactly this representation, stored the efficient way instead of as a literal zero-filled vector.</p></div>
+<div><span>DENSE</span><p>A short, fixed-length vector (e.g. 384 numbers) where every single entry is a nonzero float, produced by an embedding model. Module 04 Concept 03's dot product and cosine similarity operate on exactly this kind of vector.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> sparse retrieval matches by shared exact words; dense retrieval matches by closeness in a learned geometric space. Same "Retrieval" box, two different vector representations feeding it.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Two mechanisms already exist — nothing had named or compared them yet</h3>
+<p>Concept 02 built the inverted index. Module 04 built cosine similarity. Both are real, working mechanisms, built in isolation, with no concept so far stating that they belong to two different families or explaining when one should be preferred over the other. This concept exists purely to draw that line explicitly, before Concepts 04-06 spend three concepts making the sparse side rank its results — otherwise a learner could easily assume sparse retrieval is "the old, unranked way" and dense retrieval is simply its upgrade, which is not the relationship between them.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same query, two different result sets, on Concept 02's own corpus</h3>
+<p>Query: "vector search". Concept 02 already computed the sparse side of this: postings("vector") = [D1, D5], postings("search") = [D1, D3, D4, D5, D8], so the Boolean AND result is exactly <b>[D1, D5]</b> — no document lacking both exact words can ever appear, no matter how relevant its topic is.</p>
+<div class="context-demo">
+<div><span>D1 — "vector search over dense embeddings"</span><p>Sparse: MATCH (has both terms). Dense (illustrative score, not from a trained model): 0.91 — highest on both mechanisms.</p></div>
+<div><span>D5 — "vector index for approximate search"</span><p>Sparse: MATCH. Dense (illustrative): 0.78 — still high on both.</p></div>
+<div><span>D3 — "dense embeddings for semantic search"</span><p>Sparse: NO MATCH — missing the exact word "vector". Dense (illustrative): 0.74 — nearly as high as D5, despite the sparse mechanism excluding it entirely.</p></div>
+<div><span>D7 — "embeddings from a neural encoder"</span><p>Sparse: NO MATCH — shares neither exact word. Dense (illustrative): 0.52 — a moderate score a Boolean merge cannot express at all: this document is either "in" or "out", never "somewhat".</p></div>
+</div>
+<p>D3 and D7 are exactly the divergence this concept is about: topically related to "vector search" without using either literal word, invisible to the sparse mechanism, visible (to different degrees) to the dense one. Section 14's lab lets you try other queries from this same corpus and watch where the two mechanisms agree and disagree.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0503-beginner-visual-title">
+<strong class="concept-visual-title" id="c0503-beginner-visual-title">VISUAL · THE SAME QUERY, TWO VECTOR SPACES</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0503-svg-title c0503-svg-desc">
+<title id="c0503-svg-title">One query branching into a sparse path with a strict in-or-out result and a dense path with a graded ranking</title>
+<desc id="c0503-svg-desc">The query "vector search" splits into two paths. The sparse path performs a Boolean AND over postings lists and returns only D1 and D5 as an unordered set. The dense path scores every document by illustrative cosine similarity and returns a full ranking including D3 and D7, which the sparse path never considered.</desc>
+<text x="80" y="18" font-size="9" text-anchor="middle" fill="#5c6a63">QUERY: "vector search"</text>
+<rect x="20" y="26" width="120" height="26" fill="#fff" stroke="#8a978f"/><text x="80" y="43" font-size="9" text-anchor="middle" fill="#14241f">tokenize + postings lookup</text>
+<line x1="80" y1="52" x2="80" y2="72" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0503a)"/>
+<defs><marker id="arrow0503a" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="10" y="76" width="140" height="30" fill="#a7d97a" stroke="#14241f"/><text x="80" y="95" font-size="9.5" text-anchor="middle" fill="#14241f">SPARSE: AND merge</text>
+<text x="80" y="122" font-size="9.5" text-anchor="middle" fill="#14241f">result = {D1, D5}, unordered</text>
+<text x="330" y="18" font-size="9" text-anchor="middle" fill="#5c6a63">QUERY EMBEDDING (Module 04's dot product / cosine)</text>
+<rect x="270" y="26" width="120" height="26" fill="#fff" stroke="#8a978f"/><text x="330" y="43" font-size="9" text-anchor="middle" fill="#14241f">embed into R^d</text>
+<line x1="330" y1="52" x2="330" y2="72" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0503b)"/>
+<defs><marker id="arrow0503b" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="255" y="76" width="150" height="30" fill="#7ab8d9" stroke="#14241f"/><text x="330" y="95" font-size="9.5" text-anchor="middle" fill="#14241f">DENSE: rank by cosine similarity</text>
+<text x="330" y="122" font-size="9.5" text-anchor="middle" fill="#14241f">D1 .91, D5 .78, D3 .74, D7 .52, …</text>
+<text x="230" y="160" font-size="8.5" text-anchor="middle" fill="#5c6a63">D1 and D5 appear on both sides — D3 and D7 only exist on the dense side</text>
+<text x="230" y="176" font-size="8.5" text-anchor="middle" fill="#5c6a63">the sparse path never assigns D3 or D7 a score at all, not even a low one</text>
+</svg>
+<figcaption>Both paths start from the identical query and the identical corpus. The sparse path (green) can only ever say "in" or "out"; the dense path (blue) scores every document, which is why it can surface D3 and D7 — and why it can also rank a genuine exact match below a merely topical one.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two matching rules over two different vector spaces</h3>
+<div class="context-demo">
+<div><span>SPARSE MATCHING</span><p>Tokenize the query, look up each term's postings list (Concept 02), then merge with AND or OR. Matching is symbolic and exact — a term either equals another term or it doesn't; there is no partial credit.</p></div>
+<div><span>DENSE MATCHING</span><p>Embed the query into the same fixed-size space the documents were embedded into (an embedding model — Module 08, forward reference), then rank every document by cosine similarity (Module 04 Concept 03, cited directly). Matching is geometric — every document gets a real-valued score.</p></div>
+<div><span>WHAT'S THE SAME</span><p>Both mechanisms turn a query and a set of documents into vectors, then compare vectors — that shared shape is exactly why both sit inside the same "Retrieval" box in the pipeline.</p></div>
+<div><span>WHAT'S DIFFERENT</span><p>Sparse compares discrete, vocabulary-sized vectors by overlap; dense compares small, continuous vectors by angle. Neither mechanism is a special case of the other.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Two parallel paths into the same box</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index (sparse) / Embeddings + vector index (dense) — two parallel offline structures</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Module 04 built the dense-side math; Concept 02 built the sparse-side data structure. Neither replaces the other inside the "Retrieval" box — Module 16 will eventually show how to run both paths and fuse their results, but that combination is out of scope until this module and Module 09's vector-index material are both complete.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs this concept depends on keeping separate</h3>
+<div class="distinction-table" role="table" aria-label="Sparse vector versus dense vector, exact match versus semantic similarity, Boolean membership versus continuous score, and this concept's comparison versus Concept 04's scoring">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Sparse vector</span><span role="cell">A dense vector with a lot of zeros by coincidence</span><span role="cell">Sparse dimensionality equals vocabulary size and grows with the corpus; dense dimensionality is fixed by the embedding model and does not grow with the corpus at all — a structural difference, not a density preference.</span></div>
+<div role="row"><span role="cell">Exact term match</span><span role="cell">Semantic similarity</span><span role="cell">Sparse retrieval cannot match a paraphrase that shares no exact term; dense retrieval cannot guarantee it will rank an exact identifier or code above a topical near-miss. Neither failure mode is the other's.</span></div>
+<div role="row"><span role="cell">Sparse retrieval's Boolean result</span><span role="cell">A ranked result</span><span role="cell">b03's sparse column is a set (in or out); Concepts 04-06 add a ranking on top of the identical sparse mechanism, they don't replace it.</span></div>
+<div role="row"><span role="cell">This concept's comparison</span><span role="cell">Concept 04's scoring</span><span role="cell">This concept only names and contrasts the two mechanisms; it introduces no formula. Concept 04's term frequency and inverse document frequency are the first real numbers attached to a sparse posting.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Dense retrieval is strictly better because it understands meaning."</b><p>Not for exact identifiers, codes, names, or rare technical terms — a paraphrase-tolerant embedding can rank a wrong-but-topical document above the one exact match a sparse query would have found immediately.</p></div>
+<div><b>"Sparse retrieval can't be ranked, only filtered."</b><p>Concept 02's plain postings lists can't, but Concepts 04-06 add ranking directly on top of the same sparse mechanism — ranking is a missing ingredient, not a missing capability.</p></div>
+<div><b>"A system has to pick one of the two, permanently."</b><p>Hybrid retrieval (Module 16, forward reference) runs both mechanisms and fuses their results — this concept only establishes what's being fused, not how.</p></div>
+<div><b>"Dense retrieval has no vocabulary at all."</b><p>The embedding model still has a fixed tokenizer vocabulary underneath (Module 02, Concept 02) — what dense retrieval lacks is exact-term matching as its comparison rule, not text processing altogether.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lives in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT</span><b>The sparse mechanism, inside the database</b><p>Concept 02's inverted index, maintained by Oracle Text and queried through CONTAINS (Module 10, Concept 07, forward reference) — the sparse path from b05, running as a database feature.</p></div>
+<div><span>ORACLE AI VECTOR SEARCH</span><b>The dense mechanism, inside the same database</b><p>Module 04's cosine similarity, computed by Oracle's VECTOR_DISTANCE over stored embeddings (Module 10, Concept 05, forward reference) — the dense path from b05, in the same project.</p></div>
+<div><span>TEXT-TO-SQL</span><b>Exact identifiers usually need the sparse path</b><p>A generated SQL WHERE clause matching an order number, a customer ID, or an exact status code is exact-term matching by nature — the kind of lookup dense retrieval's tolerance for paraphrase can actively work against.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The two vectors</b><p>Sparse = vocabulary-sized, almost all zeros, exact terms only. Dense = small, fixed-size, fully populated, from an embedding model.</p></div>
+<div><b>The two match rules</b><p>Sparse merges postings lists (AND/OR, symbolic). Dense ranks by cosine similarity (Module 04 Concept 03, geometric).</p></div>
+<div><b>Why results diverge</b><p>Sparse can only see documents sharing an exact term; dense can score any document, including paraphrases sparse never considers.</p></div>
+<div><b>What's not here yet</b><p>No scoring formula for either side — Concept 04 adds the first two real weights, specifically to the sparse mechanism.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why can sparse retrieval never return D7 for the query "vector search", no matter how the corpus grows?</li>
+<li>Using b03's numbers, which two documents appear in both the sparse result and the top of the dense ranking, and why does that overlap make sense?</li>
+<li>Name one query where you would trust the sparse mechanism over the dense one, and explain why in terms of exact versus semantic matching.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 04: term frequency and inverse document frequency</h3>
+<p>This concept compared sparse and dense retrieval but gave the sparse side no way to rank its own matches. The next concept fixes exactly that, introducing the first two real scoring signals for sparse retrieval — term frequency (how often a term appears in one document) and inverse document frequency (how rare that term is across the whole corpus) — kept deliberately separate, before Concept 05 combines them into TF-IDF.</p>
+<div class="beginner-memory"><b>Concept 03 is complete.</b> Continue to Concept 04, "Term frequency and inverse document frequency."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two vector families, compared, before either one is scored.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Two vector spaces</b><small>Vocabulary-sized and sparse versus fixed-size and dense.</small></a>
+<a href="#b04"><span>02</span><b>Two match rules</b><small>Postings-list merge versus cosine-similarity ranking.</small></a>
+<a href="#b07"><span>03</span><b>Not exclusive</b><small>Hybrid retrieval fuses both later — this concept only names what gets fused.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation for both vector spaces, from-scratch code for both mechanisms, and the Sparse vs. Dense Result Board lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> name the sparse vector and the dense vector → compare their match rules on one query → show where their results agree and diverge → Concept 04 gives the sparse side its first scoring signals.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the sparse vs. dense deep dive</b><em>Formal notation for both vector spaces, from-scratch code for both mechanisms, and the Sparse vs. Dense Result Board lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The comparison that neither earlier concept made</h2></div></header>
+<p>Concept 02 built the inverted index. Module 04 built cosine similarity. Neither said what family it belonged to, or what the other family was. This concept exists purely to name both families and compare them directly — it introduces no new mechanism and no scoring formula of its own.</p>
+<div class="flow">
+<div class="flow-node">Concept 02 — the sparse mechanism, unnamed</div>
+<div class="flow-node">Module 04 — the dense mechanism, unnamed</div>
+<div class="flow-node hot">Concept 03 — names and compares both</div>
+<div class="flow-node">Concept 04 — first sparse scoring signals</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State the vector representation each mechanism uses</h3><p>Sparse: vocabulary-sized, mostly zero. Dense: fixed-size, fully populated.</p></article>
+<article class="info-card"><span>COMPARE</span><h3>Run the same query through both mechanisms and explain any divergence</h3><p>Identify which documents only one mechanism can ever return, and why.</p></article>
+<article class="info-card"><span>ARGUE</span><h3>Give one query where each mechanism should be trusted more</h3><p>Exact identifiers favor sparse; paraphrase and topical similarity favor dense.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what this concept does not build</h3><p>No scoring formula for either mechanism, and no fusion between them — both are later concepts.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02 — the inverted index and postings lists.</b> This concept reuses that mechanism and its eight-document corpus without rebuilding either.</li>
+<li><b>Module 04, Concept 03 — dot product and cosine similarity.</b> This concept cites the formula and its geometric meaning directly rather than re-deriving it.</li>
+<li><b>Out of scope here:</b> term frequency, inverse document frequency, TF-IDF and BM25 (Concepts 04-06); how embeddings are trained (Module 08); approximate vector search (Module 09); hybrid fusion (Module 16).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A card catalog versus a librarian who reads for meaning</h2></div></header>
+<p>Sparse retrieval behaves like a library's old card catalog, indexed strictly by the exact words printed on each card — search "vector search" and you get every card with both of those exact words typed on it, nothing more, nothing less. Dense retrieval behaves like a librarian who has actually read every book and can point you to something relevant even when your request uses none of the book's exact words, because they matched on what the book is <i>about</i>, not on printed text.</p>
+<div class="callout warning"><b>Analogy boundary</b>A real librarian's judgment is not literally "distance in a coordinate space" — that geometric mechanism is Module 04's cosine similarity specifically, not a general property of "understanding meaning." The analogy explains the outcome, not the computation.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Vocabulary size</td><td>The number of distinct terms across the corpus (Concept 02's V)</td><td>|V|, typically tens of thousands or more</td></tr>
+<tr><td>Sparse vector</td><td>A vector in R^|V| with a nonzero entry only for terms the document contains</td><td>v_sparse(d) ∈ R^|V|, mostly zero</td></tr>
+<tr><td>Embedding dimensionality</td><td>The fixed output size of an embedding model, independent of corpus size</td><td>d, typically 384-1536, set by the model</td></tr>
+<tr><td>Dense vector</td><td>A fixed-size vector where every entry is populated by an embedding model</td><td>v_dense(d) ∈ R^d, no zero entries by design</td></tr>
+<tr><td>Sparse match</td><td>Document set produced by merging postings lists</td><td>result = postings(t₁) ∩/∪ postings(t₂) … (Concept 02)</td></tr>
+<tr><td>Dense match</td><td>Documents ranked by cosine similarity to the query vector</td><td>score(q,d) = cos(v_dense(q), v_dense(d)) (Module 04, Concept 03)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The same query, traced through both mechanisms</h2></div></header>
+<div class="lane-flow">
+<div><b>Query arrives —</b> "vector search", identical text fed to both mechanisms.</div>
+<div><b>Sparse path: tokenize, then look up —</b> postings("vector") = [1,5], postings("search") = [1,3,4,5,8] (Concept 02's own numbers, reused).</div>
+<div><b>Sparse path: merge —</b> AND intersection gives {D1, D5}; an unordered set, nothing else.</div>
+<div><b>Dense path: embed the query —</b> produces one fixed-size vector, in the same space every document was embedded into ahead of time.</div>
+<div><b>Dense path: score every document —</b> cosine similarity against all eight document vectors, not just the two containing an exact term.</div>
+<div><b>Dense path: rank —</b> sort by score descending; D1 and D5 land near the top, but D3 and D7 — invisible to the sparse merge — also receive a real score.</div>
+</div>
+<figure class="concept-visual" aria-labelledby="c0503-merge-visual-title">
+<strong class="concept-visual-title" id="c0503-merge-visual-title">VISUAL · WHERE THE TWO RESULT SETS OVERLAP</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0503-venn-title c0503-venn-desc">
+<title id="c0503-venn-title">A Venn-style diagram of the sparse result set and the dense top-ranked set overlapping at two documents</title>
+<desc id="c0503-venn-desc">The sparse set contains D1 and D5 only. The dense top-ranked set contains D1, D5, D3 and D7. D1 and D5 sit in the overlap; D3 and D7 sit only in the dense circle, and the rest of the corpus sits outside both.</desc>
+<circle cx="180" cy="100" r="80" fill="#a7d97a" fill-opacity="0.55" stroke="#14241f"/>
+<circle cx="280" cy="100" r="80" fill="#7ab8d9" fill-opacity="0.55" stroke="#14241f"/>
+<text x="110" y="35" font-size="9.5" fill="#14241f">SPARSE result</text>
+<text x="330" y="35" font-size="9.5" text-anchor="end" fill="#14241f">DENSE top ranks</text>
+<text x="220" y="100" font-size="11" text-anchor="middle" fill="#14241f">D1, D5</text>
+<text x="150" y="130" font-size="9.5" text-anchor="middle" fill="#14241f"></text>
+<text x="300" y="70" font-size="10.5" text-anchor="middle" fill="#14241f">D3, D7</text>
+<text x="230" y="172" font-size="8.5" text-anchor="middle" fill="#5c6a63">the overlap is where an exact term match also happens to be geometrically close — not a coincidence, but not a guarantee either</text>
+</svg>
+<figcaption>D1 and D5 satisfy both mechanisms at once. D3 and D7 satisfy only the dense one — the sparse mechanism was never capable of returning them, at any rank, for this query.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One query, two branches, into one comparison</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of a query branching into a sparse path and a dense path">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Query text</b><small>identical input to both mechanisms</small></div>
+<div class="diagram-node hub-center"><b>Sparse path</b><small>tokenize → postings lookup → merge → set</small></div>
+<div class="diagram-node"><b>Dense path</b><small>embed → cosine similarity → rank → scored list</small></div>
+</div>
+</div>
+<p>Both branches start from the same query and read from the same underlying documents, but they never share an intermediate representation — a sparse postings list cannot be compared to a dense score without an explicit fusion step, which Module 16 covers and this concept deliberately does not.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where both paths sit in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index (sparse) ‖ Embeddings + vector index (dense)</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The "Retrieval" box has never been single-mechanism since Module 04 finished — this concept is the first to draw both incoming arrows explicitly and label each with the vector representation feeding it.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Two vector spaces, no new formula</h2></div></header>
+<p>This concept introduces no derivation of its own — it only places Concept 02's and Module 04's existing notation side by side:</p>
+<div class="equation">v_sparse(d) ∈ R^|V|          -- one dimension per vocabulary term, nonzero only where the term occurs
+v_dense(d)  ∈ R^d            -- fixed size d, set by the embedding model, every entry populated
+score_sparse(q,d) = 1[postings match]   -- Concept 02: membership only, no weight
+score_dense(q,d)  = cos(v_dense(q), v_dense(d))  -- Module 04, Concept 03: a real number in [-1, 1]</div>
+<p>The structural difference that drives every later comparison in this module: |V| grows with the corpus and is mostly zero per document; d is fixed by the embedding model and never zero per document. Concept 04 will attach the first real weight to score_sparse's currently-binary indicator — it will not touch score_dense at all.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>A second query pair, traced to a different divergence</h2></div></header>
+<p>Query terms "dense" AND "search", using Concept 02's own postings lists: dense = [1, 3, 6], search = [1, 3, 4, 5, 8].</p>
+<table class="worked-table">
+<thead><tr><th>Step</th><th>i pointer</th><th>j pointer</th><th>Comparison</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1</td><td>1</td><td>1 = 1</td><td>MATCH — advance both</td></tr>
+<tr><td>2</td><td>3</td><td>3</td><td>3 = 3</td><td>MATCH — advance both</td></tr>
+<tr><td>3</td><td>6</td><td>4</td><td>6 &gt; 4</td><td>advance j</td></tr>
+<tr><td>4</td><td>6</td><td>5</td><td>6 &gt; 5</td><td>advance j</td></tr>
+<tr><td>5</td><td>6</td><td>8</td><td>6 &lt; 8</td><td>advance i</td></tr>
+</tbody>
+</table>
+<p>List A (length 3) is now exhausted. Sparse AND result: <b>[D1, D3]</b>, found in 5 comparisons — independently recomputed for this lesson with the same two-pointer rule Concept 02 defined. Contrast with an illustrative dense ranking for "dense search": D3 ("dense embeddings for semantic search") would plausibly score highest of all eight documents — it satisfies both mechanisms at once this time, unlike b03's "vector search" example where the two mechanisms disagreed on D3.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT — SPARSE</span><h3>Looking up an exact order number or error code</h3><p>"ORA-00942" is a single unambiguous token — an exact postings lookup answers it directly, with no risk of an embedding drifting toward a similar-looking but wrong code.</p></article>
+<article class="info-card"><span>CLEAN FIT — DENSE</span><h3>A user question phrased nothing like the source document</h3><p>"How do I get my money back?" retrieving a document titled "Refund policy and eligibility" shares almost no exact words — a case sparse retrieval alone would likely miss.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A query that is itself a rare exact phrase used verbatim in one document</h3><p>Both mechanisms can succeed here — sparse via an exact postings hit, dense because the matching document is also the closest embedding — b03's D1 and D5 are this case.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming a high dense-similarity score means the document actually answers the query</h3><p>A high score means "geometrically close," not "correct" or "sufficient" — Concept 04 onward gives the sparse side comparable caution about term weight not equalling relevance either.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Both mechanisms, from scratch, on the same corpus</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>corpus = {
+    1: "vector search over dense embeddings",
+    2: "sparse retrieval with an inverted index",
+    3: "dense embeddings for semantic search",
+    4: "keyword search using an inverted index",
+    5: "vector index for approximate search",
+    6: "sparse and dense retrieval combined",
+    7: "embeddings from a neural encoder",
+    8: "boolean search over an inverted index",
+}
+
+# Sparse side: reuses Concept 02's index and intersect exactly.
+def build_inverted_index(corpus):
+    index = {}
+    for doc_id, text in corpus.items():
+        for term in set(text.split(" ")):
+            index.setdefault(term, []).append(doc_id)
+    for term in index:
+        index[term].sort()
+    return index
+
+def intersect(a, b):
+    i, j, result, comparisons = 0, 0, [], 0
+    while i < len(a) and j < len(b):
+        comparisons += 1
+        if a[i] == b[j]:
+            result.append(a[i]); i += 1; j += 1
+        elif a[i] < b[j]:
+            i += 1
+        else:
+            j += 1
+    return result, comparisons
+
+index = build_inverted_index(corpus)
+sparse_result, comparisons = intersect(index["dense"], index["search"])
+assert sparse_result == [1, 3]
+assert comparisons == 5
+
+# Dense side: no real embedding model here, so this stands in for one --
+# a fixed, hand-set vector per document, purely to show the *shape* of the
+# mechanism (score every document, then sort), not to claim real accuracy.
+mock_dense_scores = {1: 0.91, 5: 0.78, 3: 0.74, 7: 0.52, 4: 0.33, 6: 0.30, 8: 0.28, 2: 0.19}
+
+def rank_dense(scores):
+    return sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
+
+dense_ranking = rank_dense(mock_dense_scores)
+assert dense_ranking[0] == (1, 0.91)          # highest-scoring document first
+assert dense_ranking[-1] == (2, 0.19)         # lowest-scoring document last
+
+# The comparison this whole concept is about: which documents does sparse
+# see that dense's top-4 also sees, and which does dense see that sparse can't?
+dense_top4 = {doc for doc, _ in dense_ranking[:4]}
+sparse_and = set(intersect(index["vector"], index["search"])[0])   # {1, 5}, Concept 02's numbers
+assert sparse_and == {1, 5}
+assert dense_top4 == {1, 5, 3, 7}
+assert dense_top4 - sparse_and == {3, 7}      # exactly b03's divergence, reproduced in code
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production systems run both mechanisms side by side</h2></div></header>
+<p>Elasticsearch and OpenSearch ship a classic inverted-index BM25 scorer (sparse) alongside a k-nearest-neighbor vector field type (dense) in the same product, queryable separately or combined. Oracle runs Oracle Text (sparse, Module 10 Concept 07) and Oracle AI Vector Search (dense, Module 10 Concept 05) inside the same database engine, over the same tables. Neither product treats the two mechanisms as competitors to pick once — they expose both because the divergence this concept demonstrated in b03 is a real, permanent property of the two representations, not an artifact of small examples.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Sparse vs. Dense Result Board</h2></div></header>
+<div class="lab">
+<p>Pick a query built from this concept's eight-document vocabulary. The board computes the real sparse AND result using Concept 02's own merge, looks up an illustrative dense ranking for the same query, and highlights exactly which documents each mechanism alone can see.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgQuery_0503">Query</label>
+<select id="wgQuery_0503"></select></div>
+</div>
+<div class="lab-actions">
+<button type="button" id="wgRunBoard_0503">Compare mechanisms</button>
+<button type="button" id="wgResetBoard_0503" class="secondary">Reset</button>
+</div>
+<div class="norm-readout">
+<div><span>SPARSE RESULT (AND)</span><b id="wgSparseResult_0503">—</b></div>
+<div><span>DENSE TOP 4 (illustrative)</span><b id="wgDenseResult_0503">—</b></div>
+<div><span>IN BOTH</span><b id="wgOverlap_0503">—</b></div>
+<div><span>DENSE-ONLY</span><b id="wgDenseOnly_0503">—</b></div>
+</div>
+<div class="callout" id="wgVerdictBoard_0503">Pick a query and press "Compare mechanisms" to see where the two result sets agree and diverge.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Sparse and dense, decided by what the query needs</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it needs to succeed</th><th>When it's the better default</th></tr></thead>
+<tbody>
+<tr><td>Sparse retrieval (Concept 02's mechanism)</td><td>The relevant document must share an exact query term</td><td>Exact identifiers, codes, rare technical terms, precise keyword search</td></tr>
+<tr><td>Dense retrieval (Module 04's mechanism)</td><td>A trained embedding model that places related meanings nearby</td><td>Paraphrased or conversational queries, synonym-heavy domains</td></tr>
+<tr><td>Both together (hybrid retrieval, Module 16, forward reference)</td><td>A fusion step to combine two differently-shaped result lists</td><td>Production systems that cannot afford either mechanism's blind spot alone</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SPARSE BLIND SPOT</span><h3>The correct document uses different words entirely</h3><p>b03's D7 is exactly this — zero exact overlap with the query terms, so the sparse merge can never surface it at any rank, regardless of corpus size.</p></article>
+<article class="info-card"><span>DENSE BLIND SPOT</span><h3>A near-identical embedding for a factually wrong document</h3><p>Two documents about "refund eligibility" and "refund fraud policy" can embed close together despite opposite intents — cosine similarity measures topical closeness, not correctness.</p></article>
+<article class="info-card"><span>FALSE CONFIDENCE FROM AGREEMENT</span><h3>Assuming overlap between the two mechanisms proves relevance</h3><p>b03's D1 and D5 satisfy both mechanisms for this query, but that agreement is a property of this specific example, not a general guarantee either mechanism is right.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Dense retrieval is a newer, strictly improved version of sparse retrieval</td><td>False — they are two different representations with two different, non-overlapping blind spots, not one mechanism superseding the other.</td></tr>
+<tr><td>Sparse vectors and dense vectors differ only in how many zeros they contain</td><td>False — sparse dimensionality equals vocabulary size and grows with the corpus; dense dimensionality is fixed by the embedding model, independent of corpus size.</td></tr>
+<tr><td>A production system must choose exactly one of the two mechanisms</td><td>False — Module 16's hybrid retrieval runs both and fuses the results; this concept only names what gets fused, it doesn't yet show how.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Running both mechanisms means maintaining two separate offline structures — an inverted index and a vector index — each with its own build, storage, and update cost, a forward reference to Modules 09-10's operational material.</li>
+<li>An embedding model's blind spots are silent: a dense-only system that misses an exact-identifier query fails without an obvious error, whereas a sparse-only system missing a paraphrase also fails silently — both failure modes need dedicated evaluation, not just a working query path (Module 18, forward reference).</li>
+<li>Choosing sparse-only, dense-only, or hybrid is a cost and latency decision as much as a quality one — two mechanisms to query and fuse is strictly more expensive than one, a trade-off Module 16 addresses directly.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What determines a sparse vector's dimensionality, and what determines a dense vector's?</summary><div>Sparse: the size of the corpus vocabulary, |V|, which grows as the corpus grows. Dense: the embedding model's fixed output size, d, which does not change with the corpus.</div></details>
+<details class="quiz"><summary>Why can a dense retriever return a document that a sparse retriever's AND merge can never return, for the same query?</summary><div>Because dense retrieval scores every document by geometric similarity regardless of exact-term overlap, while a sparse AND merge only ever considers documents present in every query term's postings list.</div></details>
+<details class="quiz"><summary>Does this concept say how to combine sparse and dense results into one ranking?</summary><div>No — that is hybrid retrieval, covered in Module 16. This concept only compares the two mechanisms independently.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Concept 02's Section 10 postings table, compute the sparse AND result for "sparse" AND "retrieval" by hand (postings lists: sparse = [2, 6], retrieval = [2, 6]). Then state, in one sentence, what this particular pair of terms demonstrates about the boundary case named in Concept 02 Section 11 — a term whose postings list narrows nothing useful.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>postings("sparse") = [2, 6]. postings("retrieval") = [2, 6]. The two lists are identical, so the AND merge matches every entry: i=0(2) vs j=0(2) equal, MATCH; i=1(6) vs j=1(6) equal, MATCH; both pointers exhausted. Result: [D2, D6], found in 2 comparisons. This demonstrates the boundary case directly: intersecting with a term whose postings list exactly equals the other term's list narrows nothing at all — every document either mechanism alone would already have identified.</div>
+</details>
+<p>Teach-back: explain, in your own words, why two terms having identical postings lists is a sign those two terms may not be very useful together for narrowing a search — and connect that observation to why Concept 04's inverse document frequency will eventually penalize common terms specifically.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Sparse retrieval and dense retrieval</h3><ul><li><b>Sparse:</b> vector over the whole vocabulary, mostly zero, matched by exact term overlap (Concept 02's postings lists)</li><li><b>Dense:</b> fixed-size, fully populated vector from an embedding model, matched by cosine similarity (Module 04, Concept 03)</li><li><b>Why they diverge:</b> sparse can only see documents sharing an exact term; dense scores every document geometrically</li><li><b>What's missing from both:</b> a scoring formula for sparse (Concept 04 onward) and a fusion method between them (Module 16)</li></ul></div>
+<div><h3>Memorable example</h3><p>Query "vector search": sparse returns exactly {D1, D5}; an illustrative dense ranking also surfaces D3 and D7, which share zero exact words with the query and were never visible to the sparse mechanism at all.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain the difference between sparse and dense retrieval to someone who has never heard either term, in under thirty seconds.</summary><div>Sparse retrieval matches documents that use the exact same words as the query, using a lookup table built from those words. Dense retrieval matches documents that mean something similar to the query, using a geometric closeness score, even if the exact words differ.</div></details>
+<details class="quiz"><summary>Give a concrete query where sparse retrieval would succeed and dense retrieval could plausibly fail, and vice versa.</summary><div>An exact error code or order number favors sparse — an embedding could drift toward a similar-looking wrong code. A conversationally-phrased question with no vocabulary overlap with the source document favors dense — sparse would return nothing at all.</div></details>
+<details class="quiz"><summary>Why isn't dense retrieval simply "sparse retrieval, but better"?</summary><div>They compare fundamentally different vector shapes with different, non-overlapping blind spots — sparse vectors are vocabulary-sized and exact-match only; dense vectors are fixed-size and similarity-based. One does not generalize the other.</div></details>
+<details class="quiz"><summary>Design question: a stakeholder asks why the system doesn't "just use both and pick whichever gives more results." What's wrong with that plan?</summary><div>More results isn't the same as better-ranked or more relevant results — the two mechanisms produce differently-shaped outputs (a set versus a score) that can't be merged by simple concatenation without a defined fusion method, which is exactly what Module 16's hybrid retrieval provides and this concept does not.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2004.04906"><b>Karpukhin et al. — "Dense Passage Retrieval for Open-Domain Question Answering" (arXiv:2004.04906)</b><br><span>Introduces dense retrieval as a direct alternative to sparse TF-IDF/BM25 retrieval, confirming this concept's two-family framing from the primary literature.</span></a>
+<a href="https://en.wikipedia.org/wiki/Vector_space_model"><b>Vector space model — Wikipedia</b><br><span>The classical formalization of representing documents as vectors over a term vocabulary, behind this concept's sparse-vector definition in Section 05.</span></a>
+<a href="https://en.wikipedia.org/wiki/Full-text_search"><b>Full-text search — Wikipedia</b><br><span>General background on the exact-term matching family sparse retrieval belongs to, supporting Section 01's framing.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 COMPLETE · CONCEPT 04 NEXT</span>
+<h3>Two mechanisms are now named and compared — Concept 04 finally scores one of them</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can state, precisely, why a document can be dense-relevant but sparse-invisible. Concept 04, "Term frequency and inverse document frequency," introduces the first two real scoring signals — for the sparse mechanism specifically.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Sparse vs. Dense Result Board ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 04, Term frequency and inverse document frequency.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 03 · Complete</p>
+<a href="module-05-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 04 covers two separate problems inside Concept 02's own file formats: optical character recognition for pages with no embedded text layer, and layout analysis for determining correct reading order across columns, tables and figures.">
+<title>OCR, layout, tables and images — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 04</p>
+<h1>A page can look full<br><em>and still have nothing to read.</em></h1>
+<p class="lesson-lead">Concept 02 parsed five file formats that all shared one thing: an embedded text layer already sitting inside the file, waiting to be read out. A scanned page has no such layer — it's a grid of pixels, and nothing inside the file says which pixels are letters. This concept covers two separate problems that both live inside Concept 02's own file formats: optical character recognition (OCR), for pages with no text layer at all, and layout analysis, for pages that do have text but arrange it across columns, tables and figures whose position — not the order bytes happen to sit in the file — is what actually determines correct reading order.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concepts 02 and 03 — extracting from files and non-file sources is done; this concept covers what's missing or misordered inside those same sources</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why a scanned page needs OCR and why a multi-column page needs layout analysis before either produces correct reading text</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two different reasons a document's text isn't just sitting there</h2>
+</div>
+<p>Concepts 02 and 03 both assumed a source, once reached, already had accessible, correctly-ordered content. This concept covers what happens when that assumption fails: no text layer exists at all, or text exists but its reading order and structure have to be reconstructed from visual position rather than file order. Nothing here decides how the result gets cleaned (Concept 05) or chunked (Module 07) — both stay exactly where they were.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two different reasons a document's text isn't just sitting there</h3>
+<div class="mental-compare">
+<div><span>OCR + LAYOUT ANALYSIS (THIS CONCEPT)</span><p>Recovering text that was never stored as text at all (OCR, for a scanned or photographed page), and determining the correct reading order and structure of text that does exist but is arranged across columns, tables and figures (layout analysis).</p></div>
+<div><span>NOT THIS CONCEPT (CONCEPT 02)</span><p>Reading a file format's own embedded text layer directly, in the single reading order the file's internal structure already implies — no recognition and no reading-order decision required.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a scanned page has no text to read, only pixels to recognize — and even a page that does have text can still end up in the wrong reading order if a plain top-to-bottom byte scan ignores its columns.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Two assumptions Concept 02's five parsers quietly relied on</h3>
+<p>Concept 02 assumed every PDF, HTML page or Word document already had a text layer sitting inside it, extractable in one straightforward pass. That assumption breaks in two distinct ways many real documents hit. First: a huge amount of real-world knowledge exists only as scanned paper — old contracts, signed forms, photographed receipts, faxed complaints — where a file format's parser finds no text layer to extract, because none was ever created. Second, even a fully digital, born-native PDF report can lay its text out across multiple columns, sidebars, tables and captioned figures, where the file's raw internal text-stream order and the page's actual visual reading order are two different things. Both problems have to be solved before a document is truly usable text, and neither one is what Concept 02's five parsers were built to do.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One receipt misread by two characters — and one page misread by ignoring its columns</h3>
+<div class="context-demo">
+<div><span>OCR</span><p>A scanned order confirmation reads "ORDER 4471" to a human eye. The OCR engine returns "0RDER 447l" — mistaking a capital O for a zero and a digit 1 for a lowercase L. Two characters wrong out of ten is enough to break an exact-match lookup, even though a human would read it correctly at a glance.</p></div>
+<div><span>LAYOUT</span><p>A two-column quarterly report opens "Complaint volume rose 12%…" at the top of its left column and "Mortgage servicing complaints held steady…" at the top of its right column. Reading strictly left-to-right, top-to-bottom across the full page width interleaves one sentence from each column before either paragraph finishes — the raw text order is nonsense even though both columns are typed correctly.</p></div>
+</div>
+<p>Neither failure is a parsing bug in Concept 02's sense — the characters, once recognized, and the columns, once laid out, are both real. The problem is deciding what those pixels or that position actually mean before treating the result as reliable text.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0604-beginner-visual-title">
+<strong class="concept-visual-title" id="c0604-beginner-visual-title">VISUAL · TWO KINDS OF MISSING TEXT, ONE SHARED OUTPUT</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0604-svg-title c0604-svg-desc">
+<title id="c0604-svg-title">A scanned page with no text layer and a digital multi-column page both feed into an OCR-plus-layout-analysis stage, then a structured record output</title>
+<desc id="c0604-svg-desc">Two labeled boxes at the top -- Scanned page, no text layer and Digital page, multi-column layout -- each carry a short label naming their specific problem. Arrows lead from each into a shared box labeled OCR plus layout analysis, then down into a highlighted output box labeled structured record out, still unclean and unchunked.</desc>
+<g font-size="8.5" text-anchor="middle">
+<rect x="30" y="30" width="180" height="46" fill="#fff" stroke="#8a978f"/><text x="120" y="46" fill="#14241f" font-size="10">SCANNED PAGE</text><text x="120" y="60" font-size="7.5" fill="#5c6a63">no text layer --</text><text x="120" y="70" font-size="7.5" fill="#5c6a63">needs recognition</text>
+<rect x="250" y="30" width="180" height="46" fill="#fff" stroke="#8a978f"/><text x="340" y="46" fill="#14241f" font-size="10">DIGITAL, MULTI-COLUMN</text><text x="340" y="60" font-size="7.5" fill="#5c6a63">text exists --</text><text x="340" y="70" font-size="7.5" fill="#5c6a63">order is not obvious</text>
+</g>
+<line x1="120" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="340" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<rect x="110" y="114" width="240" height="30" fill="#fff" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="133" font-size="9" text-anchor="middle" fill="#14241f">OCR + LAYOUT ANALYSIS</text>
+<line x1="230" y1="144" x2="230" y2="168" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0604)"/>
+<defs><marker id="arrow0604" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="130" y="170" width="200" height="30" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="189" font-size="9" text-anchor="middle" fill="#14241f">STRUCTURED RECORD OUT — not cleaned yet</text>
+</svg>
+<figcaption>Two different missing pieces — recognized characters and a known reading order — but both problems still land at the same place Concept 02 and Concept 03 landed: a raw, unclean, unchunked record.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What's different, and the standard approach, per problem</h3>
+<table class="compare-table">
+<thead><tr><th>Problem</th><th>What makes it different from Concept 02</th><th>Standard approach</th></tr></thead>
+<tbody>
+<tr><td>OCR</td><td>No embedded text layer exists at all — every character has to be recognized from pixels, not read from bytes</td><td>Binarize the image, segment it into lines/words/characters, classify each segment against a trained recognition model (e.g. Tesseract, a cloud OCR API), then apply language-model post-correction</td></tr>
+<tr><td>Layout analysis</td><td>Text exists, but its visual position — not its byte order in the file — determines correct reading sequence, and tables/figures need their own structure preserved rather than flattened into one line</td><td>Detect a bounding box per block (heading, paragraph, table, figure, caption), classify each block's type, then order the blocks by reading convention (e.g. column-first, top-to-bottom) rather than raw file position</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this concept sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Sources — inventoried in Concept 01</span><i>↓</i><span class="hot">Extraction — OCR + layout analysis (this concept)</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept fills the same "Sources → Documents" gap Concepts 02 and 03 fill, for the subset of sources where recognition or reading-order has to be actively reconstructed before the text is trustworthy. Nothing here decides how a correctly-ordered document later gets chunked; that's still Module 07.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="OCR and layout analysis distinguished from file parsing, chunking, and structured-data retrieval">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">OCR (this concept)</span><span role="cell">Concept 02's file parsing</span><span role="cell">Concept 02's five formats all already contain an extractable text layer; OCR exists specifically for sources that don't.</span></div>
+<div role="row"><span role="cell">Layout analysis (this concept)</span><span role="cell">Chunking (Module 07)</span><span role="cell">Layout analysis decides what the correct linear text even is, before any chunk boundary gets drawn on top of it.</span></div>
+<div role="row"><span role="cell">Table structure preservation (this concept)</span><span role="cell">Structured-data / table retrieval (Module 21)</span><span role="cell">This concept keeps a table's row/column shape intact as it leaves the document. Module 21 covers querying an already-structured table live at answer time — a different, later mechanism, named only.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"OCR output is basically as reliable as typed text."</b><p>Even strong OCR engines routinely confuse visually similar characters (O/0, 1/l/I, rn/m). A downstream exact-match lookup or citation can silently break on a difference a human reader wouldn't even notice.</p></div>
+<div><b>"Reading a page top-to-bottom, left-to-right always gives the right order."</b><p>That rule only holds for a single-column layout. A multi-column page read that way interleaves unrelated sentences from different columns before either one finishes.</p></div>
+<div><b>"A table can just be flattened into one line of text."</b><p>Flattening a table's cells into a single text run destroys which value belongs to which row and column — the same fact ("the fee is $35") can end up attached to the wrong row entirely.</p></div>
+<div><b>"If a PDF has any embedded text, none of its pages need OCR."</b><p>Mixed documents are common: a born-digital cover page next to a scanned signature page in the same PDF. The embedded-text check has to run per page, not once for the whole file.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Matching OCR and layout analysis to the Oracle RAG project's own scanned and multi-column sources</h3>
+<div class="project-map">
+<div><span>SCANNED · SIGNED CONTRACTS AND OLDER COMPLAINT FILES</span><b>Every scanned page runs through OCR before anything else touches it</b><p>A signed agreement photographed years ago has no text layer at all; an OCR engine has to run first, with its output treated as lower-confidence than a born-digital page.</p></div>
+<div><span>LAYOUT · MULTI-COLUMN REGULATORY BULLETINS</span><b>Column-first ordering, not raster order, feeds the retrieval corpus</b><p>A two-column bulletin is read down one column fully before the other — the same discipline Concept 03's join fan-out applied to avoid a wrong "one row = one document" default.</p></div>
+<div><span>TABLES · FEE SCHEDULES AND RATE TABLES</span><b>Row/column structure survives extraction as structure, not one flattened sentence</b><p>A fee schedule's rows and columns are kept intact, so a retrieved passage still says which fee applies to which account tier.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>OCR and layout analysis solve different problems</b><p>OCR recovers missing text from pixels; layout analysis orders and structures text that already exists.</p></div>
+<div><b>OCR output can look right and still be wrong</b><p>Visually similar characters get swapped in ways a quick glance won't catch — exactly Section 03's ORDER 4471 example.</p></div>
+<div><b>Reading order is a layout decision, not a byte-order default</b><p>A multi-column page's correct order has to be determined from block position, not assumed from raw text-stream order.</p></div>
+<div><b>Tables need structure preserved, not just characters</b><p>Flattening a table into one line loses which value belongs to which row and column — Concept 05's cleaning happens after this, not instead of it.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why can OCR output look almost correct and still break an exact-match lookup?</li>
+<li>Why does reading a two-column page strictly left-to-right, top-to-bottom produce the wrong text even though every character is typed correctly?</li>
+<li>Why is flattening a table into a single line of text a lossy operation, even if every cell's characters are extracted correctly?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 05: Cleaning and normalization</h3>
+<p>This concept produced raw, structurally-correct text and tables straight out of OCR and layout analysis — including whatever character-level noise OCR leaves behind. The next concept covers cleaning that raw text: fixing encoding artifacts, removing boilerplate, and normalizing whitespace and punctuation, on top of every source Concepts 02–04 have now covered.</p>
+<div class="beginner-memory"><b>Concept 04 is complete.</b> Continue to Concept 05, "Cleaning and normalization."</div>
+<a class="button primary" href="module-06-concept-03.html">← Back to Concept 03</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two problems, one fixed page, both solved before the text can be trusted</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One receipt, two failures</b><small>OCR mistook two characters; a naive raster read jumbled two unrelated columns into one nonsense stream.</small></a>
+<a href="#b04"><span>02</span><b>The OCR / layout table</b><small>OCR and layout analysis differ, and each has its own standard tool category.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Table retrieval (Module 21) and chunking (Module 07) both build on top of this concept's output, not inside it.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Character error rate mathematics, from-scratch code, and the Reading-Order Reconstructor lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> separate OCR from layout analysis → show one receipt and one page each failing differently → name one difference and one approach per problem → Concept 05 opens cleaning next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the OCR and layout deep dive</b><em>Character error rate mathematics, from-scratch code, and the Reading-Order Reconstructor lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From reading bytes to recognizing pixels and reconstructing order</h2></div></header>
+<p>Concepts 02 and 03 both assumed a source, once reached, already had accessible, correctly-ordered content — a file's byte layer, or a system's query result. This concept covers what happens when that assumption fails in either of two ways: no text layer exists at all (a scanned page), or text exists but its correct reading order has to be reconstructed from visual position rather than assumed from file order (a multi-column page, a table, a captioned figure). Both problems still end at the same place Concept 02 and Concept 03 both ended: a raw, unclean, unchunked record — Concept 05 still owns cleaning, Module 07 still owns chunking.</p>
+<div class="flow">
+<div class="flow-node">Concept 03 — non-file extraction: databases, APIs, tickets, code repos</div>
+<div class="flow-node hot">Concept 04 — OCR, layout, tables and images</div>
+<div class="flow-node">Concept 05 — cleaning and normalization</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State what OCR and layout analysis each solve</h3><p>In one sentence each: recovering unrecognized text from pixels, versus determining structure and reading order for text that already exists.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute a character error rate from a reference and a hypothesis string</h3><p>Given two strings, count substitutions, deletions and insertions and apply the CER formula.</p></article>
+<article class="info-card"><span>DIAGNOSE</span><h3>Tell a raster-order failure apart from an OCR-recognition failure</h3><p>Given a garbled or misordered extraction, identify whether pixels were misrecognized or blocks were read in the wrong sequence.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate this concept's output from chunking and table retrieval</h3><p>State why a correctly-ordered, structure-preserved record is not yet a chunk, and why a preserved table is not yet a live, queryable structure.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02's file-parsing boundary.</b> Knowing its five formats all assume an existing text layer is what makes this concept's "no text layer at all" framing meaningful.</li>
+<li><b>Concept 01's source inventory.</b> Scanned documents and multi-column reports should already be flagged there as needing this concept's handling, not treated as ordinary files.</li>
+<li><b>No mechanism from Module 07 or Module 21.</b> Chunking a correctly-ordered record and querying a live structured table are both named only as forward references here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A photograph, a newspaper, and a spreadsheet mistaken for a sentence</h2></div></header>
+<p>A scanned page is a photograph of writing, not writing — nothing inside the file says "this group of pixels is the letter O"; a trained recognition model has to guess, and it guesses wrong often enough to matter. A multi-column page is more like a newspaper than a letter: a letter's sentences run in one unbroken line, but a newspaper page's columns are separate stories that happen to share a page, and reading across them at the same height mixes two unrelated stories into nonsense. A table is a spreadsheet, not a sentence — reading it as one flat line of prose throws away exactly the row/column relationship that gave its numbers meaning in the first place.</p>
+<div class="callout warning"><b>Analogy boundary</b>OCR and layout analysis are not the same failure with two names. A perfectly recognized character can still land in the wrong reading position, and a perfectly ordered layout can still contain a misrecognized character. Section 16 treats them as two independent failure modes for exactly this reason.</div>
+</section>
+<figure class="concept-visual" aria-labelledby="c0604-spectrum-title">
+<strong class="concept-visual-title" id="c0604-spectrum-title">VISUAL · WHERE OCR CONFIDENCE TYPICALLY DROPS</strong>
+<svg class="vector-plane" viewBox="0 0 460 130" role="img" aria-labelledby="c0604-spectrum-svg-title c0604-spectrum-svg-desc">
+<title id="c0604-spectrum-svg-title">A horizontal spectrum from high OCR confidence to low OCR confidence, with four scan conditions placed along it</title>
+<desc id="c0604-spectrum-svg-desc">A left-to-right bar labeled high confidence to low confidence. Clean high-resolution scan sits at the far left, slightly skewed scan sits next, low-resolution or faded scan sits after that, and handwritten text sits at the far right, closest to the lowest confidence.</desc>
+<line x1="20" y1="60" x2="440" y2="60" stroke="#8a978f" stroke-width="2"/>
+<text x="20" y="20" font-size="9" fill="#5c6a63">HIGH OCR CONFIDENCE</text>
+<text x="440" y="20" font-size="9" text-anchor="end" fill="#5c6a63">LOW OCR CONFIDENCE</text>
+<g font-size="9" text-anchor="middle">
+<circle cx="45" cy="60" r="5" fill="#14241f"/><text x="45" y="82" fill="#14241f">Clean scan</text>
+<circle cx="175" cy="60" r="5" fill="#14241f"/><text x="175" y="82" fill="#14241f">Skewed scan</text>
+<circle cx="300" cy="60" r="5" fill="#14241f"/><text x="300" y="82" fill="#14241f">Faded / low-res</text>
+<circle cx="420" cy="60" r="5" fill="#14241f"/><text x="420" y="82" fill="#14241f">Handwritten</text>
+</g>
+<text x="230" y="110" font-size="8" text-anchor="middle" fill="#5c6a63">position is illustrative, not a precise metric — Section 09's CER is the actual measurement, computed per document</text>
+</svg>
+<figcaption>Confidence is not binary — a clean, straight, high-resolution scan of typed text is close to Concept 02's reliability, while a skewed, faded, low-resolution or handwritten page pushes character error rate up sharply, exactly the number Section 09 defines and Section 10 computes by hand.</figcaption>
+</figure>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Character error rate (CER)</td><td>The fraction of a reference string's characters that a hypothesis string gets wrong, counted as substitutions, deletions and insertions under the minimum-cost alignment between the two strings</td><td>CER = (S + D + I) / N</td></tr>
+<tr><td>Edit distance (Levenshtein)</td><td>The minimum number of single-character substitutions, deletions and insertions needed to turn one string into another</td><td>lev(ref, hyp)</td></tr>
+<tr><td>Bounding box</td><td>A rectangular region on a page marking the extent of one detected content block — text, table, figure or caption</td><td>box = (x, y, w, h)</td></tr>
+<tr><td>Reading order</td><td>The sequence in which detected blocks should be read to reproduce the document's intended meaning</td><td>order: blocks → [1..k]</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Four lanes, one shared handoff</h2></div></header>
+<div class="lane-flow">
+<div><b>Check for a text layer, per page</b> — if one exists, skip OCR and go straight to layout analysis; if none exists, run OCR first. This check runs per page, not once for the whole file (Section 07's beginner mistake).</div>
+<div><b>OCR lane</b> — binarize the image, segment it into lines/words/characters, classify each segment against a trained recognition model, then apply language-model post-correction.</div>
+<div><b>Layout lane</b> — detect a bounding box per content block, classify each block's type (heading, paragraph, table, figure, caption), then order the blocks by reading convention rather than raw position in the file.</div>
+<div><b>Table lane</b> — within a block classified as a table, detect row and column boundaries directly, preserving cell-to-position mapping instead of flattening to one line.</div>
+<div><b>Handoff</b> — every lane still ends at the same place: a raw, unclean, unchunked, but now correctly-recognized, correctly-ordered and structure-preserved record, passed forward to Concept 05.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The recognize-then-order branch-point as a flowchart</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable branching diagram from per-page text-layer check to OCR, layout, and table lanes converging on one structured-record output">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Text layer present on this page?</b><small>Checked per page, not once for the whole file</small></div>
+<div class="diagram-node"><b>No → OCR: binarize, segment, classify, post-correct</b><small>Tesseract, a cloud OCR API</small></div>
+<div class="diagram-node"><b>Yes, multi-region → layout analysis: detect, classify, order</b><small>Block detection models, PDF layout libraries</small></div>
+<div class="diagram-node"><b>Table block detected → row/column boundary detection</b><small>Not flattening to one line</small></div>
+<div class="diagram-node"><b>Yes, single column → Concept 02's plain read is already enough</b><small>No extra work needed</small></div>
+</div>
+</div>
+<p>Every branch is a different active check solving a different difficulty, but all of them converge on the same output shape: a raw structured record, still ahead of Concept 05's cleaning.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span class="hot">Extraction — OCR + layout analysis, converging here</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Alongside Concepts 02 and 03, this concept finishes populating the gap between "Sources" and the pipeline's first labeled stage, "Documents" — this time for sources where recognition or reading-order has to be actively reconstructed rather than simply read out.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Character error rate from an edit distance</h2></div></header>
+<p>Given a reference string of length N and a hypothesis string produced by OCR, let S be the number of substituted characters, D the number of characters present in the reference but missing from the hypothesis (deletions), and I the number of characters present in the hypothesis but absent from the reference (insertions), all counted by the minimum-cost alignment between the two strings — the Levenshtein edit distance. Character error rate is:</p>
+<div class="equation">CER = (S + D + I) / N</div>
+<p>A CER of 0 means a perfect transcription; a CER above 0.5 generally means the hypothesis is unusable without correction. Word error rate (WER) applies the same formula to whole words instead of characters, and is generally higher than CER for the same transcription, since a single wrong character is enough to mark an entire word wrong under WER.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two characters wrong, computed by hand</h2></div></header>
+<p>Reference: "ORDER 4471" (N = 10 characters, including the space). OCR hypothesis: "0RDER 447l". Aligning character by character:</p>
+<table class="worked-table">
+<thead><tr><th>Position</th><th>Reference</th><th>Hypothesis</th><th>Match?</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>O</td><td>0</td><td>Substitution</td></tr>
+<tr><td>2</td><td>R</td><td>R</td><td>Match</td></tr>
+<tr><td>3</td><td>D</td><td>D</td><td>Match</td></tr>
+<tr><td>4</td><td>E</td><td>E</td><td>Match</td></tr>
+<tr><td>5</td><td>R</td><td>R</td><td>Match</td></tr>
+<tr><td>6</td><td>(space)</td><td>(space)</td><td>Match</td></tr>
+<tr><td>7</td><td>4</td><td>4</td><td>Match</td></tr>
+<tr><td>8</td><td>4</td><td>4</td><td>Match</td></tr>
+<tr><td>9</td><td>7</td><td>7</td><td>Match</td></tr>
+<tr><td>10</td><td>1</td><td>l</td><td>Substitution</td></tr>
+</tbody>
+</table>
+<p>No characters are missing (D = 0) and none are extra (I = 0) — the hypothesis is the same length as the reference, and every position lines up one-to-one. S = 2 (positions 1 and 10). CER = (2 + 0 + 0) / 10 = <b>0.20, or 20%</b>. Two characters out of ten is enough to break an exact-match lookup for order number "4471" entirely, even though a human reader would recognize both substitutions instantly from context.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cases: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A high-resolution, single-column scan of a typed memo</h3><p>Character shapes are unambiguous and there is only one column to read — OCR confidence is high and no reading-order decision is even needed.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A born-digital, single-column PDF report</h3><p>Concept 02's plain text-layer read already produces the correct order; this concept has nothing extra to do.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A scanned form with a printed table of checkboxes</h3><p>OCR alone recognizes each character correctly, but without table-aware layout analysis, checkbox rows and their labels can get associated with the wrong column entirely.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Feeding a multi-column PDF through Concept 02's parser and trusting its raw text-stream order</h3><p>Some PDF libraries emit text in the order objects were written into the file, which frequently has no relationship at all to the page's visual column layout.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Character error rate, from scratch</h2></div></header>
+<p>This is the mechanism behind Section 09's formula, applied to Section 10's exact "ORDER 4471" example — a standard Levenshtein edit-distance computation, decomposed into the S/D/I counts CER actually needs, both numbers independently confirmed before use.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · EDIT DISTANCE AND CHARACTER ERROR RATE</span>
+<pre><code>def edit_distance(ref, hyp):
+    n, m = len(ref), len(hyp)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        dp[i][0] = i
+    for j in range(m + 1):
+        dp[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if ref[i - 1] == hyp[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(
+                    dp[i - 1][j],      # deletion
+                    dp[i][j - 1],      # insertion
+                    dp[i - 1][j - 1],  # substitution
+                )
+    return dp[n][m]
+
+def cer(ref, hyp):
+    return edit_distance(ref, hyp) / len(ref)
+
+reference = "ORDER 4471"
+hypothesis = "0RDER 447l"
+
+assert edit_distance(reference, hypothesis) == 2   # O-&gt;0 and 1-&gt;l, two substitutions
+assert cer(reference, hypothesis) == 0.2            # 2 / 10
+
+# Edge case: dropping the leading character entirely is a pure deletion,
+# not a substitution -- a different failure shape with a lower CER here.
+dropped = "RDER 4471"
+assert edit_distance(reference, dropped) == 1
+assert cer(reference, dropped) == 0.1
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same four lanes, in real tools</h2></div></header>
+<p>OCR: Tesseract is the standard open-source engine; cloud OCR APIs (AWS Textract, Google Document AI, Azure AI Document Intelligence) trade a per-page cost for higher accuracy on harder scans and built-in layout detection. Layout analysis: PDF-native libraries (PyMuPDF, pdfplumber) extract each block's bounding box directly from a born-digital PDF's own coordinate data; learned layout models (e.g. LayoutLM-family models) classify block types and predict reading order on scanned or mixed pages where no reliable coordinate data exists. Table extraction: Camelot and pdfplumber target born-digital PDF tables directly; PubTables-1M is a large benchmark dataset purpose-built for training and evaluating table detection and structure-recognition models on real, messy documents. Framework-level connectors (LangChain, LlamaIndex — Modules 12 and 14) wrap several of these behind one common loader interface, the same file-format-versus-mechanism trade Concept 02 and Concept 03 both named already.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Reading-Order Reconstructor</h2></div></header>
+<div class="lab">
+<p>Six text blocks sit in a two-column report: three in the left column, three in the right. Toggle between a naive raster scan (left-to-right across the full page width, row by row) and a layout-aware, column-first order, and watch each block's position number and the reconstructed reading-order text update live. Like Concept 03's Join Fan-Out Simulator, this lab has no pick-and-reveal step — every control changes the computed output immediately.</p>
+<div class="lab-actions">
+<button type="button" id="wgOrderRaster_0604" class="active">Raster scan (naive)</button>
+<button type="button" id="wgOrderLayout_0604">Layout-aware (column-first)</button>
+</div>
+<div class="norm-readout" id="wgBlockOrder_0604"></div>
+<div class="sample-output" id="wgReconstructed_0604"></div>
+<div class="callout" id="wgOrderVerdict_0604"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Recognize-and-order vs. read-the-text-layer</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it requires</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>Concept 02's direct text-layer read</td><td>A file that already contains an embedded, single-flow text layer</td><td>Single-column, born-digital documents with no scanned pages and no multi-region layout</td></tr>
+<tr><td>OCR + layout analysis (this concept)</td><td>A recognition step for missing text, a block-ordering step for multi-region layout, or both together</td><td>Scanned pages, multi-column reports, and any document mixing digital and scanned pages within the same file</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>CHARACTER SUBSTITUTION</span><h3>OCR swaps a visually similar character with no error signal</h3><p>Section 10 showed it directly: O becomes 0, 1 becomes l, and nothing about the output looks obviously wrong without comparing against ground truth.</p></article>
+<article class="info-card"><span>READING-ORDER SCRAMBLE</span><h3>A multi-column page gets read in raster order</h3><p>Section 04's newspaper analogy: two unrelated columns interleave sentence-by-sentence, producing text that is typographically correct and semantically nonsense.</p></article>
+<article class="info-card"><span>TABLE FLATTENING</span><h3>A table's rows and columns collapse into one line</h3><p>The cell-to-position mapping Section 06's table lane is built to preserve is lost, and a retrieved number can no longer be tied back to the row or column it actually belonged to.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>OCR either works or it doesn't — there's no partial credit</td><td>False — Section 09's CER is a continuous measurement, and Section 10's worked example shows a mostly-correct transcription that still fails an exact-match lookup.</td></tr>
+<tr><td>A page's visual layout and its file's text-stream order are the same thing</td><td>False — Section 11's mistake-to-avoid: some PDF libraries emit text in write order, not reading order, and the two frequently disagree on multi-column pages.</td></tr>
+<tr><td>Once a table's characters are extracted correctly, the extraction is done</td><td>False — Section 16's table-flattening failure: correct characters in the wrong row/column relationship are still a broken extraction.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>OCR confidence scores are worth keeping, not discarding — a per-character or per-word confidence score from the OCR engine lets downstream steps flag low-confidence spans for review rather than trusting every character equally.</li>
+<li>Skew, resolution and lighting are real preprocessing concerns — deskewing, denoising and contrast correction before OCR measurably reduce CER, and are usually cheaper than accepting a higher error rate and fixing it downstream.</li>
+<li>Layout models trained on one document style don't automatically generalize — a layout model tuned on financial reports can misclassify blocks on a completely different document style (legal contracts, medical forms), so accuracy has to be checked per document type in production, not assumed from a vendor's benchmark.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does CER = (S + D + I) / N use the reference string's length, N, as the denominator rather than the hypothesis string's length?</summary><div>Because CER measures how much of the true content was recovered correctly. Using the reference length keeps the denominator fixed regardless of whether the hypothesis is longer, shorter, or the same length — a hypothesis that drops characters entirely (increasing D) still gets penalized relative to what should have been there.</div></details>
+<details class="quiz"><summary>What does a naive raster scan get wrong on a two-column page that a layout-aware read gets right?</summary><div>A raster scan reads strictly left-to-right, top-to-bottom across the full page width, which interleaves sentences from both columns row by row. A layout-aware read finishes one column top-to-bottom before starting the next, preserving each column as one coherent block of text.</div></details>
+<details class="quiz"><summary>Why is flattening a table into one line of text considered a failure even if every character is recognized correctly?</summary><div>Because a table's meaning depends on which value sits in which row and column. Flattening discards that row/column relationship, so a correctly recognized number can no longer be tied back to what it actually measured.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A scanned invoice number reads "INV-2208" in the source image. An OCR engine returns "INV-22O8" (the second-to-last digit 0 misread as the letter O). Using Section 09's formula, compute S, D, I, N and the resulting CER by hand. Then, separately, describe one situation where an OCR engine could produce a 0% CER on every individual character and the extracted document would still be unusable for retrieval — referencing this concept's layout-analysis half, not its OCR half.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Reference "INV-2208" (N = 8 characters). Hypothesis "INV-22O8": positions 1-6 (I, N, V, -, 2, 2) match; position 7 is a substitution (0 → O); position 8 (8) matches. S = 1, D = 0, I = 0. CER = (1 + 0 + 0) / 8 = 0.125, or 12.5%. Layout-analysis failure with 0% CER: every character on a two-column page could be recognized with perfect accuracy, and the page would still be unusable if the blocks are read in the wrong order — a raster scan interleaving two columns produces a 0%-CER transcription that is nonetheless semantically scrambled, exactly Section 16's reading-order-scramble failure.</div>
+</details>
+<p>Teach-back: explain, in your own words, why character error rate alone cannot certify that an extracted document is ready for retrieval.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>OCR + layout analysis</h3><ul><li><b>OCR:</b> recognizes text from pixels when no text layer exists — measured by character error rate</li><li><b>Layout analysis:</b> detects blocks, classifies their type, and orders them by reading convention, not file order</li><li><b>Tables:</b> preserve row/column structure as structure, never flatten to one line</li><li><b>Handoff:</b> a raw, unclean, unchunked record, exactly like Concepts 02 and 03's own output</li></ul></div>
+<div><h3>Memorable example</h3><p>"ORDER 4471" read by OCR as "0RDER 447l" is a 20% character error rate from just two swapped characters — small-looking, large enough to break an exact-match lookup entirely.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>How would you measure whether an OCR pipeline is good enough to trust for a retrieval corpus?</summary><div>Compute character error rate (and word error rate) against a hand-verified reference sample, not just a visual spot check. Track it per document type and per scan-quality bucket, since a single average can hide a subset of documents with unusably high error rates.</div></details>
+<details class="quiz"><summary>A two-column PDF's extracted text reads correctly for a few sentences, then suddenly jumps to an unrelated topic. What's the likely cause, and how would you fix it?</summary><div>Likely a raster-order extraction reading across both columns row by row instead of finishing one column before starting the next. The fix is a layout-analysis step that detects each column as its own block and orders blocks column-first, not a re-run of the OCR or text-extraction step itself.</div></details>
+<details class="quiz"><summary>Why can't you rely on "every character was extracted correctly" as your only quality bar for a scanned table?</summary><div>Because correct characters can still be attached to the wrong row or column if the table's structure wasn't preserved during extraction. A quality bar needs to check cell-to-position correctness, not just character-level accuracy.</div></details>
+<details class="quiz"><summary>Design question: you're ingesting a mixed batch of PDFs where some pages are born-digital and others are scanned. How do you handle both without wasting OCR calls on pages that don't need it?</summary><div>Check each page individually for an existing, extractable text layer before deciding whether to route it through OCR. Pages with a usable text layer skip OCR entirely and go straight to layout analysis if needed; only pages with no text layer at all get the more expensive OCR step.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Optical_character_recognition"><b>Optical character recognition — Wikipedia</b><br><span>Describes OCR's pattern-recognition pipeline — binarization, segmentation, character classification — the basis for this concept's OCR mechanism in Section 06.</span></a>
+<a href="https://en.wikipedia.org/wiki/Document_layout_analysis"><b>Document layout analysis — Wikipedia</b><br><span>Covers block detection and reading-order determination, the basis for this concept's layout lane in Section 06 and the Reading-Order Reconstructor lab in Section 14.</span></a>
+<a href="https://tesseract-ocr.github.io/tessdoc/"><b>Tesseract OCR documentation</b><br><span>Documentation for the open-source OCR engine named in this concept's ecosystem survey in Section 13.</span></a>
+<a href="https://arxiv.org/abs/2110.00061"><b>PubTables-1M: Towards comprehensive table extraction from unstructured documents</b><br><span>A large benchmark dataset for table detection and structure recognition, the basis for this concept's table-extraction ecosystem note in Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 · COMPLETE</span>
+<h3>OCR and layout analysis solved in principle — cleaning opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute a character error rate from a reference and hypothesis string without looking back at Section 09's formula. Concept 05, "Cleaning and normalization," opens next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-03.html">← Back to Concept 03</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 05, Cleaning and normalization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 04 · Complete</p>
+<a href="../index.html">← Back to home</a>
+</footer>
+</body>
+</html>

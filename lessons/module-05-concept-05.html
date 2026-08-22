@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 04 defined term frequency and inverse document frequency separately and multiplied neither. This concept combines them for the first time -- tf-idf(t, d) = tf(t, d) x idf(t) -- into the single per-(term, document) weight classical retrieval actually scores with, and shows why multiplication, not addition, is the combination that works.">
+<title>TF-IDF derivation — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 05</p>
+<h1>Two numbers.<br><em>One multiplication.</em></h1>
+<p class="lesson-lead">Concept 04 gave the sparse mechanism its first two real numbers — term frequency (TF) and inverse document frequency (IDF) — and deliberately never combined them. Neither number ranks anything alone: tf ignores how rare a term is, idf ignores which document you're even looking at. This concept multiplies them together for the first time: <b>tf-idf(t, d) = tf(t, d) × idf(t)</b>, a single weight per (term, document) pair that finally lets one document outrank another. Summing that weight across a query's terms produces the first real document score this course has built. This concept derives the formula and shows why multiplication — not addition, not either number alone — is the combination classical retrieval actually uses. It does not fix tf-idf's two remaining problems: unbounded growth from repeated terms, and no correction for document length. Both are named here only as forward pointers to Concepts 06 and 07.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 04's tf(t,d) and idf(t) definitions — cited directly, not re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute tf-idf by hand for one term across several documents, rank those documents by score, and explain why the ranking would break if you added tf and idf instead of multiplying them</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 04 computed term frequency and inverse document frequency completely separately and multiplied neither. This concept combined them into tf-idf(t, d) = tf(t, d) × idf(t), the first number in this course that can actually rank one document above another.</p>
+<b>5 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Multiply, don't add.</h2>
+</div>
+<p>Every idea in this concept reduces to one operation: multiplying a per-document count by a per-term rarity value. Everything else — the worked example, the ranking, the mistakes to avoid — exists to show what that one multiplication buys you that neither number could deliver alone.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>One formula, two ingredients you already have</h3>
+<div class="mental-compare">
+<div><span>BEFORE — CONCEPT 04</span><p>tf(t, d) and idf(t), computed and reported separately. Neither one, alone, could tell you which of two documents matters more.</p></div>
+<div><span>NOW — CONCEPT 05</span><p>tf-idf(t, d) = tf(t, d) × idf(t). One number, per term per document, that rewards a document for repeating a term the corpus considers rare.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> tf-idf is not a new count and not a new rarity value — it is Concept 04's two numbers, multiplied, nothing else added in.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Neither number alone can rank anything</h3>
+<p>Concept 04 already showed the shape of the problem: idf is identical for every document containing a fixed term, so sorting by idf alone produces ties across every document that shares that property. Tf varies by document, but it says nothing about whether the term is common or rare — a document that repeats "my" five times is not more relevant just because "my" is frequent, since "my" carries almost no information at all. This concept exists to combine the two into a single number that rewards exactly the case that matters: a document that uses a <i>rare</i> term <i>often</i>.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Ranking three tickets by "refund," for the first time</h3>
+<p>Reusing Concept 04's five-ticket corpus (N = 5) and its already-computed idf("refund") = ln(5/2) ≈ 0.9163:</p>
+<div class="context-demo">
+<div><span>T2</span><p>tf("refund", T2) = 1 → tf-idf = 1 × 0.9163 ≈ 0.9163</p></div>
+<div><span>T3</span><p>tf("refund", T3) = 2 → tf-idf = 2 × 0.9163 ≈ 1.8326</p></div>
+<div><span>T1, T4, T5</span><p>tf("refund", ·) = 0 → tf-idf = 0 × 0.9163 = 0</p></div>
+</div>
+<p>For the first time in this course, a query for "refund" produces an actual ranking: T3 &gt; T2 &gt; {T1, T4, T5} tied at zero. Neither tf alone (which never looked at rarity) nor idf alone (which is the same 0.9163 for every one of these five tickets) could have produced that ordering by itself.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0505-beginner-visual-title">
+<strong class="concept-visual-title" id="c0505-beginner-visual-title">VISUAL · TWO INPUTS MULTIPLY INTO ONE RANKING</strong>
+<svg class="vector-plane" viewBox="0 0 460 200" role="img" aria-labelledby="c0505-svg-title c0505-svg-desc">
+<title id="c0505-svg-title">Term frequency and inverse document frequency multiplying together into a tf-idf score for three tickets</title>
+<desc id="c0505-svg-desc">For the term refund, ticket T2 has term frequency 1 and ticket T3 has term frequency 2, while both share the same inverse document frequency of about 0.92. Multiplying each ticket's term frequency by that shared 0.92 produces tf-idf scores of about 0.92 for T2 and about 1.83 for T3, while tickets T1, T4 and T5 score zero because their term frequency is zero. The two inputs are combined by multiplication, not addition.</desc>
+<text x="80" y="16" font-size="9" text-anchor="middle" fill="#5c6a63">tf("refund", ·)</text>
+<rect x="20" y="24" width="120" height="60" fill="#fff" stroke="#8a978f"/>
+<text x="80" y="42" font-size="9.5" text-anchor="middle" fill="#14241f">T2 = 1</text>
+<text x="80" y="58" font-size="9.5" text-anchor="middle" fill="#14241f">T3 = 2</text>
+<text x="80" y="74" font-size="9.5" text-anchor="middle" fill="#14241f">T1,T4,T5 = 0</text>
+<text x="330" y="16" font-size="9" text-anchor="middle" fill="#5c6a63">idf("refund") -- one shared value</text>
+<rect x="270" y="24" width="120" height="34" fill="#fff" stroke="#8a978f"/>
+<text x="330" y="45" font-size="10" text-anchor="middle" fill="#14241f">≈ 0.9163 for all five</text>
+<line x1="80" y1="88" x2="230" y2="120" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0505a)"/>
+<line x1="330" y1="62" x2="230" y2="120" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0505a)"/>
+<defs><marker id="arrow0505a" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<text x="230" y="112" font-size="11" text-anchor="middle" fill="#14241f">×</text>
+<rect x="150" y="126" width="160" height="34" fill="#a7d97a" stroke="#14241f"/>
+<text x="230" y="147" font-size="9.5" text-anchor="middle" fill="#14241f">tf-idf(refund, ·)</text>
+<text x="230" y="180" font-size="9" text-anchor="middle" fill="#14241f">T3 ≈ 1.8326 &gt; T2 ≈ 0.9163 &gt; T1=T4=T5 = 0</text>
+<text x="230" y="194" font-size="8.5" text-anchor="middle" fill="#5c6a63">A ranking exists now -- neither input alone could produce one</text>
+</svg>
+<figcaption>Term frequency (left, varies by document) and inverse document frequency (right, one shared value) multiply into tf-idf (bottom), the first score in this course that actually orders documents.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Multiply per term, then sum across a query</h3>
+<div class="context-demo">
+<div><span>PER-TERM WEIGHT</span><p>tf-idf(t, d) = tf(t, d) × idf(t) — Concept 04's two numbers, multiplied, nothing else added or changed.</p></div>
+<div><span>PER-DOCUMENT SCORE</span><p>For a query with several terms, sum the tf-idf weight of every query term over that document: score(q, d) = Σ tf-idf(t, d) for t in q. This is the step that turns a per-term weight into an actual document-level ranking signal.</p></div>
+<div><span>WHAT'S STILL NOT HAPPENING</span><p>Raw tf still grows without any ceiling — a term appearing 20 times contributes 20 times the weight of appearing once, with no saturation. No adjustment for document length exists either. Both are Concept 06 and Concept 07's jobs, not this one's.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Still the same box, now producing an actual score</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — postings now combine into a per-document tf-idf score</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Nothing new is being stored — Concept 04's per-document tf counts and per-term idf values already sit in the index. This concept is purely arithmetic on top of numbers that already exist: multiply, then sum. The first moment "Retrieval" can actually rank sparse candidates arrives here.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs this concept depends on keeping separate</h3>
+<div class="distinction-table" role="table" aria-label="tf-idf versus tf or idf alone, per-term weight versus per-document score, multiplication versus addition, and this concept's raw tf-idf versus BM25's saturating version">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">tf-idf(t, d)</span><span role="cell">tf(t, d) or idf(t) alone</span><span role="cell">tf-idf is the product of both Concept 04 numbers together — dropping either factor collapses back into a signal Concept 04 already showed can't rank documents by itself.</span></div>
+<div role="row"><span role="cell">A per-term weight</span><span role="cell">A per-document score</span><span role="cell">tf-idf(t, d) describes one term's contribution; score(q, d) sums that contribution across every term in the query. Confusing the two makes multi-term queries impossible to reason about.</span></div>
+<div role="row"><span role="cell">Multiplying tf and idf</span><span role="cell">Adding tf and idf</span><span role="cell">Multiplication makes a term with idf = 0 (present in every document) contribute exactly zero no matter how large tf is. Addition would let a common, uninformative term drag the score up regardless of rarity — Section 09 proves this with real numbers.</span></div>
+<div role="row"><span role="cell">This concept's raw tf-idf</span><span role="cell">Concept 06's BM25 score</span><span role="cell">Raw tf-idf lets tf grow without limit and never adjusts for document length. Concept 06 replaces the tf factor with a saturating version; Concept 07 adds a length-normalization term. Neither change happens in this concept.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"tf-idf has some natural maximum value, like 1."</b><p>It doesn't. tf-idf grows without bound as tf grows — a term repeated 1,000 times in one document produces 1,000 times the tf-idf weight of appearing once, with no ceiling anywhere in this formula. Concept 06 is the first place a ceiling gets introduced.</p></div>
+<div><b>"tf-idf already accounts for document length."</b><p>It doesn't — raw tf simply counts occurrences, and longer documents mechanically accumulate higher counts for almost any term. Concept 07 owns that correction specifically; nothing in this concept's formula corrects for it.</p></div>
+<div><b>"Adding tf and idf would work about as well as multiplying them."</b><p>It wouldn't — addition lets a term with idf = 0 (in every document) still contribute a nonzero score through tf alone. Section 09 works this exact failure out with numbers.</p></div>
+<div><b>"A higher tf-idf score always means a genuinely more relevant document."</b><p>It's a useful signal, not a guarantee — a long document repeating a moderately rare word by coincidence can outscore a short, precisely on-topic one. Module 05's later concepts on evaluation (Concepts 08-10) measure exactly how well this kind of score tracks true relevance.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lives in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT</span><b>SCORE() already returns a tf-idf-family relevance number</b><p>Oracle Text's CONTAINS/SCORE mechanism (Module 10, Concept 07, forward reference) returns a relevance score built on exactly this term-frequency-times-rarity idea — this concept is what that returned number actually means underneath.</p></div>
+<div><span>SUPPORT-TICKET SEARCH</span><b>The first moment a search box could return an ordered list</b><p>Given b03's five tickets and a one-word query like "refund," this concept is the first point in the course where the system could genuinely say "show T3 before T2" instead of just "these two contain the word."</p></div>
+<div><span>TEXT-TO-SQL</span><b>A relevance score is not a WHERE clause</b><p>tf-idf ranks results by how strongly they match; Text-to-SQL answers exact structured questions (counts, sums, filters) that have one correct answer — worth keeping distinct, since this course separates ranked retrieval from deterministic query answering on purpose.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The formula</b><p>tf-idf(t, d) = tf(t, d) × idf(t) — Concept 04's two numbers, multiplied.</p></div>
+<div><b>The document score</b><p>score(q, d) = sum of tf-idf(t, d) over every term t in the query q.</p></div>
+<div><b>Why multiplication, not addition</b><p>Multiplication forces a term with idf = 0 to contribute exactly zero, however large tf is; addition would not.</p></div>
+<div><b>What's still missing</b><p>No ceiling on tf's growth (Concept 06's job) and no document-length correction (Concept 07's job).</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's numbers, explain in your own words why T3 outranks T2 for the query "refund," and why all of T1, T4, and T5 tie at zero.</li>
+<li>If a term had idf(t) = 0, what would its tf-idf(t, d) equal for every document d, and why does that make sense given what idf = 0 means?</li>
+<li>Why would summing tf(t,d) + idf(t), instead of multiplying, let a term that appears in every document still influence the score?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 06: BM25 derivation and parameters</h3>
+<p>This concept let tf grow without any limit — a term appearing 20 times contributes 20 times the weight of appearing once. The next concept asks whether that's actually reasonable, and introduces BM25: a saturating replacement for raw tf (controlled by a parameter k1) so that repetition has diminishing returns, plus a document-length adjustment (controlled by a parameter b) that Concept 07 will examine in full.</p>
+<div class="beginner-memory"><b>Concept 05 is complete.</b> Continue to Concept 06, "BM25 derivation and parameters."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Multiply, sum, rank — nothing more yet.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>One multiplication</b><small>tf(t,d) × idf(t) — Concept 04's two numbers, combined for the first time.</small></a>
+<a href="#b04"><span>02</span><b>One sum</b><small>score(q,d) adds tf-idf across a query's terms — the first per-document ranking signal.</small></a>
+<a href="#b07"><span>03</span><b>Two things still missing</b><small>No ceiling on tf, no length correction — Concepts 06 and 07's jobs specifically.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, from-scratch code, and the TF-IDF Document Ranker lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> restate tf and idf as given → multiply them into one weight → sum across query terms into one document score → prove why multiplication beats addition → name what's still missing before Concept 06 fixes the first gap.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the TF-IDF derivation deep dive</b><em>Formal notation, from-scratch code, and the TF-IDF Document Ranker lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first combined score in classical retrieval</h2></div></header>
+<p>Concept 02 built the inverted index. Concept 03 named sparse retrieval without scoring it. Concept 04 gave sparse retrieval two real numbers, tf and idf, and kept them apart on purpose. This concept combines them for the first time into tf-idf, the weight that Concept 06 (BM25) and Concept 07 (length normalization) both refine rather than replace.</p>
+<div class="flow">
+<div class="flow-node">Concept 02 — postings lists, presence only</div>
+<div class="flow-node">Concept 04 — tf and idf, defined separately</div>
+<div class="flow-node hot">Concept 05 — tf × idf, combined into one score</div>
+<div class="flow-node">Concept 06 — BM25 refines the tf factor</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DERIVE</span><h3>Write tf-idf(t, d) from Concept 04's two definitions</h3><p>No new counting mechanism — pure multiplication of numbers already computed.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Rank several documents by tf-idf for a fixed term, by hand</h3><p>Produce an actual ordering, not just two separate numbers per document.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Show why multiplication, not addition, is the right combination</h3><p>A worked counterexample where addition ranks a common term above a rare one that multiplication correctly zeroes out.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what this concept does not fix</h3><p>Unbounded tf growth and missing length normalization — Concepts 06 and 07's jobs, not this one's.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 04 — tf(t,d) and idf(t).</b> This concept treats both as already defined and correctly computed; nothing about how they're counted changes here.</li>
+<li><b>Module 04, Concept 09 — time and space complexity.</b> Summing tf-idf across a query's terms for one document is O(number of query terms) work per document, reusing that concept's cost vocabulary directly.</li>
+<li><b>Out of scope here:</b> term-frequency saturation and the k1 parameter (Concept 06); document-length normalization and the b parameter (Concept 07); evaluation metrics for whether the resulting ranking is actually good (Concepts 08-10).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A judge who finally has two scorecards to compare</h2></div></header>
+<p>Imagine a judge who was handed two separate scorecards for every contestant — one card saying how many times they mentioned a keyword, a second card (identical for every contestant) saying how rare that keyword is in general. Holding either card alone, the judge can't rank anyone: the first card ignores whether the keyword even matters, and the second card is literally the same number for everyone. The moment the judge multiplies the two cards together per contestant, a real ranking appears — someone who repeats a rare keyword often now visibly outscores someone who repeats a common one just as often.</p>
+<div class="callout warning"><b>Analogy boundary</b>The judge analogy explains why combining the two numbers produces a ranking, but it doesn't explain why multiplication specifically is the right combination rather than, say, addition — Section 09 proves that with real numbers, not analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Per-term weight</td><td>tf and idf multiplied together for one term in one document</td><td>tf-idf(t, d) = tf(t, d) × idf(t)</td></tr>
+<tr><td>Query</td><td>A set of terms submitted as a search request</td><td>q = {t&#8321;, t&#8322;, ..., t&#8342;}</td></tr>
+<tr><td>Document score</td><td>The sum of tf-idf weights over every term the query and document share</td><td>score(q, d) = &#8721;&#8348;&#8712;&#8737; tf-idf(t, d)</td></tr>
+<tr><td>Ranking</td><td>Sorting a corpus's documents by score(q, d) in descending order</td><td>rank(d) determined by score(q, d), highest first</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Multiply per term, sum per document, sort the corpus</h2></div></header>
+<div class="lane-flow">
+<div><b>Start from Concept 04's numbers —</b> tf(t, d) already counted per document, idf(t) already computed once per term.</div>
+<div><b>Multiply, per (term, document) pair —</b> tf-idf(t, d) = tf(t, d) × idf(t). No new counting, no new corpus scan.</div>
+<div><b>Sum across the query's terms, per document —</b> score(q, d) = &#8721; tf-idf(t, d) for every term t that appears in query q.</div>
+<div><b>Sort documents by score, descending —</b> the first genuine ranking this course has produced from raw text statistics alone.</div>
+</div>
+<figure class="concept-visual" aria-labelledby="c0505-rank-title">
+<strong class="concept-visual-title" id="c0505-rank-title">VISUAL · FIVE TICKETS, RANKED BY TF-IDF</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0505-rank-svg-title c0505-rank-svg-desc">
+<title id="c0505-rank-svg-title">A horizontal bar chart ranking five tickets by tf-idf score for the term refund</title>
+<desc id="c0505-rank-svg-desc">Ticket T3 scores about 1.83, the highest bar. Ticket T2 scores about 0.92, roughly half as tall. Tickets T1, T4 and T5 all score exactly zero and show no bar at all. The chart demonstrates that tf-idf produces a real ordering among documents where neither term frequency nor inverse document frequency alone could.</desc>
+<text x="10" y="16" font-size="9.5" fill="#14241f">TICKET (query: "refund")</text>
+<text x="450" y="16" font-size="9.5" text-anchor="end" fill="#14241f">tf-idf score</text>
+<text x="10" y="46" font-size="10" fill="#14241f">T3</text>
+<rect x="90" y="34" width="184" height="20" fill="#a7d97a" stroke="#14241f"/><text x="284" y="48" font-size="10" fill="#14241f">1.8326</text>
+<text x="10" y="86" font-size="10" fill="#14241f">T2</text>
+<rect x="90" y="74" width="92" height="20" fill="#7ab8d9" stroke="#14241f"/><text x="192" y="88" font-size="10" fill="#14241f">0.9163</text>
+<text x="10" y="126" font-size="10" fill="#14241f">T1</text><text x="98" y="126" font-size="9.5" fill="#5c6a63">0 (no bar)</text>
+<text x="10" y="150" font-size="10" fill="#14241f">T4</text><text x="98" y="150" font-size="9.5" fill="#5c6a63">0 (no bar)</text>
+<text x="10" y="174" font-size="10" fill="#14241f">T5</text><text x="98" y="174" font-size="9.5" fill="#5c6a63">0 (no bar)</text>
+</svg>
+<figcaption>The exact ranking Section 10 and Concept 04's numbers together produce: T3 first, T2 second, and three tied at zero — the first real ordering this course has computed from raw text alone.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two inputs, one operation, one output shape</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing tf and idf feeding a single multiplication that then feeds a sum across query terms">
+<div class="diagram-hub">
+<div class="diagram-node"><b>tf(t, d)</b><small>per-document count, from Concept 04</small></div>
+<div class="diagram-node hub-center"><b>× multiply</b><small>tf-idf(t, d), one weight per (term, document)</small></div>
+<div class="diagram-node"><b>idf(t)</b><small>per-term rarity, from Concept 04</small></div>
+</div>
+</div>
+<p>Both inputs already existed before this concept started. The only new thing is the operation connecting them — and, one step further, the sum across a query's terms that turns a per-term weight into a per-document score.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where the combined score sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — tf and idf now combine into a per-document tf-idf ranking score</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This is the first concept where the "Retrieval" box's sparse path can actually return an ordered top-k list rather than an unordered set of matching documents — the same top-k slot Module 03's baseline pipeline (Concept 06, forward reference) assumed existed all along.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why multiplication, proved with numbers</h2></div></header>
+<div class="equation">tf-idf(t, d) = tf(t, d) × idf(t)
+score(q, d) = sum over t in q of tf-idf(t, d)</div>
+<p>Suppose a hypothetical term "the" appears in all 5 of b03's tickets, so idf("the") = log(5/5) = log(1) = 0 exactly. Under multiplication, tf-idf("the", d) = tf("the", d) × 0 = 0 for every document, no matter how many times "the" repeats. Under addition instead — tf("the", d) + idf("the") = tf("the", d) + 0 — the score would just equal the raw tf count, letting an utterly uninformative term inflate every document's score by however many times it happens to appear. Multiplication is the operation that lets idf = 0 genuinely cancel a term's contribution; addition cannot.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Ranking all five tickets for "refund," completely by hand</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Ticket</th><th>tf("refund", d)</th><th>idf("refund")</th><th>tf-idf(refund, d)</th><th>Rank</th></tr></thead>
+<tbody>
+<tr><td>T3</td><td>2</td><td>0.9163</td><td>1.8326</td><td>1st</td></tr>
+<tr><td>T2</td><td>1</td><td>0.9163</td><td>0.9163</td><td>2nd</td></tr>
+<tr><td>T1</td><td>0</td><td>0.9163</td><td>0</td><td>tied 3rd</td></tr>
+<tr><td>T4</td><td>0</td><td>0.9163</td><td>0</td><td>tied 3rd</td></tr>
+<tr><td>T5</td><td>0</td><td>0.9163</td><td>0</td><td>tied 3rd</td></tr>
+</tbody>
+</table>
+<p>Every idf value in this table is identical — 0.9163, reused verbatim from Concept 04's Section 10 — because idf never varies by document for a fixed term. The entire ranking comes from the tf column varying: T3's tf of 2 versus T2's tf of 1 versus zero everywhere else. Multiplying by the same constant preserves that ordering exactly; it's tf, not idf, that produces the ranking here, with idf acting as a shared scaling factor.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Ranking b03's tickets for a one-word query</h3><p>Section 10's exact table — a rare, repeated term produces the clearest possible top result.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Multi-term queries via summation</h3><p>A query like "refund amount" sums tf-idf("refund", d) + tf-idf("amount", d) per document, rewarding documents that match multiple query terms strongly.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A query term absent from every document</h3><p>tf(t, d) = 0 for all d makes tf-idf(t, d) = 0 for all d — that term simply contributes nothing to any document's score, rather than causing an error, as long as idf(t) itself was well-defined in the first place.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Comparing tf-idf scores across two different queries</h3><p>tf-idf(t, d) is only comparable across documents for the <i>same</i> term or query — a score of 1.8 for one query and 0.9 for a different query says nothing about which query was better answered, since the underlying idf values differ entirely.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>tf-idf and document ranking, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+tickets = {
+    "T1": "my order is late and my order never arrived",
+    "T2": "please refund my order immediately",
+    "T3": "the refund was processed but the refund amount is wrong",
+    "T4": "where is my order confirmation email",
+    "T5": "i need help resetting my password",
+}
+
+def term_frequency(term, text):
+    return text.split(" ").count(term)
+
+def document_frequency(term, corpus):
+    return sum(1 for text in corpus.values() if term in text.split(" "))
+
+def inverse_document_frequency(term, corpus):
+    df = document_frequency(term, corpus)
+    if df == 0:
+        return None
+    return math.log(len(corpus) / df)
+
+def tf_idf(term, doc_id, corpus):
+    idf = inverse_document_frequency(term, corpus)
+    if idf is None:
+        return 0.0
+    return term_frequency(term, corpus[doc_id]) * idf
+
+def rank_documents(term, corpus):
+    scored = [(doc_id, tf_idf(term, doc_id, corpus)) for doc_id in corpus]
+    return sorted(scored, key=lambda pair: pair[1], reverse=True)
+
+ranking = rank_documents("refund", tickets)
+assert ranking[0][0] == "T3"                       # highest tf-idf: T3
+assert abs(ranking[0][1] - 1.8326) < 0.001
+assert ranking[1][0] == "T2"                       # second: T2
+assert abs(ranking[1][1] - 0.9163) < 0.001
+assert all(score == 0.0 for _, score in ranking[2:])   # T1, T4, T5 tied at zero
+
+# A term absent from every document contributes nothing, never crashes.
+assert tf_idf("shipping", "T3", tickets) == 0.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production systems keep this exact score</h2></div></header>
+<p>Scikit-learn's <code>TfidfVectorizer</code> computes exactly this multiplication (with its smoothed idf variant from Concept 04's Section 13) and stores the result as a sparse matrix, one row per document, one column per vocabulary term — cosine similarity between a query row and a document row is then a standard way to turn that matrix into a ranking. Apache Lucene historically used a tf-idf-derived scoring formula before switching its default to BM25F (a length-normalized, multi-field variant of the exact formula Concept 06 derives next) — a real historical progression that mirrors this module's own concept ordering.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The TF-IDF Document Ranker</h2></div></header>
+<div class="lab">
+<p>Pick a term from b03's five-ticket corpus. The ranker computes tf-idf for every ticket live, then sorts and displays them from highest score to lowest — including ties at zero for tickets that don't contain the term at all.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgTerm_0505">Term</label>
+<select id="wgTerm_0505"></select></div>
+</div>
+<div class="lab-actions">
+<button type="button" id="wgRunRanker_0505">Rank tickets</button>
+<button type="button" id="wgResetRanker_0505" class="secondary">Reset</button>
+</div>
+<div class="prob-bars" id="wgRankBars_0505"></div>
+<div class="norm-readout">
+<div><span>IDF USED (SHARED)</span><b id="wgRankIdf_0505">—</b></div>
+<div><span>TOP TICKET</span><b id="wgRankTop_0505">—</b></div>
+</div>
+<div class="callout" id="wgVerdictRanker_0505">Pick a term and press "Rank tickets" to see all five tickets sorted by tf-idf score.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>tf-idf against the alternatives it beats and the ones that beat it</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Can it rank documents?</th><th>What it's missing</th></tr></thead>
+<tbody>
+<tr><td>tf or idf alone (Concept 04)</td><td>No — proven in Section 09/b02</td><td>Combination of the two</td></tr>
+<tr><td>tf + idf (addition)</td><td>Poorly — idf=0 terms still contribute via tf</td><td>The zeroing property multiplication provides</td></tr>
+<tr><td>tf × idf (this concept)</td><td>Yes, for the exact numbers given</td><td>A ceiling on tf's growth; document-length correction</td></tr>
+<tr><td>BM25 (Concept 06)</td><td>Yes, with saturating tf</td><td>Length normalization still needs Concept 07's b parameter examined in full</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNBOUNDED REPETITION</span><h3>A term repeated dozens of times dominates the score</h3><p>Because tf enters the formula raw and unbounded, a document that repeats a moderately rare term 50 times can outscore one that uses it appropriately 3 times — Concept 06's saturation exists specifically to blunt this.</p></article>
+<article class="info-card"><span>LENGTH BIAS</span><h3>Longer documents accumulate higher tf almost for free</h3><p>Nothing in tf-idf corrects for a document simply being longer and therefore containing more total words — Concept 07's normalization term addresses this directly.</p></article>
+<article class="info-card"><span>UNDEFINED IDF PROPAGATION</span><h3>An undefined idf silently breaks scoring</h3><p>If idf(t) was never guarded against df(t) = 0 (Concept 04's Section 12), multiplying an undefined value into tf-idf propagates the failure into the whole ranking rather than the ranking simply omitting that term.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>tf-idf scores are bounded, like probabilities</td><td>False — tf-idf can grow arbitrarily large as tf grows; there is no upper bound in this formula.</td></tr>
+<tr><td>Addition would work just as well as multiplication</td><td>False — Section 09 shows addition lets an idf = 0 term still inflate the score via tf alone; multiplication correctly zeroes it.</td></tr>
+<tr><td>tf-idf already handles documents of very different lengths fairly</td><td>False — nothing in this formula adjusts for document length; that correction is Concept 07's job specifically.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Computing score(q, d) for every document in a large corpus, for every query, would be expensive if done by brute force — real systems use Concept 02's inverted index to only visit documents that contain at least one query term, never the whole corpus.</li>
+<li>Because idf shifts whenever the corpus changes (Concept 04's point, restated here), every stored tf-idf weight is implicitly tied to the corpus version it was computed against — reindexing after significant corpus growth is a real operational cost, not a one-time setup step.</li>
+<li>Raw tf-idf's unbounded growth and length blindness are well-known enough that almost no production lexical search system (Lucene, Elasticsearch, OpenSearch) ships plain tf-idf as its default ranking function anymore — BM25 or a BM25 variant has been the practical default for years, which is exactly why Concept 06 comes next.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Write the tf-idf formula and state what each side already comes from.</summary><div>tf-idf(t, d) = tf(t, d) × idf(t) — both factors are exactly Concept 04's definitions, unchanged; this concept only introduces the multiplication.</div></details>
+<details class="quiz"><summary>Why does multiplying, rather than adding, matter when idf(t) = 0?</summary><div>Multiplication makes tf-idf(t, d) = tf(t, d) × 0 = 0 regardless of tf — the term contributes nothing. Addition would leave tf(t, d) + 0 = tf(t, d), letting an uninformative term still influence the score through raw repetition.</div></details>
+<details class="quiz"><summary>What does score(q, d) compute, and how does it differ from tf-idf(t, d)?</summary><div>tf-idf(t, d) is a single term's weight in one document. score(q, d) sums that weight over every term in the query, producing one number per document that can be sorted to produce a ranking.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using b03's five tickets and Concept 04's idf("order") = ln(5/3) ≈ 0.5108, compute tf-idf("order", d) for all five tickets by hand (tf("order", ·): T1=2, T2=1, T3=0, T4=1, T5=0), rank the five tickets from highest to lowest, and state which ticket ties for last place and why.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>tf-idf("order", T1) = 2 × 0.5108 ≈ 1.0217. tf-idf("order", T2) = 1 × 0.5108 ≈ 0.5108. tf-idf("order", T4) = 1 × 0.5108 ≈ 0.5108. tf-idf("order", T3) = 0 × 0.5108 = 0. tf-idf("order", T5) = 0 × 0.5108 = 0. Ranking: T1 first (≈1.0217), T2 and T4 tied for second (≈0.5108 each), T3 and T5 tied for last at exactly 0 — both because tf("order", ·) = 0 for both of them, not because of anything different about idf.</div>
+</details>
+<p>Teach-back: explain, in your own words, why T2 and T4 tie exactly even though they're different tickets about different specifics, and connect that to what tf-idf can and cannot distinguish between.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>TF-IDF derivation</h3><ul><li><b>tf-idf(t, d) = tf(t, d) × idf(t):</b> Concept 04's two numbers, multiplied — the first per-(term, document) weight that can rank documents.</li><li><b>score(q, d) = &#8721; tf-idf(t, d):</b> summed over query terms, the first per-document ranking signal.</li><li><b>Why multiplication:</b> it forces idf = 0 terms to contribute exactly zero; addition would not.</li><li><b>What's missing:</b> a ceiling on tf's growth (Concept 06) and document-length correction (Concept 07).</li></ul></div>
+<div><h3>Memorable example</h3><p>For "refund" in a five-ticket corpus, T3 (tf=2) scores ≈1.8326, T2 (tf=1) scores ≈0.9163, and T1/T4/T5 tie at exactly 0 — the first real ranking this course has produced from raw text.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain tf-idf to someone who already knows what term frequency and inverse document frequency mean, in under thirty seconds.</summary><div>tf-idf just multiplies the two together, per term per document: how often the term shows up here, times how rare it is everywhere. Multiplying rewards a document that uses a rare term often, and it's the first number in classical search that can actually rank documents against each other.</div></details>
+<details class="quiz"><summary>Why does tf-idf use multiplication instead of addition?</summary><div>Multiplication lets a term with idf = 0 (present in every document) contribute exactly zero regardless of how often it repeats. Addition would let that same uninformative term still drag the score up through raw tf alone.</div></details>
+<details class="quiz"><summary>What are tf-idf's two most cited practical weaknesses, and which later concepts fix them?</summary><div>Unbounded growth from raw term frequency (fixed by BM25's saturating tf factor and its k1 parameter, Concept 06) and no correction for document length (fixed by BM25's b parameter and length normalization, Concept 07).</div></details>
+<details class="quiz"><summary>Design question: a teammate wants to rank documents by idf sum alone instead of tf-idf, to "keep things simple." What breaks?</summary><div>Idf doesn't vary by document for a fixed term, so summing idf over query terms produces the identical value for every document that contains those terms at all — every such document ties, and the ranking carries zero information about which document uses the terms more strongly.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/tf-idf-weighting-1.html"><b>Manning, Raghavan &amp; Schütze — "Tf-idf weighting," Introduction to Information Retrieval (Stanford IR Book)</b><br><span>The canonical derivation of the combined tf-idf weight from separately-defined tf and idf, behind this concept's Section 05 formula.</span></a>
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/inverse-document-frequency-1.html"><b>Manning, Raghavan &amp; Schütze — "Inverse document frequency," Introduction to Information Retrieval (Stanford IR Book)</b><br><span>Reused directly for idf's formula and its per-term, corpus-wide scope, unchanged from Concept 04.</span></a>
+<a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf"><b>Tf–idf — Wikipedia</b><br><span>General background on the combined tf-idf statistic, its history, and common variants, cited here for the combination this concept derives.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 COMPLETE · CONCEPT 06 NEXT</span>
+<h3>tf and idf are combined — Concept 06 fixes tf's unbounded growth</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can state, precisely, why multiplication rather than addition is the correct combination. Concept 06, "BM25 derivation and parameters," replaces raw tf with a saturating version and introduces the k1 and b parameters.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the TF-IDF Document Ranker ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 06, BM25 derivation and parameters.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 05 · Complete</p>
+<a href="module-05-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

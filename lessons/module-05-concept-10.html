@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 08 and 09 both built their metrics on top of one quiet assumption — that a relevant set like {1, 2, 4, 7} was simply given. This concept is where that ground truth actually comes from: pooling several systems' top-ranked results into one set humans can feasibly judge, the convention that treats everything outside the pool as not relevant, and Cohen's kappa for checking whether two judges even agree with each other.">
+<title>Relevance judgments and test collections — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 10 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 10</p>
+<h1>Somebody labeled it —<br><em>here's how.</em></h1>
+<p class="lesson-lead">Concepts 08 and 09 built precision, recall, F1, MRR, MAP and nDCG entirely on top of one quiet assumption: that "relevant = {1, 2, 4, 7}" was simply handed to you. This concept is where that ground truth actually comes from. Real corpora are too large to judge exhaustively, so test collections get built by pooling — merging several systems' top-ranked results into one set humans actually review — and then checking whether two judges even agree with each other before trusting either one's labels.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 08's "total relevant" denominator and Concept 09's binary/graded relevance preview — both scrutinized here as consumers of the judgments this concept produces</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain how pooling builds a test collection, compute pool coverage and the resulting recall bias by hand, and compute Cohen's kappa on a two-judge agreement table</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concepts 08 and 09 both quietly assumed "positions 1, 2, 4, 7 are relevant" was simply given. This concept is where that ground truth actually comes from — pooling, the assumption behind unjudged documents, and inter-annotator agreement.</p>
+<b>CONCEPT 09 COMPLETE · CONCEPT 10 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Where "relevant" actually comes from</h2>
+</div>
+<p>Concepts 08 and 09 both took the relevant set as a given input and built metrics on top of it. This concept opens that black box: how a fixed corpus and query set turn into a judged test collection in the first place, and why "unjudged" is a working assumption, not a fact.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The label everyone else has been borrowing</h3>
+<div class="mental-compare">
+<div><span>CONCEPTS 08-09 — CONSUME</span><p>Precision, recall, F1, MRR, MAP and nDCG all start from the same sentence: "relevant = {1, 2, 4, 7}." Where that sentence comes from was never asked.</p></div>
+<div><span>CONCEPT 10 — PRODUCE</span><p>A test collection (qrels): a fixed corpus, a fixed set of queries, and human relevance judgments over some — not all — of the (query, document) pairs between them.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> "relevant" isn't a fact about a document — it's a label a human wrote down, and this concept is about how that label gets made.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Nobody can judge a million documents against a thousand queries</h3>
+<p>A corpus with 1 million documents and a query set of 1,000 topics has a billion possible (query, document) pairs. Exhaustively judging every one isn't a budget problem that scales down with more reviewers — it's simply infeasible at real scale. Something has to make judgment tractable without giving up on having ground truth at all.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three systems, one pool, one document nobody found</h3>
+<p>Picture a tiny 50-document corpus and one query. Three systems each return their own fixed top-10 ranked list. Their union — the pool — is only 21 of the 50 documents: judges review just those 21, not all 50, and mark 7 of them relevant. But the corpus quietly hides an 8th relevant document, #44, that none of the three systems ever ranked in their top 10 — a judge who never sees a document can't ever mark it relevant.</p>
+<div class="example-grid">
+<article class="info-card"><span>THE POOL</span><h3>21 of 50 documents judged, 42.0% coverage</h3><p>Union of System A, B and C's top-10 lists — the only documents anyone ever looks at for this query.</p></article>
+<article class="info-card"><span>THE ESCAPEE</span><h3>Document #44 — relevant, never pooled</h3><p>True total relevant = 8, but only 7 ever entered the pool. The 8th was structurally invisible to every system that built it.</p></article>
+</div>
+<p>A second, separate question: even inside the pool, do two judges agree with each other? Two judges reviewing the same 20 pooled pairs agree on the label 85% of the time raw — but once you correct for how often they'd agree by pure chance, that drops to a kappa of 0.68. Section 10 works both numbers in full.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0510-beginner-visual-title">
+<strong class="concept-visual-title" id="c0510-beginner-visual-title">VISUAL · THREE SYSTEMS' POOLS, AND THE ONE DOCUMENT OUTSIDE ALL OF THEM</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 320 250" role="img" aria-labelledby="c0510-svg-title c0510-svg-desc">
+<title id="c0510-svg-title">Three overlapping circles for System A, B and C's top-10 result sets, with one relevant document plotted outside all three</title>
+<desc id="c0510-svg-desc">Three overlapping circles labeled A, B and C represent each system's top-10 ranked documents. Their combined area is the pool that gets judged, 21 of the 50-document corpus. A single dashed marker outside all three circles, labeled document 44, represents a genuinely relevant document that none of the three systems ever ranked highly enough to pool.</desc>
+<circle cx="118" cy="98" r="72" fill="#5ee6c3" fill-opacity=".38" stroke="#14241f" stroke-width="1.4"/>
+<circle cx="196" cy="98" r="72" fill="#d7ff53" fill-opacity=".38" stroke="#14241f" stroke-width="1.4"/>
+<circle cx="157" cy="158" r="72" fill="#ff7957" fill-opacity=".32" stroke="#14241f" stroke-width="1.4"/>
+<text x="68" y="60" font-size="13" font-weight="700" fill="currentColor">A</text>
+<text x="232" y="60" font-size="13" font-weight="700" fill="currentColor">B</text>
+<text x="150" y="222" font-size="13" font-weight="700" fill="currentColor">C</text>
+<circle cx="284" cy="216" r="6" fill="none" stroke="#ff7957" stroke-width="2.2" stroke-dasharray="3 2"/>
+<text x="220" y="240" font-size="10" fill="currentColor">doc #44 — never pooled</text>
+</svg>
+</div>
+<figcaption>Systems A, B and C each rank 10 documents; judges only ever see the union of those three lists — 21 unique documents, 42.0% of the 50-document corpus. Document #44 is genuinely relevant but sits outside every circle: no system surfaced it, so no judge ever reviewed it, and the standard convention treats everything outside the pool as not relevant by default.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Fix the corpus and queries, pool the rankings, judge only that</h3>
+<div class="lane-flow">
+<div><b>Fix the corpus —</b> a stable, unchanging set of documents everyone evaluates against.</div>
+<div><b>Fix the query set —</b> a stable set of topics or questions, decided in advance.</div>
+<div><b>Build the pool —</b> union together several systems' top-k ranked results for each query.</div>
+<div><b>Judge only the pool —</b> humans label just those (query, document) pairs, binary or graded.</div>
+<div><b>Assume the rest is negative —</b> everything outside the pool is treated as not relevant, by convention, not by proof.</div>
+<div><b>Optionally check the judges —</b> a second judge relabels a sample; Cohen's kappa says whether they agree beyond chance.</div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Still after scoring — this is where the answer key comes from</h3>
+<div class="pipeline-preview">
+<span>Concept 08-09 — metrics that consume judgments</span><i>↓</i><span class="hot">Concept 10 — where judgments come from (this concept)</span><i>↓</i><span>Concept 11 — lexical strengths and failures</span>
+</div>
+<p>This concept doesn't change how any document gets scored or ranked — it changes where the ground truth those scores get compared against actually originates. Concept 11, the module's last concept, moves on to what lexical retrieval is structurally good and bad at.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three distinctions worth keeping straight</h3>
+<div class="distinction-table" role="table" aria-label="Binary relevance distinguished from graded relevance, a relevance judgment distinguished from pooling, and annotator agreement distinguished from correctness">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Binary relevance {0,1}</span><span role="cell">Graded relevance {0-3}</span><span role="cell">MRR and MAP, as taught, need a strict yes/no flag. DCG and nDCG extend naturally to graded scales — that split, only previewed in Concept 09, is finished here.</span></div>
+<div role="row"><span role="cell">A relevance judgment</span><span role="cell">Pooling</span><span role="cell">A judgment is one human's label on one (query, document) pair. Pooling is the separate, earlier step of deciding which pairs get judged at all — merging several systems' top-k into one set humans actually look at.</span></div>
+<div role="row"><span role="cell">Annotator agreement (kappa)</span><span role="cell">Correctness</span><span role="cell">Kappa measures whether two judges land on the same label, corrected for chance — it says nothing about whether that shared label is actually true. High agreement can still be collectively wrong.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Test collections are exhaustively judged."</b><p>False at real scale — pooling exists precisely because exhaustive judgment of every (query, document) pair is infeasible once a corpus gets large.</p></div>
+<div><b>"An unjudged document is confirmed not relevant."</b><p>False — it's a working convention, not a verified fact. Document #44 in Section 03's example is genuinely relevant and simply never got the chance to be judged.</p></div>
+<div><b>"One judge's opinion is simply ground truth."</b><p>False — a single judge's labels are only as trustworthy as they are, which is exactly what a second judge and Cohen's kappa are for checking.</p></div>
+<div><b>"A system built after the original pool is evaluated fairly against old qrels."</b><p>False — pooling bias specifically penalizes any system that finds relevant documents no system in the original pool ever surfaced.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE "GOLDEN SET"</span><b>SMEs judging a pool built from several retriever configs</b><p>Subject-matter experts label a pool assembled from BM25, dense and hybrid retriever configurations — the exact same pooling pattern from Section 03, at project scale.</p></div>
+<div><span>POOLING BUDGET</span><b>How many configs, how deep, before judging starts</b><p>How many retriever configurations get pooled and how deep each one's top-k goes is a real design decision, made once, before any judge ever opens the review queue.</p></div>
+<div><span>PREVIEW — MODULE 18</span><b>Qrels as the file the evaluation harness actually consumes</b><p>Once the golden set exists, Module 18's evaluation harness is where Concept 08 and 09's formulas get run against it at scale, query by query.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Qrels = corpus + queries + judgments</b><p>A test collection is only useful because all three pieces are fixed together — change any one and it's a different qrel set.</p></div>
+<div><b>Pooling = union of several systems' top-k, and it's necessary</b><p>Exhaustive judgment doesn't scale; pooling is the standard way to make judgment tractable at real corpus sizes.</p></div>
+<div><b>Pooling bias = pool-based recall can overstate true recall</b><p>Whenever an escapee exists, the judged-relevant count is smaller than the true total, so the same numerator divided by a smaller denominator can only look better than it should.</p></div>
+<div><b>Kappa = chance-corrected agreement, not raw percent agreement</b><p>Two judges can look like they agree 85% of the time and still only reach "substantial," not near-perfect, agreement once chance is subtracted out.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why does pooling deeper or wider from the same three systems never rescue document #44?</li>
+<li>Why is treating an unjudged document as "confirmed not relevant" a mistake, even though the convention assumes exactly that?</li>
+<li>Why can two judges who agree 85% of the time raw still only score a kappa of 0.68?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 11: Lexical retrieval strengths and failures</h3>
+<p>The ground truth now has an origin story: pooling, the unjudged convention, and inter-annotator agreement. The next concept — the last in Module 05 — turns back to the retrieval side and asks what lexical methods like BM25 are structurally good at, and where they break down.</p>
+<div class="beginner-memory"><b>Concept 10 is active.</b> Continue to Concept 11, "Lexical retrieval strengths and failures," once it's built.</div>
+<a class="button primary" href="module-05-concept-09.html">← Back to Concept 09</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One pool, one convention, one agreement check</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Two clean numbers, one dirty truth</b><small>Pool coverage 42.0%, recall inflation 14.3% — both verified by hand.</small></a>
+<a href="#b04"><span>02</span><b>The pooling pipeline</b><small>Fix corpus → fix queries → union top-k → judge only that → assume the rest is negative.</small></a>
+<a href="#b06"><span>03</span><b>What's still deferred</b><small>LLM-as-judge and Module 18's evaluation harness are named only as forward references.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, from-scratch code, and the Pool Coverage Grid lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> the ground truth Concepts 08-09 assumed → pooling builds it at scale → the unjudged convention and its blind spot → Cohen's kappa checks whether the judges themselves agree → Concept 11 closes the module on lexical retrieval's own strengths and failures.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the relevance judgments and test collections deep dive</b><em>Formal notation, from-scratch code, and the Pool Coverage Grid lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From consuming a label to producing one</h2></div></header>
+<p>Concepts 08 and 09 spent their entire budget on formulas that take one thing as given: a labeled relevant set for each query. Neither ever asked where that label actually came from. This concept answers exactly that — how a fixed corpus and query set become a judged test collection (qrels), why real-scale corpora get pooled instead of exhaustively judged, what the resulting bias looks like in the numbers, and how to check whether the judges themselves can be trusted. No metric formula from Concept 08 or 09 gets touched here — they're cited by name only, as consumers of what this concept produces.</p>
+<div class="flow">
+<div class="flow-node">Concept 08 — precision, recall, F1 @ k</div>
+<div class="flow-node">Concept 09 — MRR, MAP, DCG, nDCG</div>
+<div class="flow-node hot">Concept 10 — relevance judgments and test collections</div>
+<div class="flow-node">Concept 11 — lexical strengths and failures</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Define a qrel and a test collection precisely</h3><p>State what "corpus + queries + judgments" actually means as a single, reusable artifact.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Explain pooling and its structural bias</h3><p>Show why pool-based recall can overstate true recall, and derive the direction of that bias algebraically.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute Cohen's kappa from a 2×2 judge table</h3><p>Go from raw agreement counts to Po, Pe and κ by hand.</p></article>
+<article class="info-card"><span>RESOLVE</span><h3>Finish the binary-vs-graded relevance distinction</h3><p>Concept 09 previewed this split without resolving it; this concept completes it.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 08's "total relevant" denominator.</b> Precision@k and recall@k both assumed that number was simply given — this concept scrutinizes where it actually comes from, and why it can be an undercount.</li>
+<li><b>Concept 01's relevance definition.</b> Judgments are what turn that abstract definition into a concrete, recorded label on a real (query, document) pair.</li>
+<li><b>Concept 09's binary-vs-graded preview.</b> Previewed there only in passing (b06/s02); finished here in full.</li>
+<li><b>Out of scope here:</b> no metric formula from Concept 08 or 09 is re-derived — they're cited by name only, as consumers of the judgments this concept produces.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>The food-critic circuit</h2></div></header>
+<p>No single critic can taste every dish at every restaurant in a city — exhaustive judging simply isn't possible. So review sites look at the union of dishes several critics already tried (pooling), and nobody fully trusts a rating until two critics roughly agree on it (annotator agreement). A dish no critic ever ordered stays unrated forever — not confirmed bad, just never tasted.</p>
+<div class="callout warning"><b>Analogy boundary</b>This picture explains the shape of pooling and agreement, not their exact arithmetic — Section 05 and Section 09 give the precise definitions and the algebra the analogy alone can't supply.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Topic / query set</td><td>The fixed set of queries a test collection is built around</td><td>Q = {q_1, …, q_m}</td></tr>
+<tr><td>Qrel</td><td>One recorded relevance judgment for a single (query, document) pair</td><td>qrel(q, d) ∈ {0,1} (binary) or {0..3} (graded)</td></tr>
+<tr><td>Pool</td><td>The union of several systems' top-k results for a query — the only documents that get judged</td><td>P_k(q) = ⋃_(s∈S) top_k(s, q)</td></tr>
+<tr><td>Judged set vs. corpus</td><td>The pool is judged; everything else in the corpus is not</td><td>P_k(q) ⊂ corpus, usually |P_k(q)| ≪ |corpus|</td></tr>
+<tr><td>Unjudged convention</td><td>A document outside the pool is treated as not relevant — an assumption, not a verified fact</td><td>d ∉ P_k(q) ⇒ assumed rel(d) = 0</td></tr>
+<tr><td>Cohen's kappa</td><td>Chance-corrected agreement between two judges' labels on the same items</td><td>κ = (P_o − P_e) / (1 − P_e)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Build, judge, note the gap, and check the judges</h2></div></header>
+<div class="lane-flow">
+<div><b>Build the pool —</b> union System A, B and C's top-10 lists: 21 of 50 documents, 42.0% coverage.</div>
+<div><b>Judge the pool —</b> humans label those 21 pairs; 7 come back relevant.</div>
+<div><b>Note the escapee —</b> document #44 is truly relevant but was never in any system's top 10, so it was never judged at all.</div>
+<div><b>Run the kappa check separately —</b> a second judge relabels a 20-pair sample; Po = 0.85, Pe = 0.53, κ = 0.6809.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>From per-system rankings to one judged test collection</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram from per-system rankings to pool union and human judgment to qrels">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Per-system rankings</b><small>Systems A, B and C's own fixed top-10 lists</small></div>
+<div class="diagram-node hub-center"><b>Pool union → human judgment</b><small>Merge the lists, then judge only the merged set</small></div>
+<div class="diagram-node"><b>Qrels</b><small>Corpus + queries + judgments = the test collection</small></div>
+</div>
+</div>
+<figure class="concept-visual" aria-labelledby="c0510-adv-visual-title">
+<strong class="concept-visual-title" id="c0510-adv-visual-title">VISUAL · THE WORKED POOL, FULLY REVEALED</strong>
+<div class="pool-grid"><div class="pool-cell not-relevant-revealed">1</div><div class="pool-cell">2</div><div class="pool-cell not-relevant-revealed">3</div><div class="pool-cell">4</div><div class="pool-cell">5</div><div class="pool-cell">6</div><div class="pool-cell relevant-revealed">7</div><div class="pool-cell">8</div><div class="pool-cell not-relevant-revealed">9</div><div class="pool-cell">10</div><div class="pool-cell">11</div><div class="pool-cell relevant-revealed">12</div><div class="pool-cell">13</div><div class="pool-cell">14</div><div class="pool-cell not-relevant-revealed">15</div><div class="pool-cell not-relevant-revealed">16</div><div class="pool-cell">17</div><div class="pool-cell not-relevant-revealed">18</div><div class="pool-cell not-relevant-revealed">19</div><div class="pool-cell">20</div><div class="pool-cell">21</div><div class="pool-cell relevant-revealed">22</div><div class="pool-cell">23</div><div class="pool-cell">24</div><div class="pool-cell relevant-revealed">25</div><div class="pool-cell">26</div><div class="pool-cell not-relevant-revealed">27</div><div class="pool-cell">28</div><div class="pool-cell not-relevant-revealed">29</div><div class="pool-cell">30</div><div class="pool-cell relevant-revealed">31</div><div class="pool-cell">32</div><div class="pool-cell not-relevant-revealed">33</div><div class="pool-cell">34</div><div class="pool-cell">35</div><div class="pool-cell not-relevant-revealed">36</div><div class="pool-cell">37</div><div class="pool-cell relevant-revealed">38</div><div class="pool-cell">39</div><div class="pool-cell not-relevant-revealed">40</div><div class="pool-cell">41</div><div class="pool-cell">42</div><div class="pool-cell">43</div><div class="pool-cell escapee-revealed">44</div><div class="pool-cell not-relevant-revealed">45</div><div class="pool-cell">46</div><div class="pool-cell not-relevant-revealed">47</div><div class="pool-cell">48</div><div class="pool-cell relevant-revealed">49</div><div class="pool-cell">50</div></div>
+<figcaption>A static rendering of Section 10's worked pool, ground truth fully revealed. Lime cells are the 7 judged-relevant documents; dim outlined cells are the 14 pooled documents judges marked not relevant; the dashed cell is document #44 — relevant, but outside the pool no matter which of the three systems contributed to it. The remaining 28 cells were never part of any system's top 10 at all.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where the answer key sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Inverted index</span><i>↓</i><span>Retrieval — BM25 scoring, Concepts 04-07</span><i>↓</i><span class="hot">Pooled judgment — qrels (this concept)</span><i>↓</i><span>Evaluation — Concept 08-09's metrics</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Qrels don't sit inside the live retrieval path at all — they're built once, offline, from a fixed corpus and query set, and then reused every time Concept 08 or 09's formulas need something to compare a ranking against. Module 18's evaluation harness is where that reuse actually happens at scale.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why pooling can only overstate recall, never understate it</h2></div></header>
+<p>Pool coverage is simply the fraction of the corpus that ever gets judged: coverage = |P| / |corpus|. In Section 10's worked example that's 21/50 = 42.0% — the other 58% of the corpus is never looked at by anyone, for any query.</p>
+<div class="equation">recall_pool = h / R_judged     recall_true = h / R_true     where R_judged ≤ R_true</div>
+<p>For any system, h is the number of its own retrieved documents that also happen to be judged relevant — the same numerator in both fractions. Whenever the pool has at least one escapee, R_judged is strictly smaller than R_true, and dividing an unchanged numerator by a smaller denominator can only produce a value equal to or larger than the true fraction. Concretely, with h=4: 4/7 = 0.5714 ≥ 4/8 = 0.5000. Pool-based recall can only overstate true recall, or match it exactly when no escapee exists — it can never understate it.</p>
+<p>Cohen's kappa follows the same Po/Pe/κ = (Po − Pe)/(1 − Pe) structure introduced in Section 05, with the numbers already computed in Section 06 and worked in full in Section 10; the Landis and Koch interpretation bands (κ around 0.61-0.80 read as "substantial agreement") are cited here as a common convention, not re-derived from anything more fundamental.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Every number here was independently verified before being written</h2></div></header>
+<p>Corpus of 50 documents, ids 1-50. Three systems each contribute a fixed top-10 ranked list for one query:</p>
+<table class="worked-table">
+<thead><tr><th>System</th><th>Top-10 ranked list</th></tr></thead>
+<tbody>
+<tr><td>A</td><td>3, 7, 12, 15, 18, 22, 29, 31, 40, 45</td></tr>
+<tr><td>B</td><td>1, 7, 12, 16, 22, 25, 33, 38, 40, 47</td></tr>
+<tr><td>C</td><td>3, 9, 12, 19, 22, 27, 31, 36, 40, 49</td></tr>
+</tbody>
+</table>
+<p>Pool = A ∪ B ∪ C = 21 unique documents out of the 50-document corpus — 42.0% coverage. Judges review those 21 and mark 7 relevant: {7, 12, 22, 25, 31, 38, 49}. Ground truth (revealed only for teaching) has one more relevant document, #44, that none of the three systems ever ranked in their top 10 — true total relevant = 8.</p>
+<table class="worked-table">
+<thead><tr><th>System A's recall</th><th>Using judged-relevant count (7)</th><th>Using true total (8)</th></tr></thead>
+<tbody>
+<tr><td>A ∩ relevant hits = {7, 12, 22, 31} — 4 documents</td><td>4 / 7 = 0.5714</td><td>4 / 8 = 0.5000</td></tr>
+</tbody>
+</table>
+<p>Pool-based recall overstates System A's true recall by (0.5714 − 0.5000) / 0.5000 = 14.3% relative — purely from trusting the pool's own relevant count as if it were the whole truth. Precision@10 for A = 4/10 = 0.40, unaffected by pooling since it only involves A's own already-judged retrievals.</p>
+<h4>Checking the judges: Cohen's kappa</h4>
+<table class="worked-table">
+<thead><tr><th></th><th>Judge 2: relevant</th><th>Judge 2: not relevant</th></tr></thead>
+<tbody>
+<tr><td>Judge 1: relevant</td><td>6</td><td>2</td></tr>
+<tr><td>Judge 1: not relevant</td><td>1</td><td>11</td></tr>
+</tbody>
+</table>
+<p>Observed agreement Po = (6+11)/20 = 0.85. Judge 1's marginal relevant rate = 8/20 = 0.40; Judge 2's = 7/20 = 0.35. Chance agreement Pe = 0.40×0.35 + 0.60×0.65 = 0.53. Kappa = (Po − Pe) / (1 − Pe) = (0.85 − 0.53) / (1 − 0.53) = 0.6809 — "substantial agreement" on the common Landis and Koch scale (0.61-0.80), cited here as a convention, not re-derived. Every number in this section was checked with a node script before being written.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>TREC — the canonical pooled test collection</h3><p>TREC's own tracks are the textbook example of building qrels by pooling several participating systems' top-ranked results, then having human assessors judge just that pool.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>An internal RAG golden set, built the same way</h3><p>SMEs judging a pool assembled from BM25, dense and hybrid retriever configurations is the exact same pooling pattern from Section 10, just at a smaller, project-specific scale.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A small, Cranfield-style corpus needs no pooling</h3><p>When a corpus and query set are small enough, exhaustive judgment is actually feasible — pooling exists to solve a scale problem that a small enough collection simply doesn't have.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Scoring a new system against old, never-repooled qrels</h3><p>A system built after the original pool was fixed gets penalized for surfacing relevant documents the pool never captured — the fix is re-pooling with the new system included, not trusting the old qrels forever.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Pool-building and Cohen's kappa, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>def build_pool(systems, k):
+    pool = set()
+    for ranked_list in systems:
+        pool.update(ranked_list[:k])
+    return pool
+
+def cohens_kappa(both_yes, only_j1, only_j2, both_no):
+    n = both_yes + only_j1 + only_j2 + both_no
+    po = (both_yes + both_no) / n
+    j1_yes = (both_yes + only_j1) / n
+    j2_yes = (both_yes + only_j2) / n
+    pe = j1_yes * j2_yes + (1 - j1_yes) * (1 - j2_yes)
+    return (po - pe) / (1 - pe)
+
+A = [3, 7, 12, 15, 18, 22, 29, 31, 40, 45]
+B = [1, 7, 12, 16, 22, 25, 33, 38, 40, 47]
+C = [3, 9, 12, 19, 22, 27, 31, 36, 40, 49]
+
+pool = build_pool([A, B, C], k=10)
+judged_relevant = {7, 12, 22, 25, 31, 38, 49}
+
+hits_A = set(A) & judged_relevant
+recall_pool_A = len(hits_A) / len(judged_relevant)
+recall_true_A = len(hits_A) / 8  # true total, including escapee #44
+
+kappa = cohens_kappa(both_yes=6, only_j1=2, only_j2=1, both_no=11)
+
+assert len(pool) == 21
+assert round(len(pool) / 50, 3) == 0.420
+assert round(recall_pool_A, 4) == 0.5714
+assert round(recall_true_A, 4) == 0.5000
+assert round(kappa, 4) == 0.6809
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The other file the same tools need</h2></div></header>
+<p><code>ir_datasets</code> and <code>pytrec_eval</code> both represent qrels the same simple way: a flat file of (query_id, doc_id, relevance) triples — binary 0/1 or graded 0-3, exactly as defined in Section 05. Concept 09 already introduced <code>pytrec_eval</code> and <code>ranx</code> for computing MRR, MAP and nDCG from a run file; a qrels file built the way this concept describes is the other input those same tools need before any of that computation can run at all.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Pool Coverage Grid</h2></div></header>
+<div class="lab">
+<p>The same 50-document corpus and the same fixed top-10 lists for Systems A, B and C from Section 10. Toggle which systems contribute, drag the pool depth k from 1 to 10, and watch the pool grow — then flip "Reveal ground truth" to see how much of it was ever actually relevant, and how document #44 never shows up no matter what you do.</p>
+<div class="system-toggle-row">
+<label><input type="checkbox" id="wgSysA_0510" checked> System A</label>
+<label><input type="checkbox" id="wgSysB_0510" checked> System B</label>
+<label><input type="checkbox" id="wgSysC_0510" checked> System C</label>
+</div>
+<div class="lab-controls">
+<div class="control"><label for="wgDepthSlider_0510">Pool depth k — top <output id="wgDepthOut_0510">10</output> from each active system</label>
+<input type="range" id="wgDepthSlider_0510" min="1" max="10" step="1" value="10"></div>
+</div>
+<div class="lab-actions">
+<button type="button" class="secondary" id="wgRevealBtn_0510">Reveal ground truth</button>
+<button type="button" class="secondary" id="wgResetBtn_0510">Reset to default</button>
+</div>
+<div class="pool-grid" id="wgPoolGrid_0510"></div>
+<div class="pool-readout" id="wgPoolReadout_0510">Judgments pending — flip "Reveal ground truth" to see which pooled documents are actually relevant.</div>
+<div class="norm-readout">
+<div><span>POOL SIZE</span><b id="wgPoolSize_0510">—</b></div>
+<div><span>CORPUS COVERAGE</span><b id="wgCoverage_0510">—</b></div>
+<div><span>RELEVANT CAPTURED</span><b id="wgCaptured_0510">—</b></div>
+<div><span>ESCAPED RELEVANT</span><b id="wgEscaped_0510">—</b></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Exhaustive vs. pooled vs. implicit signals</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Coverage</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Exhaustive judgment (small collections)</td><td>Every document judged for every query</td><td>Feasible only at Cranfield-style scale; cost explodes with corpus × query count anywhere larger.</td></tr>
+<tr><td>Pooling (large collections)</td><td>Only the union of several systems' top-k judged</td><td>Tractable at real scale, but structurally blind to relevant documents no pooled system ever surfaced.</td></tr>
+<tr><td>Implicit / click-based signals (production, named only)</td><td>No explicit judging step at all</td><td>Cheap and continuous, but noisy and biased by what's already shown — not taught here, only named as the production alternative.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>POOLING BLIND SPOT</span><h3>Penalizing a system for finding what pooling missed</h3><p>A system that surfaces genuinely relevant documents no original pooling system ever ranked gets scored as if those documents don't exist — exactly the document #44 pattern from Section 10.</p></article>
+<article class="info-card"><span>UNRELIABLE LABELS</span><h3>Trusting judgments with low kappa</h3><p>If two judges barely agree beyond chance, every downstream metric computed from either judge's labels inherits that unreliability, no matter how carefully precision or nDCG gets computed on top of it.</p></article>
+<article class="info-card"><span>JUDGE FATIGUE</span><h3>Judgment quality drifting over a long session</h3><p>Judges reviewing hundreds of pairs in one sitting tend to get faster and less careful near the end — a real, practical source of noisy qrels that no formula can detect after the fact.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Test collections are exhaustively labeled</td><td>False at real scale — they're built by pooling. Only small collections (Cranfield-style) are ever fully judged end to end.</td></tr>
+<tr><td>An unjudged document is definitely not relevant</td><td>False — it's a working convention, not a verified fact. Section 10's document #44 is the counterexample: relevant, unjudged, and never confirmed either way.</td></tr>
+<tr><td>High kappa is easy, or expected, for relevance judging</td><td>False — relevance is genuinely subjective. Moderate-to-substantial agreement (κ roughly 0.4-0.8) is the realistic norm, not near-perfect agreement.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Judgment cost scales with pool size × query count — a real budget line, not a rounding error, once a project needs more than a handful of test queries.</li>
+<li>Graded relevance costs meaningfully more to collect than binary relevance — fulfilling Concept 09's own forward reference to this trade-off.</li>
+<li>Qrels need refreshing as new systems or new documents appear — an old pool judged before a system existed can't fairly evaluate it, per Section 11's mistake case.</li>
+<li>Judge guidelines and training measurably raise kappa — annotator agreement isn't fixed; clearer instructions and calibration sessions genuinely move the number.</li>
+<li>LLM-as-judge is named here only as a modern, cheaper proxy for human relevance labeling, forward-referenced to Module 18 — not taught in this concept.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can pool-based recall never be lower than true recall, only equal to or higher?</summary><div>Both fractions share the same numerator — the number of a system's own retrieved documents that are also judged relevant. The judged-relevant count in the denominator can only be smaller than or equal to the true total (some truly relevant documents may sit outside the pool as escapees), and dividing an unchanged numerator by a smaller-or-equal denominator can only produce an equal or larger result.</div></details>
+<details class="quiz"><summary>Why doesn't a high raw percent agreement between two judges guarantee reliable relevance judgments?</summary><div>Raw agreement doesn't subtract out how often the two judges would agree purely by chance. Cohen's kappa corrects for that; two judges can post 85% raw agreement and still land at a kappa well below 1.0 once chance agreement is removed, as Section 10's own 0.6809 shows.</div></details>
+<details class="quiz"><summary>A brand-new retriever surfaces a genuinely relevant document that no pooling system ever ranked. What happens to how that document is scored?</summary><div>It gets treated as not relevant by the unjudged convention, even though it's genuinely relevant — the new retriever is penalized for finding something the original pool structurally couldn't see, exactly the document #44 pattern from Section 10.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Two systems, D and E, each contribute their own fixed top-5 ranked list from a 20-document corpus: D = {2, 5, 9, 11, 14}, E = {3, 5, 10, 11, 17}. Judges review the pool and mark {5, 9, 11, 17} relevant. Ground truth (revealed only for teaching) has one more relevant document, #20, that neither system ever ranked in its top 5.</p>
+<p>Compute: (1) the pool size and corpus coverage %; (2) System D's own relevant-and-retrieved count against the judged-relevant set; (3) System D's pool-based recall vs. its true recall, and the relative inflation between them.</p>
+<p>Separately: two judges review a fresh 25-item sample and produce this table — compute Po, Pe and kappa.</p>
+<table class="worked-table">
+<thead><tr><th></th><th>Judge 2: relevant</th><th>Judge 2: not relevant</th></tr></thead>
+<tbody>
+<tr><td>Judge 1: relevant</td><td>9</td><td>3</td></tr>
+<tr><td>Judge 1: not relevant</td><td>2</td><td>11</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Pool = D ∪ E = {2, 3, 5, 9, 10, 11, 14, 17} — 8 of 20 documents, 40% coverage. System D's own list is {2, 5, 9, 11, 14}; intersecting with the judged-relevant set {5, 9, 11, 17} gives {5, 9, 11} — 3 documents. Pool-based recall for D = 3/4 = 0.75 (the judged-relevant count is 4). True recall for D, using the real total of 5 (4 judged plus the escapee #20), = 3/5 = 0.60. That's a (0.75 − 0.60)/0.60 = 25.0% relative overstatement, purely from the pool missing #20. For the kappa table: Po = (9+11)/25 = 0.80. Judge 1's relevant rate = 12/25 = 0.48, Judge 2's = 11/25 = 0.44. Pe = 0.48×0.44 + 0.52×0.56 = 0.5024. Kappa = (0.80 − 0.5024)/(1 − 0.5024) = 0.598 — "moderate" agreement on the Landis-Koch scale, noticeably weaker than Section 10's own 0.6809.</div>
+</details>
+<p>Teach-back: explain, in your own words, why this exercise's recall inflation (25.0%) is larger than Section 10's own worked example (14.3%), even though both scenarios have exactly one escapee document.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Relevance judgments and test collections</h3><ul><li><b>Qrel:</b> one human relevance label on one (query, document) pair — binary {0,1} or graded {0..3}</li><li><b>Pooling:</b> union of several systems' top-k, judged instead of the whole corpus</li><li><b>Unjudged convention:</b> outside the pool is assumed not relevant — an assumption, not a proof</li><li><b>Cohen's kappa:</b> κ = (Po − Pe) / (1 − Pe) — chance-corrected agreement between two judges</li></ul></div>
+<div><h3>Memorable example</h3><p>3 systems, 50 documents: pool = 21 (42.0% coverage), 7 judged relevant, 1 escapee (#44) → System A's recall overstated 14.3% (0.5714 vs 0.5000). Two judges, 20 pairs: 85% raw agreement, κ = 0.6809.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why is exhaustive relevance judgment infeasible at real corpus scale, and what does pooling trade away to fix that?</summary><div>A large corpus times a real query set produces far more (query, document) pairs than any team can review. Pooling trades completeness for tractability — it judges only the union of several systems' top-k results, which means anything no pooled system ever ranked highly stays permanently unjudged.</div></details>
+<details class="quiz"><summary>A new retriever finds several genuinely relevant documents none of the original pooling systems ever surfaced. Why does it score artificially worse against the old qrels?</summary><div>The unjudged convention treats anything outside the pool as not relevant. Since the new retriever's discoveries were never in the original pool, they're counted as false positives or simply ignored rather than credited as correct hits — the qrels themselves need re-pooling with the new system included before it can be evaluated fairly.</div></details>
+<details class="quiz"><summary>How would you explain Cohen's kappa vs. raw percent agreement to a non-technical stakeholder confused why "85% agreement" isn't good enough?</summary><div>Raw percent agreement doesn't account for how often two judges would agree just by guessing, given how often each one tends to say "relevant" overall. Kappa subtracts that expected chance agreement out, so it answers a stricter question: how much better than random guessing are these two judges actually agreeing?</div></details>
+<details class="quiz"><summary>Design question: a new retriever configuration is about to ship. What would you do to your existing qrels before trusting an evaluation run against it?</summary><div>Re-pool: run the new configuration alongside the existing systems, merge its top-k into the pool, and have judges label whatever's newly added before scoring the new system against the refreshed qrels — evaluating it against the stale pool would unfairly penalize anything it finds that the old pool never captured.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/assessing-relevance-1.html"><b>Assessing relevance — Stanford IR Book</b><br><span>Primary reference for pooling and Cohen's kappa, both covered on this page with a worked judge-agreement table.</span></a>
+<a href="https://en.wikipedia.org/wiki/Text_Retrieval_Conference"><b>Text Retrieval Conference (TREC) — Wikipedia</b><br><span>The canonical named example of a large, pooled test collection, cited in Section 11.</span></a>
+<a href="https://en.wikipedia.org/wiki/Cohen%27s_kappa"><b>Cohen's kappa — Wikipedia</b><br><span>Primary reference for the chance-corrected inter-annotator agreement formula used in Section 05, Section 09 and Section 10.</span></a>
+<a href="https://en.wikipedia.org/wiki/Inter-rater_reliability"><b>Inter-rater reliability — Wikipedia</b><br><span>Broader framing reference for annotator agreement as a measurement-quality concept, cited in Section 06.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 10 COMPLETE · CONCEPT 11 NEXT</span>
+<h3>The ground truth has an origin story now — lexical strengths and failures close the module</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute pool coverage, recall bias and kappa on a scenario you haven't seen before, without looking back at Section 10. Concept 11, "Lexical retrieval strengths and failures," closes Module 05 next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Pool Coverage Grid ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 11, Lexical retrieval strengths and failures.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 10 · Complete</p>
+<a href="module-05-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>

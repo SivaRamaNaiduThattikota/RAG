@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 09 closes the module by naming the three ways a pipeline notices a source has changed: full batch re-ingestion, incremental ingestion, and event-driven ingestion — with a worked comparison showing incremental fixes reprocessing cost but not staleness, while event-driven fixes both.">
+<title>Incremental and event-driven ingestion — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 09 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 09</p>
+<h1>The source changed.<br><em>Who tells the pipeline?</em></h1>
+<p class="lesson-lead">Concept 08 gave every fact a paper trail — where it came from, what it passed through, when each event happened. None of that trail says when the pipeline should go check the source again. Concept 03 raised exactly this gap twice and deferred it both times, once calling a refresh cadence "Concept 09's job, not this one's." This concept closes Module 06 by answering it: full batch re-ingestion, incremental ingestion, and event-driven ingestion are the three ways a pipeline decides when to notice a source has changed.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth and final concept in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 07's source_last_modified_at / hash change-detection machinery and Concept 08's ingestion_lag metric, both reused directly rather than re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three re-ingestion strategies and compute a reprocessing cost and detection lag for a given schedule</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Full batch, incremental, or event-driven — someone has to pick</h2>
+</div>
+<p>Concept 03 raised this question twice and deferred it both times: sources keep changing after first ingestion, so something has to decide when the pipeline notices. This concept names the three ways that decision gets made, and shows exactly what each one costs and how stale it lets the index get.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three strategies, one decision</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Full batch re-ingestion — re-run every document on a fixed schedule, whether it changed or not. Incremental ingestion — re-run only documents that changed since the last checkpoint, still on that same fixed schedule, using Concept 07's own timestamp/hash machinery. Event-driven ingestion — a webhook or CDC event fires the instant a source changes; no schedule at all.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Concept 07's WHAT-happens-once-a-change-is-detected mechanics — a new version, a new effective_at. This concept only decides WHEN and WHICH SCOPE gets rechecked; it is reused here, not re-taught.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> full batch and incremental both run on a schedule and differ only in scope; event-driven has no schedule and reacts immediately. Two independent axes — trigger and scope — not one strategy dial.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 03 deferred this question twice — this is where it gets answered</h3>
+<p>Concept 03's own common-mistakes block warned that a one-time capture goes stale, and called deciding a refresh cadence "Concept 09's job, not this one's." Its production-implications list went further, naming "how often do we re-pull this" as a question that needs an actual answer, previewed by this concept by name. Concepts 01 through 08 built a pipeline that can parse, clean, dedup, version, and trace a document correctly once. None of that says how the pipeline finds out a source changed a second time — that is exactly the gap this concept closes.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A 6-document corpus, watched for 14 days</h3>
+<p>Widen the running example past one document. Six documents, D1 through D6, sit in the corpus — D1 is <b>POLICY-REFUND-001</b>, the same document Concepts 01 and 07 have been tracking since Module 06 opened. Over a 14-day horizon, three of the six actually change at the source: <b>D3 on day 2</b>, <b>D1 on day 5</b> (Legal edits the refund policy again), and <b>D5 on day 9</b>. D2, D4 and D6 never change at all during the horizon — they exist only to show what full batch re-ingestion reprocesses needlessly.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0609-beginner-visual-title">
+<strong class="concept-visual-title" id="c0609-beginner-visual-title">VISUAL · THREE CHANGES, TWO SCHEDULED RUNS, ONE SHARED 14-DAY TIMELINE</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0609-svg-title-b c0609-svg-desc-b">
+<title id="c0609-svg-title-b">A 14-day timeline showing three source-side changes and two scheduled ingestion runs</title>
+<desc id="c0609-svg-desc-b">A horizontal axis runs from day 0 to day 14, continuing as a dashed line past day 14 to mark the corpus stays live afterward. Three white-filled circles mark real source-side changes with dashed vertical lines up to labels: D3 changes on day 2, D1 changes on day 5, D5 changes on day 9. Two lime-filled circles mark scheduled ingestion runs produced by a fixed 7-day batch interval, at day 7 and day 14, each drawn as a taller vertical tick. A small white circle at day 0 marks the start of the horizon.</desc>
+<line x1="40" y1="140" x2="418" y2="140" stroke="#14241f" stroke-width="2"/>
+<line x1="418" y1="140" x2="442" y2="140" stroke="#14241f" stroke-width="2" stroke-dasharray="3 4" marker-end="url(#arrow0609b)"/>
+<line x1="94" y1="100" x2="94" y2="140" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="1 5"/>
+<line x1="175" y1="100" x2="175" y2="140" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="1 5"/>
+<line x1="283" y1="100" x2="283" y2="140" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="1 5"/>
+<circle cx="40" cy="140" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="94" cy="140" r="5" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="175" cy="140" r="5" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="283" cy="140" r="5" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<line x1="229" y1="116" x2="229" y2="164" stroke="#14241f" stroke-width="3"/>
+<circle cx="229" cy="140" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<line x1="418" y1="116" x2="418" y2="164" stroke="#14241f" stroke-width="3"/>
+<circle cx="418" cy="140" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<g font-size="7.5" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="40" y="98">day 0</text>
+<text x="94" y="80">D3 changes</text><text x="94" y="90">day 2</text>
+<text x="175" y="80">D1 changes</text><text x="175" y="90">day 5</text>
+<text x="283" y="80">D5 changes</text><text x="283" y="90">day 9</text>
+<text x="229" y="184" font-weight="700">day 7 run</text>
+<text x="418" y="184" font-weight="700">day 14 run</text>
+</g>
+<defs><marker id="arrow0609b" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+</svg>
+<figcaption>White dots mark source-side change events — D3 on day 2, D1 (POLICY-REFUND-001) on day 5, D5 on day 9. Lime dots mark the two scheduled runs a fixed 7-day batch_interval produces, at day 7 and day 14. Full batch and incremental both fire at exactly these two lime ticks — they differ only in which documents get reprocessed at each one, never in when. Event-driven ingestion, covered next, has no scheduled ticks at all; it reacts at the white dots themselves, the instant each one appears.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two independent axes: when it triggers, what it reprocesses</h3>
+<table class="compare-table">
+<thead><tr><th>Strategy</th><th>Trigger</th><th>Scope per run</th><th>What it reuses</th></tr></thead>
+<tbody>
+<tr><td>Full batch re-ingestion</td><td>Fixed schedule — batch_interval</td><td>Every document in the corpus, every tick</td><td>Nothing new — no change detection runs at all</td></tr>
+<tr><td>Incremental ingestion</td><td>The same fixed schedule</td><td>Only documents changed since the last checkpoint</td><td>Concept 07's source_last_modified_at / content hash — cited, not re-derived</td></tr>
+<tr><td>Event-driven ingestion</td><td>A webhook or CDC event, fired by the source itself</td><td>Exactly one document — the one that changed</td><td>Concept 07's identity fields, now attached to a push notification instead of a scheduled check</td></tr>
+</tbody>
+</table>
+<p>Incremental does not invent a new way to detect change — it reuses the exact source_last_modified_at / hash comparison Concept 07 already relies on for versioning, just to decide scope instead of identity. Event-driven does not invent a new identity scheme either — it is the same document, arriving through a push instead of a poll.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A decision layer wrapping the whole chain, not a new stage after it</h3>
+<div class="pipeline-preview">
+<span>Concepts 01-08 — source, parse, clean, dedup, version, provenance</span><i>↓</i><span class="hot">Concept 09 — scheduler / trigger layer</span><i>↓</i><span>Module 07 — chunking</span>
+</div>
+<p>Every earlier concept in this module already knows how to turn one document into a correct, traceable record. What none of them decide is when to run that whole chain again for a document that changed. This concept's job is exactly that decision — it sits alongside Concepts 01 through 08 as a layer that decides when they rerun, not as an additional processing stage bolted on after them.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Incremental ingestion distinguished from versioning, event-driven from polling, and this concept's trigger decision from index-side update mechanics">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Incremental ingestion (this concept — WHEN / WHAT SCOPE to rerun)</span><span role="cell">Concept 07's versioning (WHAT happens once a change is detected)</span><span role="cell">This concept decides whether a document gets rechecked at all; Concept 07 decides what a new version looks like once it has been. Confusing the two makes it sound like one concept duplicates the other instead of feeding it.</span></div>
+<div role="row"><span role="cell">Event-driven ingestion (push, this concept)</span><span role="cell">Polling (pull, shared by full batch and incremental)</span><span role="cell">Full batch and incremental both poll a source on a schedule and differ only in scope. Event-driven is the only strategy of the three that is push-based — the source notifies the pipeline instead of being asked.</span></div>
+<div role="row"><span role="cell">This concept's ingestion-side trigger decision</span><span role="cell">Module 19's "Document updates and incremental indexing" (index-side mechanics)</span><span role="cell">This concept decides when the pipeline notices a source-side change at all. Module 19 covers what happens to the vector index once a changed document has already made it through this chain — a later, separate concern, named forward only here.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Incremental and event-driven are the same thing."</b><p>False — they are orthogonal axes. Incremental narrows the SCOPE of what a scheduled run reprocesses; event-driven changes the TRIGGER mechanism entirely. The worked example uses incremental on a fixed schedule, proving the two are independent.</p></div>
+<div><b>"Event-driven is strictly better."</b><p>False — many sources have no event API at all. A legacy file share or an old internal database may only support being polled, not subscribed to.</p></div>
+<div><b>"Batch re-ingestion's simplicity makes its waste harmless."</b><p>False per the worked example: full batch reprocesses 12 document-instances for only 3 real changes over the same horizon — 9 wasted reruns, a 75% cost reduction incremental captures for free on the identical schedule.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>INDEX FRESHNESS</span><b>This decision sets how stale the index can get</b><p>Whichever strategy is chosen determines the ceiling on detection_lag for every document in the corpus, not just POLICY-REFUND-001.</p></div>
+<div><span>COST</span><b>Incremental and event-driven avoid needless re-embedding</b><p>Re-running Concepts 02-08's chain, and then re-embedding a chunk, has a real compute cost. Reprocessing only what changed avoids paying that cost for documents that never moved.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Module 19's cost/freshness-SLO material builds directly on this</b><p>detection_lag is exactly the metric Module 19's freshness SLOs monitor against, named forward only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Three strategies, two axes</b><p>Trigger (schedule vs. event) and scope (all documents vs. only changed ones) are independent choices, not one dial with three positions.</p></div>
+<div><b>Incremental fixes cost, not staleness</b><p>Incremental and full batch share the exact same schedule and therefore the exact same detection lag — incremental only shrinks how much gets reprocessed at each tick.</p></div>
+<div><b>Event-driven fixes both</b><p>Because there is no schedule to wait for, event-driven matches incremental's already-optimal cost while dropping detection lag to (idealized) zero.</p></div>
+<div><b>Not every source supports every strategy</b><p>Event-driven requires a source that can push a notification. Sources that can only be polled are limited to full batch or incremental.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does incremental ingestion's average detection lag equal full batch's, even though its reprocessing cost is 75% lower in the worked example?</li>
+<li>D5 changes on day 9 under a 7-day batch_interval. Which day does a scheduled strategy (full batch or incremental) actually notice that change, and why not day 9 itself?</li>
+<li>Name one real source type that cannot support event-driven ingestion, and explain what strategy it is limited to instead.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 06 COMPLETE — 9 of 9</h3>
+<p>This concept closes Module 06. Concept 01's source inventory and authority formula prioritizes what to recheck first; Concepts 02 through 06's parsing, OCR, cleaning, and dedup chain is what actually reruns; Concept 07's identity and versioning defines what "changed" means once a rerun happens; Concept 08's provenance and lineage is what gets appended on every rerun. This concept is the layer that decides when any of that happens again. Module 07, "Chunking & document representation," opens next with "Why chunk documents?" — named here only, not yet built.</p>
+<div class="beginner-memory"><b>Concept 09 is active.</b> Module 06 is complete at 9 of 9 concepts.</div>
+<a class="button primary" href="module-06-concept-08.html">← Back to Concept 08</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One corpus, three strategies, two independent axes</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The 6-document corpus</b><small>D1 (POLICY-REFUND-001) through D6, three real changes over 14 days.</small></a>
+<a href="#b04"><span>02</span><b>Trigger vs. scope</b><small>Full batch, incremental, and event-driven, laid out on both axes at once.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Versioning (Concept 07) and index-side update mechanics (Module 19) stay separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Re-Ingestion Strategy Simulator lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Concept 03's own deferred cadence question → the same 6-document corpus reused across the worked example, the code, and the lab → cost 12 vs. 3 vs. 3, average lag 4.0 vs. 4.0 vs. 0.0 days → Module 06 complete, 9 of 9.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the incremental and event-driven ingestion deep dive</b><em>Formal notation, from-scratch code, and the Re-Ingestion Strategy Simulator lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From one fact's paper trail to a whole corpus's schedule</h2></div></header>
+<p>Concept 08 tracked where a fact came from, what it passed through, and when each of those events happened — for one document sitting still. This concept asks what happens when the source underneath that document keeps moving: how does the pipeline notice, and how often does it bother to check? It is the concept that finally answers what Concept 03 deferred twice, and in doing so it closes Module 06's nine-concept arc.</p>
+<div class="flow">
+<div class="flow-node">Concept 07 — identity and versioning</div>
+<div class="flow-node">Concept 08 — provenance, lineage and timestamps</div>
+<div class="flow-node hot">Concept 09 — incremental and event-driven ingestion</div>
+<div class="flow-node">Module 07 — chunking</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Name and contrast the three re-ingestion strategies</h3><p>Full batch, incremental, and event-driven, laid out along both the trigger axis (schedule vs. event) and the scope axis (all documents vs. only changed ones).</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute reprocessing cost and detection lag for a given schedule</h3><p>Given a batch_interval and a set of change events, derive cost and average detection lag for any of the three strategies by hand.</p></article>
+<article class="info-card"><span>DECIDE</span><h3>Decide which strategy fits a given source</h3><p>Reusing Concept 01 and Concept 03's own source-type distinctions to match a source's actual capabilities to a strategy that source can support.</p></article>
+<article class="info-card"><span>RECOGNIZE</span><h3>Recognize when event-driven isn't available at all</h3><p>Some sources have no event API or change stream — recognizing that limitation is as important as computing the formulas.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 07's source_last_modified_at and content hash, reused directly.</b> Incremental ingestion's change detection is exactly this comparison, run at each scheduled tick — it is cited here, not re-derived.</li>
+<li><b>Concept 08's ingestion_lag, reused and generalized.</b> That metric measured one document-pair's gap between a source edit and the pipeline noticing. This concept's detection_lag is the same idea, generalized from one document to an entire scheduling or triggering policy.</li>
+<li><b>Concept 03's twice-deferred cadence question, cited by name.</b> Its common-mistakes block called a refresh cadence "Concept 09's job, not this one's"; its production-implications list named "how often do we re-pull this" as a question needing an actual answer. Both callbacks belong to Concept 03, not Concept 02 — Concept 02 never raises a cadence question at all.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A security guard's three ways of noticing something moved</h2></div></header>
+<p>Picture a building security guard with three different ways of working. Full batch is a guard who walks every single room on the hour, every hour, regardless of whether anything in any of those rooms actually changed since the last round. Incremental is the same hourly round, but the guard only stops to check rooms a motion sensor flagged since the last round — same schedule, far less wasted walking. Event-driven is an alarm that pages the guard the instant a door actually opens, with no fixed round at all.</p>
+<div class="callout warning"><b>Analogy boundary</b>The guard analogy explains why the three strategies differ in trigger and effort. It does not explain how to compute a reprocessing cost or a detection lag in days — Sections 05 and 09 give those formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>batch_interval</td><td>The fixed number of days between scheduled runs, shared by full batch and incremental</td><td>τ</td></tr>
+<tr><td>reprocessing_cost</td><td>Total number of document-reingestions performed over a horizon</td><td>cost</td></tr>
+<tr><td>detection_lag</td><td>The gap between a source-side change and the pipeline actually reprocessing it — Concept 08's ingestion_lag, generalized from one document-pair to a whole policy</td><td>trigger_time − change_time</td></tr>
+<tr><td>Event trigger</td><td>A push notification (webhook or CDC event) fired by the source itself the instant a change happens</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: poll on a schedule, or wait for a push</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>SCHEDULE-TRIGGERED LANE</span><p>Poll the source every τ days. Full batch reprocesses ALL documents at every tick; incremental reprocesses only CHANGED-ONLY documents at every tick, using Concept 07's timestamp/hash comparison to decide which ones qualify.</p></div>
+<div class="lane"><span>EVENT-TRIGGERED LANE</span><p>Push, not poll. A CDC event's path: source commit → change stream → listener → a single-document ingestion job → Concepts 02-08's whole chain runs for that one document → a new lineage event is appended, a direct Concept 08 callback.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Three competing policies, one shared timeline</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0609-adv-visual-title">
+<strong class="concept-visual-title" id="c0609-adv-visual-title">VISUAL · FULL BATCH, INCREMENTAL AND EVENT-DRIVEN AGAINST THE SAME 14-DAY CHANGE TIMELINE</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable three-lane timeline comparing full batch, incremental and event-driven ingestion against the same change events">
+<svg class="vector-plane" viewBox="0 0 460 300" role="img" aria-labelledby="c0609-svg-title-a c0609-svg-desc-a" style="min-width:460px">
+<title id="c0609-svg-title-a">Three stacked lanes comparing full batch, incremental and event-driven ingestion against the same three change events</title>
+<desc id="c0609-svg-desc-a">A shared row at the top marks three source-side changes at day 2 (D3), day 5 (D1) and day 9 (D5). Below it, three lanes stack vertically. The full batch lane shows two large markers at day 7 and day 14, each labeled 6 documents, aligned with dash-dot guide lines shared with the incremental lane below it. The incremental lane shows markers at the same day 7 and day 14 positions, but labeled 2 documents and 1 document respectively. The event-driven lane shows three markers aligned directly under the change events themselves, at day 2, day 5 and day 9, each labeled instant, connected to the top row by dotted guide lines that run through all three lanes.</desc>
+<g font-size="7.5" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="94" y="32">D3 · day 2</text>
+<text x="175" y="32">D1 · day 5</text>
+<text x="283" y="32">D5 · day 9</text>
+</g>
+<circle cx="94" cy="50" r="5" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="175" cy="50" r="5" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<circle cx="283" cy="50" r="5" fill="#fff" stroke="#14241f" stroke-width="2"/>
+<line x1="94" y1="58" x2="94" y2="270" stroke="#b9c2bd" stroke-width="1.2" stroke-dasharray="1 5"/>
+<line x1="175" y1="58" x2="175" y2="270" stroke="#b9c2bd" stroke-width="1.2" stroke-dasharray="1 5"/>
+<line x1="283" y1="58" x2="283" y2="270" stroke="#b9c2bd" stroke-width="1.2" stroke-dasharray="1 5"/>
+<line x1="229" y1="58" x2="229" y2="210" stroke="#8a978f" stroke-width="1.2" stroke-dasharray="5 3"/>
+<line x1="418" y1="58" x2="418" y2="210" stroke="#8a978f" stroke-width="1.2" stroke-dasharray="5 3"/>
+<text x="44" y="78" font-size="8.5" font-weight="700" fill="#14241f">FULL BATCH — every tick reprocesses all 6 docs</text>
+<line x1="40" y1="90" x2="418" y2="90" stroke="#14241f" stroke-width="1.5"/>
+<rect x="222" y="83" width="14" height="14" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<rect x="411" y="83" width="14" height="14" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<text x="229" y="112" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">6 docs</text>
+<text x="418" y="112" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">6 docs</text>
+<text x="44" y="148" font-size="8.5" font-weight="700" fill="#14241f">INCREMENTAL — same ticks, only changed docs</text>
+<line x1="40" y1="160" x2="418" y2="160" stroke="#14241f" stroke-width="1.5"/>
+<circle cx="229" cy="160" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="418" cy="160" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<text x="229" y="182" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">2 docs</text>
+<text x="418" y="182" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">1 doc</text>
+<text x="44" y="218" font-size="8.5" font-weight="700" fill="#14241f">EVENT-DRIVEN — reacts the instant each change happens</text>
+<line x1="40" y1="230" x2="418" y2="230" stroke="#14241f" stroke-width="1.5"/>
+<circle cx="94" cy="230" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="175" cy="230" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="283" cy="230" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<text x="94" y="252" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">instant</text>
+<text x="175" y="252" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">instant</text>
+<text x="283" y="252" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace">instant</text>
+<g font-size="7.5" fill="#5c6a63" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="40" y="270">day 0</text><text x="94" y="270">2</text><text x="175" y="270">5</text><text x="229" y="270">7</text><text x="283" y="270">9</text><text x="418" y="270">14</text>
+</g>
+</svg>
+</div>
+<figcaption>Full batch and incremental (top two lanes) fire at the exact same day-7 and day-14 ticks — the dash-dot guides connect them — and differ only in how many documents each tick actually touches: 6 every time for full batch, versus only the documents that changed for incremental. Event-driven (bottom lane) has no ticks at all; its dotted guides run straight up to the change events themselves, because it reacts the moment they happen rather than waiting for a scheduled check.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span>Concepts 02-08's chain — parse, clean, dedup, version, provenance</span><i>↓</i><span class="hot">Trigger / scheduler layer — deciding here</span><i>↓</i><span>Chunks (Module 07)</span>
+</div>
+<p>This concept wraps the existing chain rather than extending it. It does not sit after Concept 08 as a tenth processing stage — it sits alongside Concepts 01 through 08 as the layer deciding when, and for which documents, that whole chain runs again.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Lag, cost, and an idealization that deliberately doesn't match the sample</h2></div></header>
+<div class="equation">detection_lag = trigger_time − change_time<br>full_batch_cost = ticks × N<br>incremental_cost = Σ (documents changed since previous checkpoint)<br>event_driven_cost = number of real change events<br>waste = full_batch_cost − actual_changes</div>
+<p>Under a uniform-arrival assumption, the idealized average detection lag for a scheduled strategy is approximately τ/2 — half the batch interval, on average, if changes land uniformly at random within each window. This is explicitly an idealization, not a prediction: the worked example's three change events land at days 2, 5 and 9 against a 7-day interval, giving an empirical average lag of exactly 4.0 days, not the 3.5-day figure τ/2 = 7/2 would suggest. Three discrete events are too small a sample for the uniform-arrival approximation to land exactly, and that gap is the point — it is a deliberate caution against over-fitting a clean formula to a small, real sample.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Cost 12 vs. 3 vs. 3; average lag 4.0 vs. 4.0 vs. 0.0 days</h2></div></header>
+<p>Corpus: D1 (POLICY-REFUND-001) through D6, N = 6. Horizon: 14 days. Changes: D3 on day 2, D1 on day 5, D5 on day 9. batch_interval = 7 days, so scheduled runs occur at day 7 and day 14.</p>
+<table class="worked-table">
+<thead><tr><th>Strategy</th><th>Cost</th><th>Per-change detection lag</th><th>Average lag</th></tr></thead>
+<tbody>
+<tr><td>Full batch (2 runs × 6 docs)</td><td>12</td><td>D3: 7−2=5d · D1: 7−5=2d · D5: 14−9=5d</td><td>4.0 days</td></tr>
+<tr><td>Incremental (2 docs at day 7, 1 doc at day 14)</td><td>3</td><td>D3: 7−2=5d · D1: 7−5=2d · D5: 14−9=5d</td><td>4.0 days</td></tr>
+<tr><td>Event-driven (1 job per real change)</td><td>3</td><td>D3: 0d · D1: 0d · D5: 0d</td><td>0.0 days</td></tr>
+</tbody>
+</table>
+<p>Full batch's cost of 12 against only 3 real changes leaves 12 − 3 = 9 wasted reruns — a 75% cost reduction available simply by switching to incremental on the identical schedule. Incremental's average lag is unchanged from full batch's, 4.0 days in both cases, because incremental only narrows WHAT gets reprocessed at each tick, not WHEN the tick happens — it is still schedule-triggered. Event-driven matches incremental's already-optimal cost of 3 while dropping average lag to 0.0 days, because there is no schedule to wait for at all. Every figure here was computed once via an executed Node.js script and independently reproduced via an executed Python script run through the <code>py</code> launcher; both runs printed identical results for every number in this table.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Nightly full batch on a small, slow-changing wiki</h3><p>When the corpus is small and edits are rare, full batch's simplicity beats the modest waste — there is no engineering cost to justify against a small number of wasted reruns.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>CDC/webhook-driven ingestion of a support-ticket feed</h3><p>A live agent-assist system needs a resolved ticket reflected immediately — event-driven ingestion off the ticketing system's own change stream is the natural fit.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A source with no event API but too costly for full batch</h3><p>Scheduled incremental via an API's own "modified since" filter — revisiting Concept 03's API source discussion — reprocesses only what changed without needing the source to support push notifications at all.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming every source can support event-driven</h3><p>Legacy databases and file shares often expose no change stream or webhook mechanism whatsoever — they are limited to full batch or incremental by construction, not by choice.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>All three strategies over the fixed corpus, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>CHANGES = [("D3", 2), ("D1", 5), ("D5", 9)]
+DOCS = ["D1", "D2", "D3", "D4", "D5", "D6"]
+HORIZON = 14
+BATCH_INTERVAL = 7
+
+def full_batch_cost(horizon, interval, n_docs):
+    ticks = horizon // interval
+    return ticks * n_docs
+
+def scheduled_ticks(horizon, interval):
+    ticks, t = [], interval
+    while t <= horizon:
+        ticks.append(t)
+        t += interval
+    return ticks
+
+def incremental_cost_and_lag(changes, ticks):
+    cost, lags, checkpoint = 0, [], 0
+    for tick in ticks:
+        changed_this_window = [day for _, day in changes if checkpoint < day <= tick]
+        cost += len(changed_this_window)
+        lags += [tick - day for day in changed_this_window]
+        checkpoint = tick
+    return cost, lags
+
+def event_driven_cost_and_lag(changes):
+    return len(changes), [0 for _ in changes]
+
+ticks = scheduled_ticks(HORIZON, BATCH_INTERVAL)
+batch_cost = full_batch_cost(HORIZON, BATCH_INTERVAL, len(DOCS))
+inc_cost, inc_lags = incremental_cost_and_lag(CHANGES, ticks)
+evt_cost, evt_lags = event_driven_cost_and_lag(CHANGES)
+batch_lags = inc_lags  # full batch shares incremental's schedule, so shares its lag
+
+assert batch_cost == 12
+assert inc_cost == 3
+assert evt_cost == 3
+assert sum(batch_lags) / len(batch_lags) == 4.0
+assert sum(evt_lags) / len(evt_lags) == 0.0
+assert batch_cost - len(CHANGES) == 9  # wasted reprocessing
+
+print("full batch:", batch_cost, batch_lags)
+print("incremental:", inc_cost, inc_lags)
+print("event-driven:", evt_cost, evt_lags)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same mechanism, in real tools</h2></div></header>
+<p>Debezium is a real, open-source production CDC tool that streams row-level changes off a database's own transaction log the instant they commit — the direct implementation parallel to Concept 08's OpenLineage citation, showing event-driven ingestion is an existing engineered category, not a theoretical option. Generic webhooks play the same role for non-database sources — tickets, git repositories, SaaS APIs — the application-layer counterpart to CDC's database-layer mechanism.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Re-Ingestion Strategy Simulator</h2></div></header>
+<div class="lab">
+<p>The same 6-document corpus and the same three change events from the worked example — D3 on day 2, D1 on day 5, D5 on day 9. Drag the days-elapsed scrubber forward, pick a strategy, and (for full batch or incremental) adjust the batch interval. Watch the six document chips flip to "caught up," and watch cost and average lag update live underneath them.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgDaysElapsed_0609">Days elapsed <output id="wgDaysElapsedOut_0609">0</output></label>
+<input type="range" id="wgDaysElapsed_0609" min="0" max="14" step="1" value="0"></div>
+<div class="control" id="wgIntervalControl_0609"><label for="wgBatchInterval_0609">Batch interval (days) <output id="wgBatchIntervalOut_0609">7</output></label>
+<input type="range" id="wgBatchInterval_0609" min="1" max="14" step="1" value="7"></div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:22px;margin:18px 0" role="radiogroup" aria-label="Re-ingestion strategy">
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="radio" name="wgStrategy_0609" id="wgStrategyFull_0609" value="full" checked style="width:auto;accent-color:var(--orange)">
+<span>Full batch</span>
+</label>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="radio" name="wgStrategy_0609" id="wgStrategyIncremental_0609" value="incremental" style="width:auto;accent-color:var(--orange)">
+<span>Incremental</span>
+</label>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="radio" name="wgStrategy_0609" id="wgStrategyEvent_0609" value="event" style="width:auto;accent-color:var(--orange)">
+<span>Event-driven</span>
+</label>
+</div>
+<div class="rank-chip-row" id="wgSimChips_0609"></div>
+<div class="norm-readout" id="wgSimReadout_0609"></div>
+<div class="callout" id="wgSimVerdict_0609"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Full batch vs. incremental vs. event-driven</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Strategy</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Full batch</td><td>Simplest to build — no change detection logic at all</td><td>12 reprocessings for 3 real changes in the worked example — 75% wasted effort</td></tr>
+<tr><td>Incremental</td><td>Cuts cost to exactly the number of real changes, on the same schedule</td><td>Detection lag is unchanged from full batch — still capped by batch_interval</td></tr>
+<tr><td>Event-driven</td><td>Matches incremental's cost and drops detection lag to (idealized) zero</td><td>Requires a source that can push a notification at all — not every source can</td></tr>
+</tbody>
+</table>
+<p>Decision framework: default to full batch only for small, slow-changing sources where simplicity outweighs waste. Reach for incremental whenever a source is pollable and Concept 07's change-detection fields are already available. Reach for event-driven only when the source genuinely supports a webhook or CDC stream — and fall back to incremental when it doesn't.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSED WEBHOOK DELIVERY</span><h3>A dropped push is silently never retried</h3><p>Event-driven's single point of failure — unlike polling, which always eventually rechecks a source, a missed webhook delivery has no built-in second chance unless something else notices.</p></article>
+<article class="info-card"><span>CHECKPOINT DRIFT</span><h3>A wrong or unpersisted "last checkpoint" timestamp</h3><p>Can silently skip boundary-time changes in incremental ingestion — ties directly to Concept 07 and Concept 08's own monotonicity concerns about ordered timestamps.</p></article>
+<article class="info-card"><span>THUNDERING HERD</span><h3>Load spikes at scheduled batch time</h3><p>A production/latency concern when many sources or documents are all reprocessed at the same scheduled tick — named forward to Module 19.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Event-driven has zero real-world lag</td><td>False — there is always some processing latency, just usually far smaller than a polling interval. This lesson's 0.0-day figure is an idealization, named as a caveat in Section 18.</td></tr>
+<tr><td>Incremental requires event triggering</td><td>False — this concept's own worked example uses SCHEDULED incremental, proving scope-reduction and trigger-mechanism are independent axes.</td></tr>
+<tr><td>Pick one strategy for the whole system</td><td>False — real pipelines mix strategies per source, per Concept 01's own source-type variation. A wiki might run full batch while a ticketing system runs event-driven, in the same corpus.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Even under an event-driven design, periodic incremental reconciliation runs are needed for missed-event recovery — a scheduled safety net underneath the push mechanism, not a contradiction of it.</li>
+<li>Backfill and catch-up after downtime is a real operational need: when a listener has been offline, the gap has to be reconciled, typically by running an incremental pass over the missed window.</li>
+<li>detection_lag feeds Module 19's "Freshness and reliability SLOs" directly, and the index-side consequences of a detected change are Module 19's "Document updates and incremental indexing" — both named forward only here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does incremental ingestion's average detection lag equal full batch's exactly, in the worked example?</summary><div>Both strategies poll on the same fixed schedule, so a change is noticed at the same next tick either way. Incremental only reduces how many documents get reprocessed at that tick, not when the tick happens — cost and lag are genuinely independent quantities here.</div></details>
+<details class="quiz"><summary>Why is a scheduled strategy's average lag not exactly τ/2 in this lesson's own worked example?</summary><div>τ/2 assumes changes arrive uniformly at random across the interval. With only three discrete change events at days 2, 5 and 9 against a 7-day interval, the empirical average (4.0 days) does not match the idealized 3.5-day figure — a small, real sample simply doesn't have to match a clean statistical approximation.</div></details>
+<details class="quiz"><summary>Why can't every source support event-driven ingestion?</summary><div>Event-driven requires the source itself to emit a notification — a webhook call or a CDC stream off a transaction log. Legacy databases and file shares often expose neither mechanism, leaving full batch or incremental as the only options.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A smaller corpus: 4 documents, E1 through E4. Two real changes occur: E2 on day 3, E4 on day 7. batch_interval = 5 days, horizon = 10 days, so scheduled runs occur at day 5 and day 10. Compute reprocessing cost and average detection lag for full batch, incremental, and event-driven over this 10-day horizon.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Scheduled runs occur at day 5 and day 10 (2 ticks). Full batch cost = 2 ticks × 4 docs = 8. E2 (day 3) is caught at the day-5 tick, lag = 5 − 3 = 2 days. E4 (day 7) is caught at the day-10 tick, lag = 10 − 7 = 3 days. Average lag = (2 + 3) / 2 = 2.5 days — the same for full batch and incremental, since both share this schedule. Incremental cost = 1 document caught at day 5, plus 1 document caught at day 10 = 2, versus full batch's 8 — a waste of 8 − 2 = 6 reruns for full batch. Event-driven cost = 2 (one job per real change), with 0.0-day average lag, since each change is caught the instant it happens.</div>
+</details>
+<p>Teach-back: explain, in your own words, why incremental's cost of 2 and full batch's cost of 8 can coexist with an identical 2.5-day average detection lag for both.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Incremental and event-driven ingestion</h3><ul><li><b>Full batch:</b> fixed schedule, reprocess ALL documents every tick</li><li><b>Incremental:</b> same fixed schedule, reprocess only CHANGED documents, using Concept 07's timestamp/hash</li><li><b>Event-driven:</b> a webhook or CDC event fires the instant a source changes — no schedule at all</li><li><b>Core relation:</b> incremental fixes cost, not staleness; event-driven fixes both</li></ul></div>
+<div><h3>Memorable example</h3><p>The same 6-document corpus, 3 real changes, 14-day horizon: cost 12 vs. 3 vs. 3 reingestions, average detection lag 4.0 vs. 4.0 vs. 0.0 days — full batch and incremental share their schedule's lag exactly, and only event-driven breaks free of it.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what's the real difference between incremental and event-driven ingestion?</summary><div>They sit on independent axes. Incremental narrows scope (only changed documents) but keeps a schedule. Event-driven changes the trigger itself (a push, not a poll) and has no schedule at all. A system can be scheduled-and-incremental, as this lesson's worked example is, without being event-driven.</div></details>
+<details class="quiz"><summary>Mathematical: derive the cost and lag formulas for each strategy.</summary><div>full_batch_cost = ticks × N; incremental_cost = sum of documents changed within each tick's window since the previous checkpoint; event_driven_cost = number of real change events. detection_lag = trigger_time − change_time, computed per change and averaged; full batch and incremental share the same trigger times, so share the same lag distribution.</div></details>
+<details class="quiz"><summary>Coding: implement a change-since-checkpoint filter for incremental ingestion.</summary><div>Track a persisted checkpoint timestamp. At each tick, select documents whose source_last_modified_at (or content hash) differs from what was recorded at the previous checkpoint, reprocess only those, then advance the checkpoint to the current tick time.</div></details>
+<details class="quiz"><summary>Debugging: a webhook-driven pipeline is missing updates for one source. How do you diagnose it?</summary><div>Check whether the webhook is actually configured and firing at the source; check the listener's own logs for dropped or failed deliveries; and run a one-off incremental reconciliation pass to find documents whose source_last_modified_at is newer than their last recorded ingested_at — exactly Section 16's missed-webhook failure mode.</div></details>
+<details class="quiz"><summary>System design: design a mixed-strategy ingestion trigger layer for a multi-source RAG corpus.</summary><div>Reuse Concept 01's source inventory to tag each source with its available trigger mechanisms. Route sources with a webhook or CDC stream to event-driven ingestion, sources that are pollable but lack push support to incremental, and small slow-changing sources to full batch — all feeding the same Concepts 02-08 chain regardless of which trigger fired it.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Change_data_capture"><b>Change data capture — Wikipedia</b><br><span>Formal grounding for incremental ingestion's change-detection mechanism and for event-driven ingestion's most common real implementation — CDC streams off a database's transaction log, behind Section 06's event-triggered lane.</span></a>
+<a href="https://en.wikipedia.org/wiki/Webhook"><b>Webhook — Wikipedia</b><br><span>Grounds the event-driven trigger mechanism for non-database sources — tickets, git repositories, SaaS APIs — the application-layer counterpart to CDC, cited in Section 13's ecosystem note.</span></a>
+<a href="https://en.wikipedia.org/wiki/Polling_(computer_science)"><b>Polling (computer science) — Wikipedia</b><br><span>Formal definition of the pull/schedule-based mechanism full batch and incremental both share, contrasted against the push mechanism the other two references describe.</span></a>
+<a href="https://debezium.io/documentation/"><b>Debezium documentation</b><br><span>A real, open-source production CDC tool, cited in Section 13 as the direct implementation parallel to Concept 08's OpenLineage citation.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 COMPLETE · MODULE 06 COMPLETE — 9/9</span>
+<h3>Full batch, incremental, event-driven — answered. Module 06 closes here</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute cost and average lag by hand for a fresh schedule. Concept 01's source inventory, Concepts 02-06's extraction/cleaning/dedup chain, Concept 07's identity and versioning, and Concept 08's provenance and lineage all feed this closing decision on when that whole chain reruns. Module 07, "Chunking & document representation," opens next with "Why chunk documents?" — named here only, not yet built.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-08.html">← Back to Concept 08</a>
+</div>
+<p class="fine-print">Module 06 complete, 9 of 9 concepts. Next module in the canonical roadmap: Module 07, Chunking &amp; document representation.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 09 · Active</p>
+<a href="module-06-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

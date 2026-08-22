@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 06 wrote BM25's length-normalization parameter b into the formula but held every document's length equal to the corpus average, so b never visibly changed a score. This concept removes that simplification: a longer document naturally accumulates more term matches and higher raw term frequency without necessarily being more relevant, so scores need to be normalized against the corpus's average document length. Derives L(d) = 1-b+b(dl/avgdl) with a worked short-versus-long document example.">
+<title>Document-length normalization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 07</p>
+<h1>Longer isn't<br><em>more relevant.</em></h1>
+<p class="lesson-lead">Concept 06 wrote BM25's length-normalization parameter, b, straight into the formula — then held every document's length equal to the corpus average in every example, so b never once changed a score. This concept removes that simplification. A longer document naturally accumulates more term matches and a higher raw term frequency without necessarily being more relevant — it simply has more words for a term to land in. This concept derives the length-adjustment term <b>L(d) = 1 − b + b × dl/avgdl</b> that corrects for this, and works a complete example contrasting a genuinely short and a genuinely long document from the course's own five-ticket corpus, showing exactly how their BM25 scores shift once length is accounted for.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's full BM25 formula, saturating tf, and parameter k1 — this concept only changes what L(d) equals, nothing else in the formula</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute L(d) for a short and a long document by hand, show how each document's BM25 score shifts once length is accounted for, and explain why raw term counts favor longer documents unfairly</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concept 06 fixed BM25's unbounded tf growth but held document length fixed at the corpus average, leaving b with nothing to do. This concept computes L(d) for real, differently-sized documents and shows precisely how length normalization shifts their scores.</p>
+<b>CONCEPT 06 COMPLETE · CONCEPT 07 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Give short and long documents a fair fight.</h2>
+</div>
+<p>Every idea in this concept reduces to one comparison: a document's own length against the corpus's average length. Everything else — the worked example, the mistakes, the project mapping — exists to show what that comparison buys you that Concept 06's fixed-length assumption couldn't.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>L(d) stops being 1</h3>
+<div class="mental-compare">
+<div><span>BEFORE — CONCEPT 06</span><p>L(d) = 1 − b + b × dl/avgdl, but every example set dl = avgdl, so L(d) = 1 no matter what b was — b was in the formula, doing nothing.</p></div>
+<div><span>NOW — CONCEPT 07</span><p>Real documents have real, different lengths. L(d) is computed from each document's actual length against the corpus average, and it genuinely raises or lowers that document's BM25 score.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> nothing about BM25's formula changes in this concept — only the number that gets plugged in for L(d) stops being a placeholder.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A document twice as long isn't twice as relevant</h3>
+<p>Take any document and paste an exact copy of itself onto the end. Every term's raw count doubles. Every term's tf doubles. Under Concept 05's raw tf-idf, and even under Concept 06's saturating BM25 with L(d) held at 1, that doubled document would score meaningfully higher for every term it contains — despite containing exactly zero new information. It's simply longer, and longer documents mechanically accumulate more term matches and higher counts almost for free. This concept exists to stop a document's score from rewarding length that isn't relevance.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>T2 (short) versus T3 (long), for real</h3>
+<p>Reusing the five-ticket corpus from Concepts 02–06: T1 has 9 words, T2 has 5, T3 has 10, T4 has 6, T5 has 6, so avgdl = (9+5+10+6+6)/5 = 7.2. T2 is shorter than average; T3 is longer than average. Using b = 0.75 (the Okapi default):</p>
+<div class="context-demo">
+<div><span>T2 — SHORT (dl=5)</span><p>L(T2) = 1 − 0.75 + 0.75×(5/7.2) = 0.25 + 0.5208 ≈ 0.7708 — below 1, because T2 is shorter than average.</p></div>
+<div><span>T3 — LONG (dl=10)</span><p>L(T3) = 1 − 0.75 + 0.75×(10/7.2) = 0.25 + 1.0417 ≈ 1.2917 — above 1, because T3 is longer than average.</p></div>
+</div>
+<p>Plugging these into Concept 06's formula for the term "refund" (idf ≈ 0.9163, k1 = 1.2): without length normalization (L=1 for both, Concept 06's assumption), T2 scored 0.9163 and T3 scored 1.2599 — a gap of 0.3436. With real L(d) values, T2 rises to ≈1.0472 and T3 falls to ≈1.1357 — a gap of only ≈0.0885. T3 still edges ahead, because it genuinely repeats "refund" twice against T2's once, but most of its earlier advantage was simply because it's twice as long — and length normalization removes almost 75% of that gap.</p>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0507-beginner-visual-title">
+<strong class="concept-visual-title" id="c0507-beginner-visual-title">VISUAL · SHORT DOCUMENT RISES, LONG DOCUMENT FALLS, GAP NARROWS</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0507-svg-title c0507-svg-desc">
+<title id="c0507-svg-title">A before-and-after comparison of BM25 scores for a short ticket T2 and a long ticket T3 for the term refund</title>
+<desc id="c0507-svg-desc">Before length normalization, ticket T3 scores 1.2599 and ticket T2 scores 0.9163, a gap of about 0.34. After length normalization with b equal to 0.75, ticket T2 rises to about 1.05 and ticket T3 falls to about 1.14, a gap of only about 0.09. The chart shows the shorter document being rewarded and the longer document being corrected downward, narrowing the gap between them.</desc>
+<text x="10" y="16" font-size="9.5" fill="#14241f">BEFORE (L(d)=1, Concept 06)</text>
+<text x="10" y="46" font-size="10" fill="#14241f">T3</text>
+<rect x="70" y="34" width="252" height="20" fill="#a7d97a" stroke="#14241f"/><text x="326" y="48" font-size="10" fill="#14241f">1.2599</text>
+<text x="10" y="76" font-size="10" fill="#14241f">T2</text>
+<rect x="70" y="64" width="183" height="20" fill="#7ab8d9" stroke="#14241f"/><text x="257" y="78" font-size="10" fill="#14241f">0.9163</text>
+<text x="10" y="104" font-size="9" fill="#5c6a63">gap ≈ 0.3436</text>
+<line x1="10" y1="118" x2="450" y2="118" stroke="#8a978f" stroke-dasharray="3 3"/>
+<text x="10" y="138" font-size="9.5" fill="#14241f">AFTER (real L(d), b=0.75, this concept)</text>
+<text x="10" y="168" font-size="10" fill="#14241f">T3</text>
+<rect x="70" y="156" width="227" height="20" fill="#a7d97a" stroke="#14241f"/><text x="301" y="170" font-size="10" fill="#14241f">1.1357</text>
+<text x="10" y="198" font-size="10" fill="#14241f">T2</text>
+<rect x="70" y="186" width="209" height="20" fill="#7ab8d9" stroke="#14241f"/><text x="283" y="200" font-size="10" fill="#14241f">1.0472</text>
+</svg>
+<figcaption>Same term, same corpus, same k1 -- only L(d) changes. The long document's advantage over the short one shrinks from about 0.34 to about 0.09 once length is accounted for.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>One term, plugged into a denominator you already know</h3>
+<div class="context-demo">
+<div><span>THE FORMULA</span><p>L(d) = 1 − b + b × (dl / avgdl). dl is document d's own length; avgdl is the corpus's average length; b (0 to 1) controls how strongly length matters.</p></div>
+<div><span>WHERE IT PLUGS IN</span><p>Unchanged from Concept 06: BM25(t,d) = idf(t) × [tf(t,d)(k1+1)] / [tf(t,d) + k1×L(d)]. A bigger L(d) makes the denominator bigger, which shrinks the saturating ratio — a longer-than-average document is penalized. A smaller L(d) shrinks the denominator, raising the ratio — a shorter-than-average document is rewarded.</p></div>
+<div><span>WHAT b CONTROLS</span><p>b=0 makes L(d)=1 always (Concept 06's assumption, length ignored completely). b=1 makes L(d)=dl/avgdl exactly (length matters in full, linear proportion). b=0.75 (the usual default) blends the two.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One more number the index needs to keep</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — now also tracks each document's length and the corpus's average length</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Everything else in the index is unchanged from Concept 06 — tf counts, idf values, and postings lists. This concept only requires storing dl per document (a single integer, typically token or word count) and avgdl once per corpus, both trivial to maintain alongside the existing structures.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs this concept depends on keeping separate</h3>
+<div class="distinction-table" role="table" aria-label="L(d) versus k1, b=0 versus b=1 versus b=0.75, Concept 06's fixed L(d) versus this concept's real L(d), and length normalization versus saturation">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">L(d) — length adjustment</span><span role="cell">k1 — saturation speed</span><span role="cell">L(d) compares one document's length to the corpus average; k1 controls how fast repeated occurrences of a term stop mattering within a single document. They answer different questions entirely.</span></div>
+<div role="row"><span role="cell">b=0</span><span role="cell">b=1</span><span role="cell">b=0 makes L(d)=1 always, ignoring length completely (Concept 06's assumption). b=1 makes L(d) track relative length exactly, in full linear proportion. Neither is "no normalization" except b=0.</span></div>
+<div role="row"><span role="cell">This concept's real L(d)</span><span role="cell">Concept 06's L(d)=1</span><span role="cell">Concept 06 deliberately held dl=avgdl in every example so b's effect stayed invisible. This concept uses T2 and T3's genuinely different lengths, so L(d) actually varies.</span></div>
+<div role="row"><span role="cell">Length normalization</span><span role="cell">Term-frequency saturation</span><span role="cell">Saturation (Concept 06) stops one term's repeated occurrences within a document from mattering too much. Length normalization (this concept) stops a document's overall size from mattering too much. Both live inside the same denominator but solve different problems.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"b=1 removes length normalization; b=0 applies it fully."</b><p>Backwards. b=0 makes L(d)=1 for every document, which is no length adjustment at all. b=1 applies length normalization in its strongest, fully linear form.</p></div>
+<div><b>"Longer documents are always penalized by L(d)."</b><p>Only documents longer than the corpus average are penalized (L(d) &gt; 1). A document shorter than average gets L(d) &lt; 1, which actually boosts its score relative to Concept 06's fixed assumption.</p></div>
+<div><b>"Length normalization guarantees the shorter document wins."</b><p>It doesn't — b03's T3 still narrowly outscores T2 after normalization, because T3 genuinely repeats the term more. Normalization corrects the unfair part of the gap; it doesn't erase genuine relevance differences.</p></div>
+<div><b>"avgdl should be recomputed per query."</b><p>avgdl is a property of the corpus, computed once (and updated as documents are added or removed) — it does not depend on which query is being scored, unlike idf's df which is per-term but still corpus-wide, not per-query.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lives in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT</span><b>Ticket bodies vary wildly in length</b><p>A one-line ticket ("please refund my order") and a five-paragraph ticket describing the same issue should not be ranked apart purely because one is longer — length normalization is exactly the correction that keeps ranking fair across ticket lengths.</p></div>
+<div><span>SUPPORT-TICKET SEARCH</span><b>Verbose tickets stop gaming the ranking</b><p>Without length normalization, a customer who writes a long, rambling ticket that happens to repeat the query terms would rank higher purely from length. b03's numbers show almost 75% of that unfair advantage removed at b=0.75.</p></div>
+<div><span>TEXT-TO-SQL</span><b>Length is a ranking correction, not a filter</b><p>Filtering tickets by exact length ("show tickets under 50 words") is a deterministic SQL WHERE clause; L(d) is a soft scoring adjustment inside a relevance formula — this course keeps the two mechanisms distinct on purpose.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The formula</b><p>L(d) = 1 − b + b × dl/avgdl — unchanged BM25 formula from Concept 06, only L(d) is now computed for real.</p></div>
+<div><b>Why it's needed</b><p>Longer documents mechanically accumulate more term matches and higher raw tf without necessarily being more relevant.</p></div>
+<div><b>What b controls</b><p>b=0 ignores length entirely; b=1 normalizes fully and linearly; b=0.75 is the usual default blend.</p></div>
+<div><b>What b03 proved with numbers</b><p>Length normalization narrowed a genuine score gap from ≈0.3436 to ≈0.0885 between a short and a long document repeating the same term.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Using b03's numbers, explain why T2's score rose while T3's score fell once real document lengths were used.</li>
+<li>If avgdl were recomputed after adding many more long documents to the corpus, would T2's L(T2) rise or fall, and why?</li>
+<li>Why does b=0, not b=1, correspond to "no length normalization at all"?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 08: Precision, recall and F-score</h3>
+<p>Concepts 04 through 07 built a complete scoring formula — tf, idf, saturation, and now length normalization. None of them answered whether the resulting ranking is actually good. The next concept shifts from building scores to measuring them, starting with precision, recall, and F-score.</p>
+<div class="beginner-memory"><b>Concept 07 is complete.</b> Continue to Concept 08, "Precision, recall and F-score."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Compare length to the average, adjust the denominator, done.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>One placeholder retired</b><small>L(d) stops equaling 1 — Concept 06's simplification is removed for good.</small></a>
+<a href="#b03"><span>02</span><b>One worked comparison</b><small>A short and a long real document, same term, same k1 — only length differs.</small></a>
+<a href="#b04"><span>03</span><b>One parameter, fully explained</b><small>b controls how strongly length matters, from 0 (ignored) to 1 (full linear correction).</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, from-scratch code, and the Length-Normalization Explorer lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> name why raw length inflates scores unfairly → compute L(d) for a real short and long document → show the score gap narrow with real numbers → generalize to b's full 0-to-1 range → hand off to evaluation metrics in Concept 08.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the document-length normalization deep dive</b><em>Formal notation, from-scratch code, and the Length-Normalization Explorer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The last piece of the classical scoring formula</h2></div></header>
+<p>Concept 05 built raw tf-idf and named two flaws. Concept 06 fixed the first (unbounded tf growth) and wrote the second's parameter, b, into the formula without giving it anything to do. This concept finishes the job: it computes L(d) from real document lengths, closing the gap Concept 05 opened three concepts ago. After this concept, Module 05's scoring machinery is complete — Concepts 08–10 turn to measuring whether that machinery actually ranks well.</p>
+<div class="flow">
+<div class="flow-node">Concept 05 — raw tf-idf, unbounded, length-blind</div>
+<div class="flow-node">Concept 06 — saturating tf, L(d) fixed at 1</div>
+<div class="flow-node hot">Concept 07 — L(d) computed for real</div>
+<div class="flow-node">Concept 08 — measuring ranking quality</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DERIVE</span><h3>Write L(d) = 1−b+b(dl/avgdl) and explain each symbol</h3><p>dl, avgdl, and b, distinguished clearly from k1.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute L(d) by hand for a short and a long document</h3><p>Show the resulting BM25 scores shift in opposite directions.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Quantify how much of a score gap was length, not relevance</h3><p>Using b03's before/after numbers as the worked proof.</p></article>
+<article class="info-card"><span>GENERALIZE</span><h3>Explain b's full 0-to-1 range</h3><p>From no normalization (b=0) to full linear normalization (b=1).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06 — the full BM25 formula, k1, and the saturating tf ratio.</b> Nothing about that formula changes here; only the value plugged in for L(d) changes.</li>
+<li><b>Concept 04 — idf(t).</b> Reused unchanged, exactly as in Concepts 05 and 06.</li>
+<li><b>Out of scope here:</b> whether the resulting ranking is actually good by any external measure — that's Concepts 08–10's job, not this one's.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Judging essays of wildly different lengths</h2></div></header>
+<p>Imagine grading essays on how thoroughly they cover a topic, but one essay is one paragraph and another is ten pages. The ten-page essay will almost certainly mention the topic's key terms more times, purely from having ten times the space to do so — not necessarily because it covers the topic ten times as well. A fair grader adjusts for that: expecting proportionally more mentions from a longer essay before treating that repetition as extra evidence of quality, rather than crediting raw mention counts as if length didn't exist.</p>
+<div class="callout warning"><b>Analogy boundary</b>The grading analogy explains why an adjustment is fair, but not the specific linear-blend shape L(d) uses, or why b sits between 0 and 1 rather than being fixed at one extreme — Section 09 derives that algebraically.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Document length</td><td>The number of terms (tokens or words) in one specific document</td><td>dl (e.g. dl(T2) = 5)</td></tr>
+<tr><td>Average document length</td><td>The mean document length across the entire corpus</td><td>avgdl = (Σ dl) / N</td></tr>
+<tr><td>Length-normalization parameter</td><td>Controls how strongly length adjusts the score, from 0 (ignored) to 1 (full linear correction)</td><td>b (typically 0.75)</td></tr>
+<tr><td>Length-adjustment term</td><td>A document's length relative to the corpus average, blended by b</td><td>L(d) = 1 − b + b × dl/avgdl</td></tr>
+<tr><td>BM25 per-term weight (restated)</td><td>Unchanged from Concept 06, now with L(d) computed for real</td><td>BM25(t,d) = idf(t) × [tf(t,d)(k1+1)] / [tf(t,d) + k1·L(d)]</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Compute the ratio, blend it with b, plug it in</h2></div></header>
+<div class="lane-flow">
+<div><b>Compute dl/avgdl —</b> T2: 5/7.2 ≈ 0.6944 (below 1, shorter than average). T3: 10/7.2 ≈ 1.3889 (above 1, longer than average).</div>
+<div><b>Blend with b —</b> L(d) = (1−b) + b×(dl/avgdl). At b=0.75: L(T2) ≈ 0.7708, L(T3) ≈ 1.2917.</div>
+<div><b>Plug L(d) into Concept 06's denominator —</b> tf(t,d) + k1·L(d). A larger L(d) makes this bigger, shrinking the saturating ratio; a smaller L(d) makes it smaller, raising the ratio.</div>
+<div><b>Multiply by idf and sum across the query —</b> exactly Concept 06's structure, now with a genuinely varying L(d) per document.</div>
+</div>
+<figure class="concept-visual" aria-labelledby="c0507-blend-title">
+<strong class="concept-visual-title" id="c0507-blend-title">VISUAL · HOW L(d) SCALES WITH RELATIVE LENGTH, FOR THREE VALUES OF b</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0507-blend-svg-title c0507-blend-svg-desc">
+<title id="c0507-blend-svg-title">A line chart showing L(d) as a function of relative document length dl over avgdl, for b equal to 0, 0.75 and 1</title>
+<desc id="c0507-blend-svg-desc">When b equals 0, L(d) is a flat horizontal line at exactly 1 regardless of relative length -- length has no effect. When b equals 1, L(d) rises in a straight diagonal exactly equal to relative length -- full linear normalization. When b equals 0.75, the line sits between the two, rising less steeply than the diagonal but still increasing with relative length. All three lines cross at exactly 1 when relative length equals 1, which is where a document's length equals the corpus average.</desc>
+<line x1="40" y1="10" x2="40" y2="190" stroke="#8a978f"/>
+<line x1="40" y1="190" x2="440" y2="190" stroke="#8a978f"/>
+<text x="10" y="14" font-size="9" fill="#5c6a63">L(d)</text>
+<text x="410" y="205" font-size="9" fill="#5c6a63">dl/avgdl</text>
+<line x1="40" y1="100" x2="440" y2="100" stroke="#e08a3c" stroke-dasharray="4 4"/>
+<text x="330" y="94" font-size="8.5" fill="#e08a3c">b=0 (flat at 1)</text>
+<line x1="40" y1="190" x2="440" y2="10" stroke="#14241f" stroke-width="2"/>
+<text x="330" y="34" font-size="8.5" fill="#14241f">b=1 (full diagonal)</text>
+<line x1="40" y1="145" x2="440" y2="55" stroke="#7ab8d9" stroke-width="2.4"/>
+<text x="330" y="66" font-size="8.5" fill="#3f7fa3">b=0.75 (this concept's default)</text>
+<circle cx="240" cy="100" r="3.5" fill="#14241f"/>
+<text x="248" y="96" font-size="8.5" fill="#14241f">all lines meet here: dl=avgdl → L(d)=1</text>
+</svg>
+<figcaption>All three lines cross at exactly 1 when a document's length equals the corpus average -- b only changes how steeply L(d) reacts once length differs from that average.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two ratios in, one adjustment out</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing document length and average document length feeding the length-adjustment term, which then feeds BM25's denominator">
+<div class="diagram-hub">
+<div class="diagram-node"><b>dl</b><small>this document's length</small></div>
+<div class="diagram-node hub-center"><b>L(d) = 1−b+b·dl/avgdl</b><small>length-adjustment term, blended by b</small></div>
+<div class="diagram-node"><b>avgdl</b><small>corpus average length</small></div>
+</div>
+</div>
+<p>L(d) then multiplies k1 inside Concept 06's denominator, exactly where L(d)=1 sat inertly before. Nothing else in the pipeline changes shape — only this one input stops being a placeholder.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where length normalization sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — per-document score now corrects for document length, not just tf saturation</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This is the final concept in Module 05's scoring chain (Concepts 04–07) — the "Retrieval" box's sparse path now runs the complete, standard BM25 formula used across production lexical search engines, with nothing deferred to a later concept.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why L(d) always equals 1 at dl=avgdl, regardless of b</h2></div></header>
+<div class="equation">L(d) = (1 − b) + b × (dl / avgdl)
+
+If dl = avgdl:  L(d) = (1 − b) + b × 1 = (1 − b) + b = 1</div>
+<p>This is exactly why Concept 06's examples showed no effect from b: they fixed dl = avgdl in every case, and the two b terms cancel algebraically to exactly 1 regardless of what b was set to. Once dl ≠ avgdl, that cancellation no longer happens: for T3 (dl=10, avgdl=7.2), the ratio dl/avgdl ≈ 1.3889 is greater than 1, so the b×(dl/avgdl) term outweighs what b subtracted, and L(T3) &gt; 1. For T2 (dl=5), the opposite happens, and L(T2) &lt; 1. b controls how much this deviation from 1 is allowed to matter — at b=0, the deviation is multiplied by 0 and vanishes entirely, recovering Concept 06's assumption exactly.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>T2 and T3, fully worked, k1=1.2, b=0.75, idf(refund)≈0.9163</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Ticket</th><th>dl</th><th>dl/avgdl</th><th>L(d)</th><th>Denominator (tf+k1·L(d))</th><th>Saturating ratio</th><th>BM25 score</th></tr></thead>
+<tbody>
+<tr><td>T2 (tf=1)</td><td>5</td><td>0.6944</td><td>0.7708</td><td>1.9250</td><td>1.1429</td><td>1.0472</td></tr>
+<tr><td>T3 (tf=2)</td><td>10</td><td>1.3889</td><td>1.2917</td><td>3.5500</td><td>1.2394</td><td>1.1357</td></tr>
+</tbody>
+</table>
+<p>Every value in this table was computed directly from the formulas above and independently checked by script before being written here. Compare to Concept 06's L(d)=1 versions: T2's saturating ratio rose from 1.0 to 1.1429 (a real boost for being shorter than average); T3's fell from 1.375 to 1.2394 (a real penalty for being longer than average). The final score gap between T3 and T2 shrank from 1.2599−0.9163=0.3436 to 1.1357−1.0472=0.0885 — length normalization removed roughly 74% of the earlier gap, leaving only the portion driven by T3's genuinely higher term frequency.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>b03/s10's short-versus-long comparison</h3><p>The clearest possible demonstration: same term, same k1, only length differs, and the score gap visibly narrows.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A padded, duplicated document</h3><p>Pasting a document onto itself doubles both tf and dl; L(d) rises accordingly, blunting most (though not all) of the artificial score gain the padding would otherwise produce.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>dl = avgdl exactly</h3><p>L(d) = 1 exactly regardless of b — a document of exactly average length behaves identically to Concept 06's simplified assumption.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Normalizing against a fixed constant instead of avgdl</h3><p>Using a hardcoded "typical length" instead of the corpus's own avgdl breaks the moment the corpus composition changes — avgdl must be recomputed as documents are added or removed, the same operational point Concept 04 made about idf.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Full BM25 with real length normalization, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+tickets = {
+    "T1": "my order is late and my order never arrived",
+    "T2": "please refund my order immediately",
+    "T3": "the refund was processed but the refund amount is wrong",
+    "T4": "where is my order confirmation email",
+    "T5": "i need help resetting my password",
+}
+
+def doc_length(text):
+    return len(text.split(" "))
+
+AVGDL = sum(doc_length(t) for t in tickets.values()) / len(tickets)  # 7.2
+
+def term_frequency(term, text):
+    return text.split(" ").count(term)
+
+def document_frequency(term, corpus):
+    return sum(1 for text in corpus.values() if term in text.split(" "))
+
+def inverse_document_frequency(term, corpus):
+    df = document_frequency(term, corpus)
+    if df == 0:
+        return None
+    return math.log(len(corpus) / df)
+
+def length_term(doc_id, corpus, b):
+    dl = doc_length(corpus[doc_id])
+    return (1 - b) + b * (dl / AVGDL)
+
+def bm25_term(term, doc_id, corpus, k1=1.2, b=0.75):
+    idf = inverse_document_frequency(term, corpus)
+    if idf is None:
+        return 0.0
+    tf = term_frequency(term, corpus[doc_id])
+    L = length_term(doc_id, corpus, b)
+    ratio = (tf * (k1 + 1)) / (tf + k1 * L)
+    return idf * ratio
+
+# b=0 must reproduce Concept 06's fixed L(d)=1 behavior exactly.
+assert abs(length_term("T3", tickets, 0.0) - 1.0) < 1e-9
+
+# With real b=0.75, T2 (short) should score higher than it did at L=1,
+# and T3 (long) should score lower than it did at L=1.
+score_t2 = bm25_term("refund", "T2", tickets, b=0.75)
+score_t3 = bm25_term("refund", "T3", tickets, b=0.75)
+score_t2_nolen = bm25_term("refund", "T2", tickets, b=0.0)
+score_t3_nolen = bm25_term("refund", "T3", tickets, b=0.0)
+assert score_t2 > score_t2_nolen
+assert score_t3 < score_t3_nolen
+assert abs(score_t2 - 1.0472) < 0.001
+assert abs(score_t3 - 1.1357) < 0.001
+
+# The gap between them shrinks once length is normalized.
+assert (score_t3 - score_t2) < (score_t3_nolen - score_t2_nolen)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production systems apply this exact correction</h2></div></header>
+<p>Elasticsearch, OpenSearch, and Lucene's <code>BM25Similarity</code> all compute avgdl once per field and per shard, updating it as documents are indexed or removed, then apply this exact L(d) term with b defaulting to 0.75 — the identical default used throughout this concept. Both engines expose b as a per-field tuning knob because different content types normalize differently: log lines and short product titles often normalize length more aggressively (higher b) than long-form articles, where length differences carry more genuine signal about topic depth.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Length-Normalization Explorer</h2></div></header>
+<div class="lab">
+<p>Drag b from 0 (length ignored, Concept 06's assumption) to 1 (full linear normalization) and watch every ticket's BM25 score for "refund" update live, along with the gap between the shortest and longest tickets that contain it.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgB_0507">b <output id="wgBOut_0507">0.75</output></label>
+<input type="range" id="wgB_0507" min="0" max="1" step="0.05" value="0.75"></div>
+</div>
+<div class="prob-bars" id="wgLenBars_0507"></div>
+<div class="norm-readout">
+<div><span>L(T2) SHORT / L(T3) LONG</span><b id="wgLenPair_0507">—</b></div>
+<div><span>SCORE GAP (T3 − T2)</span><b id="wgLenGap_0507">—</b></div>
+</div>
+<div class="callout" id="wgVerdictLen_0507">Drag the b slider to see T2 and T3's scores respond in opposite directions.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>What each stage of Module 05's scoring formula still lacks</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Saturates repeated terms?</th><th>Normalizes for length?</th></tr></thead>
+<tbody>
+<tr><td>Raw tf-idf (Concept 05)</td><td>No</td><td>No</td></tr>
+<tr><td>BM25 with L(d)=1 (Concept 06)</td><td>Yes</td><td>No — deliberately held fixed</td></tr>
+<tr><td>Full BM25 (this concept)</td><td>Yes</td><td>Yes — real L(d) from real lengths</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISTUNED b</span><h3>b too low under-corrects for length</h3><p>A low b leaves most of the length-driven advantage from Section 09/s10 intact, letting long, verbose documents keep outranking shorter, more precise ones for reasons unrelated to relevance.</p></article>
+<article class="info-card"><span>MISTUNED b</span><h3>b too high over-corrects for length</h3><p>A very high b can penalize genuinely comprehensive long documents so heavily that legitimately thorough coverage of a topic gets suppressed — length and depth are correlated, not identical.</p></article>
+<article class="info-card"><span>STALE avgdl</span><h3>An outdated avgdl skews every score</h3><p>If avgdl isn't recomputed after the corpus's length distribution shifts significantly (e.g. bulk-adding many long documents), every existing document's L(d) becomes wrong relative to the new average, silently distorting rankings corpus-wide.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>b=1 turns off length normalization</td><td>False — b=1 applies it in its strongest, fully linear form. b=0 is the one that turns it off.</td></tr>
+<tr><td>Length normalization always favors shorter documents</td><td>False — a document exactly at avgdl is unaffected, and s10's T3 still wins after normalization; only the unfair portion of its advantage is removed.</td></tr>
+<tr><td>k1 and b solve the same problem from two angles</td><td>False — k1 bounds how much repetition within one document can matter; b bounds how much a document's overall size can matter. Neither substitutes for the other.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>avgdl must be maintained as a live, corpus-wide statistic, recomputed incrementally as documents are added, updated, or deleted — treating it as a one-time constant silently drifts every subsequent score's fairness over time.</li>
+<li>b is almost always left at 0.75 unless a relevance-evaluation process (Concepts 08–10, and Module 18 later) shows a specific collection's length distribution benefits from a different value — content types with unusually wide length variance (forum posts mixed with long-form articles) are the most common case for retuning it.</li>
+<li>Because L(d) depends only on a document's own length and the corpus-wide avgdl, it can be precomputed and cached per document at index time — no extra per-query cost beyond a single multiplication that Concept 06's formula already required.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Write L(d) and state what happens to it when dl=avgdl.</summary><div>L(d) = 1 − b + b × dl/avgdl. When dl=avgdl, the ratio dl/avgdl=1, so L(d) = 1−b+b = 1, regardless of b's value.</div></details>
+<details class="quiz"><summary>Why did T2's BM25 score rise while T3's fell, once real lengths were used?</summary><div>T2 (dl=5) is shorter than avgdl=7.2, so L(T2)&lt;1, which shrinks the denominator and raises T2's saturating ratio. T3 (dl=10) is longer than avgdl, so L(T3)&gt;1, which enlarges the denominator and lowers T3's saturating ratio.</div></details>
+<details class="quiz"><summary>What value of b exactly reproduces Concept 06's assumption that L(d)=1 for every document?</summary><div>b=0 — at b=0, L(d) = 1−0+0×(dl/avgdl) = 1 for any document regardless of its actual length.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using T4 (dl=6, tf("order")=1) and T1 (dl=9, tf("order")=2), avgdl=7.2, idf("order")≈0.5108, k1=1.2, and b=0.75: compute L(T4) and L(T1) by hand, then compute both tickets' BM25("order", ·) scores. State which ticket's score moved further from its Concept-06 (L=1) value, and explain why in terms of how far each ticket's length sits from avgdl.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>L(T4) = 1−0.75+0.75×(6/7.2) = 0.25+0.625 = 0.875. L(T1) = 1−0.75+0.75×(9/7.2) = 0.25+0.9375 = 1.1875. For T4 (tf=1): denom = 1+1.2×0.875 = 2.05, ratio = 1×2.2/2.05 ≈ 1.0732, score ≈ 0.5108×1.0732 ≈ 0.5482. For T1 (tf=2): denom = 2+1.2×1.1875 = 3.425, ratio = 2×2.2/3.425 ≈ 1.2847, score ≈ 0.5108×1.2847 ≈ 0.6564. T4's length (6) is closer to avgdl (7.2) than T1's length (9) is, so T4's L(d)=0.875 sits closer to 1 than T1's L(d)=1.1875 does — T1's score moved further from its Concept-06 value because T1's length deviates from the average by more.</div>
+</details>
+<p>Teach-back: explain, in your own words, why the size of a document's deviation from avgdl — not just whether it's longer or shorter — determines how much L(d) shifts its score.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Document-length normalization</h3><ul><li><b>L(d) = 1 − b + b × dl/avgdl:</b> compares a document's length to the corpus average, blended by b.</li><li><b>Plugs into Concept 06's denominator unchanged:</b> BM25(t,d) = idf(t) × tf(k1+1)/(tf+k1·L(d)).</li><li><b>b=0:</b> length ignored (Concept 06's assumption). <b>b=1:</b> full linear normalization. <b>b=0.75:</b> the usual default blend.</li><li><b>Why it's needed:</b> longer documents mechanically accumulate more term matches without necessarily being more relevant.</li></ul></div>
+<div><h3>Memorable example</h3><p>For "refund," a short ticket (5 words) and a long ticket (10 words) start with a BM25 gap of ≈0.3436 when length is ignored. With real length normalization (b=0.75), that gap shrinks to ≈0.0885 — about 74% of it was length, not relevance.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain document-length normalization to someone who already understands BM25's saturating tf factor, in under thirty seconds.</summary><div>BM25's denominator also contains a term called L(d) that compares this document's length to the corpus's average length. If the document is longer than average, L(d) is greater than 1 and the score is pulled down a bit; if it's shorter, L(d) is less than 1 and the score is pulled up. A parameter b, from 0 to 1, controls how strongly that adjustment applies.</div></details>
+<details class="quiz"><summary>Why do longer documents need this correction at all?</summary><div>A longer document mechanically has more room for any given term to appear in, so it naturally accumulates higher raw term frequency without necessarily being more topically relevant. Without normalization, that length advantage would be indistinguishable from genuine relevance.</div></details>
+<details class="quiz"><summary>A teammate sets b=0 "to keep things simple." What are they actually choosing?</summary><div>They're choosing to disable length normalization entirely — L(d)=1 for every document regardless of its actual length, which is exactly Concept 06's simplifying assumption, not a neutral default.</div></details>
+<details class="quiz"><summary>Design question: a corpus mixes one-line chat messages with full incident reports. How would you expect the optimal b to differ from a corpus of uniformly-sized documents?</summary><div>A corpus with wide length variance has more to gain from length normalization, since raw length differences are large and would otherwise dominate scores unfairly — such collections often benefit from a b closer to 1. A corpus where every document is close to avgdl already has L(d) close to 1 for everyone regardless of b, so the choice of b matters far less.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/okapi-bm25-a-non-binary-model-1.html"><b>Manning, Raghavan &amp; Schütze — "Okapi BM25: a non-binary model," Introduction to Information Retrieval (Stanford IR Book)</b><br><span>States the full BM25 formula including the L(d) length-adjustment term and its b parameter, which this concept isolates and derives in depth.</span></a>
+<a href="https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf"><b>Robertson &amp; Zaragoza — "The Probabilistic Relevance Framework: BM25 and Beyond"</b><br><span>Discusses the motivation for length normalization within the probabilistic relevance framework, cited here for why b sits between the two extremes of 0 and 1.</span></a>
+<a href="https://en.wikipedia.org/wiki/Okapi_BM25"><b>Okapi BM25 — Wikipedia</b><br><span>Background on typical b values in practice and the formula's relationship to earlier pivoted length-normalization approaches in classical IR.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 COMPLETE · CONCEPT 08 NEXT</span>
+<h3>The scoring formula is complete — Concept 08 starts measuring it</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute L(d) for a document of any length against any avgdl. Concept 08, "Precision, recall and F-score," shifts from building a ranking formula to measuring whether that ranking is actually good.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Length-Normalization Explorer ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 08, Precision, recall and F-score.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 07 · Complete</p>
+<a href="module-05-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

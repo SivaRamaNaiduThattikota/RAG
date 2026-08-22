@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 02 opens the real extraction work: getting raw text out of PDF, HTML, Word, Excel and Markdown, each with its own central parsing difficulty and its own standard tool.">
+<title>PDF, HTML, Word, Excel and Markdown parsing — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 02</p>
+<h1>Same goal, five different fights:<br><em>getting the words out of the file.</em></h1>
+<p class="lesson-lead">Concept 01 named the source inventory and the authority rule, without opening a single file. This concept opens five of them — PDF, HTML, Word's .docx, Excel's .xlsx, and Markdown — the five most common formats a real source inventory actually contains. Each one hides its text differently, so "just read the file" fails in a different way for each. Parsing is the narrow job of getting raw, extractable text out of a specific format. It stops there: turning a scanned page into text (Concept 04) and cleaning or normalizing whatever text comes out (Concept 05) are both deliberately somebody else's job.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01 — a source inventory exists; this concept opens what's inside it</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the one central parsing difficulty and one standard tool for each of five formats</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You opened five file formats — PDF, HTML, Word's .docx, Excel's .xlsx, and Markdown — naming one central parsing difficulty and one standard tool per format, with OCR and cleaning both deferred. Concept 03 opens non-file sources — databases, APIs, tickets, and code repositories — next.</p>
+<b>2 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Five formats, one narrow job: raw text out</h2>
+</div>
+<p>Every format below gets exactly one central difficulty and one standard tool. Nothing here decides whether the extracted text is clean, and nothing here handles a page that was scanned as an image rather than typed — both come later in this module.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Parsing: getting raw text out of one specific format</h3>
+<div class="mental-compare">
+<div><span>PARSING (THIS CONCEPT)</span><p>Format-specific extraction: opening a PDF, HTML page, .docx, .xlsx, or Markdown file and pulling out its actual text content, using a method that understands that format's own internal layout.</p></div>
+<div><span>NOT PARSING (LATER CONCEPTS)</span><p>Reading text off a scanned image (Concept 04's OCR) and fixing whitespace, encoding, or boilerplate in text that's already been extracted (Concept 05's cleaning) — both assume parsing already happened.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> five formats, five different reasons "just open the file" fails, and one standard tool per format that actually works.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Each format hides its text a different way</h3>
+<p>A source inventory (Concept 01) might list an HR policy as a PDF, a wiki page as HTML, an onboarding guide as a .docx, a benefits table as a .xlsx, and a README as Markdown. If you tried to open all five the same way — reading the raw bytes as plain text — you'd get five different kinds of failure: a PDF gives you binary drawing instructions, not sentences. An HTML page gives you real sentences buried inside navigation and ad markup. A .docx or .xlsx gives you a zip archive's compressed header, not a paragraph. Only Markdown comes back looking close to readable — and even it still has syntax markers a naive read can't tell apart from real content. Parsing exists because "one universal way to read a file" does not exist; it has to be format-aware.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same sentence, five files, five outcomes</h3>
+<p>Suppose the exact same policy sentence — "Refunds are accepted within 45 days of purchase." — exists in all five formats. Naively opening each file (reading its raw bytes) gives five different failures:</p>
+<div class="context-demo">
+<div><span>PDF</span><p>Binary content-stream instructions and positioned glyph codes — not readable characters at all without a parser that understands PDF's drawing model.</p></div>
+<div><span>HTML</span><p>The sentence is there, but wrapped in tags, sitting next to a navigation bar and an ad banner your naive read can't distinguish from the real content.</p></div>
+<div><span>DOCX / XLSX</span><p>A zip archive's binary header (<code>PK\x03\x04…</code>) — Word and Excel files aren't text files, they're compressed folders of XML.</p></div>
+<div><span>MARKDOWN</span><p>"Refunds are accepted within **45 days** of purchase." — almost right, except the <code>**</code> markers are still sitting in the text as literal characters.</p></div>
+</div>
+<p>Five files, one sentence, five reasons a naive open-and-read doesn't reliably return "Refunds are accepted within 45 days of purchase." and nothing else.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0602-beginner-visual-title">
+<strong class="concept-visual-title" id="c0602-beginner-visual-title">VISUAL · FIVE FORMATS CONVERGING ON ONE OUTPUT</strong>
+<svg class="vector-plane" viewBox="0 0 460 210" role="img" aria-labelledby="c0602-svg-title c0602-svg-desc">
+<title id="c0602-svg-title">Five document format boxes, each with its own central difficulty, converging through format-specific parsers into one raw-text output</title>
+<desc id="c0602-svg-desc">Five labeled boxes -- PDF, HTML, DOCX, XLSX, Markdown -- each carry a short difficulty label. Arrows lead from each into a shared box labeled format-specific parser, then down into a highlighted output box labeled raw text out, no cleaning yet.</desc>
+<g font-size="8.5" text-anchor="middle">
+<rect x="6" y="30" width="84" height="46" fill="#fff" stroke="#8a978f"/><text x="48" y="46" fill="#14241f" font-size="10">PDF</text><text x="48" y="60" font-size="7.5" fill="#5c6a63">positioned</text><text x="48" y="70" font-size="7.5" fill="#5c6a63">glyphs, no text</text>
+<rect x="96" y="30" width="84" height="46" fill="#fff" stroke="#8a978f"/><text x="138" y="46" fill="#14241f" font-size="10">HTML</text><text x="138" y="60" font-size="7.5" fill="#5c6a63">structure</text><text x="138" y="70" font-size="7.5" fill="#5c6a63">buried in markup</text>
+<rect x="186" y="30" width="84" height="46" fill="#fff" stroke="#8a978f"/><text x="228" y="46" fill="#14241f" font-size="10">DOCX</text><text x="228" y="60" font-size="7.5" fill="#5c6a63">zipped OOXML,</text><text x="228" y="70" font-size="7.5" fill="#5c6a63">versioned</text>
+<rect x="276" y="30" width="84" height="46" fill="#fff" stroke="#8a978f"/><text x="318" y="46" fill="#14241f" font-size="10">XLSX</text><text x="318" y="60" font-size="7.5" fill="#5c6a63">tabular grid,</text><text x="318" y="70" font-size="7.5" fill="#5c6a63">not prose</text>
+<rect x="366" y="30" width="84" height="46" fill="#fff" stroke="#8a978f"/><text x="408" y="46" fill="#14241f" font-size="10">Markdown</text><text x="408" y="60" font-size="7.5" fill="#5c6a63">near-clean,</text><text x="408" y="70" font-size="7.5" fill="#5c6a63">syntax markers</text>
+</g>
+<line x1="48" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="138" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="228" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="318" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<line x1="408" y1="76" x2="230" y2="112" stroke="#14241f" stroke-width="1.5"/>
+<rect x="130" y="114" width="200" height="30" fill="#fff" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="133" font-size="9" text-anchor="middle" fill="#14241f">FORMAT-SPECIFIC PARSER · one tool per format</text>
+<line x1="230" y1="144" x2="230" y2="168" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0602)"/>
+<defs><marker id="arrow0602" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="140" y="170" width="180" height="30" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="189" font-size="9" text-anchor="middle" fill="#14241f">RAW TEXT OUT — not cleaned yet</text>
+</svg>
+<figcaption>Five formats, five different reasons a naive read fails, one format-specific parser each — but every path ends at the same place: raw text, still unclean, still ahead of Concept 05.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>One difficulty, one standard tool, per format</h3>
+<table class="compare-table">
+<thead><tr><th>Format</th><th>Central difficulty</th><th>Standard tool</th></tr></thead>
+<tbody>
+<tr><td>PDF</td><td>Often just positioned glyphs on a page — no real paragraph or reading-order structure to rely on</td><td>A PDF text-extraction library (e.g. pypdf, pdfplumber, PDFMiner.six) that reads the content stream and glyph positions</td></tr>
+<tr><td>HTML</td><td>Real structure and text exist, but buried inside presentation, navigation, and boilerplate markup</td><td>An HTML/DOM parser (e.g. BeautifulSoup, lxml) that walks the tag tree and targets the real content nodes</td></tr>
+<tr><td>Word (.docx)</td><td>A structured but versioned OOXML package — a zip archive of XML parts, not a plain text file</td><td>An OOXML-aware library (e.g. python-docx) that unzips the package and reassembles paragraphs from text runs</td></tr>
+<tr><td>Excel (.xlsx)</td><td>Tabular grid data, not prose — no sentence exists until rows and columns are read together</td><td>A spreadsheet library (e.g. openpyxl, pandas) that reads cells by row and column and serializes each row as a record</td></tr>
+<tr><td>Markdown</td><td>Already close to clean text, but syntax markers (#, *, -) still need a real parser to tell heading from sentence, code from prose</td><td>A Markdown parser (e.g. Python-Markdown, markdown-it, mistune) that parses syntax into a structured tree before extracting text</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where parsing sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Sources — inventoried in Concept 01</span><i>↓</i><span class="hot">Parsing — format-specific text extraction (this concept)</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Parsing is the step that turns a cataloged source into something with the label "Documents" ever applies to at all — raw text a chunker can later cut into pieces. Nothing here decides how to cut it; that's Module 07.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Parsing distinguished from OCR, cleaning, and structured non-file sources">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Parsing a born-digital file</span><span role="cell">OCR</span><span role="cell">Every format here already has an embedded, extractable text layer; a scanned page with no text layer at all is Concept 04's separate problem, with a separate tool (an OCR engine, not a PDF text library).</span></div>
+<div role="row"><span role="cell">Raw text extraction</span><span role="cell">Cleaning / normalization</span><span role="cell">What comes out of any of today's five tools is still raw — stray whitespace, leftover boilerplate, inconsistent encoding. Fixing that is Concept 05's job, applied uniformly after parsing, not inside it.</span></div>
+<div role="row"><span role="cell">File-format parsing (this concept)</span><span role="cell">Databases, APIs, tickets, code repos</span><span role="cell">Those sources aren't files with an internal format to parse — they're queried or called. Concept 03 covers that different kind of extraction next.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A PDF is basically a text file."</b><p>It's a page-description format: positioned glyphs and drawing instructions, not paragraphs. Reading order has to be reconstructed, not assumed.</p></div>
+<div><b>"I'll decode the .docx or .xlsx bytes as text."</b><p>Both are zip archives of XML — decoding the raw bytes as characters returns the zip header's binary noise, not a single word of the document.</p></div>
+<div><b>"Markdown is just text, so I can skip a real parser."</b><p>It's close, but a blind find-and-replace on <code>#</code>, <code>*</code>, and <code>-</code> also mangles code blocks and ordinary sentences that happen to contain those characters — a real Markdown parser is still the safer standard tool.</p></div>
+<div><b>"If a PDF returns no text, run OCR right away."</b><p>First confirm the format actually lacks a text layer — many PDFs have one, and reaching for OCR (Concept 04's tool) before checking wastes effort and can be less accurate than the text that was already there.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Format-matching the Oracle RAG project's own files</h3>
+<div class="project-map">
+<div><span>PDF · HR AND POLICY DOCUMENTS</span><b>pypdf or pdfplumber extracts text before anything is chunked</b><p>Policy PDFs named in Concept 01's inventory get a PDF text-extraction pass first.</p></div>
+<div><span>HTML · INTERNAL WIKI PAGES</span><b>An HTML/DOM parser pulls the article body away from nav and boilerplate</b><p>Only the wiki's real content nodes are kept, not the surrounding site chrome.</p></div>
+<div><span>DOCX / XLSX · ONBOARDING GUIDES, BENEFITS TABLES</span><b>python-docx and openpyxl unzip and read each package directly</b><p>Word guides reassemble into paragraphs; Excel tables are read row-aware, not flattened.</p></div>
+<div><span>MARKDOWN · CODE REPOSITORY READMEs</span><b>A Markdown parser keeps heading and code-block structure intact</b><p>Repository documentation stays close to clean automatically, but still goes through a real parser.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Five difficulties, five tools</b><p>PDF's missing structure, HTML's buried structure, DOCX's zipped OOXML, XLSX's tabular grid, and Markdown's syntax markers — each with one standard tool that addresses it.</p></div>
+<div><b>Parsing is narrow on purpose</b><p>It gets raw text out of a format. It does not fix that text (Concept 05) and does not read text off an image (Concept 04).</p></div>
+<div><b>Files aren't all "just text"</b><p>DOCX and XLSX are zip archives; PDF is a page-description format — none of the three can be decoded as plain characters.</p></div>
+<div><b>Non-file sources are a different job</b><p>Databases, APIs, tickets, and code repositories don't get parsed this way — Concept 03 covers them.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why does decoding a .docx file's raw bytes as text not work?</li>
+<li>Name the one thing PDF, HTML, DOCX, and XLSX all lack that Markdown mostly already has.</li>
+<li>Why is running OCR on every PDF that returns no text not automatically the right move?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 03: Databases, APIs, tickets and code repositories</h3>
+<p>Today's five formats were all files with an internal structure to parse. The next concept covers sources that aren't files at all — queried databases, called APIs, ticket systems, and code repositories — and the different extraction approach each one needs.</p>
+<div class="beginner-memory"><b>Concept 02 is complete.</b> Continue to Concept 03, "Databases, APIs, tickets and code repositories."</div>
+<a class="button primary" href="module-06-concept-03.html">Start Concept 03 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Five formats, one difficulty and one tool each — nothing cleaned, nothing scanned</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One sentence, five failures</b><small>The same fact, opened naively in five formats, fails five different ways.</small></a>
+<a href="#b04"><span>02</span><b>The difficulty/tool table</b><small>PDF, HTML, DOCX, XLSX, Markdown — one difficulty and one standard tool each.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>OCR (Concept 04), cleaning (Concept 05), and non-file sources (Concept 03) are explicitly out of scope.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Reading-order mathematics, from-scratch code, and the Format Extraction Bench lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> define parsing narrowly → show the same sentence failing five ways → name one difficulty and one tool per format → Concept 03 opens non-file sources next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the format-parsing deep dive</b><em>Reading-order mathematics, from-scratch code, and the Format Extraction Bench lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From naming sources to opening them</h2></div></header>
+<p>Concept 01 built a source inventory and an authority rule without opening a single file. This concept opens five kinds of file, one at a time, and asks the same question of each: what stops a naive read from working, and what standard tool fixes it? The scope stays deliberately narrow — getting usable raw text out of a format that already has one. Scanned pages with no text layer at all (Concept 04) and normalizing whatever text this concept produces (Concept 05) are both explicitly out of scope here.</p>
+<div class="flow">
+<div class="flow-node">Concept 01 — source inventory and authority</div>
+<div class="flow-node hot">Concept 02 — format-specific parsing: PDF, HTML, DOCX, XLSX, Markdown</div>
+<div class="flow-node">Concept 03 — non-file sources: databases, APIs, tickets, code</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State each format's central difficulty</h3><p>In one sentence each, for PDF, HTML, DOCX, XLSX, and Markdown.</p></article>
+<article class="info-card"><span>MATCH</span><h3>Pick the standard tool for a given format</h3><p>Given a file format, name the library or tool category that addresses its specific difficulty.</p></article>
+<article class="info-card"><span>RECONSTRUCT</span><h3>Explain PDF reading-order reconstruction</h3><p>Describe, at a mechanism level, how a PDF library turns positioned glyphs back into ordered text.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate parsing from OCR and cleaning</h3><p>State why a scanned page and post-extraction cleanup are both out of this concept's scope.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's source inventory.</b> This concept assumes a catalog of sources already exists and opens what's inside five common file types from that catalog.</li>
+<li><b>Module 03's pipeline overview.</b> "Documents" was named as the pipeline's starting stage; this concept is the mechanism that actually produces a document's text.</li>
+<li><b>No mechanism from Module 05.</b> Classical retrieval's inverted indexes and scoring formulas are unrelated to getting text out of a file and are not assumed here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Five sealed boxes, five different keys</h2></div></header>
+<p>Picture five sealed boxes, each holding the same note. One box is a printed photograph of the note — you can see the words, but there's no "note" data inside, just an image of ink positions (that's closer to a scanned page than to any format in this concept, but it's the right mental picture for PDF's glyph-position problem: the words are visually present but not structurally marked as words). One box is the note taped inside a gift box full of packing paper and promotional flyers (HTML: the real note is in there, buried in everything else). Two boxes are zip-locked bags holding shredded, labeled strips that reassemble into the note only if you know the reassembly pattern (DOCX and XLSX, both zip archives of structured parts). The last box just has the note folded up with a few marks in the margin noting "this word is a heading" (Markdown) — read directly, mostly fine, except those margin marks look like part of the sentence if you don't know to treat them separately.</p>
+<div class="callout warning"><b>Analogy boundary</b>None of these five boxes is actually sealed shut with no way in — every one of them has an extractable text layer once you use the right key. A box with literally no note inside, just a photograph and nothing else, is Concept 04's OCR problem, not this concept's.</div>
+</section>
+<figure class="concept-visual" aria-labelledby="c0602-spectrum-title">
+<strong class="concept-visual-title" id="c0602-spectrum-title">VISUAL · A STRUCTURE SPECTRUM, PDF TO MARKDOWN</strong>
+<svg class="vector-plane" viewBox="0 0 460 130" role="img" aria-labelledby="c0602-spectrum-svg-title c0602-spectrum-svg-desc">
+<title id="c0602-spectrum-svg-title">A horizontal spectrum from least text structure to most, with the five formats placed along it</title>
+<desc id="c0602-spectrum-svg-desc">A left-to-right bar labeled least structure to most structure. PDF sits at the far left, HTML and DOCX and XLSX sit in the middle in that order, and Markdown sits at the far right, closest to already-clean text.</desc>
+<line x1="20" y1="60" x2="440" y2="60" stroke="#8a978f" stroke-width="2"/>
+<text x="20" y="20" font-size="9" fill="#5c6a63">LEAST TEXT STRUCTURE</text>
+<text x="440" y="20" font-size="9" text-anchor="end" fill="#5c6a63">CLOSEST TO CLEAN TEXT</text>
+<g font-size="9" text-anchor="middle">
+<circle cx="35" cy="60" r="5" fill="#14241f"/><text x="35" y="82" fill="#14241f">PDF</text>
+<circle cx="150" cy="60" r="5" fill="#14241f"/><text x="150" y="82" fill="#14241f">HTML</text>
+<circle cx="230" cy="60" r="5" fill="#14241f"/><text x="230" y="82" fill="#14241f">DOCX</text>
+<circle cx="310" cy="60" r="5" fill="#14241f"/><text x="310" y="82" fill="#14241f">XLSX</text>
+<circle cx="425" cy="60" r="5" fill="#14241f"/><text x="425" y="82" fill="#14241f">Markdown</text>
+</g>
+<text x="230" y="110" font-size="8" text-anchor="middle" fill="#5c6a63">position is illustrative, not a precise metric — every format still needs a real parser</text>
+</svg>
+<figcaption>PDF has the least built-in text structure to rely on; Markdown has the most. XLSX sits apart from a simple left-to-right ordering — it isn't "unstructured," it's structured along a different axis (rows and columns) that a linear reading-order spectrum doesn't capture well, which is exactly why it gets its own row-aware tool rather than a text-flow one.</figcaption>
+</figure>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Glyph</td><td>One rendered character with a recorded position on a PDF page</td><td>g = (char, x, y)</td></tr>
+<tr><td>Reading order</td><td>The sequence in which a human reads a page's text, top to bottom, left to right within a line</td><td>order(g₁,…,g_n)</td></tr>
+<tr><td>DOM node</td><td>One element or text node in an HTML document's parsed tree structure</td><td>n ∈ DOM(html)</td></tr>
+<tr><td>OOXML package</td><td>A zip archive containing XML parts that together represent one .docx or .xlsx document</td><td>docx = zip({document.xml, styles.xml, …})</td></tr>
+<tr><td>Cell grid</td><td>A two-dimensional array of values addressed by row and column in one spreadsheet sheet</td><td>cell(r, c)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Five branches, one shared shape</h2></div></header>
+<div class="lane-flow">
+<div><b>Detect the format</b> — a file extension or magic-byte check decides which of the five branches applies before any parsing starts.</div>
+<div><b>PDF branch</b> — read the content stream, collect each glyph's position, and sort into reading order (Section 09's rule).</div>
+<div><b>HTML branch</b> — parse into a DOM tree, then select the nodes that hold real content rather than markup, navigation, or boilerplate.</div>
+<div><b>DOCX / XLSX branch</b> — unzip the OOXML package, parse its XML parts, and reassemble either paragraph runs (DOCX) or a row-and-column grid (XLSX).</div>
+<div><b>Markdown branch</b> — parse the syntax into a structured tree, then walk it to emit text with heading levels and code blocks kept distinct from prose.</div>
+<div><b>Handoff</b> — every branch ends at the same place: raw, unclean, unchunked text, passed forward to Concept 05.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The parsing branch-point as a flowchart</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable branching diagram from file format detection to five format-specific parsers to one shared raw-text output">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Format detected</b><small>Extension or magic-byte check picks one of five branches</small></div>
+<div class="diagram-node"><b>PDF → content-stream + glyph-position parser</b><small>pypdf, pdfplumber, PDFMiner.six</small></div>
+<div class="diagram-node"><b>HTML → DOM parser</b><small>BeautifulSoup, lxml</small></div>
+<div class="diagram-node"><b>DOCX/XLSX → OOXML package parser</b><small>python-docx, openpyxl</small></div>
+<div class="diagram-node"><b>Markdown → syntax-tree parser</b><small>Python-Markdown, markdown-it, mistune</small></div>
+</div>
+</div>
+<p>Every branch is a different tool solving a different difficulty, but all five converge on the same output shape: raw text, still ahead of cleaning and chunking.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where parsing sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span class="hot">Parsing — five format-specific extractors, converging here</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept fully populates the gap between "Sources" and the pipeline's first labeled stage, "Documents" — turning five different file formats into the one shape every later stage assumes.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Reconstructing reading order from glyph coordinates</h2></div></header>
+<p>A PDF's content stream reports text chunks in whatever order the file's writer emitted them — not necessarily top-to-bottom. Each chunk c has a position (x, y) in PDF's coordinate system, where y increases upward from the page's bottom edge. Reading order is recovered by sorting on y descending first, then x ascending within chunks that share a line:</p>
+<div class="equation">key(c) = (−y_c, x_c)
+reading_order = sort ascending by key(c)</div>
+<p>Sorting by −y first means a chunk higher on the page (larger y) always sorts before one lower down; sorting by x second only matters for chunks that share a line (the same y, or within a small tolerance of it in a real implementation, since two chunks are rarely at the exact same pixel height). This is a genuinely small piece of geometry — nothing beyond a two-key sort — but it's the entire mechanism separating a PDF library's "extract text" from a naive byte read.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Un-shuffling one policy sentence by hand</h2></div></header>
+<p>Suppose a PDF's content stream emits three text chunks for one policy sentence, in this stored (non-reading) order:</p>
+<table class="worked-table">
+<thead><tr><th>Emitted order</th><th>Text</th><th>x</th><th>y</th><th>key(c) = (−y, x)</th></tr></thead>
+<tbody>
+<tr><td>1st</td><td>"Call support if unsure."</td><td>10</td><td>50</td><td>(−50, 10)</td></tr>
+<tr><td>2nd</td><td>"45 days from purchase."</td><td>140</td><td>90</td><td>(−90, 140)</td></tr>
+<tr><td>3rd</td><td>"Refund window is"</td><td>10</td><td>90</td><td>(−90, 10)</td></tr>
+</tbody>
+</table>
+<p>Sorting ascending by key(c): (−90, 10) comes first, then (−90, 140), then (−50, 10) — because −90 is smaller than −50, and between the two tied at −90, x = 10 is smaller than x = 140. That reorders the three chunks to "Refund window is" → "45 days from purchase." → "Call support if unsure.", which reads correctly as <b>"Refund window is 45 days from purchase. Call support if unsure."</b> — the emitted order was scrambled across two visual lines; the sort rule alone puts it back together.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cases: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A born-digital policy PDF</h3><p>Text layer present, glyph positions well-formed — a standard PDF text-extraction library recovers the sentence reliably.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A README.md in a code repository</h3><p>A Markdown parser separates headings, code fences, and prose correctly, keeping code blocks verbatim rather than treating them as ordinary text.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A PDF with a multi-column layout</h3><p>Two side-by-side columns can have overlapping y-ranges; a simple (−y, x) sort can interleave column text incorrectly unless the library also detects column boundaries — a real limitation of the simplified rule in Section 09, not a flaw to hide.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating an .xlsx sheet as one long paragraph</h3><p>Flattening every cell left-to-right, top-to-bottom loses which number belonged to which row — tabular data needs a row-aware tool, not a text-flow one.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Reading-order reconstruction, from scratch</h2></div></header>
+<p>This is the mechanism behind Section 09's rule, applied to Section 10's exact chunks — not a real PDF binary parser, but the same sorting logic a real one performs after it has already located each chunk's position.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · SORTING PDF TEXT CHUNKS BACK INTO READING ORDER</span>
+<pre><code>from dataclasses import dataclass
+
+@dataclass
+class TextChunk:
+    text: str
+    x: float
+    y: float   # PDF coordinates: y increases upward from the page bottom
+
+def reading_order_key(chunk: TextChunk):
+    return (-chunk.y, chunk.x)   # higher on the page first, then left to right
+
+chunks = [
+    TextChunk("Call support if unsure.", x=10,  y=50),
+    TextChunk("45 days from purchase.",  x=140, y=90),
+    TextChunk("Refund window is",        x=10,  y=90),
+]
+
+ordered = sorted(chunks, key=reading_order_key)
+sentence = " ".join(c.text for c in ordered)
+
+assert sentence == "Refund window is 45 days from purchase. Call support if unsure."
+assert ordered[0].text == "Refund window is"          # emitted 3rd, reads 1st
+
+# Edge case: two chunks on the exact same line, same y -- x alone must decide.
+tied = [TextChunk("world", x=50, y=0), TextChunk("hello", x=10, y=0)]
+assert " ".join(c.text for c in sorted(tied, key=reading_order_key)) == "hello world"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same five branches, in real libraries</h2></div></header>
+<p>PDF: pypdf and pdfplumber expose text extraction directly in Python; PDFMiner.six exposes the lower-level layout analysis both are often built on. HTML: BeautifulSoup and lxml parse markup into a DOM tree and let you select real content nodes by tag or CSS selector. DOCX: python-docx reads paragraphs and runs out of the OOXML package without you touching the zip or XML directly. XLSX: openpyxl reads cells sheet-by-sheet and row-by-row; pandas builds on libraries like it to load a sheet straight into a row-and-column table. Markdown: Python-Markdown, markdown-it, and mistune all parse Markdown's syntax into a tree before rendering or extracting text. Framework-level document loaders (LangChain, LlamaIndex — Modules 12 and 14) wrap most of these behind one common loader interface, trading some fine-grained control for a consistent call shape across formats.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Format Extraction Bench</h2></div></header>
+<div class="lab">
+<p>Pick a format, read the naive extraction result, then choose which approach actually fixes it. Reveal the lesson's answer and see whether your pick matches the standard tool for that format's central difficulty.</p>
+<div class="lab-controls" id="wgFormatControls_0602">
+<div class="control"><label for="wgFormat_0602">Format</label>
+<select id="wgFormat_0602">
+<option value="pdf">PDF — born-digital policy page</option>
+<option value="html">HTML — wiki page with navigation and ads</option>
+<option value="docx">DOCX — Word onboarding guide</option>
+<option value="xlsx">XLSX — Excel benefits table</option>
+<option value="md">Markdown — repository README</option>
+</select>
+</div>
+</div>
+<div class="context-demo" id="wgSnippetBox_0602"></div>
+<div class="lab-actions" id="wgApproachCards_0602"></div>
+<div class="lab-actions">
+<button type="button" id="wgCheck_0602">Reveal the standard fix</button>
+<button type="button" id="wgReset_0602" class="secondary">Reset my pick</button>
+</div>
+<div class="norm-readout" id="wgReadout_0602" hidden>
+<div><span>YOU PICKED</span><b id="wgPick_0602"></b></div>
+<div><span>STANDARD FIX</span><b id="wgWinner_0602"></b></div>
+</div>
+<div class="callout" id="wgVerdict_0602" hidden></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Dedicated per-format libraries vs. a unified ingestion layer</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it captures</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>Dedicated per-format library (this concept)</td><td>Direct control over one format's own extraction quirks — column layout, run reassembly, cell typing</td><td>A small number of formats, or when extraction fidelity on one format matters most</td></tr>
+<tr><td>Unified ingestion layer (e.g. framework document loaders, Unstructured-style tools)</td><td>One call shape across many formats, with format detection and library selection handled internally</td><td>A heterogeneous corpus with many format types, where consistency matters more than per-format tuning</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>EMPTY EXTRACTION</span><h3>A PDF library returns no text at all</h3><p>Usually means the page has no embedded text layer — a scanned image, not a parsing bug. That's a signal to route to Concept 04's OCR, not to retry the same library harder.</p></article>
+<article class="info-card"><span>BOILERPLATE LEAK</span><h3>HTML extraction still includes nav and ad text</h3><p>The DOM parser ran, but the wrong nodes were selected — a targeting problem, not a parser failure; the fix is selecting the actual content node, not switching tools.</p></article>
+<article class="info-card"><span>SILENT TRUNCATION</span><h3>A .docx's headers, footers, or text boxes go missing</h3><p>Many OOXML readers only walk the main document body by default — content living in headers, footers, or floating text boxes needs to be requested explicitly or it's silently dropped.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A PDF's text always appears in the order it's read visually</td><td>False — Section 10's worked example: the emitted content-stream order and the reading order are two different things, reconciled only by sorting on position.</td></tr>
+<tr><td>Since .docx/.xlsx open normally in Word/Excel, they must be plain files</td><td>False — Section 05's definitions: both are zip archives of XML parts (OOXML), never plain text underneath.</td></tr>
+<tr><td>Markdown is simple enough that regex-stripping the syntax is just as good as a real parser</td><td>False — Section 06's mechanism: a real parser tells a heading from a sentence and a code fence from prose; blind character deletion can't reliably make either distinction.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Parsing libraries are version-sensitive — a .docx saved by a newer or older version of Word, or a PDF generated by an unusual tool, can expose edge cases a library handled fine on other files; production pipelines need per-file error handling, not an assumption that one library covers every file of a given extension.</li>
+<li>Extraction throughput varies enormously by format and file size — a thousand-page PDF or a workbook with dozens of sheets can dominate an ingestion job's total runtime if parsing isn't budgeted for separately from everything after it.</li>
+<li>A parsing failure should be logged against the specific source file, not silently skipped — otherwise a gap in coverage looks identical to a gap that was never in the source inventory at all, undermining Concept 01's inventory guarantee.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't a .docx file be read correctly by decoding its raw bytes as text?</summary><div>Because .docx is a zip archive of XML parts (OOXML) — the raw bytes start with a zip header and compressed data, not characters, so decoding them as text returns binary noise rather than any of the document's words.</div></details>
+<details class="quiz"><summary>In key(c) = (−y_c, x_c), what does sorting by −y first accomplish?</summary><div>It puts chunks higher on the page (larger y, since PDF's y-axis increases upward) before chunks lower on the page, recovering top-to-bottom reading order before x breaks ties within the same line.</div></details>
+<details class="quiz"><summary>Why isn't jumping straight to OCR the right response to a PDF returning no extracted text?</summary><div>An empty extraction usually means there's no text layer at all — worth confirming first, since if a text layer does exist, a text-extraction library will recover it more accurately and cheaply than OCR would.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A team's source inventory lists: a signed contract as a PDF, a product spec as a Confluence-exported HTML page, a job description as a .docx, a pricing table as a .xlsx, and a setup guide as a README.md. For each, name its central parsing difficulty in one sentence and name one standard tool that addresses it. Then explain, for the pricing table specifically, why simply concatenating every cell into one string would produce a worse result than a row-aware read.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Contract (PDF): positioned glyphs, no guaranteed reading order — pypdf or pdfplumber. Product spec (HTML): real content buried in exported markup and navigation — BeautifulSoup or lxml. Job description (.docx): zipped OOXML with text split across runs — python-docx. Pricing table (.xlsx): tabular grid, not prose — openpyxl or pandas. Setup guide (.md): near-clean text with syntax markers — a Markdown parser like Python-Markdown or mistune. For the pricing table: concatenating every cell in reading order produces a flat string with no row/column relationship, so a price and the product it belongs to become ambiguous the moment there's more than one row — a row-aware read keeps each row's cells together as one record instead.</div>
+</details>
+<p>Teach-back: explain, in your own words, why "it opens fine in Word or Excel" does not mean a .docx or .xlsx file is a plain text file underneath.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Format-specific parsing</h3><ul><li><b>PDF:</b> positioned glyphs, no structure — a PDF text-extraction library reconstructs reading order</li><li><b>HTML:</b> structure buried in markup — a DOM parser targets real content nodes</li><li><b>DOCX/XLSX:</b> zipped OOXML — python-docx / openpyxl unzip and reassemble</li><li><b>Markdown:</b> near-clean text — a real parser still separates syntax from prose</li></ul></div>
+<div><h3>Memorable example</h3><p>A PDF's content stream can emit "Call support if unsure." before "Refund window is" — sorting by (−y, x) alone puts the sentence back in the order a human actually reads it.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the central parsing difficulty of PDF, HTML, and Excel in one sentence each.</summary><div>PDF: text exists only as positioned glyphs with no guaranteed reading order. HTML: real text is present but interleaved with presentation and boilerplate markup. Excel: content is a two-dimensional grid, not prose, so no sentence exists until rows and columns are read together.</div></details>
+<details class="quiz"><summary>Why does treating .docx and .xlsx as plain text files fail, specifically?</summary><div>Both formats are Office Open XML packages — zip archives containing XML parts — so the file's raw bytes begin with a zip header and compressed data, never with readable document text.</div></details>
+<details class="quiz"><summary>A teammate says "Markdown doesn't need a real parser, it's already basically plain text." What's the flaw?</summary><div>Markdown's syntax markers (#, *, -, code fences) carry meaning that naive string operations can't reliably separate from ordinary text — a real parser is what correctly tells a heading from a sentence and preserves a code block's verbatim content.</div></details>
+<details class="quiz"><summary>Design question: a PDF has two side-by-side columns. Why can Section 09's simple (−y, x) sort rule fail here, and what would a more robust extractor need to add?</summary><div>Two columns can have overlapping y-ranges, so sorting purely by (−y, x) can interleave text from both columns line by line instead of reading one full column before the other; a more robust extractor needs column-boundary detection (grouping chunks by x-range first) before applying the reading-order sort within each column.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/PDF"><b>PDF — Wikipedia</b><br><span>Describes PDF as a fixed-layout, page-description format built on positioned content rather than a structured-text format, the basis for this concept's reading-order reconstruction problem.</span></a>
+<a href="https://en.wikipedia.org/wiki/HTML"><b>HTML — Wikipedia</b><br><span>Covers HTML's markup structure and DOM tree model, the basis for distinguishing real content nodes from presentation and boilerplate markup in Section 06's HTML branch.</span></a>
+<a href="https://en.wikipedia.org/wiki/Office_Open_XML"><b>Office Open XML — Wikipedia</b><br><span>Documents the zip-based, XML-part structure shared by .docx and .xlsx, the exact fact behind this concept's "not a plain text file" difficulty for both formats.</span></a>
+<a href="https://en.wikipedia.org/wiki/Markdown"><b>Markdown — Wikipedia</b><br><span>Describes Markdown's design goal of remaining readable as plain text while still carrying structural syntax, the basis for this concept's "near-clean, but still needs a real parser" framing.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 · COMPLETE</span>
+<h3>Five formats parsed in principle — non-file sources open next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can name each format's difficulty and standard tool without looking back at Section 04's table. Concept 03, "Databases, APIs, tickets and code repositories," opens this module's non-file extraction work.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-03.html">Start Concept 03 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 03, Databases, APIs, tickets and code repositories.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 02 · Complete</p>
+<a href="../index.html">← Back to home</a>
+</footer>
+</body>
+</html>

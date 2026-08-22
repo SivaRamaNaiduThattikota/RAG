@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 03 named sparse and dense retrieval as two separate families but attached no score to either. This concept gives the sparse mechanism its first two real numbers, kept deliberately separate: term frequency (how often a term appears in one document) and inverse document frequency (how rare that term is across the whole corpus). No combined formula yet -- that is Concept 05's job.">
+<title>Term frequency and inverse document frequency — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 04</p>
+<h1>How often here.<br><em>How rare everywhere.</em></h1>
+<p class="lesson-lead">Concept 03 named sparse and dense retrieval as two separate families but gave neither one a score — Concept 02's postings lists could only say a document contains a term, never how strongly. This concept gives the sparse mechanism its first two real numbers, introduced one at a time and kept deliberately separate: <b>term frequency (TF)</b> counts how many times a term appears inside one specific document — a local, per-document count. <b>Inverse document frequency (IDF)</b> measures how rare a term is across the whole corpus — a single, corpus-wide number attached to the term itself, identical no matter which document you look at. Neither number is combined with the other yet — Concept 05 multiplies them together into the TF-IDF formula.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's postings lists (document frequency is just their length) and Concept 03's sparse-versus-dense naming — both cited directly, nothing re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute term frequency and inverse document frequency by hand for one term on one small corpus, and explain what each number means completely on its own</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 03 named sparse and dense retrieval as two families and compared them, but attached no score to either. This concept gave the sparse mechanism its first two real numbers — term frequency and inverse document frequency — computed and explained completely separately, with no combined formula yet.</p>
+<b>4 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One count per document. One number per term.</h2>
+</div>
+<p>Every idea in this concept reduces to a single question: does this number describe one document, or does it describe a term across the whole corpus? TF answers the first question. IDF answers the second. Keeping that scope straight is the entire lesson.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two words for two different questions</h3>
+<div class="mental-compare">
+<div><span>TERM FREQUENCY (TF)</span><p>How many times does this term appear inside this one document? A per-document count — it changes from document to document, even for the same term.</p></div>
+<div><span>INVERSE DOCUMENT FREQUENCY (IDF)</span><p>How rare is this term across the entire corpus? A single per-term number, computed once for the whole corpus, identical no matter which document is being scored.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> TF asks "how much, here." IDF asks "how rare, everywhere." Different scope, different question, both about the same term.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 02's postings lists could only say "yes" or "no"</h3>
+<p>Concept 02's inverted index tells you which documents contain a term — a membership fact, nothing more. Concept 03 named sparse retrieval as a family without giving it any way to prefer one matching document over another. This concept exists to attach the first two real numbers to that same sparse mechanism: how strongly a term shows up in one document, and how much information that term actually carries across the corpus as a whole. Neither number ranks anything by itself yet — Concept 05 is where they finally combine into a single score.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Five support tickets, one term at a time</h3>
+<p>A small corpus of five support tickets (N = 5):</p>
+<div class="context-demo">
+<div><span>T1</span><p>"my order is late and my order never arrived"</p></div>
+<div><span>T2</span><p>"please refund my order immediately"</p></div>
+<div><span>T3</span><p>"the refund was processed but the refund amount is wrong"</p></div>
+<div><span>T4</span><p>"where is my order confirmation email"</p></div>
+<div><span>T5</span><p>"i need help resetting my password"</p></div>
+</div>
+<p>Term frequency, per document, for "order": T1 = 2, T2 = 1, T3 = 0, T4 = 1, T5 = 0 — five different numbers for one term, because TF is local to each document. Inverse document frequency, for the whole corpus, for "order": 3 of the 5 tickets contain it at all, so idf("order") = ln(5/3) ≈ 0.51 — <i>one</i> number, and it would stay exactly 0.51 whether you're scoring T1, T4, or even T3, which doesn't contain "order" at all.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0504-beginner-visual-title">
+<strong class="concept-visual-title" id="c0504-beginner-visual-title">VISUAL · ONE TERM, TWO SCOPES</strong>
+<svg class="vector-plane" viewBox="0 0 460 200" role="img" aria-labelledby="c0504-svg-title c0504-svg-desc">
+<title id="c0504-svg-title">One term branching into a per-document term-frequency count and a single per-corpus inverse document frequency value</title>
+<desc id="c0504-svg-desc">The term "order" feeds two separate computations. The term-frequency branch counts occurrences separately inside each of five documents: T1 has 2, T2 has 1, T3 has 0, T4 has 1, T5 has 0. The inverse document frequency branch produces exactly one number for the whole corpus, the natural log of 5 over 3, which is about 0.51 -- the same value no matter which document is being scored.</desc>
+<text x="80" y="18" font-size="9" text-anchor="middle" fill="#5c6a63">TERM: "order", inside one document</text>
+<rect x="20" y="26" width="120" height="26" fill="#fff" stroke="#8a978f"/><text x="80" y="43" font-size="9" text-anchor="middle" fill="#14241f">count inside each document</text>
+<line x1="80" y1="52" x2="80" y2="72" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0504a)"/>
+<defs><marker id="arrow0504a" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="10" y="76" width="140" height="30" fill="#a7d97a" stroke="#14241f"/><text x="80" y="95" font-size="9.5" text-anchor="middle" fill="#14241f">TF: per-document count</text>
+<text x="80" y="122" font-size="9" text-anchor="middle" fill="#14241f">T1=2, T2=1, T3=0, T4=1, T5=0</text>
+<text x="330" y="18" font-size="9" text-anchor="middle" fill="#5c6a63">TERM: "order", across the whole corpus</text>
+<rect x="270" y="26" width="120" height="26" fill="#fff" stroke="#8a978f"/><text x="330" y="43" font-size="9" text-anchor="middle" fill="#14241f">count documents containing it</text>
+<line x1="330" y1="52" x2="330" y2="72" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0504b)"/>
+<defs><marker id="arrow0504b" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="255" y="76" width="150" height="30" fill="#7ab8d9" stroke="#14241f"/><text x="330" y="95" font-size="9.5" text-anchor="middle" fill="#14241f">IDF: one per-corpus value</text>
+<text x="330" y="122" font-size="9.5" text-anchor="middle" fill="#14241f">ln(5/3) ≈ 0.51, same for every document</text>
+<text x="230" y="160" font-size="8.5" text-anchor="middle" fill="#5c6a63">TF changes from document to document; IDF never does — it belongs to the term, not to any one document</text>
+<text x="230" y="176" font-size="8.5" text-anchor="middle" fill="#5c6a63">Concept 05 is the first place these two numbers get multiplied together</text>
+</svg>
+<figcaption>The same term, two entirely different computations. TF (green) produces five separate counts, one per document. IDF (blue) produces exactly one number, describing the term's rarity across the corpus as a whole.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Counting inside one document, counting across all of them</h3>
+<div class="context-demo">
+<div><span>TERM FREQUENCY</span><p>tf(t, d) — tokenize document d, then count how many of its tokens equal term t. A plain occurrence count, nothing more: no ranking, no comparison to any other document yet.</p></div>
+<div><span>DOCUMENT FREQUENCY</span><p>df(t) — the number of documents in the corpus containing t at least once. This is exactly the length of Concept 02's postings list for t: no new counting mechanism needed, the inverted index already has this number sitting in it.</p></div>
+<div><span>INVERSE DOCUMENT FREQUENCY</span><p>idf(t) = log(N / df(t)), where N is the total number of documents. Dividing by df and then taking a log turns "appears in many documents" into "small number" and "appears in few documents" into "large number" — the inverse relationship the name promises.</p></div>
+<div><span>WHAT'S NOT HAPPENING YET</span><p>tf and idf are not multiplied together, added, or compared to each other anywhere in this concept. Concept 05 is the first place that combination happens.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Two new numbers, still inside the same box</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — postings now carry a per-document TF count; each term also carries one corpus-wide IDF value</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Nothing moves to a new box. Concept 02's inverted index simply gets richer: instead of a postings list that only records <i>which</i> documents contain a term, each posting can now also record <i>how many times</i>, and the term itself can carry a single corpus-wide rarity value alongside it.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs this concept depends on keeping separate</h3>
+<div class="distinction-table" role="table" aria-label="Term frequency versus document frequency, per-document versus per-corpus scope, presence versus count, and this concept's separate signals versus Concept 05's combined formula">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Term frequency (tf)</span><span role="cell">Document frequency (df)</span><span role="cell">tf counts occurrences of a term inside one document; df counts how many documents contain that term at all, at least once. "Order" occurring twice in T1 is a tf fact about T1 alone; "order" occurring in 3 of 5 tickets is a df fact about the whole corpus.</span></div>
+<div role="row"><span role="cell">Inverse document frequency (idf)</span><span role="cell">A property of one document</span><span role="cell">idf is computed once per term, from N and df alone — it never looks at any single document's content, and it comes out identical for every document in the corpus.</span></div>
+<div role="row"><span role="cell">A raw occurrence count</span><span role="cell">A ranking</span><span role="cell">Knowing tf("order", T1) = 2 says nothing yet about whether T1 outranks T2 — Concepts 04-06 build the ranking on top of these raw numbers, they aren't a ranking by themselves.</span></div>
+<div role="row"><span role="cell">This concept's two separate numbers</span><span role="cell">Concept 05's TF-IDF formula</span><span role="cell">This concept computes tf and idf independently and never multiplies them. Concept 05 specifically is where tf(t,d) × idf(t) becomes one combined weight.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A term appearing twice must mean the document is twice as relevant."</b><p>It might just mean the document is longer, or repeats itself stylistically. Raw tf treats every document as if length didn't matter — Concept 07's document-length normalization is what eventually corrects for that, not this concept.</p></div>
+<div><b>"IDF is a property of a document."</b><p>It's a property of a term, computed once from the whole corpus. Every document gets the exact same idf value for the same term — only tf varies by document.</p></div>
+<div><b>"You can rank documents using idf alone."</b><p>You can't — idf doesn't vary across documents for a fixed term, so sorting documents by idf alone produces no differentiation between them at all. Ranking needs a per-document number (tf) too.</p></div>
+<div><b>"A term with document frequency zero just gets a very high idf."</b><p>It gets an undefined one — log(N / 0) is a division by zero before the log even runs. Section 16 covers this failure mode directly.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lives in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT</span><b>Term and document statistics already tracked internally</b><p>Oracle Text's index structures maintain per-term occurrence and document-frequency statistics as part of building the index itself (Module 10, Concept 07, forward reference) — this concept names exactly what those numbers are and why they're kept.</p></div>
+<div><span>SUPPORT-TICKET SEARCH</span><b>Rare words carry the signal, common words don't</b><p>In a ticket corpus like b03's, a rare term like "password" separates one ticket from the rest far more sharply than a common word like "my" ever could — the direct intuition idf is built to capture.</p></div>
+<div><span>TEXT-TO-SQL</span><b>A frequency count is a deterministic computation, not a retrieval or a generation step</b><p>Counting occurrences of a token is exact arithmetic over stored text — worth naming precisely, since this course keeps retrieval, generation, and deterministic calculation in clearly separate boxes.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Term frequency</b><p>tf(t, d) = how many times term t appears inside document d. A per-document count, changes document to document.</p></div>
+<div><b>Inverse document frequency</b><p>idf(t) = log(N / df(t)). A single per-term number, shared by every document in the corpus.</p></div>
+<div><b>Why they're kept separate here</b><p>Neither number ranks anything alone; combining them is Concept 05's job specifically, not this one's.</p></div>
+<div><b>The edge case to remember</b><p>df(t) = 0 makes idf undefined (division by zero before the log). df(t) = N makes idf exactly zero.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why does it make sense that tf can differ across all five tickets in b03, while idf for that same term cannot?</li>
+<li>Using b03's numbers, which single ticket would "password" single out most sharply, and why does its low document frequency make that possible?</li>
+<li>If a hypothetical term appeared in all 5 of b03's tickets, what would its idf equal, and what does that value say about how useful the term is for telling tickets apart?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 05: TF-IDF derivation</h3>
+<p>This concept computed term frequency and inverse document frequency as two independent numbers and never multiplied them. The next concept does exactly that: deriving tf-idf(t, d) = tf(t, d) × idf(t) as a single combined weight per term per document, and showing why that specific combination — not addition, not either number alone — is the one classical retrieval actually uses.</p>
+<div class="beginner-memory"><b>Concept 04 is complete.</b> Continue to Concept 05, "TF-IDF derivation."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two numbers, two scopes, no combination yet.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Two questions</b><small>How much, in this document — versus how rare, across all of them.</small></a>
+<a href="#b04"><span>02</span><b>Two counts</b><small>tf from tokenizing one document; df reused straight from Concept 02's postings-list length.</small></a>
+<a href="#b07"><span>03</span><b>Not combined yet</b><small>Concept 05 multiplies tf and idf together — this concept only defines each one alone.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, from-scratch code for both numbers, and the Term Frequency / Document Frequency Explorer lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> define term frequency alone → define document frequency and inverse document frequency alone → show why df = 0 and df = N are both meaningful edge cases → Concept 05 finally multiplies the two together.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the term frequency / inverse document frequency deep dive</b><em>Formal notation, from-scratch code for both numbers, and the Term Frequency / Document Frequency Explorer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first two numbers attached to a sparse match</h2></div></header>
+<p>Concept 02 built the inverted index. Concept 03 named the sparse mechanism it belongs to, alongside dense retrieval, without scoring either. This concept gives sparse matching its first two real numbers — term frequency and inverse document frequency — introduced separately, on purpose, so each one's intuition is clear before Concept 05 combines them.</p>
+<div class="flow">
+<div class="flow-node">Concept 02 — postings lists, presence only</div>
+<div class="flow-node">Concept 03 — sparse named, still unscored</div>
+<div class="flow-node hot">Concept 04 — tf and idf, defined separately</div>
+<div class="flow-node">Concept 05 — tf × idf, combined</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COMPUTE</span><h3>Calculate tf(t, d) by hand for a small document</h3><p>A plain occurrence count from tokenized text — no formula beyond counting.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Calculate df(t) and idf(t) by hand for a small corpus</h3><p>Reuse a postings-list length for df; apply log(N / df) for idf.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>State why idf is identical across every document for one term</h3><p>It never inspects any single document's content — only N and df feed it.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what this concept does not build</h3><p>No combined tf-idf weight, no length normalization, no ranking formula — all later concepts.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02 — postings lists.</b> A postings list's length is already this concept's document frequency; nothing new needs to be built to get df.</li>
+<li><b>Concept 03 — sparse versus dense.</b> This concept scores the sparse mechanism specifically; dense retrieval's cosine similarity is untouched by anything here.</li>
+<li><b>Module 04, Concept 06 — logarithms.</b> That concept already established that taking a log is monotonic — it never changes which of two values was larger. This concept reuses that fact directly: the choice of log base for idf doesn't change which term ranks as rarer than another.</li>
+<li><b>Out of scope here:</b> the combined tf-idf weight and its derivation (Concept 05); BM25 (Concept 06); document-length normalization (Concept 07).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A word count inside one essay, versus how many essays use that word at all</h2></div></header>
+<p>Term frequency behaves like counting how many times a specific word shows up inside one essay you're holding — a fact about that essay alone, unrelated to any other essay in the stack. Inverse document frequency behaves like asking, across an entire stack of essays, how many of them use that word at all — if nearly every essay in the stack says "the," that word tells you nothing about which essay is about what; if only one essay says "photosynthesis," that word is a strong clue pointing straight at that one essay.</p>
+<div class="callout warning"><b>Analogy boundary</b>The essay-stack analogy explains why rarity carries information, but it doesn't explain the exact formula — log(N / df) specifically, not some other rarity measure — that's Section 05 and Section 09's job, not the intuition's.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Corpus size</td><td>Total number of documents in the corpus</td><td>N = |corpus|</td></tr>
+<tr><td>Term frequency</td><td>Number of times term t occurs inside document d</td><td>tf(t, d), a non-negative integer, one value per (term, document) pair</td></tr>
+<tr><td>Document frequency</td><td>Number of documents containing t at least once</td><td>df(t) = &#124;{ d &#8712; corpus : tf(t, d) &gt; 0 }&#124;, equal to Concept 02's postings-list length for t</td></tr>
+<tr><td>Inverse document frequency</td><td>A single per-term rarity value computed from N and df(t) alone</td><td>idf(t) = log(N / df(t)), one value per term, shared by every document</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Counting inside one document, then counting across all of them</h2></div></header>
+<div class="lane-flow">
+<div><b>Corpus arrives —</b> five support tickets, T1 through T5, N = 5 (b03's exact text).</div>
+<div><b>Tokenize each document —</b> split each ticket's text into individual terms, exactly as Concept 02 already does to build postings lists.</div>
+<div><b>Count occurrences per document (tf) —</b> for one chosen term, count how many of that document's tokens equal it. Repeat separately for every document — five separate counts.</div>
+<div><b>Count documents containing the term (df) —</b> instead of counting occurrences, count how many documents have at least one occurrence. This is just the length of the term's postings list.</div>
+<div><b>Divide and take a log (idf) —</b> idf(t) = log(N / df(t)) — one division, one log, done once per term, not once per document.</div>
+</div>
+<figure class="concept-visual" aria-labelledby="c0504-idf-title">
+<strong class="concept-visual-title" id="c0504-idf-title">VISUAL · IDF RISES AS DOCUMENT FREQUENCY FALLS</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0504-idf-svg-title c0504-idf-svg-desc">
+<title id="c0504-idf-svg-title">A horizontal bar chart showing inverse document frequency increasing as document frequency falls, for four terms in the five-ticket corpus</title>
+<desc id="c0504-idf-svg-desc">"my" appears in 4 of 5 documents and has the lowest inverse document frequency, about 0.22. "order" appears in 3 of 5 and has idf about 0.51. "refund" appears in 2 of 5 and has idf about 0.92. "password" appears in only 1 of 5 and has the highest idf, about 1.61. Rarer terms across the corpus get a larger inverse document frequency weight, with N fixed at 5 throughout.</desc>
+<text x="10" y="16" font-size="9.5" fill="#14241f">TERM (df out of N=5)</text>
+<text x="450" y="16" font-size="9.5" text-anchor="end" fill="#14241f">idf = ln(N/df)</text>
+<text x="10" y="42" font-size="10" fill="#14241f">"my" (df=4)</text>
+<rect x="140" y="32" width="22" height="18" fill="#a7d97a" stroke="#14241f"/><text x="172" y="45" font-size="10" fill="#14241f">0.22</text>
+<text x="10" y="82" font-size="10" fill="#14241f">"order" (df=3)</text>
+<rect x="140" y="72" width="51" height="18" fill="#a7d97a" stroke="#14241f"/><text x="201" y="85" font-size="10" fill="#14241f">0.51</text>
+<text x="10" y="122" font-size="10" fill="#14241f">"refund" (df=2)</text>
+<rect x="140" y="112" width="92" height="18" fill="#7ab8d9" stroke="#14241f"/><text x="242" y="125" font-size="10" fill="#14241f">0.92</text>
+<text x="10" y="162" font-size="10" fill="#14241f">"password" (df=1)</text>
+<rect x="140" y="152" width="161" height="18" fill="#7ab8d9" stroke="#14241f"/><text x="311" y="165" font-size="10" fill="#14241f">1.61</text>
+<text x="230" y="185" font-size="8.5" text-anchor="middle" fill="#5c6a63">Same corpus (N=5) throughout — only document frequency changes, and idf always moves in the opposite direction</text>
+</svg>
+<figcaption>Four terms from b03's corpus, ranked by document frequency. As df falls from 4 down to 1, idf climbs from 0.22 up to 1.61 — the "inverse" in the name is this exact relationship, made visible.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One term, two branches, two different outputs</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram of a term branching into a term-frequency path and a document-frequency/inverse-document-frequency path">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Term + corpus</b><small>identical input to both computations</small></div>
+<div class="diagram-node hub-center"><b>TF path</b><small>tokenize document → count occurrences → one number per document</small></div>
+<div class="diagram-node"><b>IDF path</b><small>count containing documents (df) → divide into N → log → one number per term</small></div>
+</div>
+</div>
+<p>Both branches start from the same term and the same corpus, but they produce outputs of a completely different shape — a list of per-document counts on one side, a single scalar on the other. Concept 05 is the first place those two differently-shaped outputs get combined, once per (term, document) pair.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where both numbers sit in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Inverted index — postings carry per-document TF; each term carries one corpus-wide IDF</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>The "Retrieval" box's sparse path hasn't gained a new stage — Concept 02's inverted index is simply carrying two more numbers than it did before: a count alongside each posting, and a rarity value alongside each term.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Two formulas, still no multiplication between them</h2></div></header>
+<div class="equation">tf(t, d)  = count of term t among document d's tokens             -- one integer per (term, document) pair
+df(t)     = |{ d in corpus : tf(t, d) > 0 }|                       -- Concept 02's postings-list length for t
+idf(t)    = log( N / df(t) )                                        -- one real number per term, shared by every document</div>
+<p>The log base is a free choice — natural log, log base 10, log base 2 — and it doesn't change which term ranks as rarer than another, because log is monotonically increasing (Module 04, Concept 06 already established this exact fact for softmax scores; it applies identically here). This lesson uses natural log (ln) throughout its worked numbers. Two boundary values worth memorizing: if df(t) = N (the term is in every document), idf(t) = log(1) = 0 exactly — zero weight. If df(t) = 0 (the term is in no document), N / df(t) is a division by zero and idf is undefined, not simply "very large."</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>"refund," computed completely by hand</h2></div></header>
+<p>Using b03's five tickets: tf("refund", T1) = 0, tf("refund", T2) = 1, tf("refund", T3) = 2, tf("refund", T4) = 0, tf("refund", T5) = 0.</p>
+<table class="worked-table">
+<thead><tr><th>Step</th><th>Quantity</th><th>Value</th><th>How it was found</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>df("refund")</td><td>2</td><td>Two tickets have tf &gt; 0 for "refund": T2 and T3.</td></tr>
+<tr><td>2</td><td>N</td><td>5</td><td>Total tickets in the corpus.</td></tr>
+<tr><td>3</td><td>N / df</td><td>2.5</td><td>5 ÷ 2.</td></tr>
+<tr><td>4</td><td>idf("refund")</td><td>≈ 0.9163</td><td>ln(2.5), independently recomputed for this lesson.</td></tr>
+</tbody>
+</table>
+<p>Notice tf("refund", T3) = 2 is the single largest per-document count in this example, while idf("refund") ≈ 0.9163 is one fixed number that would apply equally to T1, T4, or T5 even though none of them contain "refund" at all. That asymmetry — a rich per-document signal next to a flat per-term one — is exactly what Concept 05 combines.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT — TF</span><h3>A long support thread that keeps repeating "refund"</h3><p>A ticket that says "refund" five times across a long back-and-forth is plausibly more about a refund than one that mentions it once in passing — tf captures that intuition directly.</p></article>
+<article class="info-card"><span>CLEAN FIT — IDF</span><h3>Distinguishing "password" from "my" in b03's corpus</h3><p>"my" appears in 4 of 5 tickets and carries almost no discriminating power; "password" appears in exactly 1 and immediately points at a single ticket — idf quantifies that gap precisely.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A term present in literally every document</h3><p>If df(t) = N, idf(t) = log(N/N) = log(1) = 0 exactly — a term that appears everywhere gets exactly zero weight once Concept 05 multiplies it against tf, no matter how large tf is for any one document.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Comparing raw tf across two documents of very different length</h3><p>tf("order", T1) = 2 versus tf("order", T4) = 1 looks like T1 cares more about orders — but that comparison ignores document length entirely, which is precisely why Concept 07 exists as its own concept rather than being folded in here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Term frequency and inverse document frequency, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+tickets = {
+    "T1": "my order is late and my order never arrived",
+    "T2": "please refund my order immediately",
+    "T3": "the refund was processed but the refund amount is wrong",
+    "T4": "where is my order confirmation email",
+    "T5": "i need help resetting my password",
+}
+
+def term_frequency(term, text):
+    return text.split(" ").count(term)
+
+def document_frequency(term, corpus):
+    return sum(1 for text in corpus.values() if term in text.split(" "))
+
+def inverse_document_frequency(term, corpus):
+    df = document_frequency(term, corpus)
+    if df == 0:
+        return None  # undefined: N / 0 before the log even runs -- guard, don't crash
+    return math.log(len(corpus) / df)
+
+# tf varies document by document, even for the same term.
+assert term_frequency("order", tickets["T1"]) == 2
+assert term_frequency("order", tickets["T2"]) == 1
+assert term_frequency("order", tickets["T3"]) == 0
+
+# df and idf are single numbers describing the whole corpus.
+assert document_frequency("refund", tickets) == 2
+idf_refund = inverse_document_frequency("refund", tickets)
+assert abs(idf_refund - 0.9163) < 0.001          # matches Section 10's hand computation
+
+# Edge case: a term absent from every document has no defined idf here.
+assert inverse_document_frequency("shipping", tickets) is None
+
+# Boundary case: a term present in every document gets exactly zero weight.
+assert math.log(5 / 5) == 0.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where production systems keep these exact two numbers</h2></div></header>
+<p>Apache Lucene (and Elasticsearch/OpenSearch on top of it) stores per-term document frequency directly inside its index structures and computes idf from it at query time as one component of its scoring function. Scikit-learn's <code>TfidfVectorizer</code> computes term frequency and document frequency the same way this concept does, then applies a smoothed variant of idf — commonly log((1+N)/(1+df)) + 1 — specifically to avoid the df = 0 undefined case Section 11 and Section 16 both flag; that smoothing detail is a real-world refinement worth knowing exists, not a formula this concept derives.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Term Frequency / Document Frequency Explorer</h2></div></header>
+<div class="lab">
+<p>Pick a term from b03's five-ticket corpus. The explorer computes its real per-document term-frequency counts, its document frequency, and its inverse document frequency live — including the one term that never appears anywhere, so you can see the df = 0 case break the formula on purpose.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgTerm_0504">Term</label>
+<select id="wgTerm_0504"></select></div>
+</div>
+<div class="lab-actions">
+<button type="button" id="wgRunExplorer_0504">Compute TF and IDF</button>
+<button type="button" id="wgResetExplorer_0504" class="secondary">Reset</button>
+</div>
+<div class="prob-bars" id="wgBars_0504"></div>
+<div class="norm-readout">
+<div><span>SUM OF TF ACROSS CORPUS</span><b id="wgSum_0504">—</b></div>
+<div><span>DOCUMENT FREQUENCY (df)</span><b id="wgDf_0504">—</b></div>
+<div><span>CORPUS SIZE (N)</span><b id="wgN_0504">—</b></div>
+<div><span>IDF = ln(N / df)</span><b id="wgIdf_0504">—</b></div>
+</div>
+<div class="callout" id="wgVerdictExplorer_0504">Pick a term and press "Compute TF and IDF" to see its per-document counts and its single corpus-wide IDF value.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Presence, count, and rarity — three different amounts of information</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Signal</th><th>What it tells you</th><th>What it can't tell you alone</th></tr></thead>
+<tbody>
+<tr><td>Presence only (Concept 02/03)</td><td>Whether a term is in a document at all</td><td>How strongly, or how rare that term is elsewhere</td></tr>
+<tr><td>Term frequency alone</td><td>How many times a term repeats inside one document</td><td>Whether that term is common or rare across the corpus</td></tr>
+<tr><td>Inverse document frequency alone</td><td>How rare a term is across the whole corpus</td><td>Anything about any single document — it can't rank documents by itself</td></tr>
+<tr><td>Combined tf-idf (Concept 05, preview only)</td><td>How strongly a document uses a term the corpus considers rare</td><td>Not introduced in this concept — named here only as the destination</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNGUARDED DIVISION</span><h3>Computing idf for a term with df = 0</h3><p>N / 0 is undefined before the log even runs. Section 12's code guards against this explicitly; unguarded code either crashes or silently returns infinity, which is not a usable score.</p></article>
+<article class="info-card"><span>LENGTH BLINDNESS</span><h3>Treating tf as fair across documents of different length</h3><p>A longer document naturally accumulates higher raw counts for almost every term, independent of relevance — Concept 07's document-length normalization exists specifically to correct this, not this concept.</p></article>
+<article class="info-card"><span>RANKING BY IDF ALONE</span><h3>Trying to sort documents using only idf</h3><p>Idf is identical for every document containing (or not containing) a fixed term — sorting by it alone produces ties across every document that shares that property, because it isn't a per-document number at all.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A term appearing twice in a document is twice as relevant as one appearing once</td><td>False — tf is a raw count with no built-in notion of relevance or document length; it's an input to a later score, not a score itself.</td></tr>
+<tr><td>Idf changes depending on which document you're scoring</td><td>False — idf is computed once per term from N and df alone; it is the same number for every document in the corpus.</td></tr>
+<tr><td>A rare term automatically has a very high, well-defined idf</td><td>False in the extreme case — a term with df = 0 (absent from every document) makes idf undefined, not simply large; Section 13's smoothed variants exist to handle this in practice.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Term frequency is essentially free — it falls out of the same tokenization pass that already builds Concept 02's postings lists, with no extra corpus-wide scan required.</li>
+<li>Document frequency and idf require knowing the corpus size N and every term's df, which means adding, removing, or editing even one document shifts every existing term's idf slightly — an index-wide recomputation or incremental-update concern (Module 19, forward reference), not a one-document update.</li>
+<li>Storing a per-term idf value alongside a vocabulary of potentially millions of terms is cheap compared to storing per-document tf counts across the whole corpus — a real memory-versus-freshness trade-off production systems have to manage explicitly.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What is the difference between document frequency and term frequency?</summary><div>Term frequency counts how many times a term occurs inside one specific document. Document frequency counts how many documents in the corpus contain that term at all, regardless of how many times.</div></details>
+<details class="quiz"><summary>Why is idf the same value for every document in the corpus, for a fixed term?</summary><div>Because idf is computed only from N (corpus size) and df(t) (how many documents contain t) — it never inspects the content of any single document, so it can't vary from one document to the next.</div></details>
+<details class="quiz"><summary>What happens to idf if a term appears in every single document?</summary><div>df(t) = N, so idf(t) = log(N/N) = log(1) = 0 exactly — the term gets zero weight once combined with tf in Concept 05.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using b03's five tickets, compute tf, df, and idf by hand for the term "is." (Hint: "is" appears in T1 — "my order <b>is</b> late" — and in T4 — "where <b>is</b> my order" — and nowhere else.) State the resulting idf value, and then explain in one sentence why it comes out identical to "refund"'s idf from Section 10 even though "is" and "refund" are completely different words.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>tf("is", T1) = 1, tf("is", T4) = 1, tf("is", T2) = tf("is", T3) = tf("is", T5) = 0. df("is") = 2 (T1 and T4). N = 5. idf("is") = ln(5/2) = ln(2.5) ≈ 0.9163 — exactly the same value as "refund"'s idf from Section 10. That equality isn't a coincidence about the words themselves: idf depends only on df and N, and both "is" and "refund" happen to occur in exactly 2 of the 5 tickets, so the formula produces the identical number regardless of which two specific documents each term happens to occur in, or what the words even mean.</div>
+</details>
+<p>Teach-back: explain, in your own words, why two completely unrelated terms can share the exact same idf value, and connect that observation to Section 17's correction that idf is a property of document frequency alone, not of any word's meaning.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Term frequency and inverse document frequency</h3><ul><li><b>tf(t, d):</b> how many times term t occurs inside document d — a per-document count</li><li><b>idf(t) = log(N / df(t)):</b> how rare term t is across the whole corpus — one number per term, shared by every document</li><li><b>Key edge cases:</b> df(t) = N gives idf = 0 exactly; df(t) = 0 makes idf undefined</li><li><b>What's missing:</b> a combined weight (Concept 05) and length normalization (Concept 07) — neither exists yet</li></ul></div>
+<div><h3>Memorable example</h3><p>In a five-ticket corpus, "my" (in 4 of 5 tickets) has idf ≈ 0.22; "password" (in only 1 of 5) has idf ≈ 1.61 — same corpus, same formula, opposite ends of the rarity scale.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain term frequency and inverse document frequency to someone who has never heard either term, in under thirty seconds.</summary><div>Term frequency is how many times a word shows up in one document you're looking at. Inverse document frequency is how rare that word is across every document you have — common words score low, rare words score high, and that rarity score is the same no matter which document you check it against.</div></details>
+<details class="quiz"><summary>Why can't you rank documents using inverse document frequency alone?</summary><div>Idf doesn't vary by document for a fixed term — it's one shared number. Ranking requires something that differs per document, which is exactly what term frequency provides.</div></details>
+<details class="quiz"><summary>What breaks if you compute idf for a term that appears in zero documents, and how would you guard against it in code?</summary><div>N divided by a document frequency of zero is undefined before the log function even runs. Guard by checking df == 0 first and returning a sentinel (or skipping the term entirely) rather than letting the division execute.</div></details>
+<details class="quiz"><summary>Design question: a teammate proposes ranking retrieved documents by idf sum alone, without ever touching term frequency. What's wrong with that plan?</summary><div>Idf sum over the query terms would be identical for every document containing those terms — it carries no information about how strongly any particular document actually uses them. Without tf, every document that merely contains the terms ties for the same score, defeating the purpose of ranking at all.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/term-frequency-and-weighting-1.html"><b>Manning, Raghavan & Schütze — "Term frequency and weighting," Introduction to Information Retrieval (Stanford IR Book)</b><br><span>The canonical definition of term frequency as a per-document occurrence count, behind this concept's tf definition in Section 05.</span></a>
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/inverse-document-frequency-1.html"><b>Manning, Raghavan & Schütze — "Inverse document frequency," Introduction to Information Retrieval (Stanford IR Book)</b><br><span>The canonical derivation of idf as log(N/df), confirming this concept's formula and its corpus-wide, per-term scope.</span></a>
+<a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf"><b>Tf–idf — Wikipedia</b><br><span>General background on term frequency and inverse document frequency as the two components combined in Concept 05, cited here only for the two components separately.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 COMPLETE · CONCEPT 05 NEXT</span>
+<h3>Two numbers are defined — Concept 05 finally multiplies them together</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can state, precisely, why idf never varies by document for a fixed term. Concept 05, "TF-IDF derivation," combines tf and idf into the single weight classical retrieval actually scores with.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Term Frequency / Document Frequency Explorer ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 05, TF-IDF derivation.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 04 · Complete</p>
+<a href="module-05-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

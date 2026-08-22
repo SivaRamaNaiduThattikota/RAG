@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 04 closed the mathematics behind retrieval. Module 05 opens classical information retrieval by naming its four working parts -- corpus, document, query and relevance -- as a relationship between a fixed collection and an expressed need, before any matching mechanism is built.">
+<title>What is information retrieval? Corpora, documents, queries and relevance — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 01</p>
+<h1>What is information<br><em>retrieval, really?</em></h1>
+<p class="lesson-lead">Module 04 built the mathematics — vectors, similarity, distance, probability — that later concepts will use to score a document against a query. Before any of that scoring exists, information retrieval (IR) needs four plain words defined precisely: a <b>corpus</b> is the fixed collection you search; a <b>document</b> is one retrievable unit inside it; a <b>query</b> is the surface expression of what someone is trying to find; and <b>relevance</b> is the judgment of how well a given document actually satisfies that need. No index, no formula, no ranking yet — this concept only fixes the vocabulary Module 05 will spend the next ten concepts building mechanisms for.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First of eleven concepts opening Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Module 03's RAG pipeline and Module 04's closing synthesis — no new mechanism, only new vocabulary</b></div>
+<div><span>BEGINNER GOAL</span><b>Define corpus, document, query and relevance precisely, and tell each apart from its nearest neighbor</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You defined a corpus as the fixed collection being searched, a document as one retrievable unit inside it, a query as the surface text expressing an information need, and relevance as a judgment about a specific document-query pair — not a property of a document alone. No matching mechanism was built; that starts next concept, with the inverted index.</p>
+<b>1 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Four words, one relationship</h2>
+</div>
+<p>Every concept in this module assumes you can use these four words precisely. Get comfortable with them before Concept 02 gives you the first real data structure that acts on them.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A collection, a unit, a need, and a judgment</h3>
+<div class="mental-compare">
+<div><span>CORPUS &amp; DOCUMENT</span><p>The <b>corpus</b> is the whole fixed collection — every file, row, or chunk you're willing to search. A <b>document</b> is one retrievable unit inside it.</p></div>
+<div><span>QUERY &amp; RELEVANCE</span><p>The <b>query</b> is the text someone actually typed or asked. <b>Relevance</b> is not a property of a document by itself — it's a judgment about how well one specific document answers one specific query.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> information retrieval is the problem of finding, inside a fixed corpus, the documents that are relevant to a query — where "relevant" is a judgment call, not a lookup.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Relevance isn't an exact match — a SQL WHERE clause can't ask this question</h3>
+<p>A database query like <code>WHERE title = 'inverted index'</code> has an exact, provable answer: a row matches or it doesn't. "Which documents are relevant to <i>how do search engines answer boolean queries fast?</i>" has no such exact answer — two careful readers can disagree on whether a given document counts, and both can be reasonable. Information retrieval exists because most real information needs are judgments of degree over a large, fixed collection, not exact-match lookups over a small one — and someone still has to build a system that returns a useful answer anyway.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>An eight-document corpus, reused for the rest of this module</h3>
+<p>This corpus reappears in every concept through Concept 04's TF-IDF derivation. Eight short documents about retrieval techniques:</p>
+<div class="context-demo">
+<div><span>THE CORPUS</span><p>D1 vector search over dense embeddings · D2 sparse retrieval with an inverted index · D3 dense embeddings for semantic search · D4 keyword search using an inverted index · D5 vector index for approximate search · D6 sparse and dense retrieval combined · D7 embeddings from a neural encoder · D8 boolean search over an inverted index</p></div>
+<div><span>THE QUERY</span><p>"What technique lets you answer boolean search queries over documents quickly?"</p></div>
+<div><span>THE JUDGMENT</span><p>D8 mentions boolean search directly over an inverted index — highly relevant. D2 and D4 mention an inverted index but not boolean queries by name — partially relevant. D1, D3, D5, D6, D7 are about retrieval generally but say nothing about boolean queries or the mechanism that answers them — not relevant to this specific need.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0501-beginner-visual-title">
+<strong class="concept-visual-title" id="c0501-beginner-visual-title">VISUAL · ONE QUERY OVER A FIXED CORPUS</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0501-svg-title c0501-svg-desc">
+<title id="c0501-svg-title">A query arrow entering a corpus of eight documents, with three shaded by relevance grade</title>
+<desc id="c0501-svg-desc">The query about boolean search enters a box containing D1 through D8. D8 is shaded darkest as highly relevant, D2 and D4 are shaded lighter as partially relevant, and D1, D3, D5, D6, D7 are unshaded as not relevant to this specific query.</desc>
+<rect x="10" y="18" width="120" height="52" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="70" y="40" font-size="10" text-anchor="middle" fill="#14241f">QUERY</text>
+<text x="70" y="56" font-size="8" text-anchor="middle" fill="#14241f">boolean search?</text>
+<line x1="130" y1="44" x2="168" y2="44" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0501)"/>
+<defs><marker id="arrow0501" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="170" y="8" width="280" height="174" fill="none" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="310" y="24" font-size="9" text-anchor="middle" fill="#5c6a63">CORPUS — 8 DOCUMENTS</text>
+<g font-size="10" text-anchor="middle">
+<rect x="184" y="34" width="60" height="34" fill="#fff" stroke="#8a978f"/><text x="214" y="55" fill="#14241f">D1</text>
+<rect x="252" y="34" width="60" height="34" fill="#a7d97a" stroke="#14241f"/><text x="282" y="55" fill="#14241f">D2</text>
+<rect x="320" y="34" width="60" height="34" fill="#fff" stroke="#8a978f"/><text x="350" y="55" fill="#14241f">D3</text>
+<rect x="388" y="34" width="56" height="34" fill="#a7d97a" stroke="#14241f"/><text x="416" y="55" fill="#14241f">D4</text>
+<rect x="184" y="76" width="60" height="34" fill="#fff" stroke="#8a978f"/><text x="214" y="97" fill="#14241f">D5</text>
+<rect x="252" y="76" width="60" height="34" fill="#fff" stroke="#8a978f"/><text x="282" y="97" fill="#14241f">D6</text>
+<rect x="320" y="76" width="60" height="34" fill="#fff" stroke="#8a978f"/><text x="350" y="97" fill="#14241f">D7</text>
+<rect x="388" y="76" width="56" height="34" fill="#3aa876" stroke="#14241f"/><text x="416" y="97" fill="#fff">D8</text>
+</g>
+<text x="310" y="132" font-size="8" text-anchor="middle" fill="#5c6a63">dark green = highly relevant · light green = partially relevant · white = not relevant</text>
+<text x="310" y="150" font-size="8" text-anchor="middle" fill="#5c6a63">the corpus itself never changes — only the shading changes when the query changes</text>
+</svg>
+<figcaption>Relevance is shading applied to the same fixed corpus, one query at a time — a different query would shade an entirely different subset. Concept 02 replaces "read every box to decide" with a structure that jumps straight to the shaded ones.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What IR takes in, and what it must return</h3>
+<div class="context-demo">
+<div><span>INPUT</span><p>A fixed corpus C = {d₁, d₂, … , d_N} and a query q — just the collection and the request, nothing precomputed yet.</p></div>
+<div><span>OUTPUT</span><p>A subset or ranking of C, ordered by estimated relevance to q — an estimate, because true relevance lives in the asker's head, not in the documents.</p></div>
+<div><span>WHAT'S DEFERRED</span><p>How that estimate gets computed — matching terms fast (Concept 02), weighting them (Concepts 04-06), or comparing meaning as geometry (already covered in Module 04) — is the rest of this module's job, not this concept's.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Retrieval — the box this whole module fills in</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Module 04 already gave "Retrieval" one mechanism: score by vector geometry. Module 05 gives it a second, older mechanism — score by matching terms — starting with this concept's vocabulary and Concept 02's first real data structure.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs beginners routinely blur</h3>
+<div class="distinction-table" role="table" aria-label="Corpus versus index, document versus chunk, query versus need, and relevance versus correctness distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Corpus</span><span role="cell">An index</span><span role="cell">The corpus is the raw collection; an index (Concept 02) is a derived structure built from it to answer queries fast — the corpus can exist with zero indexes built over it.</span></div>
+<div role="row"><span role="cell">Document</span><span role="cell">Always a whole file</span><span role="cell">In a RAG system a "document" for retrieval purposes is usually a chunk (Module 07) — one passage, not one PDF.</span></div>
+<div role="row"><span role="cell">Query</span><span role="cell">The information need itself</span><span role="cell">The query is the literal text typed or spoken; the need is what's actually wanted, and the two can differ (vocabulary mismatch) — a forward reference, not solved here.</span></div>
+<div role="row"><span role="cell">Relevance</span><span role="cell">Correctness or truth</span><span role="cell">A document can be relevant (on-topic, useful) without directly answering the question, and a technically true document can be irrelevant if it doesn't address this need.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Relevance is an objective property of a document."</b><p>It's a relationship between a document and a specific query — the same document can be highly relevant to one query and useless for another.</p></div>
+<div><b>"A bigger corpus is always more useful."</b><p>A corpus full of near-duplicate or off-topic material can make relevant documents harder to find, not easier — size alone isn't quality.</p></div>
+<div><b>"The query text always says exactly what the user wants."</b><p>Wording, typos, and ambiguity mean the literal query and the true information need are related but distinct — this module's later query-understanding concepts (Module 15) exist because of that gap.</p></div>
+<div><b>"IR means the specific algorithm my search box uses."</b><p>IR is the whole problem — corpus, query, relevance — of which term-matching (this module) and vector geometry (Module 04) are two different mechanisms, not the definition itself.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Naming the Oracle RAG project's four parts</h3>
+<div class="project-map">
+<div><span>CORPUS</span><b>The ingested knowledge base</b><p>Every row, ticket, or chunk the Oracle-backed system has agreed to search — fixed at query time, even though it changes over time via ingestion.</p></div>
+<div><span>DOCUMENT &amp; QUERY</span><b>One stored chunk; one user question</b><p>A document is one retrievable chunk in the database; the query is the natural-language question a user actually asks the system.</p></div>
+<div><span>RELEVANCE — DEFERRED</span><b>Which chunks should be surfaced, and how well that's measured</b><p>Estimating it starts with Concept 02's inverted index; measuring how well the estimate matches human judgment is Module 18's job, much later.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Four definitions</b><p>Corpus (the fixed collection), document (one retrievable unit), query (the literal request), relevance (a judgment about a document-query pair).</p></div>
+<div><b>Corpus vs. index</b><p>An index is built from a corpus to answer queries fast — it's a derived structure, not the collection itself.</p></div>
+<div><b>Relevance is relational</b><p>Never a property of a document alone; always with respect to a specific query.</p></div>
+<div><b>Nothing computed yet</b><p>No matching, weighting, or ranking mechanism exists so far in this module — that begins next concept.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why can't "relevance" be defined the same way a SQL <code>WHERE</code> clause is?</li>
+<li>Using b03's corpus, name one document you'd personally grade differently from the lesson's judgment, and explain why a reasonable disagreement is possible.</li>
+<li>What's the difference between a corpus and an index, and which one does Concept 02 build?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 02: inverted indexes and postings lists</h3>
+<p>Vocabulary is fixed. The next concept introduces the first real data structure of lexical retrieval: an inverted index, mapping each term to the list of documents containing it — and shows exactly why that beats scanning every document, word by word, for every query.</p>
+<div class="beginner-memory"><b>Concept 01 is complete.</b> Continue to Concept 02, "Inverted indexes and postings lists."</div>
+<a class="button primary" href="module-05-concept-02.html">Continue to Concept 02 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A corpus, a query, and a judgment — nothing computed yet</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>The four words</b><small>Corpus, document, query, relevance — defined and distinguished from their nearest neighbors.</small></a>
+<a href="#b03"><span>02</span><b>One worked corpus</b><small>Eight documents, one query, graded relevance — reused through Concept 04.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>No index, no scoring formula — those are Concepts 02 onward.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal definitions, graded judgments, and the Relevance Judgment Explorer lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> fix the vocabulary (corpus, document, query, relevance) → ground it in one worked corpus → name what's explicitly out of scope → Concept 02 opens with the first real mechanism, the inverted index.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the information retrieval deep dive</b><em>Formal definitions, graded relevance judgments, and the Relevance Judgment Explorer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The module's vocabulary, before its first mechanism</h2></div></header>
+<p>Module 04 closed with every concept's math chained onto one worked example. Module 05 opens Phase 1's final module — classical, term-based information retrieval, the lexical machinery dense retrieval extends rather than replaces. This concept fixes the four nouns every later concept in the module will use without redefining: corpus, document, query, relevance. It builds no index and computes no score.</p>
+<div class="flow">
+<div class="flow-node">Module 03 — RAG's mental model</div>
+<div class="flow-node">Module 04 — retrieval's mathematics</div>
+<div class="flow-node hot">Module 05, Concept 01 — retrieval's vocabulary</div>
+<div class="flow-node">Concept 02 — the first mechanism</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State all four terms precisely</h3><p>Corpus, document, query, relevance — with notation, in a sentence each, without circularity.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate each term from its nearest neighbor</h3><p>Corpus from index, document from chunk, query from information need, relevance from correctness.</p></article>
+<article class="info-card"><span>JUDGE</span><h3>Produce a graded relevance judgment by hand</h3><p>Given a corpus and a query, assign and justify a relevance grade to each document.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what this concept does not build</h3><p>No index, no term weighting, no ranking formula — those begin at Concept 02.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 03, Concept 01 — What exactly is RAG?</b> Retrieval was already named as a stage in the pipeline; this concept defines what that stage actually operates on.</li>
+<li><b>Module 04, Concept 10 — Worked retrieval geometry.</b> Confirms vector-based scoring already works end to end; this module gives "Retrieval" a second, term-based mechanism.</li>
+<li><b>Nothing about indexes or scoring formulas is assumed</b> — if a term below feels unfamiliar, it's being defined here for the first time, not recalled.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A library, a question, and a librarian's judgment</h2></div></header>
+<p>A corpus is a library's entire collection. A document is one book on a shelf. A query is the question you actually ask the librarian out loud. Relevance is the librarian's judgment about whether a specific book actually helps with that specific question — not whether the book is good, popular, or true in general, and not fixed once and for all: a different question about the same collection gets a different set of relevant books.</p>
+<div class="callout warning"><b>Analogy boundary</b>The library captures the four relationships, not the mechanism — a real system doesn't have a librarian's judgment available at query time, which is exactly why Concept 02 onward builds computable estimates of relevance instead.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Corpus</td><td>The fixed, finite collection of documents being searched</td><td>C = {d₁, d₂, …, d_N}</td></tr>
+<tr><td>Document</td><td>One retrievable unit inside the corpus</td><td>d_i ∈ C</td></tr>
+<tr><td>Query</td><td>The literal text expressing an information need</td><td>q</td></tr>
+<tr><td>Information need</td><td>What the asker actually wants, which q only approximates</td><td>(unobservable directly)</td></tr>
+<tr><td>Relevance</td><td>A judgment of how well d_i satisfies the need behind q</td><td>rel(d_i, q) ∈ {0,1} or a graded scale</td></tr>
+</tbody>
+</table>
+<p>rel is a function of a <i>pair</i> — a document and a query together — never of a document alone. That single fact is the source of most of Section 17's misconceptions.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The relationship, traced step by step</h2></div></header>
+<div class="lane-flow">
+<div><b>An information need forms</b> — something the asker wants to know, not yet written down.</div>
+<div><b>The need is expressed as a query q</b> — text or speech, an approximation of the need, not the need itself.</div>
+<div><b>An IR system receives (C, q)</b> — the fixed corpus and the query, nothing else.</div>
+<div><b>The system returns a subset or ranking of C</b> — its estimate of which documents are relevant.</div>
+<div><b>The asker judges the actual relevance</b> — the true rel(d,q) the system was only ever estimating.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two mechanisms, one "Retrieval" box</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing lexical and dense retrieval as two mechanisms feeding one retrieval stage">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Module 04 · dense</b><small>Score by vector geometry — cosine similarity, distance</small></div>
+<div class="diagram-node hub-center"><b>Corpus C, query q</b><small>The same fixed inputs, either mechanism</small></div>
+<div class="diagram-node"><b>Module 05 · lexical</b><small>Score by matching terms — starting with Concept 02's inverted index</small></div>
+</div>
+</div>
+<p>Both mechanisms take the identical (C, q) pair this concept just defined and produce a ranking; they estimate rel(d,q) differently, which is exactly what Concept 03 (sparse vs. dense retrieval) compares directly.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span class="hot">Retrieval — corpus, query, relevance defined here</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Nothing upstream (parsing, chunking, embedding) or downstream (context construction, generation) is redefined here — this concept only names the inputs and desired output of the "Retrieval" box itself.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Relevance as an unspecified function — deliberately</h2></div></header>
+<p>This concept states rel(d,q) as a function with a domain and a range, and stops there on purpose:</p>
+<div class="equation">rel: C × Q → {0, 1}              (binary relevance)
+rel: C × Q → {0, 1, 2, ..., k}    (graded relevance, k grades)</div>
+<p>No formula computes rel here. Concept 04 gives term frequency its first numeric estimate of relevance; Concept 06 (BM25) is the first complete scoring function this module builds. Stating the function's signature now — what goes in, what comes out — is what makes every later concept's formula recognizable as "one way to approximate rel," rather than a fact handed down without context.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Grading all eight documents by hand</h2></div></header>
+<p>Using b03's corpus and query ("what technique lets you answer boolean search queries over documents quickly?"), a graded judgment on a 0-2 scale:</p>
+<table class="worked-table">
+<thead><tr><th>Doc</th><th>Text</th><th>Grade</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>D8</td><td>boolean search over an inverted index</td><td>2</td><td>Names boolean search and the inverted index directly</td></tr>
+<tr><td>D2</td><td>sparse retrieval with an inverted index</td><td>1</td><td>Has the mechanism (inverted index), not boolean queries by name</td></tr>
+<tr><td>D4</td><td>keyword search using an inverted index</td><td>1</td><td>Same mechanism again, still no mention of boolean queries</td></tr>
+<tr><td>D1</td><td>vector search over dense embeddings</td><td>0</td><td>A different mechanism entirely (dense, not lexical)</td></tr>
+<tr><td>D3</td><td>dense embeddings for semantic search</td><td>0</td><td>Same reason as D1</td></tr>
+<tr><td>D5</td><td>vector index for approximate search</td><td>0</td><td>"Index" here means an approximate vector index, not a boolean-query structure</td></tr>
+<tr><td>D6</td><td>sparse and dense retrieval combined</td><td>0</td><td>General retrieval, no boolean-query mechanism named</td></tr>
+<tr><td>D7</td><td>embeddings from a neural encoder</td><td>0</td><td>Unrelated to boolean queries</td></tr>
+</tbody>
+</table>
+<p>Two of eight documents graded 0 for a subtle reason worth noticing: D5's "index" is a different kind of index (approximate vector search) than the one this query actually needs — a term match without a concept match, the exact trap Section 17 names directly.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cases: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Web search</h3><p>Corpus = crawled pages, document = one page, query = the search box text, relevance = whether a human would click and be satisfied.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Enterprise knowledge search</h3><p>Corpus = an Oracle-backed knowledge base, document = one indexed chunk, query = an employee's typed question, relevance = whether that chunk actually helps answer it.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Zero relevant documents</h3><p>A query can legitimately have no relevant document anywhere in the corpus — "no relevant results" is a correct IR outcome, not a system failure, when the corpus genuinely lacks the answer (Module 03's answerability concept, cited directly).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating "mentions the same word" as "relevant"</h3><p>D5 in Section 10 mentions "index" but isn't relevant to this query — term overlap is a useful signal (Concept 02 onward), never a definition of relevance itself.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Modeling the vocabulary as data — no retrieval algorithm yet</h2></div></header>
+<p>This concept's code deliberately stops short of computing anything: it represents a corpus, a query, and a relevance judgment as plain data, with no matching mechanism attached. Building that mechanism is Concept 02's job.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · DATA ONLY, NO RETRIEVAL LOGIC</span>
+<pre><code>corpus = {
+    1: "vector search over dense embeddings",
+    2: "sparse retrieval with an inverted index",
+    3: "dense embeddings for semantic search",
+    4: "keyword search using an inverted index",
+    5: "vector index for approximate search",
+    6: "sparse and dense retrieval combined",
+    7: "embeddings from a neural encoder",
+    8: "boolean search over an inverted index",
+}
+
+query = "what technique lets you answer boolean search queries over documents quickly?"
+
+# A hand-assigned relevance judgment: doc id -> grade (0, 1 or 2).
+# Nothing here computed this -- it is Section 10's table, typed in directly.
+relevance_judgment = {1: 0, 2: 1, 3: 0, 4: 1, 5: 0, 6: 0, 7: 0, 8: 2}
+
+assert set(relevance_judgment) == set(corpus)          # every document was judged
+assert all(g in (0, 1, 2) for g in relevance_judgment.values())
+relevant_docs = [d for d, g in relevance_judgment.items() if g > 0]
+assert relevant_docs == [2, 4, 8]
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same four words, inside real tools</h2></div></header>
+<p>LangChain's <code>Document</code> object pairs page content with metadata — the same "document" this concept defines, just with a class name attached. A retriever interface (LangChain, LlamaIndex, Elasticsearch, Oracle Text) always takes a query string and a fixed corpus and returns a ranked list — the same (C, q) → ranking shape from Section 06, regardless of which mechanism computes the ranking underneath. Recognizing that shape now is what will make every framework's retriever interface look familiar rather than arbitrary, once Module 12 introduces them directly.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Relevance Judgment Explorer</h2></div></header>
+<div class="lab">
+<p>Pick a query, then mark each of the eight documents as relevant or not relevant by your own judgment. Reveal the lesson's own graded judgment and see where you agreed or disagreed — there is no single correct answer, only a comparison.</p>
+<div class="lab-controls" id="wgQueryControls_0501">
+<div class="control"><label for="wgQuery_0501">Query</label>
+<select id="wgQuery_0501">
+<option value="boolean">What technique lets you answer boolean search queries over documents quickly?</option>
+<option value="dense">What captures the meaning of a document as numbers?</option>
+</select>
+</div>
+</div>
+<div class="lab-actions" id="wgDocToggles_0501"></div>
+<div class="lab-actions">
+<button type="button" id="wgCheck_0501">Reveal the lesson's judgment</button>
+<button type="button" id="wgReset_0501" class="secondary">Reset my marks</button>
+</div>
+<div class="norm-readout" id="wgReadout_0501" hidden>
+<div><span>YOU MARKED RELEVANT</span><b id="wgYours_0501"></b></div>
+<div><span>LESSON MARKS RELEVANT (GRADE &gt; 0)</span><b id="wgGold_0501"></b></div>
+<div><span>AGREEMENT</span><b id="wgAgreement_0501"></b></div>
+</div>
+<div class="callout" id="wgVerdict_0501" hidden></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Binary vs. graded relevance</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it captures</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>Binary (relevant / not relevant)</td><td>A single yes-or-no split of the corpus</td><td>Fast prototyping, and metrics like precision/recall (Module 18) that only need a cutoff</td></tr>
+<tr><td>Graded (e.g., 0-2 or 0-4 scale)</td><td>How strongly a document satisfies the need, not just whether it does</td><td>Ranking quality metrics like nDCG (Module 18) and rigorous test collections (Concept 10 of this module)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSING COVERAGE</span><h3>The corpus never contained a relevant document</h3><p>No retrieval mechanism, however good, can return a relevant document that was never ingested — a corpus-coverage problem, not a retrieval-mechanism problem.</p></article>
+<article class="info-card"><span>QUERY-NEED MISMATCH</span><h3>The literal query doesn't capture the real need</h3><p>A poorly worded query can make even a perfect relevance judge return the wrong subset — Module 15's query understanding concepts address this directly, later.</p></article>
+<article class="info-card"><span>GRANULARITY MISMATCH</span><h3>The relevant information is split across chunks</h3><p>If "document" is defined too coarsely or too finely for the need, no single retrievable unit may fully satisfy it — a chunking decision (Module 07), not a relevance-definition problem.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A document is relevant or not, independent of any query</td><td>False — relevance is always with respect to a specific query; Section 05's rel(d,q) takes both arguments.</td></tr>
+<tr><td>Sharing a word with the query makes a document relevant</td><td>False — Section 10's D5 shares "index" with a boolean-query need but isn't relevant; word overlap is a signal, not a definition.</td></tr>
+<tr><td>"No relevant documents found" always means the system failed</td><td>False — Section 11's boundary case: it can correctly mean the corpus never had the answer.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Corpus curation — what gets ingested, and what doesn't — bounds every retrieval mechanism built afterward; no algorithm compensates for missing coverage.</li>
+<li>Collecting graded relevance judgments at scale (Concept 10, test collections) costs real annotator time and money — most teams start with cheap binary judgments and add grades only where it changes a decision.</li>
+<li>"Relevant to this user" can differ by tenant or access level even for an identical query string — a governance concern Module 20 addresses directly, flagged here as a forward reference only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Is rel(d,q) a function of the document alone, the query alone, or both together?</summary><div>Both together — Section 05 defines it as a function on the pair (d,q); a document's relevance can change entirely when the query changes.</div></details>
+<details class="quiz"><summary>What's the difference between a corpus and an index?</summary><div>A corpus is the raw fixed collection; an index is a derived structure built from the corpus specifically to answer queries fast — Concept 02 builds the first one.</div></details>
+<details class="quiz"><summary>Why is "no relevant documents were found" sometimes the correct answer, not a bug?</summary><div>Because a corpus can genuinely lack any document that satisfies a given need — Section 11's boundary case and Module 03's answerability concept both cover this directly.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using b03's corpus, grade all eight documents (0, 1, or 2) against a new query: "which of these techniques represents meaning as numeric vectors?" Write one sentence of justification per document, then state which documents you marked relevant.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>D1 (vector search over dense embeddings) — grade 2, names vectors and embeddings directly. D3 (dense embeddings for semantic search) — grade 2, same reason. D7 (embeddings from a neural encoder) — grade 1, embeddings are present but the query's emphasis on "search" isn't addressed. D5 (vector index for approximate search) — grade 1, "vector" is present but the focus is the index structure, not the representation itself. D2, D4, D6, D8 — grade 0, these describe sparse or boolean mechanisms, not numeric-vector representations. Relevant set: {1, 3} strongly, {5, 7} partially.</div>
+</details>
+<p>Teach-back: explain, in your own words, why D5 scored lower here than in Section 10 despite containing the word "vector" in both cases — name the specific query difference that causes it.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Information retrieval's vocabulary</h3><ul><li><b>Corpus:</b> the fixed collection being searched</li><li><b>Document:</b> one retrievable unit inside it</li><li><b>Query:</b> the literal text expressing a need</li><li><b>Relevance:</b> rel(d,q) — a judgment about a pair, never a document alone</li></ul></div>
+<div><h3>Memorable example</h3><p>D5 ("vector index for approximate search") shares a word with a boolean-query query but isn't relevant to it — proof that term overlap and relevance are related, never identical.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define information retrieval without using the word "search."</summary><div>The problem of returning, from a fixed collection, the items that best satisfy an expressed information need — where "best satisfies" is a judgment, not an exact match.</div></details>
+<details class="quiz"><summary>Why does IR need a separate notion of "information need" distinct from "query"?</summary><div>Because query text is an imperfect, sometimes ambiguous or mis-worded approximation of what the asker actually wants — treating them as identical hides real failure modes like vocabulary mismatch (Module 15).</div></details>
+<details class="quiz"><summary>A stakeholder says "just return every document that contains the query's words." What's wrong with that as a definition of relevance?</summary><div>It conflates term overlap with relevance — Section 10's D5 and Section 17's table both show a document can share vocabulary with a query while being judged not relevant to the actual need.</div></details>
+<details class="quiz"><summary>Design question: how would you build a small test set to evaluate a future retrieval mechanism, using only this concept's vocabulary?</summary><div>Fix a corpus, write a set of queries, and collect a relevance judgment (binary or graded) for every document against every query — exactly Concept 10's "test collections," built from nothing more than this concept's four terms.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Information_retrieval"><b>Information retrieval — Wikipedia</b><br><span>A general overview of the field's scope and terminology, confirming the corpus/document/query/relevance framing used in this concept.</span></a>
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/irbook.html"><b>Manning, Raghavan &amp; Schütze — Introduction to Information Retrieval</b><br><span>The canonical open textbook this module follows through Concept 11; its opening chapter defines the same four terms formally.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 COMPLETE · CONCEPT 02 ACTIVE</span>
+<h3>Vocabulary fixed — the first mechanism opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can state rel(d,q) as a function of a pair, not a document alone. Concept 02, "Inverted indexes and postings lists," gives this module its first real data structure.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-05-concept-02.html">Continue to Concept 02 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 02, Inverted indexes and postings lists.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 01 · Complete</p>
+<a href="module-04-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

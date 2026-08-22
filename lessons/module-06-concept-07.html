@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 07 covers document identity and versioning: a stable doc_id that survives every edit, plus a version_number, content hash and effective_at/superseded_at timestamp per revision, so a document's own history can answer what-was-current-on-date-X questions.">
+<title>Document identity and versioning — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 07</p>
+<h1>Same document.<br><em>Different day, different words.</em></h1>
+<p class="lesson-lead">Concept 06 resolved copies of the same content that exist RIGHT NOW, side by side. This concept covers a different axis: one document's own content changing ACROSS TIME. A refund policy edited from a 30-day window to a 45-day window is still, in every meaningful sense, the same policy — but its content hash from Concept 06 says otherwise every single time. This concept gives it a stable doc_id that survives the edit, plus a version_number, content hash, and effective_at/superseded_at timestamp per revision, so a question like "what did this policy say on a given date" has a real answer.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's exact-hash mechanism (reused as a black box) and Concept 03's refund-policy scenario, extended directly with a stable doc_id</b></div>
+<div><span>BEGINNER GOAL</span><b>Tell document identity apart from a content hash, and answer "which version was current on date X" from version metadata</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One doc_id, two versions, one changed number</h2>
+</div>
+<p>Concept 06 asked "are these two records, existing right now, actually the same thing?" This concept asks a question Concept 06 never could: when ONE document's own content changes over time, how do you keep calling it the same document, and how do you still answer what it used to say?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A number that survives the edit, plus a timestamp for each revision</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>A stable doc_id assigned once and never reassigned, plus a version_number, content hash and effective_at/superseded_at timestamp attached to every revision of that same document.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Concept 06's same-content-at-once dedup (R1/R2/R3 all coexisting right now) and Concept 08's full provenance/lineage/audit trail — both different problems, named only as neighbors here.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> the doc_id is the thread that runs through every version of one document. The content hash is not that thread — it's expected to change on every single edit, or there would be nothing to version in the first place.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Without a stable ID, an edited document looks brand new every time</h3>
+<p>A policy gets edited. Its content hash from Concept 06 changes completely — that's the avalanche effect working exactly as designed. But if nothing links the old hash to the new one, the pipeline treats the edited document as a totally unrelated, brand-new record. Old and new evidence both sit in the index with no connection between them, retrieval can surface either one with no sense of which is current, and nothing can answer a question like "what did the refund policy say on the day this ticket was filed." This concept exists to give a document an identity that survives its own edits, so questions like that have a real answer.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The refund policy Concept 03 already raised — now with a stable ID</h3>
+<p>Concept 03 already described this exact case: a refund policy that said "30 days," was superseded by a version that says "45 days," changed by "a commit message from fourteen months ago." This concept gives that same policy a persistent identity: doc_id = <b>POLICY-REFUND-001</b>, assigned once and never reassigned.</p>
+<div class="example-grid">
+<article class="info-card"><span>VERSION 1 · SUPERSEDED</span><h3>"…within 30 days of purchase."</h3><p>Effective 2024-11-02, superseded 2025-06-18 — a 228-day lifespan as the current version.</p></article>
+<article class="info-card"><span>VERSION 2 · CURRENT</span><h3>"…within 45 days of purchase."</h3><p>Effective 2025-06-18, no superseded_at — 431 days current as of today, 2026-08-23.</p></article>
+</div>
+<p>Same doc_id both times. Two completely different content hashes. That's not a contradiction — it's the point.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0607-beginner-visual-title">
+<strong class="concept-visual-title" id="c0607-beginner-visual-title">VISUAL · ONE THREAD, TWO VERSIONS, TWO UNRELATED HASHES</strong>
+<svg class="vector-plane" viewBox="0 0 460 200" role="img" aria-labelledby="c0607-svg-title c0607-svg-desc">
+<title id="c0607-svg-title">One doc_id thread running through two version boxes, each with its own different content hash underneath</title>
+<desc id="c0607-svg-desc">A horizontal thread labeled doc_id POLICY-REFUND-001 runs above two boxes. The left box, v1, shows the 30-day text, effective 2024-11-02, superseded 2025-06-18, and a hash starting 97ca17e1. The right box, v2, shows the 45-day text, effective 2025-06-18, status current, and a different hash starting 2be6d94f. An arrow points from v1 to v2 labeled edit produces a new hash, same doc_id.</desc>
+<line x1="20" y1="18" x2="440" y2="18" stroke="#14241f" stroke-width="2"/>
+<text x="230" y="13" font-size="9" fill="#14241f" text-anchor="middle" font-weight="700">doc_id: POLICY-REFUND-001</text>
+<line x1="20" y1="18" x2="20" y2="34" stroke="#14241f" stroke-width="2"/>
+<line x1="440" y1="18" x2="440" y2="34" stroke="#14241f" stroke-width="2"/>
+<g font-size="9">
+<rect x="20" y="34" width="185" height="90" fill="#fff" stroke="#8a978f"/>
+<text x="112" y="52" fill="#14241f" font-size="10" text-anchor="middle" font-weight="700">v1 · SUPERSEDED</text>
+<text x="112" y="68" font-size="8" fill="#5c6a63" text-anchor="middle">"…within 30 days of purchase."</text>
+<text x="112" y="84" font-size="7.5" fill="#5c6a63" text-anchor="middle">effective 2024-11-02 → superseded 2025-06-18</text>
+<text x="112" y="106" font-size="8" fill="#ff7957" text-anchor="middle" font-family="DM Mono, monospace">hash 97ca17e1…91b4363a</text>
+<rect x="255" y="34" width="185" height="90" fill="#d7ff53" stroke="#14241f"/>
+<text x="347" y="52" fill="#14241f" font-size="10" text-anchor="middle" font-weight="700">v2 · CURRENT</text>
+<text x="347" y="68" font-size="8" fill="#14241f" text-anchor="middle">"…within 45 days of purchase."</text>
+<text x="347" y="84" font-size="7.5" fill="#14241f" text-anchor="middle">effective 2025-06-18 → (none)</text>
+<text x="347" y="106" font-size="8" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">hash 2be6d94f…3071dd9d</text>
+</g>
+<line x1="205" y1="79" x2="255" y2="79" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0607)"/>
+<text x="230" y="145" font-size="8" fill="#14241f" text-anchor="middle">edit → a brand-new hash, the SAME doc_id</text>
+<defs><marker id="arrow0607" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+</svg>
+<figcaption>The doc_id thread above both boxes never changes. Each box's own hash, printed beneath its text, is completely different from the other — Concept 06's exact-hash check would call these two boxes totally unrelated. Identity survives the edit; the hash is never expected to.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Five fields, one persistent document</h3>
+<table class="compare-table">
+<thead><tr><th>Field</th><th>Meaning</th><th>This document's values</th></tr></thead>
+<tbody>
+<tr><td>doc_id</td><td>Assigned once, at first ingestion — never reassigned</td><td>POLICY-REFUND-001 (both versions)</td></tr>
+<tr><td>version_number</td><td>Increments by one each time the content actually changes</td><td>1 → 2</td></tr>
+<tr><td>content_hash</td><td>Concept 06's exact-hash check, recomputed for this revision</td><td>97ca17e1…91b4363a → 2be6d94f…3071dd9d</td></tr>
+<tr><td>effective_at / superseded_at</td><td>When this version became current, and when (if ever) it stopped being current</td><td>2024-11-02 / 2025-06-18 → 2025-06-18 / (none)</td></tr>
+<tr><td>status</td><td>Exactly one version per doc_id is CURRENT; the rest are SUPERSEDED</td><td>SUPERSEDED → CURRENT</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Resolved cluster in, one identity with a history out</h3>
+<div class="pipeline-preview">
+<span>Concept 06 — dedup + canonicalization</span><i>↓</i><span class="hot">Concept 07 — identity and versioning</span><i>↓</i><span>Concept 08 — provenance, lineage and timestamps</span><i>↓</i><span>Documents</span>
+</div>
+<p>This concept assumes Concept 06's dedup and canonicalization already ran — a document only gets a stable identity once it's been resolved to one canonical record per moment in time. Nothing here builds a full audit trail of every transformation a document went through; that hand-off belongs to Concept 08.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Two neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Identity and versioning distinguished from deduplication and from provenance">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Stable identity (this concept)</span><span role="cell">A content hash (Concept 06)</span><span role="cell">The hash is expected to change on every edit; the doc_id is expected NOT to. Confusing the two means an edited document looks unrelated to its own past.</span></div>
+<div role="row"><span role="cell">One document over TIME (this concept)</span><span role="cell">Multiple copies at the SAME time (Concept 06)</span><span role="cell">Concept 06's R1/R2/R3 all coexist right now. This concept covers a single doc_id's own content changing across versions — a different axis entirely.</span></div>
+<div role="row"><span role="cell">A lightweight per-revision timestamp (this concept)</span><span role="cell">A full lineage/audit trail (Concept 08)</span><span role="cell">effective_at/superseded_at is the minimal metadata this concept needs for an as-of query. The complete transformation history is Concept 08's separate, later job.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The hash is the identity."</b><p>False — the hash is guaranteed to change on every edit (Concept 06's avalanche effect), or there would be nothing left to version. The doc_id has to live outside the hash entirely.</p></div>
+<div><b>"Delete superseded versions — only the latest one matters."</b><p>False whenever an audit or point-in-time question matters. Superseded versions get tombstoned, not deleted, echoing Concept 06's own handoff pattern.</p></div>
+<div><b>"You need Concept 01's full authority ranking to find the current version."</b><p>False — within one document's own history, recency (or version_number) alone is enough. Concept 01's full type+recency ranking is for choosing across different SOURCES, not for picking a version within one document.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>DOC_ID ASSIGNMENT</span><b>Assigned at first ingestion, reused on every re-ingestion of the same source</b><p>A policy re-crawled from the same source URL or file path gets the same doc_id every time, never a fresh one.</p></div>
+<div><span>VERSION METADATA</span><b>version_number and timestamps power "as of" audit queries</b><p>A support agent asking what the refund policy said on the day a specific ticket was filed gets a real answer, not a guess.</p></div>
+<div><span>PREVIEW — CONCEPT 08</span><b>What a full transformation/audit trail adds on top</b><p>This concept tracks WHAT changed and WHEN, for one document's own history. Provenance, lineage and timestamps covers WHERE every fact came from and how it got there — a separate, later concept.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Identity is not the hash</b><p>doc_id stays byte-identical across every edit; the content hash is expected to change every single time.</p></div>
+<div><b>Why the hash can't do the hash's job AND identity's job</b><p>Hashing is built for the avalanche effect — there is nothing partial or stable about it to hang a version history on.</p></div>
+<div><b>Five fields are enough</b><p>doc_id, version_number, content_hash, effective_at/superseded_at and status are sufficient to answer "what was current on date X."</p></div>
+<div><b>Recency alone decides within one document's own history</b><p>Concept 01's full auth(s) formula is for ranking across different sources, not for finding the current version of one document.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why do h(v1) and h(v2) have to differ, even though both describe the same refund policy under the exact same doc_id?</li>
+<li>POLICY-REFUND-001's v2 became effective on 2025-06-18. Concept 03 said the 45-day rule changed "a commit message from fourteen months ago." Using today's date, 2026-08-23, does that line up?</li>
+<li>Why doesn't Concept 01's full auth(s) = (type_rank, −recency) formula need to run just to find POLICY-REFUND-001's current version?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 08: Provenance, lineage and timestamps</h3>
+<p>This concept gave one document a stable identity that survives its own edits, plus the minimal metadata needed for an as-of query. The next concept extends that single per-revision timestamp into a fuller transformation and audit trail — where every fact came from, and every step it passed through to get here.</p>
+<div class="beginner-memory"><b>Concept 07 is complete.</b> Continue to Concept 08, "Provenance, lineage and timestamps."</div>
+<a class="button primary" href="module-06-concept-06.html">← Back to Concept 06</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One number that stays, one hash that never does</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One doc_id, two versions</b><small>The refund-policy scenario, extended directly from Concept 03.</small></a>
+<a href="#b04"><span>02</span><b>The version metadata table</b><small>doc_id, version_number, hash, timestamps, status.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Provenance and lineage (Concept 08) is a different job, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the As-Of Query Timeline lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Concept 06's own boundary -- one document changing over time is a different problem -- → Concept 03's refund policy, extended with a persistent doc_id → SHA-256 hashes confirmed different, dates confirmed roughly fourteen months apart → Concept 08 opens provenance and lineage next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the identity and versioning deep dive</b><em>Formal notation, from-scratch code, and the As-Of Query Timeline lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From resolving copies now to tracking one document over time</h2></div></header>
+<p>Concept 06 resolved multiple copies of the same content that exist right now, at the same moment. This concept covers a different axis: one document's own content changing across versions over time, held together by a persistent doc_id that survives every edit. Versioning is not the same thing as deduplication, and it is not a full provenance trail either — provenance, the complete where-from and how-it-got-here history, is Concept 08's separate job, named only.</p>
+<div class="flow">
+<div class="flow-node">Concept 05 — cleaning and normalization</div>
+<div class="flow-node">Concept 06 — deduplication and canonicalization</div>
+<div class="flow-node hot">Concept 07 — document identity and versioning</div>
+<div class="flow-node">Concept 08 — provenance, lineage and timestamps</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>State the identity-vs-hash distinction</h3><p>A doc_id stays constant across every edit; a content hash is expected to change on every one.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute a stable-ID assignment across an edit</h3><p>Given two revisions of the same document, keep one doc_id and compute two genuinely different content hashes.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Apply version metadata to answer an as-of query</h3><p>Given effective_at/superseded_at timestamps, determine which version was current on a given date.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate this concept from dedup and from provenance</h3><p>State why versioning needs exactly one doc_id per document, and why a full lineage trail is Concept 08's separate job.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06, complete.</b> This concept reuses Concept 06's exact-hash check as a black box, scoped to one doc_id instead of the whole corpus: "the hash differs" is the edit-detection signal that triggers a new version.</li>
+<li><b>Concept 01's auth(s) formula, named only.</b> Used here purely as a contrast — it ranks across different SOURCES; it plays no role in picking the current version within one document's own history.</li>
+<li><b>Out of scope here:</b> a full lineage/audit trail (Concept 08) and chunk-level versioning (Module 07) are both named only, as forward references.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A passport number, renewed again and again</h2></div></header>
+<p>A passport number stays exactly the same across every renewal, even though the photo and the expiry date — the content — change every single time. Nobody argues a renewed passport belongs to a different person just because the photo changed; the number is what carries identity forward through every renewal. A document's doc_id plays exactly that role: it is the number that survives, while the content hash is the photo that is expected to change.</p>
+<div class="callout warning"><b>Analogy boundary</b>The passport analogy explains why identity has to be kept separate from content in the first place. It doesn't explain how an "as of" query actually resolves which version was current on a given date — Section 09 gives that formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Document identity</td><td>A stable, system-assigned key that stays constant across every revision of one document</td><td>doc_id</td></tr>
+<tr><td>Version</td><td>One revision of a document's content, sharing its parent document's doc_id</td><td>v_i</td></tr>
+<tr><td>Content hash</td><td>Concept 06's exact-hash check, recomputed for this revision's normalized content</td><td>h(norm(v_i))</td></tr>
+<tr><td>Validity window</td><td>The half-open interval during which a version was the current one</td><td>[effective_at(v_i), superseded_at(v_i))</td></tr>
+<tr><td>Current version</td><td>The single version of a doc_id with no superseded_at set</td><td>current(doc_id) = v_n</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Assign once, compare on every re-ingestion</h2></div></header>
+<div class="lane-flow">
+<div><b>Assignment lane</b> — assign doc_id exactly once, at first ingestion. Every later re-ingestion of the same source reuses it; it is never regenerated.</div>
+<div><b>Change-detection lane</b> — on re-ingestion, recompute the content hash and compare it to the current version's hash for that same doc_id, using Concept 06's exact-hash check scoped to one document instead of the whole corpus.</div>
+<div><b>No-op branch</b> — hashes match: nothing has changed since the last ingestion, and no new version is created.</div>
+<div><b>New-version branch</b> — hashes differ: append version_number+1 with the new hash and effective_at = now, then set the prior version's superseded_at = now and status = SUPERSEDED.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>From a resolved record to a version history</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable branching diagram from a cleaned canonical record through a hash comparison to either a no-op or a new superseding version">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Cleaned + canonicalized record in</b><small>From Concept 06</small></div>
+<div class="diagram-node"><b>Hash vs. current version's hash</b><small>Equal → no-op / Different → new version</small></div>
+<div class="diagram-node"><b>Prior version superseded</b><small>Tombstoned, not deleted</small></div>
+<div class="diagram-node"><b>Current version served by default</b><small>As-of queries can still reach superseded ones</small></div>
+</div>
+</div>
+<p>Every branch still converges on the same output shape as every prior Module 06 concept: a record ready to move forward — this time carrying a persistent identity and a version history behind it, not just a single fixed snapshot.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span>Extraction — Concepts 02-04</span><i>↓</i><span>Cleaning — Concept 05</span><i>↓</i><span>Dedup + canonicalization — Concept 06</span><i>↓</i><span class="hot">Identity + versioning — converging here</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept is what lets a document survive its own future edits without losing continuity with its past — Concept 08 adds a fuller transformation/audit trail on top, and Module 07 decides how the current version eventually gets chunked.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why identity is invariant and the hash never is</h2></div></header>
+<p>Formalize a version history as an ordered sequence V = (v1, …, vn) that all share one doc_id. Define current(doc_id, t) as the vi such that effective_at(vi) ≤ t &lt; superseded_at(vi) — or vn itself, if vn has no superseded_at set, meaning it is still current. doc_id is invariant across every i in that sequence: it holds exactly the same value for v1 through vn. content_hash(vi), by contrast, is guaranteed NOT to be invariant — if h(norm(vi)) equaled h(norm(vi+1)), there would have been nothing to version in the first place; the change-detection lane in Section 06 would have taken the no-op branch instead.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One doc_id, two versions, every number verified by script</h2></div></header>
+<p>doc_id = POLICY-REFUND-001, assigned once and never reassigned. v1 = "Refund requests must be submitted within 30 days of purchase." (effective 2024-11-02, superseded 2025-06-18, status SUPERSEDED). v2 = "Refund requests must be submitted within 45 days of purchase." (effective 2025-06-18, no superseded_at, status CURRENT as of today, 2026-08-23).</p>
+<table class="worked-table">
+<thead><tr><th>Check</th><th>Computation</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>SHA-256 of v1</td><td>h(v1)</td><td>97ca17e152d71b0bdd3f32616ea0ff734aefb5317a2670224661215b91b4363a</td></tr>
+<tr><td>SHA-256 of v2</td><td>h(v2)</td><td>2be6d94f38532cc9a4070b0edf7882b25f0d3fa73d7473cbf3d9858c3071dd9d</td></tr>
+<tr><td>h(v1) vs. h(v2)</td><td>Equality check</td><td>NOT EQUAL — same doc_id, two unrelated hashes</td></tr>
+<tr><td>v1's lifespan</td><td>days(2024-11-02 → 2025-06-18)</td><td>228 days as the current version</td></tr>
+<tr><td>v2's lifespan so far</td><td>days(2025-06-18 → 2026-08-23)</td><td>431 days current, and counting</td></tr>
+<tr><td>Total identity lifespan</td><td>days(2024-11-02 → 2026-08-23)</td><td>659 days under one doc_id, spanning two versions</td></tr>
+</tbody>
+</table>
+<p>431 days between v2's effective date and today works out to roughly 14 months — which independently reproduces Concept 03's own line, "a commit message from fourteen months ago," as a genuine numeric consistency check across concepts rather than a coincidence asserted from memory. Every hash and every day count here was computed via an executed Node.js script (<code>crypto.createHash('sha256')</code> and plain <code>Date</code> arithmetic) and independently cross-checked in Python via the <code>py</code> launcher.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A compliance policy edited quarterly</h3><p>Point-in-time audit questions — "what did this say on the day of the incident" — need exactly the effective_at/superseded_at metadata this concept assigns.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>A wiki page edited repeatedly under one page ID</h3><p>The page's own ID is the doc_id; every edit becomes a new version without losing the page's continuity.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A document moved or renamed with unchanged content</h3><p>Same identity or a new one? Resolved by a source-system-native key (a stable database ID, a ticket number), never by file path or URL alone.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assigning a brand-new doc_id on every re-ingestion</h3><p>Check the hash against the existing doc_id's current version first — an unchanged source should never mint a fresh identity for content that hasn't actually changed.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A version store and an as-of lookup, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES BEYOND HASHLIB</span>
+<pre><code>import hashlib
+
+store = {}  # doc_id -> list of version dicts, oldest first
+
+def content_hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def add_version(doc_id, text, now):
+    h = content_hash(text)
+    versions = store.setdefault(doc_id, [])
+    if versions and versions[-1]["hash"] == h:
+        return versions[-1]  # no-op: nothing actually changed
+    if versions:
+        versions[-1]["superseded_at"] = now
+        versions[-1]["status"] = "SUPERSEDED"
+    version = {
+        "version_number": len(versions) + 1,
+        "hash": h,
+        "effective_at": now,
+        "superseded_at": None,
+        "status": "CURRENT",
+    }
+    versions.append(version)
+    return version
+
+def current_version_as_of(doc_id, t):
+    for v in reversed(store[doc_id]):
+        if v["effective_at"] <= t and (v["superseded_at"] is None or t < v["superseded_at"]):
+            return v
+    return None
+
+v1 = add_version("POLICY-REFUND-001",
+    "Refund requests must be submitted within 30 days of purchase.", "2024-11-02")
+v2 = add_version("POLICY-REFUND-001",
+    "Refund requests must be submitted within 45 days of purchase.", "2025-06-18")
+
+assert v1["hash"] != v2["hash"]
+assert current_version_as_of("POLICY-REFUND-001", "2025-01-01")["version_number"] == 1
+assert current_version_as_of("POLICY-REFUND-001", "2026-08-23")["version_number"] == 2
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same mechanism, in real systems</h2></div></header>
+<p>Slowly Changing Dimension Type 2 in data warehousing is the direct real-world implementation of this concept's identity+versioning mechanism: a surrogate key (this concept's doc_id) stays fixed while effective-date and end-date columns track each revision, exactly like effective_at/superseded_at here. Git's commit history extends Concept 03's own mention of "a commit message from fourteen months ago" — every commit is a per-revision timestamp and message attached to a file that keeps one identity across every change. Cloud object-store versioning (keeping every past version of an object under one key) is a named, not-derived, industry parallel to the same underlying idea.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The As-Of Query Timeline</h2></div></header>
+<div class="lab">
+<p>One document, doc_id POLICY-REFUND-001, starting from the two versions in Section 10. Drag the as-of date slider and watch which version is "current" flip the moment you cross day 228 — the day v2 became effective. Once the slider reaches day 659 ("today"), a button unlocks that records a brand-new third version live, right in the browser.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgAsOf_0607">As-of date <output id="wgAsOfOut_0607">day 0 — 2024-11-02</output></label>
+<input type="range" id="wgAsOf_0607" min="0" max="900" step="1" value="0"></div>
+</div>
+<div style="display:flex;justify-content:space-between;font:10px DM Mono;color:var(--muted);margin:6px 0 18px">
+<span>v1 effective (day 0)</span><span>v2 effective (day 228)</span><span>today (day 659)</span>
+</div>
+<div class="lab-actions"><button type="button" id="wgAddEdit_0607">Record a new edit here</button></div>
+<div class="norm-readout" id="wgTimelineReadout_0607"></div>
+<div class="callout" id="wgTimelineVerdict_0607"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Stable identity vs. pure content-addressable storage</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Identity + versioning (this concept)</td><td>Supports as-of queries; "the same thing, changed" stays a meaningful statement</td><td>Extra bookkeeping — a version store, timestamps, and a change-detection check on every re-ingestion</td></tr>
+<tr><td>Pure content-addressable storage</td><td>Simple — the hash IS the address, no version store needed at all</td><td>No persistent identity by design; an edit produces an unrelated new object with nothing linking it to the old one</td></tr>
+</tbody>
+</table>
+<p>Decision framework: use content-addressing when "the same thing, changed" genuinely isn't a concept you need — pure immutable blobs, cache entries. Use stable identity whenever "what changed" or "what was true then" matters, which is exactly this concept's case.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNSCOPED DEDUP</span><h3>Near-duplicates fed in as if they were new versions of an unrelated doc_id</h3><p>Concept 06's dedup must run scoped per doc_id first — otherwise a near-duplicate of a completely different document gets mistaken for a new version.</p></article>
+<article class="info-card"><span>CLOCK SKEW</span><h3>As-of query results silently corrupted</h3><p>If effective_at/superseded_at come from clocks that disagree, "what was current on date X" can return the wrong version, or none at all.</p></article>
+<article class="info-card"><span>ORPHANED DOC_ID</span><h3>No retirement marker when a source is deleted</h3><p>A doc_id left with no explicit "retired" status looks like it's still tracking a live source, when the source is actually gone.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The hash can serve as the identity</td><td>False — Section 06's mechanism depends on the hash changing on every edit; the doc_id has to live outside it entirely.</td></tr>
+<tr><td>Versioning and provenance are the same thing</td><td>False — versioning is WHAT changed and WHEN, within one document's own history. Provenance (Concept 08) is WHERE it came from and the full transformation trail behind it.</td></tr>
+<tr><td>Only the current version needs to stay in the index</td><td>Context-dependent, not a blanket truth — Section 18 covers when retaining superseded versions actually matters.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Retaining every superseded version has a real storage cost — it's a genuine trade-off against the value of point-in-time audit answers, not a free default.</li>
+<li>The index should default to serving the current version for ordinary retrieval, while still supporting historical/as-of queries when they're explicitly asked for.</li>
+<li>Freshness and how quickly a new version propagates ties directly to Module 19's freshness SLOs, named forward-only here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't a document's content hash also serve as its stable identity?</summary><div>A cryptographic hash is designed to change completely on any content change (the avalanche effect) — if it were also the identity, every edit would mint a brand-new, unrelated document with no link to its own past.</div></details>
+<details class="quiz"><summary>Why does the 14-month gap between v2's effective date and today matter here?</summary><div>It's an independent numeric check against Concept 03's own claim that the 45-day rule changed "a commit message from fourteen months ago" — the two concepts' numbers line up because they describe the same underlying policy history.</div></details>
+<details class="quiz"><summary>Why must Concept 06's dedup be scoped to one doc_id before this concept's versioning runs?</summary><div>Otherwise a near-duplicate of a completely different document could be mistaken for a new version of an unrelated doc_id — dedup has to resolve "is this really the same document" before versioning asks "has this document's content changed."</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new document, doc_id = "HR-0007", has two text revisions: rev A = "Employees accrue 1.5 vacation days per month." (effective 2025-01-01), and rev B = "Employees accrue 2.0 vacation days per month." (effective 2025-09-01). State whether h(rev A) and h(rev B) should be equal or different, and lay out the full version metadata table for HR-0007 — doc_id, version_number, content_hash (just note "differs" is enough, no need to compute a real hash by hand), effective_at, superseded_at, and status for both rows.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>h(rev A) and h(rev B) must be DIFFERENT — the content genuinely changed ("1.5" to "2.0"), and a hash gives zero partial credit for a one-character difference. Version table: doc_id = HR-0007 for both rows. Row 1 — version_number 1, content_hash = h(rev A), effective_at = 2025-01-01, superseded_at = 2025-09-01, status = SUPERSEDED. Row 2 — version_number 2, content_hash = h(rev B), effective_at = 2025-09-01, superseded_at = (none), status = CURRENT.</div>
+</details>
+<p>Teach-back: explain, in your own words, why HR-0007 keeps the same doc_id across both rows even though its content_hash is completely different in each one.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Document identity and versioning</h3><ul><li><b>doc_id:</b> assigned once at first ingestion, never reassigned</li><li><b>version_number / content_hash:</b> one per revision — the hash is expected to change every time</li><li><b>effective_at / superseded_at:</b> the minimal timestamp pair an as-of query needs</li><li><b>Handoff:</b> superseded versions are tombstoned, not deleted; Concept 08 builds the fuller audit trail</li></ul></div>
+<div><h3>Memorable example</h3><p>POLICY-REFUND-001 keeps one doc_id across a 30-day version (superseded after 228 days) and a 45-day version (current for 431 days and counting) — two completely unrelated SHA-256 hashes under one stable identity.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't a content hash double as a document's stable identity?</summary><div>A hash is designed so any content change produces a completely unrelated output (the avalanche effect) — using it as identity would mean every edit mints a brand-new, unlinked document, which defeats the entire purpose of tracking a version history.</div></details>
+<details class="quiz"><summary>How does a Type 2 Slowly Changing Dimension relate to this concept?</summary><div>It's the direct data-warehousing implementation of the same idea: a surrogate key stays fixed across changes (this concept's doc_id) while effective-date and end-date columns track each revision, exactly like effective_at/superseded_at here.</div></details>
+<details class="quiz"><summary>Why does deduplication need to be scoped to one doc_id before versioning runs?</summary><div>Otherwise a near-duplicate of an entirely different document could be misread as a "new version" of an unrelated doc_id — dedup has to confirm sameness of identity before versioning asks whether that same document's content has changed.</div></details>
+<details class="quiz"><summary>How would you design an as-of query for a document with several stored versions?</summary><div>Store effective_at and superseded_at per version, then find the version vi where effective_at(vi) ≤ t &lt; superseded_at(vi) for the requested timestamp t — or the latest version if it has no superseded_at set, meaning it's still current.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Slowly_changing_dimension"><b>Slowly changing dimension — Wikipedia</b><br><span>Type 2 SCD (surrogate key + version + effective/end-date columns) is the direct data-warehousing implementation of this concept's mechanism, cited in Section 13's ecosystem note.</span></a>
+<a href="https://en.wikipedia.org/wiki/Surrogate_key"><b>Surrogate key — Wikipedia</b><br><span>Formalizes the general idea of a content-independent, system-assigned stable identifier — exactly what doc_id instantiates, behind Section 05's precision and Section 09's mathematics.</span></a>
+<a href="https://en.wikipedia.org/wiki/Content-addressable_storage"><b>Content-addressable storage — Wikipedia</b><br><span>The named alternative this concept deliberately does NOT use as identity — the address IS the hash, so every edit is, by design, an unrelated object. Used in Section 15's contrast.</span></a>
+<a href="https://en.wikipedia.org/wiki/Version_control"><b>Version control — Wikipedia</b><br><span>The git-based real-world example of per-revision timestamps and messages, extending Concept 03's own commit-history mention in Section 13's ecosystem note.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 COMPLETE · CONCEPT 08 NEXT</span>
+<h3>One identity, a real version history — provenance and lineage open next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can lay out a full version metadata table for a new doc_id without looking back at Section 05. Concept 08, "Provenance, lineage and timestamps," opens next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-06.html">← Back to Concept 06</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 08, Provenance, lineage and timestamps.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 07 · Complete</p>
+<a href="module-06-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

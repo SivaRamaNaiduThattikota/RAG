@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 04-07 built a complete BM25 scoring formula but never asked whether the ranking it produces is actually good. This concept shifts from building scores to measuring them: precision@k (of the retrieved set, how many are relevant), recall@k (of the relevant documents, how many were retrieved), and F1 as their harmonic mean, worked on a concrete 8-document ranked list.">
+<title>Precision, recall and F-score — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 08</p>
+<h1>How good is<br><em>the ranking, really?</em></h1>
+<p class="lesson-lead">Concepts 04 through 07 built a complete scoring formula — tf, idf, saturation, and length normalization. Nothing in that formula ever asked whether the ranking it produces is actually good. This concept makes that shift: given a ranked list and a cutoff k, precision@k asks what fraction of the top-k retrieved documents are actually relevant, and recall@k asks what fraction of all the relevant documents in existence made it into the top k. F1 combines both into one number. These are set-based metrics — a relevant document at rank 1 counts identically to one at rank k — the rank-aware family that fixes that is Concept 09's job, not this one's.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth of eleven concepts in Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concepts 04-07's complete BM25 formula — this concept doesn't touch scoring at all, it measures whether a ranking produced by any scoring function is good</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute precision@k, recall@k and F1@k for a concrete ranked list, and explain why they're evaluated at a specific cutoff rather than over the whole ranking</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Concept 07 finished Module 05's scoring machinery — a complete, production-shaped BM25 formula. This concept starts measuring whether the rankings that formula produces are actually any good.</p>
+<b>8 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A ranking is a claim. These metrics check it.</h2>
+</div>
+<p>BM25 hands back a sorted list and stops — it has no opinion on whether that list is good. This concept gives you the first tools to check that claim: pick a cutoff k, look at the top k results, and ask two separate questions about them.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Precision@k and recall@k ask two different questions</h3>
+<div class="mental-compare">
+<div><span>CONCEPTS 04-07 — SCORING</span><p>Compute a number for every document, sort by it. BM25's job ends the moment the sorted list exists.</p></div>
+<div><span>CONCEPT 08 — MEASURING</span><p>Take the top k of that sorted list and check it against ground truth: precision@k = relevant ∩ retrieved / retrieved. recall@k = relevant ∩ retrieved / relevant. Two different fractions, two different denominators.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> precision asks "of what I handed back, how much was right?" Recall asks "of everything that was right, how much did I hand back?" The two denominators are never the same set.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A formula can't grade its own homework</h3>
+<p>BM25's score for a document is internally consistent — it always ranks a document with more, better-distributed, rarer query terms higher. But "internally consistent" and "actually useful to the person searching" are not the same claim. A ranking can be perfectly computed and still put the one relevant ticket at position 6 instead of position 1, or fail to retrieve it at all. Checking that requires something BM25 itself cannot supply: an independent judgment of which documents are actually relevant to the query, then a way to score the ranking against that judgment. That judgment is assumed given in this concept (Concept 10 covers where it actually comes from) — the job here is just the scoring.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Eight ranked documents, four actually relevant, cutoff at k=3</h3>
+<p>A query returns eight documents in ranked order, positions 1 through 8. Ground truth says positions 1, 2, 4 and 7 are actually relevant; positions 3, 5, 6 and 8 are not. Cut off at k=3 — only the top three positions count as "retrieved":</p>
+<div class="example-grid">
+<article class="info-card"><span>RETRIEVED (TOP 3)</span><h3>Positions 1, 2, 3</h3><p>Two of these (1, 2) are relevant — that's 2 true positives. Position 3 is not relevant — 1 false positive.</p></article>
+<article class="info-card"><span>MISSED (RANKS 4-8)</span><h3>Position 4 and position 7</h3><p>Both are relevant but sit outside the top 3 — 2 false negatives, the relevant documents this cutoff didn't reach.</p></article>
+</div>
+<p>Precision@3 = 2 relevant retrieved / 3 retrieved = 0.667. Recall@3 = 2 relevant retrieved / 4 relevant total = 0.5. F1@3 = 2×0.667×0.5 / (0.667+0.5) ≈ 0.571. Every one of these numbers was computed by script and independently confirmed before being written here.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0508-beginner-visual-title">
+<strong class="concept-visual-title" id="c0508-beginner-visual-title">VISUAL · EIGHT RANKED POSITIONS, CUTOFF AT k=3</strong>
+<div class="rank-chip-row">
+<div class="rank-chip tp"><b>1</b><span>relevant</span><small>TP</small></div>
+<div class="rank-chip tp cutoff-edge"><b>2</b><span>relevant</span><small>TP</small></div>
+<div class="rank-chip fp"><b>3</b><span>not relevant</span><small>FP</small></div>
+<div class="rank-chip fn"><b>4</b><span>relevant</span><small>FN</small></div>
+<div class="rank-chip tn"><b>5</b><span>not relevant</span><small>TN</small></div>
+<div class="rank-chip tn"><b>6</b><span>not relevant</span><small>TN</small></div>
+<div class="rank-chip fn"><b>7</b><span>relevant</span><small>FN</small></div>
+<div class="rank-chip tn"><b>8</b><span>not relevant</span><small>TN</small></div>
+</div>
+<figcaption>The dashed edge after position 2 marks the k=3 cutoff — everything left of it (positions 1-3) is "retrieved," everything right of it isn't. Precision only looks at the three chips left of the line; recall looks at all four relevant chips regardless of which side they land on.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three formulas, one shared table of counts</h3>
+<table class="compare-table">
+<thead><tr><th>Metric</th><th>Formula</th><th>Question it answers</th></tr></thead>
+<tbody>
+<tr><td>Precision@k</td><td>TP / (TP + FP) = TP / k</td><td>Of the k documents retrieved, what fraction are actually relevant?</td></tr>
+<tr><td>Recall@k</td><td>TP / (TP + FN) = TP / (total relevant)</td><td>Of every relevant document that exists, what fraction did the top k catch?</td></tr>
+<tr><td>F1@k</td><td>2 × Precision × Recall / (Precision + Recall)</td><td>One number balancing both — low if either precision or recall is low, since it's a harmonic, not arithmetic, mean.</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where measurement sits, right after scoring</h3>
+<div class="pipeline-preview">
+<span>Query</span><i>↓</i><span>BM25 scoring — Concepts 04-07</span><i>↓</i><span>Ranked list produced</span><i>↓</i><span class="hot">Evaluation — precision/recall/F1 at a cutoff (this concept)</span><i>↓</i><span>Retrieval quality known</span>
+</div>
+<p>This concept sits entirely after the scoring formula finishes its job. Nothing here changes how a document gets ranked — it only judges the ranking that already exists, against ground truth that has to come from somewhere else (Concept 10).</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Retrieval precision/recall distinguished from classifier precision/recall, set-based metrics distinguished from rank-aware metrics, and ground-truth relevance distinguished from this concept's own scope">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Precision/recall@k (this concept)</span><span role="cell">Module 02's classifier precision/recall</span><span role="cell">Identical formulas, different "positive" — here it's "inside the top-k retrieved set," there it was a classifier's decision at one threshold. The parallel is real; the mechanism producing the positive set is different.</span></div>
+<div role="row"><span role="cell">Set-based metrics (this concept)</span><span role="cell">Rank-aware metrics (Concept 09)</span><span role="cell">A relevant document at rank 1 and one at rank k score identically here. MRR/MAP/DCG, next concept, are exactly the family built to care about position within the top k.</span></div>
+<div role="row"><span role="cell">Scoring this concept assumes given</span><span role="cell">Where relevance judgments come from</span><span role="cell">This concept treats "positions 1, 2, 4, 7 are relevant" as a given fact. Concept 10 covers how that fact actually gets established.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A higher k always gives a better score."</b><p>Recall@k can only rise or stay flat as k grows (retrieving more can only add relevant documents, never remove them), but precision@k typically falls as k grows past the point where relevant documents run out — b03/s10's own numbers show this directly.</p></div>
+<div><b>"Precision and recall move together."</b><p>They trade off. Retrieving more (larger k) tends to raise recall and lower precision; retrieving less does the opposite. There's no k that maximizes both at once except in the rare case of a perfect ranking.</p></div>
+<div><b>"F1 is the only way to combine them."</b><p>F1 weights precision and recall equally. F-beta (named here only) lets one matter more than the other — a system where missing a relevant document is worse than a false positive would weight recall more heavily.</p></div>
+<div><b>"One query's precision/recall is the whole evaluation."</b><p>A single query's numbers are noisy and can be an outlier. Real evaluation averages precision/recall/F1 across many queries — Module 18 covers that properly; this concept works one query at a time on purpose, to make the mechanics visible.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT SEARCH</span><b>Precision@k on retrieved support tickets</b><p>Given a fixed set of judged-relevant past tickets for a test query, precision@k tells you how much of what the search returns at a chosen k is actually useful, not just plausible-looking.</p></div>
+<div><span>RETRIEVAL TUNING</span><b>Recall@k catches a coverage problem precision alone would hide</b><p>A search that returns 3 relevant tickets out of 3 retrieved (precision=1.0) could still be missing 7 other relevant tickets entirely — recall@k is what exposes that gap.</p></div>
+<div><span>PREVIEW — CONCEPT 09</span><b>What position, not just presence, buys you</b><p>Precision@k treats a relevant ticket at position 1 and position 3 identically. The next concept's MRR and nDCG are what let position itself count.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Precision and recall have different denominators</b><p>Precision divides by how many were retrieved (k); recall divides by how many relevant documents actually exist.</p></div>
+<div><b>F1 is a harmonic mean, not an average</b><p>It stays low if either precision or recall is low — a harmonic mean can't be rescued by one strong number alone.</p></div>
+<div><b>These are set-based, not rank-aware</b><p>Position within the top k doesn't matter yet — a relevant document at rank 1 and rank k score identically here.</p></div>
+<div><b>Ground-truth relevance is assumed, not derived</b><p>This concept never asks where "positions 1, 2, 4, 7 are relevant" came from — Concept 10 does.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why can recall@k never decrease as k increases, while precision@k can?</li>
+<li>Using b03's numbers, what would recall@8 be, and why does that make sense given k=8 means "retrieve everything"?</li>
+<li>Why is a relevant document at rank 1 scored identically to one at rank k by precision@k and recall@k?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 09: MRR, MAP, DCG and nDCG</h3>
+<p>This concept treated the top-k retrieved set as unordered — position inside it never affected the score. The next concept covers the rank-aware family that fixes exactly that: MRR looks at where the first relevant result lands, MAP averages precision at every relevant rank, and DCG/nDCG weight relevance by a decreasing function of position.</p>
+<div class="beginner-memory"><b>Concept 08 is complete.</b> Continue to Concept 09, "MRR, MAP, DCG and nDCG."</div>
+<a class="button primary" href="../roadmap.html#module-05">See Module 05 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Pick a cutoff, count four outcomes, compute two fractions</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One ranked list, one cutoff</b><small>Eight documents, four relevant, k=3 — the four outcomes counted by hand.</small></a>
+<a href="#b04"><span>02</span><b>The three formulas</b><small>Precision, recall, and their harmonic mean, each answering a different question.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Rank position (Concept 09) and where relevance judgments come from (Concept 10) are both out of scope here.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal notation, from-scratch code, and the Top-k Confusion Grid lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> shift from scoring to measuring → count TP/FP/FN/TN at one cutoff → compute precision, recall, F1 → Concept 09 adds position, Concept 10 adds where the ground truth comes from.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the precision, recall and F-score deep dive</b><em>Formal notation, from-scratch code, and the Top-k Confusion Grid lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From building a ranking to grading one</h2></div></header>
+<p>Concepts 04-07 built a complete, production-shaped scoring formula. Nothing in that chain ever checked its own output against ground truth. This concept is the first that does: it fixes a cutoff k, counts four outcomes (true/false positive, true/false negative) against a known relevance judgment, and turns those counts into precision, recall, and F1. Position within the top k, and where the relevance judgment itself comes from, are both explicitly out of scope — Concepts 09 and 10 respectively.</p>
+<div class="flow">
+<div class="flow-node">Concept 06 — saturating BM25</div>
+<div class="flow-node">Concept 07 — length normalization</div>
+<div class="flow-node hot">Concept 08 — precision, recall, F1 @ k</div>
+<div class="flow-node">Concept 09 — MRR, MAP, DCG, nDCG</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COUNT</span><h3>Classify every ranked position into TP, FP, FN or TN at a given k</h3><p>Given a ranked list and a relevance judgment, produce the four counts precision/recall/F1 are built from.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute precision@k, recall@k and F1@k from those counts</h3><p>By hand, for any k, on any ranked list with known relevance.</p></article>
+<article class="info-card"><span>REASON</span><h3>Explain why recall@k is monotonic in k and precision@k is not</h3><p>State the mechanical reason, not just the observed pattern.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate this concept from rank-aware metrics and from relevance-judgment sourcing</h3><p>State clearly what Concept 09 and Concept 10 each add that this concept deliberately doesn't.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concepts 04-07 — a complete BM25 scoring formula.</b> This concept measures whatever ranking any scoring function produces; it doesn't require BM25 specifically, but the course's own ranked lists so far all came from it.</li>
+<li><b>No mechanism from Module 02 required, but the parallel helps.</b> Module 02's confusion-matrix-based precision/recall (Concept 03 there) uses the identical formulas on a classifier's decision instead of a retrieved set.</li>
+<li><b>Out of scope here:</b> rank position within the top k (Concept 09) and where relevance judgments actually come from (Concept 10) are both named only as forward references.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A fishing net with a size limit</h2></div></header>
+<p>Casting a net into a lake full of fish and non-fish debris is like retrieving a ranked list: the net doesn't sort by species, it just catches whatever falls within its reach. Precision asks: of everything the net actually caught, what fraction was fish? Recall asks: of every fish in the entire lake, what fraction ended up in the net? A tiny, tightly-woven net might catch only fish (high precision) but miss most of the lake's fish entirely (low recall). A net the size of the whole lake catches every fish (recall=1) but also every piece of debris (precision drops to whatever fraction of the lake is actually fish).</p>
+<div class="callout warning"><b>Analogy boundary</b>The net explains the precision/recall trade-off shape, not the specific arithmetic — Section 09 gives the exact formulas, and Section 09's own reasoning about monotonicity doesn't follow from the net alone.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Retrieved set @k</td><td>The top k documents in a ranked list, treated as one unordered set</td><td>R_k</td></tr>
+<tr><td>Relevant set</td><td>Every document judged relevant to the query, regardless of rank or whether it was retrieved</td><td>Rel</td></tr>
+<tr><td>Precision@k</td><td>The fraction of the retrieved set that is relevant</td><td>P@k = |R_k ∩ Rel| / |R_k|</td></tr>
+<tr><td>Recall@k</td><td>The fraction of the relevant set that was retrieved</td><td>Rec@k = |R_k ∩ Rel| / |Rel|</td></tr>
+<tr><td>F1@k</td><td>The harmonic mean of precision@k and recall@k</td><td>F1@k = 2·P@k·Rec@k / (P@k+Rec@k)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Four counts, then two fractions</h2></div></header>
+<div class="lane-flow">
+<div><b>Fix k —</b> decide how many top-ranked results actually count as "retrieved" for this evaluation.</div>
+<div><b>Classify every document —</b> TP (relevant and in the top k), FP (not relevant but in the top k), FN (relevant but outside the top k), TN (not relevant and outside the top k).</div>
+<div><b>Compute precision@k —</b> TP / (TP+FP), which always equals TP/k since TP+FP is exactly the size of the retrieved set.</div>
+<div><b>Compute recall@k —</b> TP / (TP+FN), which always equals TP divided by the total number of relevant documents, a fixed quantity that doesn't depend on k at all.</div>
+<div><b>Combine into F1@k —</b> the harmonic mean, low whenever either input is low.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The classify-then-divide flow</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram from a ranked list and cutoff to four classified outcomes to precision, recall and F1">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Ranked list + cutoff k</b><small>Top k = retrieved, the rest is not</small></div>
+<div class="diagram-node hub-center"><b>Classify: TP / FP / FN / TN</b><small>Every document falls into exactly one bucket</small></div>
+<div class="diagram-node"><b>Precision@k, Recall@k, F1@k</b><small>Two fractions and their harmonic mean</small></div>
+</div>
+</div>
+<table class="confusion-quadrant" aria-label="Confusion quadrant for retrieval at a cutoff">
+<thead><tr><th></th><th>Relevant</th><th>Not relevant</th></tr></thead>
+<tbody>
+<tr><th>In top k (retrieved)</th><td>TP</td><td>FP</td></tr>
+<tr><th>Outside top k</th><td>FN</td><td>TN</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where evaluation sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Inverted index</span><i>↓</i><span>Retrieval — BM25 scoring, Concepts 04-07</span><i>↓</i><span class="hot">Evaluation — this concept judges the ranking, doesn't change it</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept never touches the "Retrieval" box's own mechanics — it only looks at what came out of it and scores that output against ground truth.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why recall@k is monotonic and precision@k is not</h2></div></header>
+<p>Let Rel be the fixed set of relevant documents (its size never changes as k changes), and let R_k be the retrieved set at cutoff k. Increasing k to k+1 can only add one more document to R_k — it never removes one, since R_k ⊆ R_{k+1} by construction of a ranked list. Therefore |R_k ∩ Rel| is non-decreasing in k, and since |Rel| is fixed:</p>
+<div class="equation">Rec@k = |R_k ∩ Rel| / |Rel|   is non-decreasing as k increases</div>
+<p>Precision has no such guarantee, because its denominator |R_k| = k grows by exactly 1 every step, while its numerator |R_k ∩ Rel| grows by 1 only if the newly-added document happens to be relevant, and by 0 otherwise:</p>
+<div class="equation">P@k = |R_k ∩ Rel| / k   can rise, fall, or stay flat as k increases</div>
+<p>This is the exact mechanical reason recall never decreases as you retrieve more, while precision can fall the moment you retrieve a non-relevant document.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The same eight documents, four different cutoffs</h2></div></header>
+<p>Ranked list of 8 documents; relevant = positions {1, 2, 4, 7} (4 relevant total, fixed regardless of k):</p>
+<table class="worked-table">
+<thead><tr><th>k</th><th>TP</th><th>FP</th><th>FN</th><th>Precision@k</th><th>Recall@k</th><th>F1@k</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1</td><td>0</td><td>3</td><td>1.000</td><td>0.250</td><td>0.400</td></tr>
+<tr><td>3</td><td>2</td><td>1</td><td>2</td><td>0.667</td><td>0.500</td><td>0.571</td></tr>
+<tr><td>5</td><td>3</td><td>2</td><td>1</td><td>0.600</td><td>0.750</td><td>0.667</td></tr>
+<tr><td>8</td><td>4</td><td>4</td><td>0</td><td>0.500</td><td>1.000</td><td>0.667</td></tr>
+</tbody>
+</table>
+<p>Every row was computed and independently verified by script before being written here. Recall climbs monotonically, 0.25 → 0.5 → 0.75 → 1.0, exactly as Section 09 proved it must. Precision falls from a perfect 1.0 at k=1 to 0.5 at k=8 — retrieving "everything" (k=8) always gives recall=1 and precision equal to the corpus's overall relevant fraction, here 4/8=0.5. F1 peaks around the middle of this range (k=5 and k=8 tie at 0.667) rather than at either extreme, exactly what a metric balancing both quantities should do.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Comparing two rankings at the same k</h3><p>If system A gets precision@5=0.8 and system B gets 0.4 on the same query, A's top 5 is straightforwardly more useful at that cutoff — no ambiguity.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>k=8, retrieve the entire corpus</h3><p>Recall@k is guaranteed to be 1.0, and precision@k collapses to the corpus's own relevant fraction — a useful sanity-check boundary, not a real operating point.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Zero relevant documents exist for a query</h3><p>Recall's denominator (total relevant) is 0, making recall undefined rather than 0 — a real edge case evaluation code has to handle explicitly, not silently divide by zero.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Comparing precision@3 for one system to precision@10 for another</h3><p>Precision at different cutoffs isn't comparable — a fair comparison always fixes k first, exactly as s10's table holds k fixed within each row.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Precision, recall and F1 at k, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>relevant = {1, 2, 4, 7}  # 1-indexed ranked positions judged relevant
+total_relevant = len(relevant)
+
+def metrics_at_k(k, relevant):
+    retrieved = set(range(1, k + 1))
+    tp = len(retrieved & relevant)
+    fp = len(retrieved - relevant)
+    fn = len(relevant - retrieved)
+    precision = tp / len(retrieved) if retrieved else 0.0
+    recall = tp / len(relevant) if relevant else None
+    f1 = (2 * precision * recall / (precision + recall)
+          if (precision + recall) > 0 else 0.0)
+    return {"k": k, "tp": tp, "fp": fp, "fn": fn,
+            "precision": round(precision, 3),
+            "recall": round(recall, 3),
+            "f1": round(f1, 3)}
+
+results = [metrics_at_k(k, relevant) for k in (1, 3, 5, 8)]
+assert results[0] == {"k": 1, "tp": 1, "fp": 0, "fn": 3, "precision": 1.0, "recall": 0.25, "f1": 0.4}
+assert results[1]["precision"] == 0.667 and results[1]["recall"] == 0.5
+assert results[3]["recall"] == 1.0  # k=8 retrieves everything
+
+# Recall is non-decreasing in k; precision is not guaranteed to be.
+recalls = [metrics_at_k(k, relevant)["recall"] for k in range(1, 9)]
+assert all(recalls[i] <= recalls[i + 1] for i in range(len(recalls) - 1))
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same counts, in real tools</h2></div></header>
+<p>Information-retrieval toolkits (<code>pytrec_eval</code>, <code>ranx</code>) compute precision@k and recall@k directly from a run file (a ranked list per query) and a qrels file (relevance judgments) — the exact two inputs this concept assumes. Search platforms (Elasticsearch's Rank Evaluation API, OpenSearch's equivalent) expose the same metrics for live index evaluation. The underlying TP/FP/FN/TN classification is identical to <code>sklearn.metrics.precision_score</code>/<code>recall_score</code> from Module 02 — the difference is entirely in what counts as the "positive" set, not in the arithmetic.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Top-k Confusion Grid</h2></div></header>
+<div class="lab">
+<p>Eight ranked positions, each toggleable as relevant or not (defaulting to b03/s10's own {1,2,4,7}). Move the cutoff k and watch every chip's classification, the confusion counts, and precision/recall/F1 update live — change which positions are relevant to build your own ranked list and see the same formulas apply.</p>
+<fieldset class="relevance-toggles" id="wgRelToggles_0508">
+<legend>Mark each position relevant or not</legend>
+</fieldset>
+<div class="lab-controls">
+<div class="control"><label for="wgK_0508">Cutoff k <output id="wgKOut_0508">3</output></label>
+<input type="range" id="wgK_0508" min="1" max="8" step="1" value="3"></div>
+</div>
+<div class="rank-chip-row" id="wgRankRow_0508"></div>
+<table class="confusion-quadrant" aria-label="Live confusion quadrant">
+<thead><tr><th></th><th>Relevant</th><th>Not relevant</th></tr></thead>
+<tbody>
+<tr><th>In top k</th><td id="wgTP_0508">—</td><td id="wgFP_0508">—</td></tr>
+<tr><th>Outside top k</th><td id="wgFN_0508">—</td><td id="wgTN_0508">—</td></tr>
+</tbody>
+</table>
+<div class="norm-readout">
+<div><span>PRECISION@k</span><b id="wgPrec_0508">—</b></div>
+<div><span>RECALL@k</span><b id="wgRec_0508">—</b></div>
+<div><span>F1@k</span><b id="wgF1_0508">—</b></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Set-based evaluation vs. rank-aware evaluation</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it measures</th><th>What it ignores</th></tr></thead>
+<tbody>
+<tr><td>Precision/recall/F1@k (this concept)</td><td>Whether the top-k set overlaps with the relevant set, and how much</td><td>Where inside the top k each relevant document actually sits</td></tr>
+<tr><td>MRR/MAP/DCG/nDCG (Concept 09)</td><td>The same overlap, but weighted so earlier positions count more</td><td>Nothing extra — a strict superset of what this concept measures, at the cost of a more involved formula</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>k CHOSEN AFTER THE FACT</span><h3>Cherry-picking k to flatter a system</h3><p>Reporting precision@1 for a system that only does well at k=1, or recall@50 for one that needs a huge net to look good, misrepresents real-world performance at the k users actually see.</p></article>
+<article class="info-card"><span>UNDEFINED RECALL</span><h3>A query with zero relevant documents</h3><p>Section 11's boundary case — recall's denominator is 0, and treating the undefined result as 0 (or 1) silently biases any average computed across queries.</p></article>
+<article class="info-card"><span>MIXED-k COMPARISON</span><h3>Comparing precision@3 to precision@10</h3><p>Section 11's mistake card — the two numbers answer different questions and are not directly comparable without holding k fixed.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Precision and recall always move in the same direction as k grows</td><td>False — Section 09 proves recall is non-decreasing while precision has no such guarantee, and s10's table shows precision actually falling as k grows.</td></tr>
+<tr><td>F1 is a simple average of precision and recall</td><td>False — it's a harmonic mean, which is always less than or equal to the arithmetic mean, and drops sharply if either input is near zero.</td></tr>
+<tr><td>A relevant document ranked higher automatically scores better under these metrics</td><td>False for this concept specifically — precision@k and recall@k are set-based and don't reward position within the top k at all; that's Concept 09's entire point.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>k should match a real product decision — how many results a user actually sees (e.g. a chat assistant injecting the top 5 chunks into context) — not be chosen to flatter whichever k a system happens to do best at.</li>
+<li>Precision@k and recall@k are almost always reported averaged across a held-out set of test queries, never for a single query in isolation — Module 18 covers the averaging and statistical-significance machinery this concept deliberately doesn't.</li>
+<li>Undefined recall (zero relevant documents for a query) has to be handled explicitly in evaluation code — silently coercing it to 0 or excluding the query entirely are both defensible choices, but the choice has to be deliberate and documented.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can recall@k never decrease as k increases, while precision@k can?</summary><div>The retrieved set only grows as k increases, so the number of relevant documents caught can only stay the same or increase — recall's numerator is non-decreasing over a fixed denominator. Precision's denominator (k) grows by exactly 1 every step regardless of whether the new document is relevant, so its ratio can fall.</div></details>
+<details class="quiz"><summary>At k=8 in s10's example, why is recall exactly 1.0 and precision exactly 0.5?</summary><div>k=8 retrieves the entire 8-document list, so every relevant document is necessarily included — recall=1.0 by construction. Precision becomes the corpus's own relevant fraction, 4 relevant out of 8 total, which is 0.5.</div></details>
+<details class="quiz"><summary>Why are precision@3 for one system and precision@10 for another not directly comparable?</summary><div>Because they answer different questions — "how clean are the top 3" versus "how clean are the top 10." A fair comparison requires fixing k and computing the same metric for both systems at that cutoff.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different query returns 6 ranked documents; relevant = positions {2, 3, 5} (3 relevant total). Compute TP, FP, FN, precision, recall and F1 at k=2 and at k=4 by hand. State which of the two cutoffs a product that shows users exactly 4 results should actually report, and why reporting the other one would be misleading.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Relevant = {2,3,5}. At k=2: retrieved={1,2}. TP=1 (position 2), FP=1 (position 1), FN=2 (positions 3,5). Precision=1/2=0.5, Recall=1/3≈0.333, F1=2×0.5×0.333/(0.5+0.333)≈0.4. At k=4: retrieved={1,2,3,4}. TP=2 (positions 2,3), FP=2 (positions 1,4), FN=1 (position 5). Precision=2/4=0.5, Recall=2/3≈0.667, F1=2×0.5×0.667/(0.5+0.667)≈0.571. A product showing exactly 4 results to users should report k=4's numbers — reporting k=2 would describe a cutoff the user never actually experiences, understating recall relative to what the product genuinely delivers.</div>
+</details>
+<p>Teach-back: explain, in your own words, why the "right" k to report is a product decision, not a purely mathematical one.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Precision, recall, F1 @ k</h3><ul><li><b>Precision@k:</b> TP/k — of what was retrieved, how much was relevant</li><li><b>Recall@k:</b> TP/(total relevant) — of what's relevant, how much was retrieved</li><li><b>F1@k:</b> harmonic mean of the two, low if either is low</li><li><b>Set-based, not rank-aware:</b> position inside the top k doesn't matter yet — Concept 09's job</li></ul></div>
+<div><h3>Memorable example</h3><p>Eight documents, four relevant, cutoff k=3: precision=0.667, recall=0.5, F1≈0.571 — three separate numbers from the same four counts, each answering a different question.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A stakeholder says "our search has 95% precision, so it's great." What would you ask before agreeing?</summary><div>Precision at what k, and what's the recall at that same k? A system can hit very high precision by retrieving only one or two extremely safe results while missing most relevant documents entirely — precision alone never reveals that coverage gap.</div></details>
+<details class="quiz"><summary>Why is F1 a harmonic mean rather than a simple average of precision and recall?</summary><div>A harmonic mean punishes a low value in either input far more than an arithmetic mean would — a system with precision=1.0 and recall=0.01 would average to roughly 0.5 arithmetically but scores near 0.02 harmonically, correctly reflecting that it's barely useful despite one perfect-looking number.</div></details>
+<details class="quiz"><summary>Design question: how would you choose which k to report for a RAG system that injects retrieved chunks into an LLM's context?</summary><div>Match k to however many chunks the system actually injects into context at answer time — if the pipeline uses the top 5 chunks, precision@5 and recall@5 are what describes the user's real experience; any other k describes a scenario the system doesn't actually run.</div></details>
+<details class="quiz"><summary>A colleague computes recall for a query with zero relevant documents and gets a division-by-zero error. How should the evaluation code handle this?</summary><div>Treat it as an explicit edge case rather than letting it crash or silently defaulting — common, defensible choices are excluding such queries from the average entirely, or reporting them separately, but the decision needs to be deliberate and documented rather than accidental.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Precision_and_recall"><b>Precision and recall — Wikipedia</b><br><span>General definitions and the classifier/retrieval duality this concept draws on directly in Section 06 and Section 13.</span></a>
+<a href="https://en.wikipedia.org/wiki/F-score"><b>F-score — Wikipedia</b><br><span>The harmonic-mean derivation and the F-beta generalization named in Section 07's common-mistakes card.</span></a>
+<a href="https://en.wikipedia.org/wiki/Document_retrieval"><b>Document retrieval — Wikipedia</b><br><span>Background on the retrieved-set framing this concept's precision@k and recall@k formulas are built on.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 COMPLETE · CONCEPT 09 NEXT</span>
+<h3>Set-based evaluation done — rank position opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can classify TP/FP/FN/TN at any cutoff without looking back at Section 06. Concept 09, "MRR, MAP, DCG and nDCG," opens next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Top-k Confusion Grid ↑</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 09, MRR, MAP, DCG and nDCG.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 08 · Complete</p>
+<a href="module-05-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>

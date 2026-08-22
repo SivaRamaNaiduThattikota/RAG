@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 05's closing concept: what lexical retrieval is structurally good at (exact-match precision, postings-list efficiency, saturation and length correction, zero training data), and its one structural failure -- vocabulary mismatch, where BM25 scores a genuinely relevant document at exactly 0.0000, sometimes ranking it below every irrelevant document in the corpus.">
+<title>Lexical retrieval strengths and failures — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-05-11.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 11 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 05 · CONCEPT 11</p>
+<h1>Excellent at "same word."<br><em>Blind to "same idea."</em></h1>
+<p class="lesson-lead">Concepts 02 and 04-07 built a complete BM25 scoring formula. Concepts 08-10 built the tools to measure whether its rankings are any good. This closing concept turns that machinery on itself: what is lexical retrieval structurally good at, independent of any further tuning, and where does it structurally break? The answer to the second question has an exact number attached — a genuinely relevant document can score precisely 0.0000, and can rank strictly below every irrelevant document in the corpus, simply because the customer phrased their question in different words than the answer was written in.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eleventh and final concept of Module 05 (Phase 1)</b></div>
+<div><span>PREREQUISITE</span><b>Concepts 02, 04-07's BM25 formula and Concepts 08-10's evaluation tools — this concept introduces no new formula, it stress-tests the one already built</b></div>
+<div><span>BEGINNER GOAL</span><b>Name lexical retrieval's structural strengths, and predict from vocabulary overlap alone whether BM25 will score a document at exactly zero</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concept 10 covered where relevance judgments come from. This closing concept applies everything Module 05 built to ask a harder question: what is lexical retrieval structurally good at, and where does it structurally fail?</p>
+<b>CONCEPT 10 COMPLETE · CONCEPT 11 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Same word, found instantly. Same idea, different words, invisible.</h2>
+</div>
+<p>BM25 is excellent at finding needles that use the same word as the haystack, and structurally blind to needles that don't. This concept names both halves of that sentence precisely, with numbers.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A synthesis, not a new formula</h3>
+<div class="mental-compare">
+<div><span>CONCEPTS 01-10</span><p>Built a scoring formula piece by piece (Concepts 02, 04-07), then built tools to measure whether its rankings are good (Concepts 08-10).</p></div>
+<div><span>CONCEPT 11</span><p>Steps back and names, with exact numbers, what that whole approach is structurally good at — and the one place it structurally breaks, no matter how well it's tuned.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> BM25 is excellent at finding needles that use the same word as the haystack, and blind to needles that don't. Every strength and every failure in this concept traces back to that one sentence.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Real users don't phrase questions the way answers are written</h3>
+<p>A support ticket about a refund might use the word "refund" throughout. A customer asking about the same thing might type "reimbursement" instead — a genuine synonym, semantically identical, but a completely different token. Before Module 08 introduces a different tool built specifically to close this gap, this concept proves the problem is real, with numbers, not a hypothetical wave of the hand.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>"Wheres my reimbursement" — the right answer scores dead last</h3>
+<p>The same five-ticket corpus from Concepts 06-07: T1 (order late), T2 ("please refund my order immediately"), T3 ("the refund was processed but the refund amount is wrong"), T4 (order confirmation email), T5 (password reset). A customer types: <b>"wheres my reimbursement"</b> — a realistic, informally-spelled real query.</p>
+<div class="example-grid">
+<article class="info-card"><span>T1, T2, T4, T5</span><h3>Score 0.2867 / 0.2550 / 0.2395 / 0.2395</h3><p>None of these tickets are about a reimbursement at all — they score above zero only because they happen to contain the incidental word "my".</p></article>
+<article class="info-card"><span>T3 — THE ACTUAL ANSWER</span><h3>Scores exactly 0.0000</h3><p>The one ticket genuinely about a refund/reimbursement problem ranks strictly LAST, below all four irrelevant tickets.</p></article>
+</div>
+<p>Why: "wheres" and "reimbursement" appear in zero documents in the corpus (out-of-vocabulary, contribute 0 everywhere). "my" is in-vocabulary and appears in T1/T2/T4/T5 — but T3's own text never contains the word "my" at all, so even that term contributes 0 to T3. Every number here was independently verified by script.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0511-beginner-visual-title">
+<strong class="concept-visual-title" id="c0511-beginner-visual-title">VISUAL · QUERY VOCABULARY AND T3'S VOCABULARY DON'T OVERLAP AT ALL</strong>
+<div class="vector-plane-wrap">
+<svg class="vector-plane" viewBox="0 0 300 200" role="img" aria-labelledby="c0511-svg-title c0511-svg-desc">
+<title id="c0511-svg-title">Two non-overlapping circles, one for the query's vocabulary and one for T3's vocabulary, with zero shared terms</title>
+<desc id="c0511-svg-desc">Two separate circles that do not touch. The left circle is labeled query terms: wheres, my, reimbursement. The right circle is labeled T3's terms: the, refund, was, processed, but, amount, is, wrong. No terms appear in both circles.</desc>
+<circle cx="105" cy="100" r="85" fill="none" stroke="#ff7957" stroke-width="2"/>
+<circle cx="205" cy="100" r="85" fill="none" stroke="#5ee6c3" stroke-width="2"/>
+<text x="105" y="45" font-size="10" text-anchor="middle" fill="#ff7957">QUERY TERMS</text>
+<text x="105" y="90" font-size="9" text-anchor="middle" fill="currentColor">wheres</text>
+<text x="105" y="105" font-size="9" text-anchor="middle" fill="currentColor">my</text>
+<text x="105" y="120" font-size="9" text-anchor="middle" fill="currentColor">reimbursement</text>
+<text x="205" y="45" font-size="10" text-anchor="middle" fill="#5ee6c3">T3'S TERMS</text>
+<text x="205" y="80" font-size="9" text-anchor="middle" fill="currentColor">refund, amount</text>
+<text x="205" y="95" font-size="9" text-anchor="middle" fill="currentColor">processed, wrong</text>
+<text x="205" y="110" font-size="9" text-anchor="middle" fill="currentColor">the, was, but, is</text>
+<text x="155" y="165" font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">zero shared terms</text>
+</svg>
+</div>
+<figcaption>The query's vocabulary and T3's own vocabulary share exactly zero terms — not near-zero, exactly zero. BM25 has no mechanism for noticing that "reimbursement" and "refund" mean the same thing.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Four strengths, one failure, all traced to earlier concepts</h3>
+<table class="compare-table">
+<thead><tr><th>Property</th><th>Where it comes from</th><th>Type</th></tr></thead>
+<tbody>
+<tr><td>Exact-match precision</td><td>Concept 02's postings lists — a query term maps directly to the documents containing it</td><td>Strength</td></tr>
+<tr><td>Frequency/rarity weighting</td><td>Concepts 04-05's tf and idf</td><td>Strength</td></tr>
+<tr><td>Saturation and length correction</td><td>Concepts 06-07's BM25 formula and L(d)</td><td>Strength</td></tr>
+<tr><td>Fully deterministic, zero training data</td><td>The formula itself — every score is auditable by hand</td><td>Strength</td></tr>
+<tr><td>Vocabulary mismatch</td><td>A query term contributes to a score only if that literal token is present — absent or out-of-vocabulary terms contribute exactly 0, never "a little"</td><td>Failure</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Closing Module 05, naming the boundary of what's been built</h3>
+<div class="pipeline-preview">
+<span>Concepts 02, 04-07 — build the scorer</span><i>↓</i><span>Concepts 08-10 — measure it</span><i>↓</i><span class="hot">Concept 11 — name its structural boundary</span><i>↓</i><span>Module 06 — knowledge sources & ingestion</span>
+</div>
+<p>This concept adds no new box to the pipeline — it names a hard boundary on the "Retrieval" box already built. Module 08's dense embeddings, later in the course, add a parallel box that resolves exactly the gap this concept identifies — named here only, not taught.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three things beginners fold into "BM25 is broken"</h3>
+<div class="distinction-table" role="table" aria-label="Low but nonzero score distinguished from exactly-zero score, vocabulary mismatch distinguished from a coverage gap, and a failure mode distinguished from a bug">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Exactly-zero score (this concept)</span><span role="cell">A low-but-nonzero score</span><span role="cell">A low score means some rare shared term matched weakly. A score of exactly 0.0000 means zero terms overlapped at all — a qualitatively different, total failure.</span></div>
+<div role="row"><span role="cell">Vocabulary mismatch (this concept)</span><span role="cell">A coverage gap (Concept 10 / Module 03's answerability concepts)</span><span role="cell">Vocabulary mismatch: the fact IS in the corpus, worded differently. A coverage gap: the fact simply isn't in the corpus at all. Same symptom (a bad answer), different cause and different fix.</span></div>
+<div role="row"><span role="cell">A structural failure mode (this concept)</span><span role="cell">A bug</span><span role="cell">BM25 is working exactly as designed — it was never built to recognize synonyms. Vocabulary mismatch is a boundary of the approach, not a defect in its implementation.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"BM25 returning 0 means something is broken."</b><p>It means zero query terms literally appear in that document (or corpus-wide) — exactly the intended, correct behavior of an exact-match formula.</p></div>
+<div><b>"Tuning k1 or b will fix vocabulary mismatch."</b><p>False — Section 09 proves algebraically that BM25(Q,d) is exactly 0 whenever Q and d share no terms, for ANY value of k1 or b. Neither parameter appears anywhere in that zero.</p></div>
+<div><b>"Hand-built synonym lists aren't real lexical retrieval."</b><p>They are, and they're a real, commonly deployed mitigation — but they only cover whatever pairs someone thought to write down in advance.</p></div>
+<div><b>"Lexical retrieval is obsolete."</b><p>False — Section 11's SKU/error-code case shows a scenario where exact-match precision is exactly what's needed and embeddings would blur the result.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>ORACLE TEXT SEARCH</span><b>"Reimbursement policy" against a corpus that only ever says "refund"</b><p>A real customer query using "reimbursement" scores poorly or exactly 0 against Oracle Text's BM25-based ranking if the corpus never uses that exact word — this concept's failure mode, in production.</p></div>
+<div><span>PREVIEW — MODULE 08</span><b>Dense embeddings, named only</b><p>The concrete gap this concept identifies is exactly what Module 08's learned dense representations, and Module 16's hybrid retrieval, exist to close — named here as a forward reference, not taught.</p></div>
+<div><span>PREVIEW — MODULE 10</span><b>Oracle's VECTOR type</b><p>The database mechanism that will eventually store the dense representations Module 08 introduces — named only, not built here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Four strengths, each traceable to an earlier concept</b><p>Exact-match precision, frequency/rarity weighting, saturation/length correction, and zero training data.</p></div>
+<div><b>One precisely-named failure</b><p>Vocabulary mismatch — a query term contributes to a score only if that literal token is present; absent terms contribute exactly 0.</p></div>
+<div><b>Predictable from token overlap alone</b><p>If a query and a document share zero terms, the score is exactly 0.0000 — no exception, no partial credit.</p></div>
+<div><b>No amount of k1/b tuning fixes it</b><p>Section 09 proves this algebraically — the zero doesn't depend on either parameter.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why does BM25 score a genuinely relevant document at exactly 0.0000 rather than just "low"?</li>
+<li>Using Section 03's example, why can an irrelevant ticket outscore the one genuinely relevant ticket?</li>
+<li>What's the difference between a vocabulary-mismatch failure and a coverage gap (Concept 10's territory)?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 05 complete — Module 06 opens next</h3>
+<p>This concept closes Module 05's eleven concepts: a complete, measured, and now precisely-bounded lexical retrieval system. The vocabulary-mismatch gap this concept identifies is exactly what Module 08's dense embeddings, later in the course, are built to close — named here as a forward reference, not taught yet. The mechanically next module is Module 06, "Knowledge sources & ingestion."</p>
+<div class="beginner-memory"><b>Module 05 is complete.</b> Continue to Module 06 on the roadmap.</div>
+<a class="button primary" href="../roadmap.html#module-06">See Module 06 on the roadmap →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Same word, found instantly. Different word, invisible.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The dead-last result</b><small>The one genuinely relevant ticket scores 0.0000, ranked below four irrelevant ones.</small></a>
+<a href="#b04"><span>02</span><b>The strengths/failure table</b><small>Four strengths, each traced to an earlier concept, and one precisely-named failure.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Module 08's dense embeddings are named as the answer, not taught here.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The algebraic proof, from-scratch code, and the Vocabulary Mismatch Bench lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 11 path:</b> name lexical retrieval's real strengths → show a genuinely relevant document scoring exactly zero → prove algebraically that no parameter tuning fixes it → try your own queries live → Module 06 opens the knowledge-ingestion phase next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the lexical retrieval strengths and failures deep dive</b><em>The algebraic zero-score proof, from-scratch code, and the Vocabulary Mismatch Bench lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The scorer turned on itself</h2></div></header>
+<p>Concepts 02 and 04-07 built the scorer. Concepts 08-10 built the measuring stick. This closing concept turns that measuring stick on the scorer itself, and finds an exact, provable boundary: whenever a query and a document share zero terms, the score is exactly 0 — not approximately, not usually, exactly — regardless of how the formula's parameters are tuned.</p>
+<div class="flow">
+<div class="flow-node">Concept 09 — MRR, MAP, DCG, nDCG</div>
+<div class="flow-node">Concept 10 — relevance judgments</div>
+<div class="flow-node hot">Concept 11 — strengths and failures</div>
+<div class="flow-node">Module 06 — knowledge sources & ingestion</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Name 3+ structural strengths, each tied to a specific earlier concept</h3><p>Exact-match precision, frequency/rarity weighting, saturation/length correction, zero training data.</p></article>
+<article class="info-card"><span>STATE</span><h3>State the vocabulary-mismatch failure precisely</h3><p>A query term contributes to a score only if that literal token is present in a document and in the corpus vocabulary.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Hand-compute a genuinely relevant document's score landing at exactly 0</h3><p>From vocabulary overlap alone, before running any formula.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Explain why no k1/b tuning fixes it, and name Module 08 as the architectural answer</h3><p>By name only — no embedding math is taught here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02 (postings), 04-05 (tf/idf), 06-07 (BM25/k1/b/L(d)).</b> This concept reuses every formula unchanged — it introduces nothing new mathematically.</li>
+<li><b>Concepts 08-09 (the metrics that register this failure as a bad score) and 10 (who decides T3 is the right answer).</b></li>
+<li><b>Out of scope here:</b> embedding math, cosine similarity on text embeddings, and dense-retrieval training are all deferred whole to Module 08.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A card catalog indexed strictly by printed words</h2></div></header>
+<p>A library card catalog indexed strictly by literal printed words instantly finds every card that says "automobile" — but never surfaces a card about "cars" unless that exact word is printed on it too. The catalog isn't broken; it was never built to know the two words mean the same thing. Lexical retrieval is that catalog: exhaustive and instant on literal matches, structurally silent on everything else.</p>
+<div class="callout warning"><b>Analogy boundary</b>The catalog explains why the failure happens. It doesn't explain the exact arithmetic that makes the score land at precisely 0.0000, or why one shared incidental word can outrank zero shared words — Sections 09-10 supply that.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Lexical retrieval strength</td><td>A deterministic property of BM25 traceable to a specific earlier concept (postings, tf/idf, saturation, length correction)</td><td>—</td></tr>
+<tr><td>Vocabulary mismatch</td><td>A genuinely relevant document d shares no terms with query Q</td><td>Q ∩ terms(d) = ∅</td></tr>
+<tr><td>Zero-overlap score</td><td>BM25's score is the sum of independent per-term contributions; a term contributes 0 if absent from d, or if it appears in zero documents corpus-wide</td><td>BM25(Q,d) = Σ_t contribution(t,d)</td></tr>
+<tr><td>Semantic vs. lexical relevance</td><td>Human judgment of "is this actually the right answer" (Concept 10) can disagree completely with shared surface tokens</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing "wheres my reimbursement" against T3, term by term</h2></div></header>
+<div class="lane-flow">
+<div><b>Tokenize —</b> "wheres my reimbursement" → ["wheres", "my", "reimbursement"].</div>
+<div><b>Postings lookup, "wheres" —</b> appears in zero documents corpus-wide (df=0) → idf undefined → contributes 0 to every document, including T3.</div>
+<div><b>Postings lookup, "reimbursement" —</b> same as above: df=0 → contributes 0 everywhere, including T3.</div>
+<div><b>Postings lookup, "my" —</b> in-vocabulary (df=4, appears in T1/T2/T4/T5) — but T3's own text never contains "my" at all, so tf("my", T3)=0 → contributes 0 to T3 specifically, even though the term is real.</div>
+<div><b>Sum —</b> BM25("wheres my reimbursement", T3) = 0 + 0 + 0 = exactly 0.0000.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>From query tokens to a per-document sum</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram from query tokens through postings-list lookup to a per-document BM25 sum">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Query tokens</b><small>Tokenized, lowercased</small></div>
+<div class="diagram-node"><b>Postings-list lookup per term</b><small>Concept 02</small></div>
+<div class="diagram-node"><b>Per-document BM25 sum</b><small>Concepts 04-07</small></div>
+</div>
+</div>
+<p>Every branch converges on the same shared handoff Concepts 08-10 already measure: a ranked list, now precisely bounded by which terms it can and cannot recognize as related.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Naming a boundary, not adding a box</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Inverted index</span><i>↓</i><span class="hot">Retrieval — BM25, now precisely bounded</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept adds no new box to the pipeline — it names a hard boundary on the "Retrieval" box already built across Concepts 02-10. Module 08 later adds a parallel box (dense embeddings) that resolves exactly this boundary — named here, not built.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why the score is exactly 0, for any k1 or b</h2></div></header>
+<p>BM25's score for query Q against document d is a sum of independent per-term contributions: BM25(Q,d) = Σ_{t∈Q} idf(t) · [tf(t,d)(k1+1)] / [tf(t,d) + k1·L(d)]. Each term t contributes exactly 0 under either of two conditions: (1) t appears in zero documents corpus-wide, so idf(t) is undefined and its contribution is defined as 0 by convention (Concept 06's own boundary rule); or (2) tf(t,d) = 0 — the term simply doesn't appear in d — which makes the numerator tf(t,d)(k1+1) = 0, and the whole fraction 0, regardless of what idf(t), k1, or L(d) equal. Neither condition depends on k1 or b anywhere in its derivation. Therefore, if every term in Q satisfies one of the two conditions for a given d, BM25(Q,d) = 0 + 0 + ... + 0 = exactly 0, for every possible value of k1 and b. A sharper corollary follows directly: for any document d1 sharing even one term with positive idf, BM25(Q,d1) > 0 = BM25(Q,d2) for a document d2 sharing zero terms — meaning d1 outranks d2 regardless of which document a human would actually call relevant.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Three queries, the same five tickets</h2></div></header>
+<p>Corpus and defaults unchanged from Concepts 06-07: T1-T5, k1=1.2, b=0.75, AVGDL=7.2.</p>
+<table class="worked-table">
+<thead><tr><th>Query</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>A: "refund"</td><td>0.0000</td><td>1.0472</td><td>1.1357</td><td>0.0000</td><td>0.0000</td><td>Works — T3 ranks first, T2 second</td></tr>
+<tr><td>B: "reimbursement"</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>Total blindness — every ticket ties at 0</td></tr>
+<tr><td>C: "wheres my reimbursement"</td><td>0.2867</td><td>0.2550</td><td>0.0000</td><td>0.2395</td><td>0.2395</td><td>Misleading — T3 ranks strictly LAST</td></tr>
+</tbody>
+</table>
+<p>Query A shows the formula working exactly as intended. Query B shows total blindness — every ticket ties, including the correct one. Query C is the strongest demonstration: T3, the only ticket genuinely about a refund/reimbursement problem, scores below all four irrelevant tickets, because "wheres" and "reimbursement" are out-of-vocabulary and T3 happens to lack the incidental shared word "my". Every value was computed by an independent script reimplementing Concept 07's exact published functions unchanged, and cross-checked bit-for-bit against Concept 07's own already-published T2/T3 numbers for Query A.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>SKU or error-code exact lookup</h3><p>A query for "ERR-4471" should match that exact code, not a semantically "close" one — dense embeddings would blur this; lexical retrieval nails it.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Postings-list efficiency at scale</h3><p>Concept 02's inverted index touches only the postings for query terms, never the whole corpus — a real efficiency strength at any scale.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Query C's T1-over-T3 result</h3><p>Not just blindness but a misleading ranking — an irrelevant document actively outranks the relevant one.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Reaching for k1/b to fix a vocabulary problem</h3><p>Section 09 proves neither parameter appears anywhere in the zero-overlap result — tuning them cannot help.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Vocabulary overlap and the zero-score guarantee, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES CONCEPT 07'S FUNCTIONS UNCHANGED</span>
+<pre><code>import math
+
+tickets = {
+    "T1": "my order is late and my order never arrived",
+    "T2": "please refund my order immediately",
+    "T3": "the refund was processed but the refund amount is wrong",
+    "T4": "where is my order confirmation email",
+    "T5": "i need help resetting my password",
+}
+
+def doc_length(text):
+    return len(text.split(" "))
+
+AVGDL = sum(doc_length(t) for t in tickets.values()) / len(tickets)
+
+def term_frequency(term, text):
+    return text.split(" ").count(term)
+
+def document_frequency(term, corpus):
+    return sum(1 for text in corpus.values() if term in text.split(" "))
+
+def inverse_document_frequency(term, corpus):
+    df = document_frequency(term, corpus)
+    return None if df == 0 else math.log(len(corpus) / df)
+
+def length_term(doc_id, corpus, b=0.75):
+    return (1 - b) + b * (doc_length(corpus[doc_id]) / AVGDL)
+
+def bm25_term(term, doc_id, corpus, k1=1.2, b=0.75):
+    idf = inverse_document_frequency(term, corpus)
+    if idf is None:
+        return 0.0
+    tf = term_frequency(term, corpus[doc_id])
+    L = length_term(doc_id, corpus, b)
+    return idf * (tf * (k1 + 1)) / (tf + k1 * L)
+
+def bm25_query(tokens, doc_id, corpus):
+    return sum(bm25_term(t, doc_id, corpus) for t in tokens)
+
+def vocabulary_overlap(tokens, doc_id, corpus):
+    return set(tokens) & set(corpus[doc_id].split(" "))
+
+assert bm25_query(["reimbursement"], "T3", tickets) == 0.0
+assert vocabulary_overlap(["wheres", "my", "reimbursement"], "T3", tickets) == set()
+assert bm25_query(["wheres", "my", "reimbursement"], "T3", tickets) == 0.0
+assert bm25_query(["wheres", "my", "reimbursement"], "T1", tickets) > 0.0
+
+# Edge case: an all-out-of-vocabulary query scores 0 for every document.
+for doc_id in tickets:
+    assert bm25_query(["zzzznotaword"], doc_id, tickets) == 0.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same boundary in real search engines</h2></div></header>
+<p>Elasticsearch, OpenSearch, and Lucene's BM25Similarity (already named in Concepts 06-07) exhibit this exact zero-overlap behavior unless a synonym filter or stemmer is configured at index time — a real, hand-maintained, bounded mitigation, not a fix for the underlying structural gap. Dense Passage Retrieval's own motivation section explicitly cites this lexical vocabulary-mismatch problem as the reason dense retrieval exists — the direct forward pointer to Module 08, named only, not taught here.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Vocabulary Mismatch Bench</h2></div></header>
+<div class="lab">
+<p>Type any query, or click a preset, against the same five tickets. Watch which words highlight as literal matches, which score bar rises, and which ticket the human relevance toggle says is actually right.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgQueryInput_0511">Query</label><input type="text" id="wgQueryInput_0511" value="refund"></div>
+</div>
+<div class="lab-actions preset-chip-row">
+<button type="button" class="preset-chip" data-query-0511="refund">refund</button>
+<button type="button" class="preset-chip" data-query-0511="reimbursement">reimbursement</button>
+<button type="button" class="preset-chip" data-query-0511="wheres my reimbursement">wheres my reimbursement</button>
+<button type="button" class="preset-chip" data-query-0511="order confirmation">order confirmation</button>
+</div>
+<div class="lab-actions">
+<button type="button" class="secondary" id="wgRevealRelBtn_0511">Reveal human relevance</button>
+<button type="button" class="secondary" id="wgResetBtn_0511">Reset to default</button>
+</div>
+<div class="ticket-list" id="wgTicketList_0511"></div>
+<div class="norm-readout" id="wgVocabReadout_0511"></div>
+<div class="callout" id="wgMismatchCallout_0511" hidden></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Exact-lexical vs. augmented-lexical vs. dense</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Catches exact matches</th><th>Catches paraphrase</th><th>Needs training data</th><th>Interpretable</th></tr></thead>
+<tbody>
+<tr><td>Exact lexical (BM25, this module)</td><td>Yes</td><td>No</td><td>No</td><td>Yes, fully auditable</td></tr>
+<tr><td>Synonym/stemmer-augmented lexical</td><td>Yes</td><td>Only pairs someone listed</td><td>No</td><td>Yes</td></tr>
+<tr><td>Dense embeddings (Module 08, named only)</td><td>Usually</td><td>Yes</td><td>Yes</td><td>Less directly</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>VOCABULARY MISMATCH</span><h3>The core failure — zero shared terms, zero score</h3><p>Module 08's dense embeddings exist specifically to close this gap.</p></article>
+<article class="info-card"><span>MISLEADING RANKING</span><h3>An irrelevant document outranks the relevant one</h3><p>Section 10's Query C result — arguably worse than plain blindness, since it actively points the wrong way.</p></article>
+<article class="info-card"><span>MORPHOLOGICAL VARIANTS</span><h3>"refund" vs. "refunds" without stemming</h3><p>A narrower, mechanical cousin of vocabulary mismatch — also closed by Module 08's approach, or by a stemmer as a narrower fix.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A score of 0 always means an error</td><td>False — Section 09 shows it's the exact, correct behavior when no query term is present in a document or corpus.</td></tr>
+<tr><td>Tuning k1/b always improves relevance</td><td>False for vocabulary mismatch specifically — Section 09's proof shows neither parameter appears in the zero-overlap result.</td></tr>
+<tr><td>Lexical retrieval is obsolete</td><td>False — Section 11's SKU/error-code case is a clean fit lexical retrieval handles better than embeddings.</td></tr>
+<tr><td>Synonym lists fully solve vocabulary mismatch</td><td>False — they only cover whatever pairs someone wrote down in advance, not novel phrasing.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Synonym-dictionary maintenance is a real, ongoing engineering cost — every new phrasing a customer might use has to be anticipated and added by hand.</li>
+<li>A zero-result or near-zero-score search has a real product-perception cost — users experience it as "the system doesn't understand me," even when the answer exists in the corpus.</li>
+<li>Zero/low-score queries are a concrete monitoring signal (Module 19, named only) for deciding whether to add a synonym entry or invest in a dense/hybrid upgrade — Module 08 and Module 16 are the two production answers, not built here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does BM25 score a genuinely relevant document at exactly 0.0000 rather than some low but nonzero value?</summary><div>Because every per-term contribution is either a real positive number (idf(t) times the saturating ratio) or exactly 0 (if the term is absent from the document or from the entire corpus). If every query term falls into the zero case for a given document, the sum of all-zero contributions is exactly 0 -- there's no mechanism for "partial credit."</div></details>
+<details class="quiz"><summary>Using Section 10's Query C, why can an irrelevant ticket outscore the one genuinely relevant ticket?</summary><div>The irrelevant tickets happen to share an incidental word ("my") with the query, giving them a small positive score, while the relevant ticket (T3) shares zero words with the query at all -- BM25 has no way to know that sharing zero specific words doesn't mean zero relevance.</div></details>
+<details class="quiz"><summary>What's the difference between a vocabulary-mismatch failure and a coverage gap?</summary><div>Vocabulary mismatch means the fact IS in the corpus, just worded differently than the query. A coverage gap (Concept 10's territory) means the fact simply isn't in the corpus at all. Both produce a bad answer, but the fix is completely different -- better retrieval versus better source coverage.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new 4-document corpus: D1="the package was delivered yesterday", D2="shipment tracking shows it arrived", D3="your order has shipped", D4="please cancel my subscription". Query: "wheres my package". Predict, from vocabulary overlap alone, which documents will score exactly 0. Then compute the one nonzero term's actual contribution to whichever document(s) score above 0. Finally, state whether the human-relevant document (D1, about a delivered package) scores above zero or not.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Query tokens: "wheres", "my", "package". "wheres" appears in none of D1-D4 (df=0, contributes 0 everywhere). "my" appears only in D4 ("please cancel my subscription") -- contributes a positive amount to D4 only, 0 to D1/D2/D3. "package" appears only in D1 ("the package was delivered yesterday") -- contributes a positive amount to D1 only. Prediction confirmed: D2 and D3 share zero query terms and score exactly 0. D1 scores above 0 (from "package") and D4 scores above 0 (from "my," an incidental match, since D4 is about a subscription, not a package). The human-relevant document, D1, does score above zero here -- because "package" literally appears in it -- but D4 (irrelevant) also scores above zero from an incidental word, exactly the same shape of risk as Section 10's Query C.</div>
+</details>
+<p>Teach-back: explain, in your own words, why predicting a BM25 score's zero/nonzero status from vocabulary overlap alone is possible before running any arithmetic.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Lexical retrieval's boundary</h3><ul><li><b>Strengths:</b> exact-match precision, frequency/rarity weighting, saturation/length correction, zero training data</li><li><b>Failure:</b> vocabulary mismatch -- a term contributes only if literally present, never "a little" otherwise</li><li><b>The proof:</b> zero shared terms means an exact 0.0000 score, for any k1 or b</li><li><b>The answer:</b> Module 08's dense embeddings, named only, close this exact gap</li></ul></div>
+<div><h3>Memorable example</h3><p>"Wheres my reimbursement" scores the one genuinely relevant ticket at exactly 0.0000 -- ranked dead last, below four irrelevant tickets that merely share an incidental word.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What are BM25's real production strengths compared to dense embeddings?</summary><div>Exact-match precision (critical for SKUs, error codes, and IDs), full determinism and auditability with no training data required, and efficient postings-list lookups that scale predictably -- all properties dense embeddings trade away for semantic flexibility.</div></details>
+<details class="quiz"><summary>Derive why BM25 scores exactly 0 for a query and document sharing no terms.</summary><div>BM25's score is a sum of independent per-term contributions. Each contribution is 0 if the term is absent from the corpus (idf undefined) or absent from the specific document (tf=0, forcing the numerator to 0 regardless of idf, k1, or b). If every query term falls into one of these cases for a document, the entire sum is exactly 0.</div></details>
+<details class="quiz"><summary>Implement a vocabulary-overlap checker that predicts a zero score before running BM25.</summary><div>Tokenize the query, tokenize the document, and check whether the intersection of the two token sets is empty -- an empty intersection guarantees a BM25 score of exactly 0, since every term would fall into a zero-contribution case.</div></details>
+<details class="quiz"><summary>A user reports zero search results for a term you know exists in the corpus under a different name. How would you diagnose and fix it?</summary><div>Diagnose by checking whether the query term appears in the corpus's postings lists at all (df=0 confirms vocabulary mismatch, not a bug). Two fixes at different cost: a cheap, hand-maintained synonym mapping for known term pairs, or a more expensive dense/hybrid retrieval upgrade that generalizes to unanticipated phrasing.</div></details>
+<details class="quiz"><summary>Sketch a hybrid approach that keeps lexical's exact-match strength while covering this gap.</summary><div>Run both lexical (BM25) and dense retrieval in parallel, then merge their candidate sets with a fusion method (e.g. reciprocal rank fusion) -- Module 16's own territory, named here only as the shape of the eventual answer.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Okapi_BM25"><b>Okapi BM25 — Wikipedia</b><br><span>The formula this concept stress-tests, already cited in Concepts 06-07.</span></a>
+<a href="https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf"><b>Robertson &amp; Zaragoza — The Probabilistic Relevance Framework: BM25 and Beyond</b><br><span>Cited for the strengths side -- decades of production robustness, no training data required.</span></a>
+<a href="https://arxiv.org/abs/2004.04906"><b>Karpukhin et al. — Dense Passage Retrieval for Open-Domain Question Answering</b><br><span>Explicitly motivates dense retrieval by citing lexical vocabulary mismatch -- the direct forward pointer to Module 08, named only.</span></a>
+<a href="https://en.wikipedia.org/wiki/Vocabulary_mismatch"><b>Vocabulary mismatch — Wikipedia</b><br><span>Primary reference for this concept's core failure mode.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 11 COMPLETE · MODULE 05 COMPLETE (11/11)</span>
+<h3>Lexical retrieval, fully built, measured, and bounded</h3>
+<p>You can now name lexical retrieval's real strengths, predict a zero score from vocabulary overlap alone, and explain why no amount of k1/b tuning fixes vocabulary mismatch. Module 05 is complete. Module 06, "Knowledge sources & ingestion," opens Phase 2 next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="../roadmap.html#module-06">See Module 06 on the roadmap →</a>
+</div>
+<p class="fine-print">Module 05 complete. Next in the canonical roadmap: Module 06, Knowledge sources &amp; ingestion.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 05 · Concept 11 · Active</p>
+<a href="module-05-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

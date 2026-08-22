@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 06, Concept 05 covers cleaning and normalization: fixing exactly three defects in an already-extracted record -- encoding artifacts (mojibake), boilerplate, and whitespace/punctuation plus residual noise -- and nothing else. Deduplication across records stays Concept 06's job.">
+<title>Cleaning and normalization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-06-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 06 · CONCEPT 05</p>
+<h1>Readable is not<br><em>the same as clean.</em></h1>
+<p class="lesson-lead">Concepts 02, 03 and 04 each handed forward the same three words: a raw, unclean, unchunked record. Whatever the source — a parsed file, a database row, a scanned page — getting a full, correctly-ordered record out was the job; making its content trustworthy was deliberately deferred every time. This concept is where "unclean" finally gets addressed, and for exactly three defects: encoding artifacts (mojibake, from decoding bytes under the wrong charset), boilerplate (nav, footer and legal chrome repeating verbatim across every page or record from one source), and whitespace, punctuation and residual noise — including Concept 04's own uncorrected "0RDER 447l," left exactly as it was until now. Deduplicating identical records across sources is a different problem, and it's Concept 06's, not this one's.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth of nine concepts in Module 06 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concepts 02, 03 and 04 — every source is now extracted and ordered; this is the first concept to also make it clean</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three defects cleaning fixes, and explain why a record can be readable and still fail all three</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Three defects, three fixes, one word finally dropped</h2>
+</div>
+<p>Concepts 02, 03 and 04 all produced a full, correctly-ordered record and then stopped — none of them addressed whether that record's text was actually trustworthy. This concept covers exactly that: fixing encoding artifacts, removing boilerplate, and normalizing whitespace and punctuation (plus residual noise) in a record that's already extracted and already in the right order. Nothing here decides whether two records are the same record seen twice — that's Concept 06 — and nothing here decides where a chunk boundary falls — that's Module 07.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Fixing three specific defects, nothing more</h3>
+<div class="mental-compare">
+<div><span>CLEANING AND NORMALIZATION (THIS CONCEPT)</span><p>Fixing encoding artifacts, removing boilerplate, and normalizing whitespace and punctuation plus residual character-level noise — inside one already-extracted, correctly-ordered record.</p></div>
+<div><span>NOT THIS CONCEPT (CONCEPT 06)</span><p>Deciding whether two or more separately-cleaned records, possibly from different sources, are actually the same underlying thing — a problem about identity across records, not noise within one.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a record can be perfectly readable and still be wrong in three completely independent ways — a decoder mismatch, a repeated block of chrome, or leftover rough edges — and fixing one says nothing about the other two.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Getting a record out was never the same job as making it trustworthy</h3>
+<p>Concept 02's parsers, Concept 03's non-file extractors, and Concept 04's OCR and layout analysis all had one job: produce a full, correctly-ordered record from whatever source they were pointed at. None of them checked whether that record was decoded under the right character encoding, none of them stripped the nav and footer chrome that a scraped or exported source repeats on every page, and none of them tidied the irregular spacing and residual noise extraction can leave behind. That was never an oversight — it was a deliberate boundary. This concept is where those three specific gaps finally get closed.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One garbled apostrophe, one repeated nav bar, one leftover OCR mistake</h3>
+<div class="context-demo">
+<div><span>ENCODING</span><p>The word "don't" contains a right single quotation mark that UTF-8-encodes as three bytes. Decoded under the wrong charset, those same three bytes render as "donâ€™t" — one intended character balloons into three garbled ones, five characters becoming seven.</p></div>
+<div><span>BOILERPLATE</span><p>A support page's "Home | Support | Contact" nav bar gets pulled in at both the top and bottom of every single page scraped from that source — useful for navigation once, dead weight in a retrieval corpus every time after.</p></div>
+<div><span>WHITESPACE / PUNCTUATION</span><p>Irregular spacing and stray punctuation left over from extraction — and Concept 04's own uncorrected "0RDER 447l" is exactly the kind of leftover noise this step finally addresses, rather than leaving it as OCR's problem forever.</p></div>
+</div>
+<p>None of these three failures announces itself as an obvious error — each one just quietly makes a lookup, a match, or a retrieved passage a little less reliable than it looks.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0605-beginner-visual-title">
+<strong class="concept-visual-title" id="c0605-beginner-visual-title">VISUAL · THREE DEFECTS, ONE CLEANING PASS, ONE WORD DROPPED</strong>
+<svg class="vector-plane" viewBox="0 0 580 210" role="img" aria-labelledby="c0605-svg-title c0605-svg-desc">
+<title id="c0605-svg-title">Three defects -- encoding artifacts, boilerplate, and whitespace and punctuation noise -- converge through one cleaning pass into a clean record that is no longer called unclean</title>
+<desc id="c0605-svg-desc">Three labeled boxes at the top -- Encoding artifacts, Boilerplate, and Whitespace, punctuation and residual noise -- each carry a short description. Arrows lead from each into a shared box labeled cleaning pass, then down into a highlighted output box labeled clean record, no longer called unclean.</desc>
+<g font-size="8.5" text-anchor="middle">
+<rect x="20" y="28" width="170" height="52" fill="#fff" stroke="#8a978f"/><text x="105" y="46" fill="#14241f" font-size="9.5">ENCODING ARTIFACTS</text><text x="105" y="60" font-size="7.5" fill="#5c6a63">wrong charset --</text><text x="105" y="70" font-size="7.5" fill="#5c6a63">mojibake</text>
+<rect x="205" y="28" width="170" height="52" fill="#fff" stroke="#8a978f"/><text x="290" y="46" fill="#14241f" font-size="9.5">BOILERPLATE</text><text x="290" y="60" font-size="7.5" fill="#5c6a63">repeated nav/footer --</text><text x="290" y="70" font-size="7.5" fill="#5c6a63">chrome, not content</text>
+<rect x="390" y="28" width="170" height="52" fill="#fff" stroke="#8a978f"/><text x="475" y="42" fill="#14241f" font-size="9.5">WHITESPACE +</text><text x="475" y="53" fill="#14241f" font-size="9.5">PUNCTUATION</text><text x="475" y="66" font-size="7.5" fill="#5c6a63">irregular spacing,</text><text x="475" y="76" font-size="7.5" fill="#5c6a63">residual OCR noise</text>
+</g>
+<line x1="105" y1="80" x2="290" y2="118" stroke="#14241f" stroke-width="1.5"/>
+<line x1="290" y1="80" x2="290" y2="118" stroke="#14241f" stroke-width="1.5"/>
+<line x1="475" y1="80" x2="290" y2="118" stroke="#14241f" stroke-width="1.5"/>
+<rect x="180" y="120" width="220" height="30" fill="#fff" stroke="#14241f" stroke-width="1.5"/>
+<text x="290" y="139" font-size="9" text-anchor="middle" fill="#14241f">CLEANING PASS</text>
+<line x1="290" y1="150" x2="290" y2="174" stroke="#14241f" stroke-width="2" marker-end="url(#arrow0605)"/>
+<defs><marker id="arrow0605" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<rect x="160" y="176" width="260" height="34" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<text x="290" y="197" font-size="9" text-anchor="middle" fill="#14241f">CLEAN RECORD — no longer "unclean"</text>
+</svg>
+<figcaption>Three separate defects, three separate fixes, one shared handoff point — but for the first time since Concept 02, what leaves this concept is no longer described as "unclean." It's still unchunked (Module 07) and still not deduplicated against other records (Concept 06).</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What each defect looks like, and the standard fix</h3>
+<table class="compare-table">
+<thead><tr><th>Defect</th><th>What it looks like</th><th>Standard fix</th></tr></thead>
+<tbody>
+<tr><td>Encoding</td><td>Bytes decoded under the wrong character encoding — a correct character turns into two or three garbled ones (mojibake)</td><td>Reverse the mis-decode: re-encode the garbled text under the charset that was wrongly assumed, then decode those bytes under the real one (e.g. the ftfy library)</td></tr>
+<tr><td>Boilerplate</td><td>Navigation, footer or legal chrome that repeats verbatim across every page or record pulled from the same source</td><td>Match and remove the known repeated block, or a close template pattern for it, without touching content that merely happens to repeat by design</td></tr>
+<tr><td>Whitespace + punctuation + residual noise</td><td>Irregular spacing, inconsistent punctuation, and character-level noise that survived extraction — including uncorrected OCR mistakes</td><td>A regex chain for spacing and punctuation, plus targeted, context-driven rules for known residual errors</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this concept sits in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Sources — inventoried in Concept 01</span><i>↓</i><span class="hot">Cleaning — encoding, boilerplate, whitespace/punctuation (this concept)</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>This concept sits just after Concepts 02, 03 and 04's extraction work and just before a record is treated as a finished "Document." Nothing here decides how a clean record later gets chunked; that's still Module 07, and nothing here decides whether two clean records are the same one; that's still Concept 06.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three neighbors this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Cleaning and normalization distinguished from deduplication, chunking, and OCR's own post-correction">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Cleaning (this concept)</span><span role="cell">Deduplication (Concept 06)</span><span role="cell">Cleaning fixes noise inside one record; deduplication decides whether two separately-cleaned records are the same underlying thing — an across-record problem, not a within-record one.</span></div>
+<div role="row"><span role="cell">Cleaning (this concept)</span><span role="cell">Chunking (Module 07)</span><span role="cell">Cleaning doesn't decide where a chunk boundary falls — it only makes sure the text a chunker later slices is actually trustworthy.</span></div>
+<div role="row"><span role="cell">Cleaning's whitespace/punctuation lane</span><span role="cell">Concept 04's own OCR post-correction</span><span role="cell">Concept 04's post-correction is source-specific and happens at recognition time; this concept's pass is universal and happens after extraction, regardless of source.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Cleaning is just trimming whitespace."</b><p>Whitespace is one of three independent defects. A record can have perfect spacing and still be full of mojibake or repeated boilerplate.</p></div>
+<div><b>"If text displays fine, encoding must be correct."</b><p>Mojibake doesn't always look obviously broken — some garbled sequences render as plausible-looking text that only breaks an exact-match lookup, not a casual glance.</p></div>
+<div><b>"Removing boilerplate once by hand is enough."</b><p>A source's template can drift after a redesign, and a rule tuned to one exact block silently stops matching a slightly-changed one.</p></div>
+<div><b>"Cleaning finishes the job."</b><p>A fully cleaned record is still unchunked and still not checked against every other record for duplication — cleaning closes three specific gaps, not every gap.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Matching cleaning's three lanes to the Oracle RAG project's own sources</h3>
+<div class="project-map">
+<div><span>ENCODING · EXPORTED TICKET NARRATIVES</span><b>Declared-vs-actual charset mismatches get caught and repaired here</b><p>An export that claims UTF-8 but was actually written as Windows-1252 produces mojibake in every ticket narrative it touches — this lane is what catches it.</p></div>
+<div><span>BOILERPLATE · SCRAPED REGULATORY BULLETINS</span><b>The repeated nav/legal footer never reaches the retrieval corpus</b><p>Every scraped bulletin carries the same disclaimer and navigation chrome; stripping it once, correctly, keeps that dead weight out of every retrieved passage.</p></div>
+<div><span>WHITESPACE + RESIDUAL NOISE · OCR'D COMPLAINT ATTACHMENTS</span><b>Concept 04's own leftover character noise gets fixed here, not before</b><p>A scanned complaint attachment's OCR output — including any "0RDER 447l"-style residual error — gets its spacing and character-level noise addressed in this pass, exactly where the project's design always intended it.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Three distinct defects, three distinct fixes</b><p>Encoding, boilerplate, and whitespace/punctuation plus residual noise are independent problems — fixing one says nothing about the other two.</p></div>
+<div><b>The record finally stops being called "unclean"</b><p>It's still unchunked (Module 07) and still not deduplicated against other records (Concept 06) — but "unclean" is gone for the first time since Concept 02.</p></div>
+<div><b>Encoding artifacts can look like plausible text</b><p>A quick glance doesn't reliably catch mojibake — it can render as text that merely looks a little odd rather than obviously broken.</p></div>
+<div><b>Cleaning is not deduplication</b><p>Cleaning never compares one record to another — that comparison, and everything it implies, is Concept 06's separate job.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In your own words, why are encoding, boilerplate, and whitespace/punctuation three genuinely separate problems rather than three names for the same thing?</li>
+<li>Why can't a single boilerplate rule be trusted across every source a project pulls from?</li>
+<li>Why does dropping the word "unclean" from this record's description not mean the record is fully ready for retrieval?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Concept 06: Deduplication and canonicalization</h3>
+<p>This concept produced a record that is finally clean — no encoding artifacts, no boilerplate, and no leftover whitespace, punctuation or residual noise. It says nothing about whether that record is the only copy of its content in the corpus. The next concept covers exactly that: recognizing identical or near-identical records across sources and deciding what to do about them.</p>
+<div class="beginner-memory"><b>Concept 05 is active.</b> Continue to Concept 06, "Deduplication and canonicalization," once it's built.</div>
+<a class="button primary" href="module-06-concept-04.html">← Back to Concept 04</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Three defects, one fixed record, and one word finally dropped</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One apostrophe, one nav bar, one OCR leftover</b><small>Encoding, boilerplate and whitespace/punctuation each fail in their own distinct way.</small></a>
+<a href="#b04"><span>02</span><b>The three-defect table</b><small>What each defect looks like, and the standard fix per lane.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Deduplication (Concept 06) and chunking (Module 07) both build on top of this concept's output, not inside it.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>A before/after CER improvement, from-scratch cleaners, and the Cleaning Toggle Bench.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> separate encoding from boilerplate from whitespace/punctuation → show each failing on its own → name one fix per defect → Concept 06 opens deduplication next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the cleaning and normalization deep dive</b><em>A before/after CER improvement, from-scratch cleaners, and the Cleaning Toggle Bench</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The concept that finally drops the word "unclean"</h2></div></header>
+<p>Concepts 02, 03 and 04 each solved a different extraction problem — file parsing, non-file sources, OCR and layout — and each one deliberately handed forward the same description: a raw, unclean, unchunked record. This concept is the first to remove one of those three words. It covers exactly three defects, and no others: encoding artifacts, boilerplate, and whitespace/punctuation plus residual noise. Deduplicating identical records across sources is a different problem entirely — Concept 06's, not this one's — and chunking stays Module 07's job.</p>
+<div class="flow">
+<div class="flow-node">Concept 04 — OCR, layout, tables and images</div>
+<div class="flow-node hot">Concept 05 — cleaning and normalization</div>
+<div class="flow-node">Concept 06 — deduplication and canonicalization</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Name the three defects this concept fixes</h3><p>Encoding artifacts (mojibake), boilerplate (repeated chrome), and whitespace/punctuation plus residual noise — no others.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute a before/after CER improvement from a targeted cleaning correction</h3><p>Reusing Concept 04's own character-error-rate formula on its own uncorrected "0RDER 447l" example.</p></article>
+<article class="info-card"><span>DIAGNOSE</span><h3>Tell which of the three defects a raw sample exhibits</h3><p>Given a dirty record, identify whether it shows encoding, boilerplate, whitespace/punctuation noise, or some combination of the three.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate cleaning from deduplication and from OCR's own post-correction</h3><p>State why this concept's universal, post-extraction pass is not Concept 06's across-record dedup, and not Concept 04's source-specific, recognition-time correction.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02's parsing boundary.</b> A parser reading a file's own text layer correctly never guaranteed that layer was decoded under the right character encoding — that gap is exactly this concept's encoding lane.</li>
+<li><b>Concept 04's unresolved CER example.</b> "0RDER 447l" was left uncorrected on purpose; this concept is the explicit thread that closes it, reusing Concept 04's own CER formula to measure the fix.</li>
+<li><b>No mechanism from Concept 06 or Module 07.</b> Deduplication across records and chunk-boundary decisions are both named only as forward references here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A wrong radio frequency, a reprinted letterhead, a proofreader's second pass</h2></div></header>
+<p>Encoding artifacts are a wrong radio frequency: the signal — the bytes — never changed, but tuning in with the wrong decoder turns clear speech into static-laced noise. Boilerplate is a letterhead reprinted on every page of a fax: useful once, dead weight copied a hundred times over. Whitespace and punctuation noise is what a proofreader catches on a second pass: nothing structurally wrong, just rough edges an exact-match system can't see past.</p>
+<div class="callout warning"><b>Three repairs, not one</b>Cleaning is not one generic step wearing three names. Fixing a decoder mismatch, stripping a repeated template, and tightening spacing are three independent operations — a record can pass one, fail the other two, and any combination in between, exactly what Section 14's lab demonstrates directly.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Character encoding</td><td>A mapping between abstract characters (Unicode code points) and the specific byte sequences used to store or transmit them (e.g. UTF-8, Windows-1252)</td><td>encode: char → bytes</td></tr>
+<tr><td>Mojibake</td><td>Garbled text produced when bytes encoded under one character encoding are decoded under a different, incompatible one</td><td>decode_B(encode_A(text)) ≠ text, A ≠ B</td></tr>
+<tr><td>Boilerplate</td><td>Non-unique, repeated text — navigation, footers, legal disclaimers — that appears verbatim across many pages or records from the same source</td><td>block ∈ every record of source S</td></tr>
+<tr><td>Unicode normalization form (NFC / NFKC)</td><td>A canonical, standardized representation of Unicode text, defined by Unicode Standard Annex #15, so equivalent character sequences compare as identical</td><td>NFC(text), NFKC(text)</td></tr>
+<tr><td>Character error rate (CER)</td><td>Defined fully in Concept 04; reused here to measure how much a cleaning correction recovers, not raw OCR accuracy</td><td>CER = (S + D + I) / N</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Three lanes, one shared handoff</h2></div></header>
+<div class="lane-flow">
+<div><b>Encoding lane</b> — detect or assume the source's real byte encoding, then repair mojibake by reversing the mis-decode: re-encode the garbled text under the charset that was wrongly assumed, then decode those bytes under the correct one (Section 12's from-scratch function does exactly this on the verified don't/donâ€™t pair).</div>
+<div><b>Boilerplate lane</b> — match and remove known repeated blocks (nav, footer, legal disclaimers) that appear verbatim across every page or record from the same source, without touching content that merely happens to repeat by design (Section 11's FAQ "Q:" mistake to avoid).</div>
+<div><b>Whitespace + punctuation lane</b> — collapse irregular spacing, standardize punctuation spacing, and apply targeted, context-driven corrections to residual character-level noise left over from extraction — including Concept 04's own uncorrected "0RDER 447l," addressed here for the first time.</div>
+<div><b>Handoff</b> — every lane still ends at the same place Concepts 02–04 ended, minus one word: a structurally-correct, now-clean record — still unchunked (Module 07) and still not deduplicated against other records (Concept 06).</div>
+</div>
+<p>The boilerplate arithmetic is simple but adds up fast: a 93-character nav/footer block appearing once before and once after a 208-character body, joined by two single-space separators, produces a 396-character raw extract (93 + 1 + 208 + 1 + 93). Stripping both copies removes 188 characters — about 47.5% of the raw extract — and leaves exactly the 208-character body.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Three lanes converging on a record that's finally clean</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram from a raw record through three parallel cleaning lanes to a clean record output">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Raw record — encoding + boilerplate + whitespace noise</b><small>Same handoff shape as Concepts 02–04</small></div>
+<div class="diagram-node"><b>Encoding lane — repair mojibake</b><small>Re-encode / re-decode round-trip</small></div>
+<div class="diagram-node"><b>Boilerplate lane — strip known blocks</b><small>Exact or template-matched removal</small></div>
+<div class="diagram-node"><b>Whitespace/punctuation lane — normalize + fix residual noise</b><small>Regex chain, contextual corrections</small></div>
+<div class="diagram-node active"><b>Clean record</b><small>No longer called "unclean" — still unchunked, still not deduplicated</small></div>
+</div>
+</div>
+<p>Every lane fixes a different defect independently, but for the first time since Concept 02, all three converge on an output that finally drops the word "unclean." Concept 06 still owns deduplication, and Module 07 still owns chunking.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Sources</span><i>↓</i><span class="hot">Cleaning — encoding, boilerplate, whitespace/punctuation (this concept)</span><i>↓</i><span>Documents</span><i>↓</i><span>Chunks</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span>LLM</span><i>↓</i><span>Answer</span>
+</div>
+<p>Alongside Concepts 02–04, this concept sits between "Sources" and the pipeline's first labeled stage, "Documents" — closing the trust gap those concepts deliberately left open, for every source they each covered.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same CER formula, reused for a different purpose</h2></div></header>
+<p>Concept 04 defined character error rate in full: given a reference string of length N and a hypothesis string, with S substitutions, D deletions and I insertions under the minimum-cost (Levenshtein) alignment between the two,</p>
+<div class="equation">CER = (S + D + I) / N</div>
+<p>That definition is not re-derived here — it's reused for a different purpose. Concept 04 used CER to measure how much an OCR engine's raw output diverged from the truth. This concept uses the exact same formula to measure how much a cleaning correction recovers: compute CER once against the dirty hypothesis, apply a targeted fix, then compute CER again against the corrected hypothesis. The formula doesn't change; what changes is which string sits in the "hypothesis" slot.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Closing Concept 04's loop: 20% down to 0%</h2></div></header>
+<p>Reference: "ORDER 4471" (N = 10 characters, including the space). Concept 04's own uncorrected OCR hypothesis: "0RDER 447l". A targeted, context-driven rule recognizes "ORDER" as a known keyword and the trailing token as a digit-only order number, disambiguating 0↔O and 1↔l accordingly, and produces cleaned = "ORDER 4471" exactly.</p>
+<table class="worked-table">
+<thead><tr><th>Position</th><th>Reference</th><th>Before cleaning</th><th>Before match?</th><th>After cleaning</th><th>After match?</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>O</td><td>0</td><td>Substitution</td><td>O</td><td>Match</td></tr>
+<tr><td>2</td><td>R</td><td>R</td><td>Match</td><td>R</td><td>Match</td></tr>
+<tr><td>3</td><td>D</td><td>D</td><td>Match</td><td>D</td><td>Match</td></tr>
+<tr><td>4</td><td>E</td><td>E</td><td>Match</td><td>E</td><td>Match</td></tr>
+<tr><td>5</td><td>R</td><td>R</td><td>Match</td><td>R</td><td>Match</td></tr>
+<tr><td>6</td><td>(space)</td><td>(space)</td><td>Match</td><td>(space)</td><td>Match</td></tr>
+<tr><td>7</td><td>4</td><td>4</td><td>Match</td><td>4</td><td>Match</td></tr>
+<tr><td>8</td><td>4</td><td>4</td><td>Match</td><td>4</td><td>Match</td></tr>
+<tr><td>9</td><td>7</td><td>7</td><td>Match</td><td>7</td><td>Match</td></tr>
+<tr><td>10</td><td>1</td><td>l</td><td>Substitution</td><td>1</td><td>Match</td></tr>
+</tbody>
+</table>
+<p>Before cleaning: S = 2 (positions 1 and 10), D = 0, I = 0. CER = (2 + 0 + 0) / 10 = <b>0.20, or 20%</b> — Concept 04's own number, left deliberately uncorrected. After cleaning: S = 0, D = 0, I = 0. CER = (0 + 0 + 0) / 10 = <b>0.00, or 0%</b> — a full recovery.</p>
+<figure class="concept-visual" aria-labelledby="c0605-cer-title">
+<strong class="concept-visual-title" id="c0605-cer-title">VISUAL · CER BEFORE AND AFTER THE CLEANING CORRECTION</strong>
+<svg class="vector-plane" viewBox="0 0 460 160" role="img" aria-labelledby="c0605-cer-svg-title c0605-cer-svg-desc">
+<title id="c0605-cer-svg-title">A number line from 0 to 0.30 character error rate, plotting the ORDER 4471 example's CER before and after a targeted cleaning correction</title>
+<desc id="c0605-cer-svg-desc">A horizontal axis marked 0.00, 0.10, 0.20 and 0.30. A point at 0.20 is labeled before cleaning. A point at 0.00 is labeled after cleaning. A curved arrow above the axis connects the two points, labeled minus 0.20 after a targeted correction.</desc>
+<line x1="40" y1="90" x2="420" y2="90" stroke="#8a978f" stroke-width="2"/>
+<g font-size="8" fill="#5c6a63" text-anchor="middle">
+<line x1="40" y1="85" x2="40" y2="95" stroke="#8a978f"/><text x="40" y="110">0.00</text>
+<line x1="167" y1="85" x2="167" y2="95" stroke="#8a978f"/><text x="167" y="110">0.10</text>
+<line x1="293" y1="85" x2="293" y2="95" stroke="#8a978f"/><text x="293" y="110">0.20</text>
+<line x1="420" y1="85" x2="420" y2="95" stroke="#8a978f"/><text x="420" y="110">0.30</text>
+</g>
+<text x="230" y="128" font-size="8" text-anchor="middle" fill="#5c6a63">CHARACTER ERROR RATE — "ORDER 4471" EXAMPLE</text>
+<path d="M293,80 Q166,32 40,80" fill="none" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrowcer0605)"/>
+<defs><marker id="arrowcer0605" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+<text x="166" y="22" font-size="8" text-anchor="middle" fill="#14241f">−0.20 after a targeted correction</text>
+<circle cx="293" cy="90" r="5" fill="#14241f"/><text x="293" y="146" font-size="8.5" text-anchor="middle" fill="#14241f">BEFORE — 0.20 (20%)</text>
+<circle cx="40" cy="90" r="5" fill="#14241f"/><text x="40" y="146" font-size="8.5" text-anchor="middle" fill="#14241f">AFTER — 0.00 (0%)</text>
+</svg>
+<figcaption>The same before/after numbers as the table above, plotted on an actual character-error-rate axis rather than a bar: two characters wrong out of ten (20%) drops to zero once the targeted 0↔O and 1↔l correction runs.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cases: two clean fits, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A digitally-authored ticket note with correct, consistent UTF-8 throughout</h3><p>No mojibake, no repeated chrome, no irregular spacing — this concept has nothing extra to do.</p></article>
+<article class="info-card"><span>CLEAN FIT</span><h3>Mojibake from a known, declared mis-encoding</h3><p>A system that reliably exports Windows-1252 mislabeled as UTF-8 produces mojibake that's deterministically repairable, because the exact wrong-charset assumption is already known.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Mojibake that's already lossy — the original bytes are gone</h3><p>Text that's already round-tripped through multiple lossy transcodings can leave permanent replacement characters where information used to be; no repair recovers bytes that no longer exist.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Over-aggressive boilerplate stripping deleting legitimate repeated content</h3><p>Removing every line that starts with a repeated string like "Q:" because it looks boilerplate-like destroys legitimate structured content — an FAQ's questions — that happens to repeat by design, not by accident.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Three cleaners, from scratch</h2></div></header>
+<p>This is the mechanism behind Section 06's three lanes: a mojibake repair function tested on the verified don't/donâ€™t pair, an exact-block boilerplate stripper, and a whitespace/punctuation normalizer — plus one edge case every production cleaner needs to pass: running twice on already-clean text must not change it.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · MOJIBAKE REPAIR, BOILERPLATE STRIPPING, WHITESPACE NORMALIZATION</span>
+<pre><code>NAV = "Home | Support | Contact"
+
+def fix_mojibake(text):
+    # Reverse a wrong-charset decode by re-encoding under the charset
+    # that was wrongly assumed, then decoding under the real one.
+    try:
+        return text.encode("cp1252").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text  # not mojibake under this hypothesis -- leave it alone
+
+def strip_boilerplate(text):
+    out = text
+    if out.startswith(NAV):
+        out = out[len(NAV):]
+    out = out.lstrip()
+    if out.endswith(NAV):
+        out = out[:-len(NAV)]
+    return out.rstrip()
+
+import re
+
+def normalize_whitespace(text):
+    out = re.sub(r"\s+,and", ", and", text)
+    out = out.replace("0RDER 447l", "ORDER 4471")
+    out = re.sub(r" {2,}", " ", out)
+    return out.strip()
+
+mojibake = "don" + chr(0xE2) + chr(0x20AC) + chr(0x2122) + "t"  # "donâ€™t"
+assert len(mojibake) == 7
+fixed = fix_mojibake(mojibake)
+assert fixed == "don" + chr(0x2019) + "t"                        # "don't"
+assert len(fixed) == 5
+
+# Edge case: idempotency. Running a cleaner on already-clean text
+# must not change it -- Section 18's production concern, checked here.
+already_clean = "don" + chr(0x2019) + "t know when it will update."
+assert fix_mojibake(already_clean) == already_clean
+assert normalize_whitespace(already_clean) == already_clean
+assert strip_boilerplate(already_clean) == already_clean
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same three lanes, in real tools</h2></div></header>
+<p>Encoding: ftfy ("fixes text for you") is the standard open-source library for automated mojibake repair, applying exactly the re-encode/re-decode heuristic Section 12 builds from scratch. Whitespace and punctuation: Python's built-in <code>unicodedata.normalize</code> applies NFC or NFKC canonical forms per Unicode Standard Annex #15, standardizing equivalent-but-differently-encoded character sequences. Boilerplate: content-extraction heuristics in the style of trafilatura and Boilerpipe detect and strip template chrome from web pages using structural and statistical signals rather than one exact string match, named here without a separate link-verification pass, consistent with Concept 04's own precedent of naming more tools than it links. Framework-level connectors (LangChain, LlamaIndex — Modules 12 and 14) expose several of these as document transformers behind one common interface, the same file-format-versus-mechanism trade Concepts 02–04 all named already.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Cleaning Toggle Bench</h2></div></header>
+<div class="lab">
+<p>One fixed dirty record carries all three defects at once. Three independent checkboxes — one per defect — combine in any of eight ways. Like Concept 03's Join Fan-Out Simulator and Concept 04's Reading-Order Reconstructor, there is no pick-and-reveal step: every checkbox toggle recomputes the live output immediately.</p>
+<div style="display:flex;flex-wrap:wrap;gap:22px;margin:22px 0">
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="checkbox" id="wgFixEncoding_0605" style="width:auto;accent-color:var(--orange)">
+<span>Fix encoding artifacts</span>
+</label>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="checkbox" id="wgRemoveBoilerplate_0605" style="width:auto;accent-color:var(--orange)">
+<span>Remove boilerplate</span>
+</label>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="checkbox" id="wgNormalizeWhitespace_0605" style="width:auto;accent-color:var(--orange)">
+<span>Normalize whitespace, punctuation &amp; residual noise</span>
+</label>
+</div>
+<div class="norm-readout" id="wgCleanReadout_0605"></div>
+<div class="sample-output" id="wgCleanOutput_0605"></div>
+<div class="callout" id="wgCleanVerdict_0605"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Generic library-level fixes vs. targeted source-aware rules</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it requires</th><th>When it's enough</th></tr></thead>
+<tbody>
+<tr><td>Generic library-level normalization (ftfy, unicodedata NFC/NFKC)</td><td>No source-specific configuration — runs the same repair logic over any text</td><td>Encoding repair and canonical-form normalization, where the fix is universal and doesn't depend on knowing the source's layout</td></tr>
+<tr><td>Targeted, source-template-aware rules (this concept's boilerplate lane)</td><td>Knowing the exact repeated block, or a close pattern for it, per source</td><td>Boilerplate removal, where a generic rule risks either missing a slightly-varied template or deleting legitimate repeated content</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>WRONG-GUESS REPAIR</span><h3>Applying a mojibake fix to text that was never mis-decoded</h3><p>Running Section 12's re-encode/re-decode round-trip on already-correct UTF-8 text can corrupt valid characters instead of fixing anything — the round-trip has to be conditional, not automatic.</p></article>
+<article class="info-card"><span>TEMPLATE DRIFT</span><h3>Boilerplate leaks through after a site redesign</h3><p>An exact-string stripper tuned to "Home | Support | Contact" misses "Home | Support | Contact | v2" the moment a source changes its template even slightly.</p></article>
+<article class="info-card"><span>OVER-NORMALIZATION</span><h3>A whitespace/punctuation pass deletes meaningful structure</h3><p>Collapsing every run of spaces to one can flatten a deliberately indented code block or table-like list into unreadable prose — normalization needs a boundary, not a blanket rule.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Cleaning is always harmless to run</td><td>False — Section 16's wrong-guess repair and over-normalization failures both show a cleaning step can actively damage already-correct text if it's applied unconditionally.</td></tr>
+<tr><td>A statistical charset detector is always right</td><td>False — charset detection is a best guess from limited evidence; a known-source charset assumption is safer wherever one is available, since detectors fail silently often enough to matter.</td></tr>
+<tr><td>Boilerplate is just visual clutter, not a retrieval problem</td><td>False — Section 14's lab verdict makes this explicit: boilerplate that survives into the corpus keeps consuming retrieval's limited context budget on identical chrome, every single time it's retrieved.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Idempotency has to be checked before a cleaner ships, not assumed — running any cleaning function twice on already-clean text must produce identical output, exactly Section 12's edge case.</li>
+<li>Boilerplate templates drift as sites redesign — a stripper that worked last quarter can silently start missing a source's new nav markup, so template rules need periodic revalidation, not one-time setup.</li>
+<li>Cleaning-rule versioning matters for Concept 06's dedup hashing — if two records were cleaned by different rule versions, a hash-based duplicate check can miss a match that a consistent cleaning pass would have caught.</li>
+<li>NFC vs. NFKC is a real decision with downstream consequences, not a default to pick silently — NFKC folds more aggressively (e.g. collapsing typographic variants), which helps matching but can also erase distinctions a corpus actually needs.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does mojibake happen if none of the original bytes are ever lost?</summary><div>Because the underlying byte sequence for the original character is unchanged — mojibake comes from decoding those same bytes under the wrong charset assumption, not from losing any bytes. A decoder that assumes a different charset than the one used to encode the text reads the same bytes through the wrong table and produces different characters entirely.</div></details>
+<details class="quiz"><summary>Why can't boilerplate removal use one universal rule across every source?</summary><div>Because each source's nav, footer and legal template is different text. A rule tuned to one source's exact repeated block won't match a different source's template, and even the same source's template can drift after a redesign.</div></details>
+<details class="quiz"><summary>Why is over-normalization also a failure, not just "less aggressive cleaning"?</summary><div>Because normalization can delete or distort meaningful content — legitimate repeated structure, deliberate spacing — that isn't noise at all. That's a different kind of damage than under-cleaning, not merely an incomplete fix.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different OCR pass over a similar order-confirmation scan produces this raw record: <code>"Home | Support | Contact   Your 0RDER 5502 has shipped  ,and should arrive within 3 days.   Home | Support | Contact"</code></p>
+<p>(a) Name which two of this concept's three defects are present in this record, and which one is absent. (b) The reference for the order number alone is "ORDER 5502" (N = 10); the raw OCR hypothesis for that token is "0RDER 5502." Compute S, D, I and the resulting CER by hand. (c) A targeted cleaning correction — the same 0↔O disambiguation rule from Section 10 — fixes the leading character, producing corrected hypothesis "ORDER 5502." Compute the CER after this correction.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>(a) Boilerplate is present (the "Home | Support | Contact" block repeats at both ends) and whitespace/punctuation noise is present (the double space before ",and" and the double spaces around the nav blocks) — encoding is absent, since nothing in this record is mojibake. (b) Reference "ORDER 5502" vs. hypothesis "0RDER 5502": position 1 is a substitution (O → 0), positions 2–10 all match. S = 1, D = 0, I = 0, N = 10. CER = (1 + 0 + 0) / 10 = 0.10, or 10%. (c) After correction, hypothesis "ORDER 5502" matches the reference exactly: S = 0, D = 0, I = 0. CER = 0 / 10 = 0.00, or 0%.</div>
+</details>
+<p>Teach-back: in your own words, explain why a record that is now character-perfect on its order number (CER = 0) can still fail to be usable for retrieval, and name the two things this concept's fully-cleaned record still is not — the same discipline Concept 04's own teach-back applied to CER not certifying full readiness.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Cleaning and normalization</h3><ul><li><b>Encoding:</b> repair mojibake caused by decoding bytes under the wrong charset</li><li><b>Boilerplate:</b> strip nav/footer/legal chrome that repeats verbatim across a source's records</li><li><b>Whitespace + punctuation:</b> normalize spacing and fix residual character-level noise, including uncorrected OCR mistakes</li><li><b>Handoff:</b> a record that's finally clean — still unchunked (Module 07), still not deduplicated (Concept 06)</li></ul></div>
+<div><h3>Memorable example</h3><p>"Don't" mis-decoded as "donâ€™t" (5 → 7 characters), and Concept 04's own "0RDER 447l" corrected back to "ORDER 4471" — a character error rate drop from 20% to 0%, reusing Concept 04's own formula for a new purpose.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>How would you detect mojibake programmatically, without a human scanning every record?</summary><div>Attempt the re-encode/re-decode round-trip (encode under a suspected wrong charset, decode under the real one) and check whether the result contains fewer non-ASCII "junk" characters or matches expected-language statistics better than the original — a successful, clean round-trip is itself evidence the text was mojibake.</div></details>
+<details class="quiz"><summary>A boilerplate stripper that worked fine for months suddenly starts leaving nav chrome in the corpus. What's the likely cause, and how do you fix it?</summary><div>The source most likely redesigned its template, so the exact-match (or near-match) rule no longer fires. The fix is revalidating the stripper's known-block pattern against the source's current markup, not assuming a one-time rule stays correct forever.</div></details>
+<details class="quiz"><summary>How would you code a known-block boilerplate stripper that's safe against deleting legitimate repeated content?</summary><div>Match the exact known block (or a tightly scoped template pattern for it) at the specific positions it's expected to appear — typically a document's start and end — rather than deleting any line that merely resembles the block anywhere in the body, which is what risks catching legitimate repeated content like FAQ prefixes.</div></details>
+<details class="quiz"><summary>You're normalizing a multilingual corpus. How do you decide between NFC and NFKC?</summary><div>NFC preserves more typographic distinctions and is usually safer as a default; NFKC folds compatibility variants more aggressively, which helps exact-match retrieval but can erase distinctions (like certain typographic or width variants) that matter for some languages or domains — the choice has to be made deliberately per corpus, not left as a silent default.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Mojibake"><b>Mojibake — Wikipedia</b><br><span>Defines mojibake as garbled text from a charset mismatch between encoding and decoding — the basis for this concept's encoding-artifacts lane and the don't/donâ€™t worked illustration.</span></a>
+<a href="https://unicode.org/reports/tr15/"><b>Unicode Standard Annex #15: Unicode Normalization Forms</b><br><span>The authoritative definition of NFC and NFKC — the basis for this concept's whitespace/punctuation normalization lane.</span></a>
+<a href="https://en.wikipedia.org/wiki/Boilerplate_(text)"><b>Boilerplate (text) — Wikipedia</b><br><span>Defines boilerplate text as repeated, non-unique content — the basis for this concept's boilerplate-removal lane.</span></a>
+<a href="https://ftfy.readthedocs.io/en/latest/"><b>ftfy documentation</b><br><span>Documentation for ftfy ("fixes text for you"), the open-source library named in Section 13's ecosystem survey for automated mojibake repair.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 ACTIVE</span>
+<h3>Encoding, boilerplate and whitespace/punctuation solved — deduplication opens next</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute a before/after character error rate for a targeted cleaning correction without looking back at Section 09's formula. Concept 06, "Deduplication and canonicalization," opens next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-04.html">← Back to Concept 04</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Concept 06, Deduplication and canonicalization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 06 · Concept 05 · Complete</p>
+<a href="../index.html">← Back to home</a>
+</footer>
+</body>
+</html>
