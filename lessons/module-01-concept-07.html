@@ -1,0 +1,1078 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson explaining prompts, decoding strategies, sampling parameters, and how generated tokens become readable output.">
+<title>Prompts, sampling and generated output — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-07.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 07</p>
+<h1>Prompts, sampling<br>
+<em>and generated output</em>
+</h1>
+<p class="lesson-lead">Follow a tokenized prompt through one full generation loop: one next-token distribution at a time, one decoding decision at a time, until a stop condition ends the answer.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Seventh Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Tokens and modalities</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Trace one full decoding loop</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You traced the predict-decode-append-repeat loop and compared greedy, temperature, and top-k decoding.</p>
+<b>7 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Generation is a loop, not one big step</h2>
+</div>
+<p>A model never writes a full answer in one move. It predicts one next-token distribution, a decoding rule picks one token from it, that token is appended, and the whole step repeats.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Prompts, decoding, and generated output</h3>
+<p>A <b>prompt</b> is the tokenized input handed to the model—often structured into roles such as <b>system</b>, <b>user</b>, and <b>assistant</b> rather than one plain block of text. Given that input, the model produces a probability distribution over every token in its vocabulary for what should come next.</p>
+<p>
+<b>Decoding</b> is the rule that turns that distribution into one chosen token. <b>Generation</b> repeats prediction, decoding, and appending—one token at a time—until a stop condition ends the sequence, which is then detokenized back into readable text.</p>
+<div class="beginner-memory">
+<b>First memory:</b> one model call predicts a distribution; decoding and looping produce the sentence.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why not generate the whole answer in one shot?</h3>
+<p>The model was trained to predict one next token given everything before it—that is its only output shape. A stop condition is required, or generation would continue until an arbitrary length limit. A decoding rule is required because a probability distribution is not yet a choice: something must turn “12: 34%, 10: 22%, several: 15%…” into an actual next token.</p>
+<div class="mental-compare">
+<div>
+<span>DETERMINISTIC NEED</span>
+<p>Factual, citation-bearing answers usually want the same input to produce a consistent answer.</p>
+</div>
+<div>
+<span>DIVERSITY NEED</span>
+<p>Brainstorming or varied phrasing benefits from controlled randomness across calls.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Tracing “The leave policy allows…”</h3>
+<p>After the prompt “The leave policy allows”, the model’s distribution favors <code>12</code> over <code>10</code>, <code>several</code>, <code>many</code>, and <code>unlimited</code>. Greedy decoding always takes the single highest-probability token at each step; sampling can occasionally take a lower-probability one instead.</p>
+<div class="context-demo">
+<div>
+<span>STEP 1</span>
+<p>Distribution over the next token; greedy picks <code>12</code>.</p>
+</div>
+<div>
+<span>STEP 2</span>
+<p><code>12</code> is appended; the new distribution favors <code>days</code>.</p>
+</div>
+<div>
+<span>STEP 3</span>
+<p><code>days</code> is appended; the distribution now favors the stop token <code>.</code>—generation ends.</p>
+</div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c07-visual-title">
+  <strong class="concept-visual-title" id="c07-visual-title">VISUAL · THE GENERATION LOOP</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable autoregressive generation loop diagram"><div class="diagram-split"><div class="diagram-node"><b>…allows</b><small>prompt so far</small></div><div class="diagram-fork" aria-hidden="true">↗<br>↘</div><div class="diagram-node active"><b>Predict distribution</b><small>P(next token | prompt so far)</small></div><div class="diagram-node active"><b>Decode: pick "12"</b><small>greedy or sampled</small></div><div class="diagram-node"><b>…allows 12</b><small>appended, loop repeats</small></div></div></div>
+  <figcaption>Each pass predicts one distribution, a decoding rule picks one token, and that token extends the prompt for the next pass—until a stop token or length limit ends the loop.</figcaption>
+  <ol class="diagram-key"><li><b>Repeats:</b> the loop runs once per generated token, not once per answer.</li><li><b>Decoding rule:</b> greedy, temperature, top-k, or top-p decide how “predict” becomes “pick.”</li><li><b>Stop condition:</b> an end-of-sequence token or a maximum length ends the loop.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>How a distribution becomes a token</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>GREEDY</span>
+<h3>Always highest probability</h3>
+<p>Deterministic; identical input always produces the identical output.</p>
+</article>
+<article class="info-card">
+<span>TEMPERATURE SAMPLING</span>
+<h3>Reweight, then sample</h3>
+<p>Scales the distribution before sampling; higher temperature flattens it toward more randomness.</p>
+</article>
+<article class="info-card">
+<span>TOP-K</span>
+<h3>Sample among the k best</h3>
+<p>Restricts sampling to the k highest-probability tokens, then renormalizes.</p>
+</article>
+<article class="info-card">
+<span>TOP-P (NUCLEUS)</span>
+<h3>Sample within a probability mass</h3>
+<p>Keeps the smallest set of tokens whose probabilities sum to at least p.</p>
+</article>
+<article class="info-card">
+<span>BEAM SEARCH</span>
+<h3>Track multiple sequences</h3>
+<p>Keeps several candidate continuations in parallel to favor overall sequence likelihood.</p>
+</article>
+<article class="info-card">
+<span>STOP CONDITIONS</span>
+<h3>End the loop</h3>
+<p>An end-of-sequence token, a stop string, or a maximum token count.</p>
+</article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Prompt assembly, then the decoding loop</h3>
+<div class="mental-compare">
+<div>
+<span>PROMPT ASSEMBLY</span>
+<p>System instructions, retrieved context, conversation history, and the question are tokenized into one structured input.</p>
+</div>
+<div>
+<span>DECODING LOOP</span>
+<p>Predict, decode, append, and repeat against that fixed input until a stop condition fires.</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>System + context + question</span>
+<i>→</i>
+<span>Tokenizer</span>
+<i>→</i>
+<span>Model</span>
+<i>→</i>
+<span>Distribution</span>
+<i>→</i>
+<span>Decode</span>
+<i>→</i>
+<span>Detokenize</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the role-structured prompt map</summary>
+<div>
+<div class="pipeline-preview">
+<span>System role: instructions</span>
+<i>↓</i>
+<span>User role: question</span>
+<i>↓</i>
+<span>Retrieved context: evidence</span>
+<i>↓</i>
+<span>Assistant role: generation begins</span>
+<i>↓</i>
+<span>Token loop until stop</span>
+<i>↓</i>
+<span>Answer text</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that get blurred together</h3>
+<div class="distinction-table" role="table" aria-label="Prompt and decoding distinctions">
+<div role="row">
+<b role="cell">Term</b>
+<b role="cell">What it actually is</b>
+<b role="cell">Common confusion</b>
+</div>
+<div role="row">
+<span role="cell">Prompt</span>
+<span role="cell">The tokenized input for one model call</span>
+<span role="cell">Confused with the entire conversation history</span>
+</div>
+<div role="row">
+<span role="cell">Distribution</span>
+<span role="cell">Probabilities the model assigns to every vocabulary token</span>
+<span role="cell">Confused with the chosen token itself</span>
+</div>
+<div role="row">
+<span role="cell">Decoding</span>
+<span role="cell">The rule that turns a distribution into a token</span>
+<span role="cell">Confused with the model’s knowledge or accuracy</span>
+</div>
+<div role="row">
+<span role="cell">Temperature</span>
+<span role="cell">A reweighting applied before sampling</span>
+<span role="cell">Confused with randomness in general, including top-k/top-p</span>
+</div>
+</div>
+<p>Two calls with identical input and greedy decoding always produce the same output; two calls with identical input and sampling can legitimately differ.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“The model writes the whole answer in one step.”</b>
+<p>It predicts one token at a time inside a repeating loop.</p>
+</div>
+<div>
+<b>“Temperature changes what the model knows.”</b>
+<p>It only changes how a token is picked from the same underlying distribution.</p>
+</div>
+<div>
+<b>“Higher temperature always improves answers.”</b>
+<p>Past a point it increases incoherence, not quality.</p>
+</div>
+<div>
+<b>“Greedy decoding is always worse than sampling.”</b>
+<p>Greedy is often preferred for consistent, citation-bearing answers.</p>
+</div>
+<div>
+<b>“A system prompt guarantees the model will obey it.”</b>
+<p>It strongly conditions the distribution but does not guarantee compliance.</p>
+</div>
+<div>
+<b>“Stopping is automatic and always correct.”</b>
+<p>Missing or misconfigured stop conditions can truncate or run past a useful answer.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Choosing decoding settings for Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>FACTUAL / CITED ANSWERS</span>
+<b>Low temperature or greedy</b>
+<p>Favors consistent wording tied to the retrieved evidence.</p>
+</div>
+<div>
+<span>EXPLORATORY ASSISTANCE</span>
+<b>Moderate temperature or top-p</b>
+<p>Allows varied phrasing when strict consistency is not required.</p>
+</div>
+<div>
+<span>STRUCTURED OUTPUT</span>
+<b>Stop sequences and schema constraints</b>
+<p>Prevent generation from continuing past a required JSON or citation block.</p>
+</div>
+<div>
+<span>PROMPT ROLES</span>
+<b>Separate instructions, evidence, and question</b>
+<p>System role carries policy; retrieved context stays clearly bounded from the user’s question.</p>
+</div>
+</div>
+<p>LangChain and LangGraph expose decoding parameters and stop sequences as configuration, but the underlying distribution still comes from the model, and the decoding rule still decides what leaves that distribution as a token.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Prompt</b>
+<p>The tokenized input for one model call.</p>
+</div>
+<div>
+<b>Distribution</b>
+<p>Probabilities over every possible next token.</p>
+</div>
+<div>
+<b>Decoding</b>
+<p>The rule that turns a distribution into a token.</p>
+</div>
+<div>
+<b>Stop condition</b>
+<p>What ends the generation loop.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does generation require a loop instead of one model call?</li>
+<li>What exactly does temperature change, and what does it leave unchanged?</li>
+<li>Why can greedy decoding be the better choice for a citation-bearing answer?</li>
+<li>What happens if a stop condition never fires?</li>
+<li>Why can identical prompts produce different answers under sampling but not under greedy decoding?</li>
+<li>Where do prompt roles fit before the decoding loop even starts?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick decoding judgment exercise</summary>
+<div>
+<ol>
+<li>A support answer that must match an approved policy sentence — <b>greedy or very low temperature</b>.</li>
+<li>Ten varied marketing taglines from one prompt — <b>higher temperature or top-p</b>.</li>
+<li>A required JSON response — <b>stop sequence/schema constraint, low temperature</b>.</li>
+<li>An answer that trails off with no ending — <b>missing or misconfigured stop condition</b>.</li>
+<li>Same prompt, same greedy settings, two different outputs — <b>should not happen; investigate the setup</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Capabilities, limitations and responsible use</h3>
+<p>Concept 8 closes Module 01 by examining what generative models can and cannot reliably do, common failure patterns beyond decoding choices, and responsible-use practices before Module 02 moves into transformers and attention in depth.</p>
+<div class="beginner-memory">
+<b>Concept 07 is complete.</b> Continue to capabilities, limitations, and responsible use.</div>
+<a class="button primary" href="module-01-concept-08.html">Start Concept 08 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required loop, optional depth.</h2>
+<p>Master the predict-decode-append-repeat loop and the project decisions first. Open sampling mathematics, code, production, and interviews only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>Prediction, decoding, and generation are different steps.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Greedy, temperature, top-k, top-p, and beam search.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>Match decoding settings to the answer’s required consistency.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open sampling mathematics, code, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 07 path:</b> Prompt → distribution → decode → append → repeat → stop → detokenize.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the prompts and decoding deep dive</b>
+<em>Softmax and temperature mathematics, top-k/top-p code, prompt templates, production sampling</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where decoding sits</h2>
+</div>
+</header>
+<p>Concept 6 established that a model reads and writes tokens, not raw text. Concept 7 examines what happens between those tokens: how a prompt becomes a distribution, and how a distribution becomes the next token, repeatedly. Concept 8 will step back to what this whole loop can and cannot reliably do.</p>
+<div class="flow">
+<div class="flow-node">Tokens</div>
+<div class="flow-node">Model</div>
+<div class="flow-node hot">Decoding loop</div>
+<div class="flow-node">Generated tokens</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>TRACE</span>
+<h3>Follow the loop</h3>
+<p>Walk a distribution through decoding, appending, and stopping by hand.</p>
+</article>
+<article class="info-card">
+<span>COMPARE</span>
+<h3>Contrast decoding rules</h3>
+<p>Explain what greedy, temperature, top-k, and top-p each change.</p>
+</article>
+<article class="info-card">
+<span>SELECT</span>
+<h3>Match settings to task</h3>
+<p>Choose decoding parameters appropriate to consistency requirements.</p>
+</article>
+<article class="info-card">
+<span>DIAGNOSE</span>
+<h3>Spot loop failures</h3>
+<p>Identify missing stop conditions and runaway or truncated generation.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Token / token ID:</b> the unit a model consumes and produces (Concept 6).</li>
+<li>
+<b>Inference:</b> using fixed parameters to process a new input (Concept 5).</li>
+<li>
+<b>Vocabulary:</b> the fixed set of tokens a model can output (Concept 6).</li>
+<li>
+<b>Logit:</b> a model’s raw, unnormalized score for one token, previewed here and used throughout this lesson.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>One word at a time, never looking back to rewrite</h2>
+</div>
+</header>
+<p>Think of the model as writing one word at a time on a typewriter with no backspace key: at every position it weighs every possible next character against everything already typed, commits to one, and moves forward. Decoding is the rule for which weighted option gets committed.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>A typewriter commits letter by letter with no lookahead; a decoding rule can still consider many candidate tokens at each step before committing to exactly one—it just cannot revise a token once it has been appended.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Definitions by role</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Produced/consumed by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Logit</td>
+<td>Raw unnormalized score the model assigns to one vocabulary token</td>
+<td>Model’s final layer</td>
+</tr>
+<tr>
+<td>Softmax distribution</td>
+<td>Logits converted into probabilities that sum to one</td>
+<td>Softmax function over logits</td>
+</tr>
+<tr>
+<td>Temperature</td>
+<td>A scalar that reweights logits before softmax</td>
+<td>Decoding configuration</td>
+</tr>
+<tr>
+<td>Top-k / top-p</td>
+<td>Rules that restrict the distribution to a subset before sampling</td>
+<td>Decoding configuration</td>
+</tr>
+<tr>
+<td>Stop condition</td>
+<td>The rule that ends the generation loop</td>
+<td>End-of-sequence token, stop string, or max length</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>From logits to a probability bar chart</h2>
+</div>
+</header>
+<div class="lane-flow">
+<div>Model outputs one logit per vocabulary token</div>
+<div>Temperature divides every logit before the next step</div>
+<div>Softmax exponentiates and normalizes into probabilities</div>
+<div>Top-k or top-p may remove low-probability tokens first</div>
+<div>A decoding rule selects exactly one remaining token</div>
+</div>
+<p>Illustrative step-1 distribution over candidates for “The leave policy allows…”, after softmax:</p>
+<div class="prob-bars" role="img" aria-label="Bar chart of an illustrative next-token probability distribution">
+<div class="prob-row"><span>12</span><div class="bar-track"><div class="bar-fill" style="width:34%"></div></div><span>34%</span></div>
+<div class="prob-row"><span>unlimited</span><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><span>20%</span></div>
+<div class="prob-row"><span>10</span><div class="bar-track"><div class="bar-fill" style="width:22%"></div></div><span>22%</span></div>
+<div class="prob-row"><span>several</span><div class="bar-track"><div class="bar-fill" style="width:15%"></div></div><span>15%</span></div>
+<div class="prob-row"><span>many</span><div class="bar-track"><div class="bar-fill" style="width:9%"></div></div><span>9%</span></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>The loop, with its repeat edge made explicit</h2>
+</div>
+</header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram of the decoding loop returning to its own input">
+<div class="diagram-split">
+<div class="diagram-node"><b>Prompt so far</b><small>tokens</small></div>
+<div class="diagram-node active"><b>Model</b><small>one forward pass</small></div>
+<div class="diagram-node active"><b>Distribution</b><small>over vocabulary</small></div>
+<div class="diagram-node"><b>Decode one token</b><small>greedy / sampled</small></div>
+<div class="diagram-node"><b>Stop? → Answer</b><small>else: append and repeat ↻</small></div>
+</div>
+</div>
+<p>The final node feeds back into the first: the newly appended token becomes part of “prompt so far” for the next pass, until the stop check succeeds.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Generation is the last stage of the RAG pipeline</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Retrieved chunks</span>
+<i>↓</i>
+<span>Context + question assembled</span>
+<i>↓</i>
+<span>Prompt tokenized</span>
+<i>↓</i>
+<span>Decoding loop</span>
+<i>↓</i>
+<span>Generated tokens</span>
+<i>↓</i>
+<span>Detokenized answer</span>
+</div>
+<p>Everything upstream—retrieval quality, context construction, prompt roles—only shapes the distribution the model produces. Decoding then decides what leaves that distribution as the visible answer.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Softmax with temperature, and top-k/top-p</h2>
+</div>
+</header>
+<div class="equation">Softmax with temperature: P(token_i) = exp(z_i / T) / Σ_j exp(z_j / T)</div>
+<p>
+<code>z_i</code> is the logit for token <code>i</code> and <code>T</code> is the temperature. As <code>T → 0</code>, the distribution concentrates on the single highest logit, converging toward greedy decoding; as <code>T</code> grows, the distribution flattens toward uniform.</p>
+<div class="equation">Top-k: keep the k tokens with highest P, renormalize, then sample</div>
+<div class="equation">Top-p: keep the smallest token set S where Σ_{i∈S} P(token_i) ≥ p, renormalize, then sample</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Temperature by hand on three logits</h2>
+</div>
+</header>
+<p>Logits <code>z = [2.0, 1.0, 0.0]</code> for tokens <code>[A, B, C]</code>.</p>
+<div class="equation">T=1: exp(2)=7.39, exp(1)=2.72, exp(0)=1.00; sum=11.11 → P=[0.665, 0.245, 0.090]</div>
+<div class="equation">T=2: exp(1)=2.72, exp(.5)=1.65, exp(0)=1.00; sum=5.37 → P=[0.507, 0.307, 0.186]</div>
+<p>Raising the temperature from 1 to 2 pulled probability away from the top token (0.665 → 0.507) and toward the others—the ranking is unchanged, but the distribution is flatter, so sampling is more likely to pick <code>B</code> or <code>C</code>.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>POLICY ANSWER</span>
+<h3>Greedy, T≈0</h3>
+<p>Same question should yield the same cited answer every time.</p>
+</article>
+<article class="info-card">
+<span>BRAINSTORM LIST</span>
+<h3>Top-p, moderate T</h3>
+<p>Varied, still coherent phrasing across repeated calls.</p>
+</article>
+<article class="info-card">
+<span>STRUCTURED JSON</span>
+<h3>Low T + stop sequence</h3>
+<p>Generation halts exactly at the closing brace.</p>
+</article>
+<article class="info-card">
+<span>CREATIVE DRAFT</span>
+<h3>Higher T, top-k</h3>
+<p>Deliberately favors less predictable continuations.</p>
+</article>
+<article class="info-card">
+<span>VERY HIGH TEMPERATURE</span>
+<h3>Counterexample</h3>
+<p>Near-uniform sampling degrades into incoherent output, not creativity.</p>
+</article>
+<article class="info-card">
+<span>NO STOP CONDITION</span>
+<h3>Counterexample</h3>
+<p>Generation runs to the maximum length instead of ending naturally.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>Greedy versus temperature sampling from scratch</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre>
+<code>import math, random
+
+def softmax_with_temperature(logits, temperature):
+    scaled = [logit / temperature for logit in logits]
+    m = max(scaled)
+    exps = [math.exp(value - m) for value in scaled]
+    total = sum(exps)
+    return [value / total for value in exps]
+
+def decode_step(logits, temperature=None):
+    if temperature is None:
+        return logits.index(max(logits))          # greedy
+    probs = softmax_with_temperature(logits, temperature)
+    u, cumulative = random.random(), 0.0
+    for index, p in enumerate(probs):
+        cumulative += p
+        if u < cumulative:
+            return index
+    return len(probs) - 1
+</code>
+</pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>Provider decoding parameters</h2>
+</div>
+</header>
+<p>Model APIs and libraries such as Hugging Face <code>transformers.generate</code> expose temperature, top-k, top-p, repetition penalties, and stop sequences as call-time arguments rather than model retraining. LangChain and LangGraph pass these same parameters through to the underlying provider call—they configure decoding, they do not implement a different decoding algorithm of their own.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Run the decoding loop yourself</h2>
+</div>
+</header>
+<div class="lab">
+<p>Choose a decoding strategy and step through the same toy distribution table used above, one generated token at a time, until a stop token ends the sequence.</p>
+<div class="lab-actions" role="group" aria-label="Choose a decoding strategy">
+<button type="button" class="decode-strategy-button active" data-strategy="greedy" aria-pressed="true">Greedy</button>
+<button type="button" class="decode-strategy-button secondary" data-strategy="temperature" aria-pressed="false">Temperature sampling</button>
+<button type="button" class="decode-strategy-button secondary" data-strategy="topk" aria-pressed="false">Top-k (k=2)</button>
+</div>
+<div class="sample-output" id="decodeOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choosing a decoding strategy</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Determinism</th>
+<th>Best fit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Greedy</td>
+<td>Fully deterministic</td>
+<td>Consistent, citation-bearing answers</td>
+</tr>
+<tr>
+<td>Temperature sampling</td>
+<td>Stochastic, tunable spread</td>
+<td>Controlled variety across calls</td>
+</tr>
+<tr>
+<td>Top-k / top-p</td>
+<td>Stochastic, bounded candidate set</td>
+<td>Variety while avoiding very low-probability tokens</td>
+</tr>
+<tr>
+<td>Beam search</td>
+<td>Deterministic given beam width</td>
+<td>Favoring overall sequence likelihood over per-token greed</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>REPETITION</span>
+<h3>Degenerate loops</h3>
+<p>Greedy or low-temperature decoding can repeat phrases without a repetition penalty.</p>
+</article>
+<article class="info-card">
+<span>INCOHERENCE</span>
+<h3>Temperature too high</h3>
+<p>Excessive randomness produces fluent-looking but unreliable text.</p>
+</article>
+<article class="info-card">
+<span>RUNAWAY LENGTH</span>
+<h3>Missing stop condition</h3>
+<p>Generation continues to the maximum length instead of a natural end.</p>
+</article>
+<article class="info-card">
+<span>TRUNCATION</span>
+<h3>Stop sequence fires too early</h3>
+<p>A stop string that also appears inside valid content cuts the answer short.</p>
+</article>
+<article class="info-card">
+<span>INCONSISTENCY</span>
+<h3>Unintended sampling</h3>
+<p>Sampling left on for tasks that actually need reproducible, citation-bearing answers.</p>
+</article>
+<article class="info-card">
+<span>PROMPT LEAKAGE</span>
+<h3>Role boundaries ignored</h3>
+<p>Generated text echoes or is steered by content that should have stayed in the system role.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Temperature=0 and greedy are two unrelated settings</td>
+<td>Temperature approaching 0 converges toward greedy behavior mathematically.</td>
+</tr>
+<tr>
+<td>Sampling makes the model know more</td>
+<td>Sampling only changes which already-assigned probability becomes the chosen token.</td>
+</tr>
+<tr>
+<td>Beam search always beats greedy</td>
+<td>It optimizes overall sequence likelihood, which does not guarantee better factual or grounded answers.</td>
+</tr>
+<tr>
+<td>Stop tokens are optional detail</td>
+<td>A missing or wrong stop condition directly causes truncated or runaway generation.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Fix decoding parameters and log them per request for reproducibility during debugging.</li>
+<li>Use low temperature or greedy decoding for answers that must match approved wording or citations.</li>
+<li>Set explicit stop sequences for structured outputs; verify they cannot appear inside valid content.</li>
+<li>Cap maximum generated tokens to bound latency and cost even when a stop condition should fire earlier.</li>
+<li>Monitor for repetition and truncation as separate, distinct failure signals.</li>
+<li>Treat decoding settings as part of the versioned configuration, not an implementation detail.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>What does temperature mathematically do to logits?</summary>
+<div>It divides each logit before softmax, flattening the resulting distribution as temperature increases and sharpening it as temperature decreases toward zero.</div>
+</details>
+<details class="quiz">
+<summary>Why can identical prompts produce different answers?</summary>
+<div>A stochastic decoding rule such as temperature sampling or top-k/top-p can select a different token at any step, even from an identical distribution.</div>
+</details>
+<details class="quiz">
+<summary>What ends the generation loop?</summary>
+<div>An end-of-sequence token, a configured stop string, or a maximum token length.</div>
+</details>
+<details class="quiz">
+<summary>Why might beam search not be the best fit for a RAG answer?</summary>
+<div>It optimizes for overall sequence likelihood, not for grounding in retrieved evidence, so it can still produce fluent but ungrounded text.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>For a customer-facing policy answer, a marketing tagline generator, a structured data-extraction endpoint, and an open-ended research-brainstorm assistant, propose a decoding strategy and explicit stop condition for each. State what would go wrong with the opposite choice.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one defensible decision pattern</summary>
+<div>Policy answers: greedy or very low temperature, stop at the citation block, to keep wording consistent and auditable. Taglines: moderate-to-high temperature or top-p, no strict stop sequence beyond a length cap, to encourage variety. Data extraction: low temperature, an explicit stop sequence or schema-validated stop, since malformed structure is worse than reduced variety. Brainstorming: higher temperature or top-k, generous length, since a wider range of coherent but lower-probability ideas is the goal. The opposite choice in each case trades away the property the task actually needed—consistency for the first two, variety for the last two.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>The loop</h3>
+<p>Predict distribution → decode one token → append → repeat → stop → detokenize.</p>
+</div>
+<div>
+<h3>Selection rule</h3>
+<ul>
+<li>Consistency required → greedy / low T</li>
+<li>Variety wanted → temperature / top-p</li>
+<li>Structured output → stop sequence + low T</li>
+<li>Every setting → log and version it</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Explain the difference between top-k and top-p sampling.</summary>
+<div>Top-k restricts sampling to a fixed number of highest-probability tokens; top-p restricts sampling to the smallest set of tokens whose cumulative probability reaches a threshold, so its effective candidate count varies with how peaked the distribution is.</div>
+</details>
+<details class="quiz">
+<summary>Why would you fix decoding parameters for a production RAG endpoint?</summary>
+<div>To keep answers reproducible and debuggable, and to avoid unintended variation in citation-bearing or policy-sensitive responses.</div>
+</details>
+<details class="quiz">
+<summary>What happens mathematically to softmax output as temperature approaches zero?</summary>
+<div>The distribution concentrates almost entirely on the token with the highest logit, converging to greedy decoding’s behavior.</div>
+</details>
+<details class="quiz">
+<summary>How would you debug a model that generates endlessly without stopping?</summary>
+<div>Check whether the expected end-of-sequence or stop-string condition is configured and reachable, and confirm the maximum-length cap is acting only as a backstop, not the primary stop mechanism.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1904.09751">
+<b>Holtzman et al. — The Curious Case of Neural Text Degeneration</b>
+<br>
+<span>Introduces nucleus (top-p) sampling and analyzes degeneration in likelihood-maximizing decoding.</span>
+</a>
+<a href="https://arxiv.org/abs/1805.04833">
+<b>Fan, Lewis & Dauphin — Hierarchical Neural Story Generation</b>
+<br>
+<span>Introduces top-k sampling for improving generated text quality.</span>
+</a>
+<a href="https://arxiv.org/abs/1909.05858">
+<b>Keskar et al. — CTRL</b>
+<br>
+<span>Conditional generation using control codes, relevant to structured prompt roles.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 07 is complete. Its sampling mathematics, decoding-loop lab, failure modes, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-08.html">Start Concept 08 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Capabilities, limitations and responsible use.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 07 · Active</p>
+<a href="module-01-concept-06.html">← Concept 06</a>
+</footer>
+</body>
+</html>

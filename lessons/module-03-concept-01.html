@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson defining Retrieval-Augmented Generation as a two-part architecture pattern — a retriever that searches an external corpus, wired to a generator, Module 02's LLM completely unchanged — so the answer is conditioned on retrieved evidence instead of parametric memory alone.">
+<title>What exactly is Retrieval-Augmented Generation? — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 01</p>
+<h1>What exactly is<br><em>Retrieval-Augmented Generation?</em></h1>
+<p class="lesson-lead">Module 02 is complete — all eleven concepts, tokens through the transformer, attention, decoding, hallucination, and structured output — exactly where Concept 11 said Module 03 would begin. RAG is not a new model and not a new training run. It's a <b>retriever</b> that searches an external <b>corpus</b> for relevant evidence, wired to a <b>generator</b> — Module 02's LLM, completely unchanged — that answers conditioned on that evidence instead of parametric memory alone. That conditioning is called <b>grounding</b>, and grounding is not a correctness guarantee. Module 03, RAG mental model &amp; problem framing, starts right here.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Module 02's complete decode loop and hallucination boundary (Concepts 07, 09, 11)</b></div>
+<div><span>BEGINNER GOAL</span><b>Define RAG's two-box pattern and name all four vocabulary terms precisely</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You defined RAG plainly as retriever + generator, wired together — not a new model, not a new training run — and named all four vocabulary terms: retriever, corpus, generator, grounding. Grounding conditions the generator's output on retrieved evidence; it never guarantees that output is correct.</p>
+<b>1 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two boxes, wired together — not a new model</h2>
+</div>
+<p>Module 02 finished the LLM mechanism end to end — tokens, attention, decoding, hallucination, structured output, all of it. This concept opens Module 03 by drawing the smallest possible diagram of what RAG actually is: one new box, the retriever, wired in front of the box you already know. Nothing about the generator's insides changes. Only what shows up in its prompt does.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A retriever wired to a generator — not a new model</h3>
+<p><b>Retrieval-Augmented Generation (RAG)</b> is an architecture pattern, not a model and not a training procedure. It's two components wired together: a <b>retriever</b> that searches an external <b>corpus</b> — a collection of documents that lives outside the model's weights — for passages relevant to a query, and a <b>generator</b> — Module 02's LLM, completely unchanged — that produces an answer conditioned on whatever the retriever handed it, instead of drawing only on its own parametric memory.</p>
+<p>Conditioning the generator's output on retrieved evidence like this is called <b>grounding</b>. Grounding means the evidence was actually sitting in the prompt when the answer got written. It is not a correctness guarantee — the generator still has to read that evidence and use it well, and later concepts own every way that can go wrong.</p>
+<div class="beginner-memory"><b>First memory:</b> RAG is retriever + generator, wired together — not a new model, not a new training run.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>The decode loop never checks its own memory</h3>
+<p>Module 02 Concept 09 already showed the shape of the problem: the decode loop has no verification step built in, and it answers from lossy, compressed weight-group residue left over from training — parametric memory, and nothing else. RAG is the architectural response to exactly that gap: insert an evidence-gathering step before generation ever runs, so the generator has something besides its own memory to read.</p>
+<div class="mental-compare">
+<div><span>WHAT THIS SECTION COVERS</span><p>Just enough "why" to motivate the shape of the fix — an evidence step, inserted before generation.</p></div>
+<div><span>WHAT IT DOESN'T COVER YET</span><p>Cost, knowledge cutoffs, private and constantly-changing knowledge, and why you can't just ask the LLM to fix this itself — that full case is Concept 02's job, next.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One clause, two outcomes</h3>
+<p>Someone asks Oracle RAG: "Does our travel policy require pre-approval for international conferences?" That single question plays out two different ways, depending on whether a retriever is in the loop at all.</p>
+<div class="context-demo">
+<div><span>PARAMETRIC-ONLY (MODULE 02'S MECHANISM ALONE)</span><p>The generator answers straight from weight-group residue — the same mechanism Concept 09 walked through — fluently and confidently. It can also be flatly wrong about this specific internal policy, for exactly the reason Concept 09 already gave: nothing in that mechanism checks itself against the actual document.</p></div>
+<div><span>RAG</span><p>The retriever searches the corpus, finds the actual policy passage covering international-travel pre-approval, and hands it to the generator. The generator reads that passage and answers from it. That's the whole story at this level: the retriever found the passage, the generator read it and answered.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0301-visual-title">
+  <strong class="concept-visual-title" id="c0301-visual-title">VISUAL · TWO BOXES, ONE NEW WIRE</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing a query routed through the retriever to the corpus, returning a passage placed inside the generator's prompt">
+    <div class="diagram-hub">
+      <div class="diagram-node"><b>Query</b><small>"Does our policy require pre-approval for international conferences?"</small></div>
+      <div class="diagram-node"><b>Corpus</b><small>the internal policy documents — external, not stored in the generator's weights</small></div>
+      <div class="diagram-node hub-center"><b>Retriever — new</b><small>searches the corpus, returns the passages that look relevant</small></div>
+      <div class="diagram-node"><b>Retrieved passage</b><small>the actual clause covering international-travel pre-approval</small></div>
+      <div class="diagram-node"><b>Generator</b><small>Module 02's LLM, unchanged — reads the passage plus the query, answers from it</small></div>
+    </div>
+  </div>
+  <figcaption>One query, one new component. The retriever's only job is to find the corpus passage that matters; the generator's mechanism never changes — only its prompt now carries retrieved evidence instead of the bare question.</figcaption>
+  <ol class="diagram-key"><li><b>The retriever is the only new box:</b> everything downstream of it is Module 02's already-built machinery.</li><li><b>The corpus lives outside the weights:</b> searching it at query time is not the same as training on it.</li><li><b>Grounding means "in the prompt," not "correct":</b> the generator still has to read the passage and answer well.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two boxes, each with exactly one job</h3>
+<div class="mental-compare">
+<div><span>RETRIEVER</span><p>Takes the query, searches the corpus, returns the top passages. How it searches — embeddings, vector indexes, similarity scoring — is deliberately out of scope until Modules 04 through 10 build it piece by piece. For now, treat it as a box with one job: find relevant text.</p></div>
+<div><span>GENERATOR</span><p>The identical LLM mechanism from Module 02 — tokenize, forward pass, decode loop. Nothing about that mechanism is new here. Only its input changed: the prompt now contains retrieved passages plus the question, instead of the bare question alone.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The pattern's silhouette — nothing more, yet</h3>
+<div class="scroll-flow">
+<span>Query</span><i>→</i>
+<span>Retriever searches Corpus</span><i>→</i>
+<span>Retrieved passages</span><i>→</i>
+<span>Prompt = instructions + passages + question</span><i>→</i>
+<span>Generator (Module 02's LLM, unchanged)</span><i>→</i>
+<span>Grounded answer</span>
+</div>
+<p>That's the whole shape for now. How the corpus got ready to be searched in the first place — parsing, chunking, embedding, indexing — is offline work this concept doesn't touch, and the full online-query breakdown is Concept 06's job. This is only the silhouette.</p>
+<details class="beginner-answer">
+<summary>Open where this sits in the full RAG skeleton</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunking</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors / index</span><i>↓</i>
+<span class="hot">Retrieval</span><i>↓</i>
+<span>Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span>Answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four things RAG gets flattened into, and isn't</h3>
+<div class="distinction-table" role="table" aria-label="RAG pattern distinctions">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">The RAG pattern (retriever + generator)</span><span role="cell">A new model architecture</span><span role="cell">The generator is Module 02's LLM, unmodified — its architecture never changes</span></div>
+<div role="row"><span role="cell">The RAG pattern</span><span role="cell">Fine-tuning</span><span role="cell">No training happens to add retrieval; the corpus is searched at query time, never baked into the weights</span></div>
+<div role="row"><span role="cell">The RAG pattern</span><span role="cell">A search engine alone</span><span role="cell">Retrieval without a generation step that reads the results and writes an answer is not RAG</span></div>
+<div role="row"><span role="cell">The RAG pattern</span><span role="cell">An LLM autonomously browsing the web</span><span role="cell">That's tool use / agentic behavior — related but distinct, and it's Module 23's job</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"RAG is a type of model."</b><p>No — it's an architecture pattern combining two existing, separately-understood components: a retriever and a generator.</p></div>
+<div><b>"RAG means the model was retrained on your documents."</b><p>No — no training occurs. The corpus is searched live, at query time, not memorized into weights.</p></div>
+<div><b>"Grounding guarantees a correct answer."</b><p>No — grounding means the output was conditioned on retrieved evidence, not that it's automatically correct. Failure modes are later concepts' job.</p></div>
+<div><b>"Retrieval replaces the LLM."</b><p>No — retrieval only finds evidence. Generation is still required to actually produce the answer.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Naming Oracle RAG's two boxes for the first time</h3>
+<div class="project-map">
+<div><span>RETRIEVER</span><b>Will eventually be Oracle AI Database</b><p>Oracle AI Database's vector/text search (Module 10) will eventually play this role, searching over the policy-document corpus for passages relevant to a query.</p></div>
+<div><span>GENERATOR</span><b>The same LLM mechanism from Module 02</b><p>Tokenize → forward pass → decode loop, now handed retrieved passages inside its prompt instead of the bare question.</p></div>
+<div><span>WHAT THIS ISN'T YET</span><b>No schema, no embeddings, no chunking</b><p>This concept only labels the skeleton's two halves. Those decisions arrive with their own modules.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The two-box definition</b><p>RAG is a retriever wired to a generator: the retriever searches a corpus, the generator answers from what it finds.</p></div>
+<div><b>The four vocabulary terms</b><p>Retriever, corpus, generator, grounding — able to state each one precisely, not just recognize the words.</p></div>
+<div><b>The generator is unchanged from Module 02</b><p>Same tokenize → forward pass → decode loop. RAG changes the prompt, never the mechanism.</p></div>
+<div><b>Grounding is not a correctness guarantee</b><p>Grounding means conditioned on retrieved evidence — nothing about that word promises the answer is right.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Define RAG in one sentence, naming both boxes.</li>
+<li>Define grounding without using the word "correct."</li>
+<li>Why is a fine-tuning-only system not RAG?</li>
+<li>Why is a search-only system, with no generation step, not RAG?</li>
+<li>Name what this concept deliberately did not cover yet, and which concepts own each piece.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Why we cannot simply ask the LLM: external knowledge</h3>
+<p>Today's concept defined the shape: retriever, corpus, generator, grounding. Concept 02 builds directly on that vocabulary to explain, in depth, why the pattern actually earns its keep — the cost of scaling a model's memory, knowledge cutoffs, and knowledge that's private or changes too often to ever sit safely inside a set of weights.</p>
+<div class="beginner-memory"><b>Concept 01 is complete.</b> Continue to Why we cannot simply ask the LLM: external knowledge.</div>
+<a class="button primary" href="module-03-concept-02.html">Start Concept 02 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required vocabulary, optional depth.</h2>
+<p>Master the two-box definition and the four vocabulary terms first. Open the formal notation, from-scratch code, and the sorter lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>RAG as retriever + generator, wired together — not a new model.</small></a>
+<a href="#b04"><span>02</span><b>Separate</b><small>The retriever's search job from the generator's unchanged Module 02 mechanism.</small></a>
+<a href="#b06"><span>03</span><b>Distinguish</b><small>The RAG pattern from fine-tuning, search alone, and agentic web browsing.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the P(answer|query,context) notation, code, and the sorter lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> Query → retriever searches corpus, new → retrieved passages → prompt = instructions + passages + question → generator (Module 02's LLM, unchanged) → grounded answer.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the RAG architecture deep dive</b><em>The P(answer|query,context) notation, a from-scratch retrieve/generate toy, and the "Retriever or Generator?" sorter lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 03's first of twelve concepts</h2></div></header>
+<p>Module 02 closed with eleven concepts complete — Concept 11, structured generation, the most recent. This concept opens Module 03 and establishes only the architecture-level definition and vocabulary of RAG. Concept 02 (why the pattern is needed), Concept 06 (the pipeline broken into stages), and Concept 09 (the naive/advanced/modular taxonomy) are named here as later, not-yet-covered territory — this concept draws the shape, nothing past it.</p>
+<div class="flow">
+<div class="flow-node">Module 02 complete</div>
+<div class="flow-node">Query</div>
+<div class="flow-node hot">Retriever — new</div>
+<div class="flow-node hot">Generator — Module 02's LLM, cited</div>
+<div class="flow-node">Module 03 continues</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State RAG's two-part pattern precisely</h3><p>One sentence, naming both boxes: a retriever and a generator, wired together.</p></article>
+<article class="info-card"><span>NAME</span><h3>Recite all four vocabulary terms</h3><p>Retriever, corpus, generator, grounding — each with a one-line definition, not just recognition.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not cover</h3><p>Motivation depth (Concept 02), pipeline stages (Concept 06), and taxonomy (Concept 09) are named, not taught, here.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Tell the pattern apart from its neighbors</h3><p>Fine-tuning, search-alone, and "a new model architecture" each get told apart from RAG specifically.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Parametric knowledge is lossy weight-group residue (Module 02, Concept 09):</b> hallucination is a decoding-loop property, and no verification step exists — cited, not re-derived.</li>
+<li><b>The decode loop and structured output (Module 02, Concept 11):</b> settled, unmodified machinery — the generator box in this concept is exactly that, untouched.</li>
+<li><b>Capability/limitation task routing (Module 01, Concept 08):</b> already flagged retrieval as the fix for exactly this gap — this concept is where that flag gets cashed in.</li>
+<li>All three are assumed fully known going forward; none of them get re-taught here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>An open-book exam, not a closed-book one</h2></div></header>
+<p>Module 02's LLM alone is a closed-book exam — every answer drawn from memory, exactly Concept 09's world. RAG opens the book before the question gets answered: a research assistant (the retriever) finds the right pages in that book (the corpus) and hands them to the exam-taker (the generator) before the exam-taker writes a single word.</p>
+<div class="callout warning"><b>Analogy boundary</b>The research assistant doesn't write the essay. Handing over the right page is not the same as writing the right answer — the exam-taker still has to read it and synthesize a response, and can still get it wrong with the right page in hand. Grounding is not automatic correctness. Guu et al.'s REALM paper traces this exact pattern back through language-model pretraining, years before "RAG" became its name — this is an architecture idea, not one paper's invention.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>RAG (Retrieval-Augmented Generation)</td><td>The architecture pattern itself: a retriever composed with a generator so generation is conditioned on retrieved evidence</td><td>Not a model, not a training procedure — a wiring pattern between two components</td></tr>
+<tr><td>Retriever</td><td>The component that takes a query and a corpus and returns relevant passages</td><td>Internal mechanism — embeddings, indexes, scoring — deferred to Modules 04-10</td></tr>
+<tr><td>Corpus</td><td>The external collection of documents or knowledge being searched</td><td>Lives outside the model's weights; searched at query time, not memorized</td></tr>
+<tr><td>Generator</td><td>The LLM producing the answer</td><td>Identical mechanism to Module 02 — only its input differs, never its architecture</td></tr>
+<tr><td>Grounding</td><td>Conditioning generation on retrieved evidence</td><td>Explicitly does not imply factual correctness</td></tr>
+</tbody>
+</table>
+<p>This is Lewis et al.'s 2020 formulation — the paper that coined "RAG" and framed it exactly this way, as a retriever composed with a generator under one conditional-generation objective.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The first trace with two live boxes instead of one</h2></div></header>
+<div class="scroll-flow">
+<span>Query arrives</span><i>→</i>
+<span>retriever(query, corpus) runs — internals opaque, deferred to Modules 04-10</span><i>→</i>
+<span>Passages returned</span><i>→</i>
+<span>Prompt assembled: instructions + passages + query</span><i>→</i>
+<span>generator(prompt) runs — Concept 04's forward pass, Concept 07's decode loop, cited not re-derived</span><i>→</i>
+<span>Answer</span>
+</div>
+<p>Every earlier concept in this course has traced a pipeline with exactly one live box in it — the generator. This is the first trace with two: the retriever's box is opaque today, on purpose, and stays that way until Modules 04 through 10 build its insides out piece by piece.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One query, two very different fates</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable split diagram forking one query into a faded parametric-only path straight to the generator and a solid RAG path through the retriever and corpus first">
+  <div class="diagram-split">
+    <div class="diagram-node"><b>Query arrives</b><small>one shared starting point</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node"><b>Straight to the generator, alone</b><small>Concept 09's world — parametric only, no evidence ever offered</small></div>
+    <div class="diagram-node active"><b>Query → retriever → corpus → passages → generator</b><small>RAG — this concept — the generator now has evidence in its prompt</small></div>
+  </div>
+</div>
+<ol class="diagram-key"><li><b>Same generator, both branches:</b> nothing about the generator's mechanism differs between the two paths.</li><li><b>The only difference is the prompt:</b> whether it was ever handed external evidence at all.</li><li><b>Neither branch guarantees correctness:</b> Section 04's boundary — an unread page and a badly-read page can both end in a wrong answer.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Two coarse boxes on the right of the standing skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunking</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors / index</span><i>↓</i>
+<span class="hot">Retrieval</span><i>↓</i>
+<span>Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>Today's concept draws exactly two coarse boxes — Retrieval and LLM — at the right-hand end of this skeleton. Everything from Documents through Vectors is an unopened black box for now; Modules 06 through 10 build it out piece by piece, one stage at a time.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Notation for two worlds, not yet the scoring inside either</h2></div></header>
+<p>Concept 09's world, parametric only:</p>
+<div class="equation">P(answer | query)</div>
+<p>This concept's world, conditioned on retrieved evidence:</p>
+<div class="equation">P(answer | query, context), where context = Retriever(query, corpus)</div>
+<p>That's as far as the notation goes today. The retrieval scoring function itself — similarity, ranking — is Module 04's job (mathematics for retrieval), and fusing or reranking multiple retrieved passages is Module 16's. This section only names the shape of the two conditional distributions; it derives neither.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>A three-document corpus, scored by hand</h2></div></header>
+<p>Toy corpus, three one-sentence documents, and a query:</p>
+<div class="equation">Query: "Do I need approval for international conference travel?"</div>
+<div class="equation">D1: "Employees must get manager approval before booking international conference travel over $2,000."</div>
+<div class="equation">D2: "Domestic travel under $500 does not require approval."</div>
+<div class="equation">D3: "The office coffee machine is serviced every Tuesday."</div>
+<p>Score each document by simple keyword-overlap counting against the query's four content words — <code>approval</code>, <code>international</code>, <code>conference</code>, <code>travel</code> — a deliberate stand-in for real embeddings and vector search, not the real retrieval mechanism:</p>
+<div class="mask-panels">
+  <div class="mask-panel">
+    <span class="mask-panel-title">KEYWORD OVERLAP — TOY RETRIEVAL SCORE</span>
+    <div class="prob-bars">
+      <div class="prob-row winner"><span class="token-label">D1</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>4 / 4 words</span></div>
+      <div class="prob-row"><span class="token-label">D2</span><div class="bar-track"><div class="bar-fill" style="width:50%"></div></div><span>2 / 4 words</span></div>
+      <div class="prob-row ineligible"><span class="token-label">D3</span><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><span>0 / 4 words</span></div>
+    </div>
+  </div>
+</div>
+<p>D1 wins by hand-count, so it's the passage the retriever returns. Now watch what changes in the generator's answer. Parametric-only, per Concept 09's worked-example style, the generator might guess by analogy to the more familiar domestic-travel rule it half-remembers — something like "the usual $500 threshold applies" — which is wrong for this policy. Handed D1 inside its prompt, the generator answers from the actual sentence: manager approval is required for international conference travel over $2,000. Same generator, same mechanism — the only thing that changed is what was sitting in the prompt when it wrote the answer.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>GOOD FIT</span><h3>Internal policy Q&amp;A over a document corpus</h3><p>Exactly Section 10's shape — a fixed, searchable corpus and questions that need one of its specific passages.</p></article>
+<article class="info-card"><span>GOOD FIT</span><h3>Support queries over a changing knowledge base</h3><p>A knowledge base that gets edited constantly is exactly the case parametric memory can't keep up with.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A purely creative-writing prompt</h3><p>No external fact is needed, so retrieval adds no value here — Concept 12 covers when RAG should not be used, in depth.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A plain keyword-search UI, no generation step</h3><p>Finding documents and listing them is not RAG — there's no generator reading them and writing an answer.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A fine-tuned-only model, no live corpus</h3><p>Baking documents into weights at training time is a different pattern entirely — nothing is searched at query time.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The two boxes, as the smallest possible stubs</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>corpus = [
+    "Employees must get manager approval before booking "
+    "international conference travel over $2,000.",
+    "Domestic travel under $500 does not require approval.",
+    "The office coffee machine is serviced every Tuesday.",
+]
+
+def retrieve(query, corpus):
+    # naive word-overlap scoring -- a stand-in for real embeddings
+    # and vector search, which is Module 08's job, not this one.
+    query_words = set(query.lower().split())
+    scored = [
+        (doc, len(query_words & set(doc.lower().split())))
+        for doc in corpus
+    ]
+    scored = [pair for pair in scored if pair[1] > 0]
+    scored.sort(key=lambda pair: pair[1], reverse=True)
+    return [doc for doc, score in scored]
+
+def generate(query, passages):
+    # formats a prompt string only -- does not run a real decode
+    # loop, which is Module 02's already-built machinery, cited
+    # here rather than reimplemented.
+    if not passages:
+        return f"No evidence found in the corpus for: {query}"
+    evidence = "\n".join(passages)
+    return f"Evidence:\n{evidence}\n\nQuestion: {query}\nAnswer:"
+
+passages = retrieve("approval for international conference travel", corpus)
+print("retrieved:", passages[0])
+print(generate("approval for international conference travel", passages))
+print(generate("what is the office wifi password", retrieve("wifi password", corpus)))
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where this two-box shape already lives</h2></div></header>
+<p>LangChain's retriever-plus-LLM chain abstraction is this exact pattern with a name and an interface — real depth on it waits for Module 12. LlamaIndex's query engine is the same shape again, wearing different naming, covered in Module 14. Provider-level hosted retrieval and file-search features hide the retriever behind a single API call, but they're implementing the identical retriever+generator pattern Section 05 just defined, not a different one. None of this is new: Guu et al.'s REALM showed the retriever-plus-language-model pattern years before the "RAG" name existed, and Gao et al.'s 2023 survey is the field's current umbrella reference for how practitioners now talk about all of it.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The "Retriever or Generator?" sorter</h2></div></header>
+<div class="lab">
+<p>Eight components, three destinations. Click a chip below to select it, then click the box it belongs in — Retriever, Generator, or Not RAG's core pattern. Every chip gets moved either way; getting it wrong is feedback, not a dead end.</p>
+<div class="sort-pool" id="sortPool0301" role="group" aria-label="Unsorted RAG components">
+<button type="button" class="sort-chip" data-item="corpus" data-bin="retriever">Corpus of internal policy documents</button>
+<button type="button" class="sort-chip" data-item="search" data-bin="retriever">Searching the corpus for relevant passages</button>
+<button type="button" class="sort-chip" data-item="ranking" data-bin="retriever">Ranking passages by relevance</button>
+<button type="button" class="sort-chip" data-item="decode" data-bin="generator">The decode loop (predict, sample, append)</button>
+<button type="button" class="sort-chip" data-item="softmax" data-bin="generator">Softmax over the output head's logits</button>
+<button type="button" class="sort-chip" data-item="finalanswer" data-bin="generator">Producing the final fluent answer text</button>
+<button type="button" class="sort-chip" data-item="finetune" data-bin="none">Fine-tuning the model's weights on your documents</button>
+<button type="button" class="sort-chip" data-item="searchonly" data-bin="none">A search engine with no generation step at all</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose a box for the selected component">
+<button type="button" class="bin-button" id="binRetriever0301" data-bin-target="retriever">Retriever box</button>
+<button type="button" class="bin-button" id="binGenerator0301" data-bin-target="generator">Generator box</button>
+<button type="button" class="bin-button" id="binNone0301" data-bin-target="none">Not RAG's core pattern</button>
+</div>
+<p class="sample-output" id="sortStatus0301" aria-live="polite">Select a component above, then choose the box it belongs in.</p>
+<div class="sort-boxes" aria-label="Sorted components">
+<div class="sort-box" id="sortedRetriever0301"><span>RETRIEVER BOX</span></div>
+<div class="sort-box" id="sortedGenerator0301"><span>GENERATOR BOX</span></div>
+<div class="sort-box" id="sortedNone0301"><span>NOT RAG'S CORE PATTERN</span></div>
+</div>
+<div class="lab-actions"><button type="button" class="secondary" id="resetSortButton0301">Reset</button></div>
+<div class="sample-output" id="sortScore0301" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Four responses to "the model doesn't know this"</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it costs</th><th>What it actually gives you</th></tr></thead>
+<tbody>
+<tr><td>Parametric-only generation</td><td>Free — no extra step</td><td>Only whatever survived training as weight-group residue; nothing current or private</td></tr>
+<tr><td>RAG (this concept)</td><td>A retriever, a corpus, and a search step before every generation call</td><td>Answers conditioned on live, external evidence — grounded, not automatically correct</td></tr>
+<tr><td>Fine-tuning on the corpus</td><td>Training data and a training run, repeated every time the corpus changes</td><td>Knowledge baked into weights — stale the moment the source documents change</td></tr>
+<tr><td>Long-context prompting (paste everything in)</td><td>A much larger prompt, every single call, regardless of relevance</td><td>Works until the corpus outgrows the context window; cost scales with corpus size, not query relevance</td></tr>
+</tbody>
+</table>
+<p>This is a preview only. The real decision framework — RAG versus prompting or long-context, RAG versus fine-tuning, search, or tool use — is Concepts 07 and 08's job.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Getting the pattern itself wrong</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>RETRIEVAL MISTAKEN FOR RAG</span><h3>No generation step at all</h3><p>A system that only finds and lists passages, with nothing reading and answering from them, is missing the half of the pattern that actually produces an answer.</p></article>
+<article class="info-card"><span>FINE-TUNING MISTAKEN FOR RAG</span><h3>No live corpus at all</h3><p>Baking documents into weights at training time skips the query-time search step entirely — a different pattern, not a variant of this one.</p></article>
+<article class="info-card"><span>GROUNDING MISTAKEN FOR CORRECTNESS</span><h3>Section 04's boundary, again</h3><p>Conditioning on retrieved evidence is not the same as verifying the answer against it — that gap is the deep failure chain Concept 11 owns.</p></article>
+<article class="info-card"><span>GENERATOR ASSUMED TO NEED CHANGES</span><h3>It doesn't</h3><p>Nothing about the generator is modified or retrained to "participate" in RAG — only its prompt's contents change.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"RAG is a new kind of neural network"</td><td>It composes two existing, separately-built components — a retriever and a generator — it isn't a new architecture family.</td></tr>
+<tr><td>"RAG requires retraining the LLM"</td><td>No training occurs. The corpus is searched live, at query time, never baked into the weights.</td></tr>
+<tr><td>"Retrieval alone is RAG"</td><td>Retrieval without the required generation/grounding step that reads the results and writes an answer is not RAG.</td></tr>
+<tr><td>"Grounded automatically means correct"</td><td>Grounding is conditioning on retrieved evidence, not verification of the answer against it.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>The retriever and generator are two independently deployable, scalable, versionable components — each can be swapped or upgraded without touching the other.</li>
+<li>Module 19's operations depth covers exactly how that independence gets exploited in production; it's flagged here, not delivered.</li>
+<li>Most of the rest of Module 03, and the modules after it, exist specifically to make each of these two boxes trustworthy, measurable, and secure — none of that starts until this pattern is locked in first.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define RAG's two parts from memory.</summary><div>A retriever that searches an external corpus for relevant passages, and a generator — an LLM, unmodified — that answers conditioned on whatever the retriever found.</div></details>
+<details class="quiz"><summary>What does grounding guarantee, and what does it not guarantee?</summary><div>It guarantees the generator's output was conditioned on retrieved evidence at generation time. It does not guarantee the answer is factually correct.</div></details>
+<details class="quiz"><summary>Name all four vocabulary terms with one-line definitions.</summary><div>Retriever: searches a corpus for relevant passages. Corpus: the external documents being searched. Generator: the LLM producing the answer, unchanged from Module 02. Grounding: conditioning generation on retrieved evidence.</div></details>
+<details class="quiz"><summary>Does a retrieval-only system count as RAG? Does a fine-tuning-only system?</summary><div>Neither does. Retrieval-only has no generation/grounding step, so no answer ever gets written from the evidence. Fine-tuning-only has no live corpus — knowledge gets baked into weights instead of searched at query time. Both are missing one required half of the pattern.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Label each of the following as (a) parametric-only generation, (b) retrieval-only search with no generation, or (c) RAG, and justify each label using this concept's two-part definition and Section 17's misconceptions table.</p>
+<ol>
+<li>A chatbot answers every question straight from what it learned during training, with no document lookup of any kind.</li>
+<li>A search bar returns a ranked list of matching support articles for the user to read themselves; nothing summarizes or answers anything.</li>
+<li>A support assistant searches a knowledge base for the three most relevant articles, then writes a one-paragraph answer citing what it found in them.</li>
+</ol>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open the worked solution</summary><div>Scenario 1 is (a) parametric-only: the generator answers alone, with no corpus and no retriever anywhere in the picture — exactly Concept 09's world. Scenario 2 is (b) retrieval-only: a corpus is searched and ranked, but nothing reads the results and writes an answer from them — the required generation/grounding step never happens, per Section 17's "retrieval alone is RAG" misconception. Scenario 3 is (c) RAG: a retriever searches a corpus, a generator reads what it found, and an answer gets written conditioned on that evidence — both boxes present, wired together. Teach-back: in your own words, using the terms retriever, corpus, generator, and grounding, explain why RAG needs both boxes and neither one alone qualifies.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The pattern</h3><p>RAG is a retriever wired to a generator: the retriever searches an external corpus and returns passages, the generator — Module 02's LLM, unchanged — answers conditioned on them. Skeleton position: the Retrieval and LLM boxes, at the right end of the full Documents→...→Answer pipeline. Core equation for this concept: P(answer | query, context), where context = Retriever(query, corpus).</p></div>
+<div><h3>Selection rule</h3><ul><li>Use cases: policy Q&amp;A, support queries over an evolving knowledge base</li><li>Warning signs: retrieval-only or fine-tuning-only mistaken for RAG; grounding mistaken for correctness</li><li>Memorable example: the open-book exam — a research assistant hands over the right page, but the exam-taker still has to read and answer it</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain RAG to a non-technical stakeholder in one sentence.</summary><div>It's a search step wired in front of the AI's answer, so it reads your actual documents before it responds, instead of relying only on what it happened to learn during training.</div></details>
+<details class="quiz"><summary>A candidate says RAG fine-tunes the model on your documents. Correct them.</summary><div>No training happens in RAG. The documents live in a searchable corpus and get retrieved live, at query time; fine-tuning is a separate technique that bakes knowledge into weights instead, with none of the query-time search step.</div></details>
+<details class="quiz"><summary>What is the minimal set of components required before you can call a system RAG?</summary><div>A corpus to search, a retriever that searches it and returns passages, and a generator that reads those passages and writes an answer conditioned on them. Drop any one of the three and it stops being RAG.</div></details>
+<details class="quiz"><summary>Sketch the two boxes of a RAG system for a support-ticket corpus, and name what each box owns.</summary><div>Retriever box: owns finding the most relevant past tickets or knowledge-base articles for the incoming query. Generator box: owns reading whatever the retriever found and writing the actual reply — the retriever never writes anything, and the generator never searches anything.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.11401"><b>Lewis, Perez, Piktus et al. — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</b><br><span>The paper that coined "RAG" and the retriever+generator conditional-generation framing this concept teaches, behind Sections 01, 05, 06 and 09.</span></a>
+<a href="https://arxiv.org/abs/2002.08909"><b>Guu, Lee, Tung, Pasupat &amp; Chang — REALM: Retrieval-Augmented Language Model Pre-Training</b><br><span>Shows the retriever+generator pattern predates and outlives the "RAG" name itself, behind Sections 04 and 13.</span></a>
+<a href="https://arxiv.org/abs/2312.10997"><b>Gao, Xiong, Gao et al. — Retrieval-Augmented Generation for Large Language Models: A Survey</b><br><span>The field's current umbrella reference for how RAG gets talked about today, behind Sections 13 and 15.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 · COMPLETE</span>
+<h3>The two-box definition and four vocabulary terms are today's takeaway</h3>
+<p>Before moving on, be able to state the two-box definition (retriever + generator), name all four vocabulary terms precisely, and restate why grounding is not a correctness guarantee. Concept 02, "Why we cannot simply ask the LLM: external knowledge," is next — it builds directly on today's vocabulary to explain, in depth, why this pattern is actually needed.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-02.html">Start Concept 02 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Why we cannot simply ask the LLM: external knowledge.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 01 · Complete</p>
+<a href="module-02-concept-11.html">← Concept</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on constrained and grammar-guided decoding: how a mask inserted between the model's per-step logits and Concept 07's decode rule forces every generated token to keep the output inside a fixed shape — valid JSON, a schema, or a fixed set of choices — and why that guarantee has to live at the token level, not in a politely worded prompt.">
+<title>Structured generation and constrained outputs — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-11.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 11 (Module 02) complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 11</p>
+<h1>Structured generation,<br><em>and constrained outputs</em></h1>
+<p class="lesson-lead">Concept 10 showed that evidence sitting inside the context window isn't always attended to reliably. This concept turns to a different axis entirely: even a fluent, well-attended answer isn't automatically a machine-parseable one. A JSON parser, a tool-call executor, or a citation validator needs a hard shape guarantee on every single call — not a habit the model usually keeps. That guarantee has to be enforced at the token level, as a mask on Concept 07's decode loop, not requested in words inside the prompt. This closes out Module 02; Module 03 starts building retrieval itself next.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eleventh and final LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>Next-token probability and decoding, and its decode-append loop</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why a hard shape guarantee must be enforced at the token level, not just requested in the prompt</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You defined constrained/grammar-guided decoding as a mask inserted between Concept 04's logits and Concept 07's decode-and-append loop, then separated shape validity from factual correctness for good — the mask guarantees the first and says nothing at all about the second.</p>
+<b>11 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A mask, not a request — the same scores, a guaranteed shape</h2>
+</div>
+<p>Concept 07 built the decode loop: logits in, a token out, every step, until a stop condition fires. This concept adds exactly one new step to that loop — a mask that narrows the candidate tokens down to whichever ones keep the output legal, before the decode rule ever runs. Nothing about Concept 07's greedy, temperature, or top-k logic changes. What changes is what it's allowed to choose from.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A mask on Concept 07's distribution, not a polite request in the prompt</h3>
+<p><b>Constrained decoding</b> — also called grammar-guided decoding — is a mask applied to the per-step token distribution Concept 07's decode loop already produces at every position. At each step, the mask forces the output to keep a fixed shape: valid JSON, a specific schema, or one of a small fixed set of choices. Any token that would break that shape gets its probability zeroed out before the decode rule ever gets to pick from the distribution.</p>
+<p>That is a completely different thing from asking the model nicely, in the prompt, to "respond only in JSON" or "pick exactly one of these three options." A prompt instruction changes what the model is likely to produce. A mask changes what it is possible for the model to produce at that step. One is a habit; the other is a guarantee.</p>
+<div class="beginner-memory"><b>First memory:</b> constrained decoding is a mask inserted between Concept 04's logits and Concept 07's decode rule — it narrows the candidates, it never asks for good behavior. "Please respond in JSON" is a request. A grammar mask is a constraint the invalid tokens cannot survive.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>"Usually right" is not the bar a parser needs cleared</h3>
+<p>Fluent, high-probability text is exactly what Concept 07's decode loop is built to produce, and for most conversational output that's the entire goal. But the moment that output has to feed a downstream system — a JSON parser, a tool-call executor, a citation validator, a routing field that only accepts three legal values — "usually correct" stops being good enough. A parser either successfully parses the string or it throws on that exact call. There's no partial credit at the boundary between "the model behaved well 99 times out of 100" and the one call that breaks production.</p>
+<div class="mental-compare">
+<div><span>PROMPTED FORMATTING'S JOB</span><p>Raise the odds the model happens to produce the right shape on its own, by describing that shape in words. No enforcement — just a strong hint.</p></div>
+<div><span>ENFORCED MASKING'S JOB</span><p>Make the wrong shape structurally impossible to generate at each step, regardless of how the model would have behaved unconstrained.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A three-value routing field, and the invalid word that almost won</h3>
+<p>Oracle RAG needs a routing decision field that must be exactly one of three values: <code>approved</code>, <code>denied</code>, or <code>pending</code>. At the decode step that produces this field, the model's raw, unconstrained distribution actually ranks a fourth word — <code>unclear</code> — as its single highest-probability token. It's a fluent, reasonable-sounding word. It is also not a legal value for this field.</p>
+<div class="context-demo">
+<div><span>UNCONSTRAINED DECODE STEP</span><p>Same raw scores, no mask applied: the top pick is <code>unclear</code> — fluent, but not one of the three values this field is allowed to hold.</p></div>
+<div><span>GRAMMAR-MASKED DECODE STEP</span><p>Identical raw scores, mask applied first: <code>unclear</code> is zeroed out before the decode rule ever sees it, so the top pick becomes <code>approved</code> — a legal value, guaranteed.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0211-visual-title">
+  <strong class="concept-visual-title" id="c0211-visual-title">VISUAL · THE MASK FLIPS THE WINNER WITHOUT CHANGING THE SCORES</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing one raw distribution forking into an unconstrained top pick of an invalid word and a grammar-masked top pick of a valid enum value, both computed from the same underlying scores">
+    <div class="diagram-hub">
+      <div class="diagram-node"><b>Raw top pick: "unclear"</b><small>highest score, but not a legal enum value</small></div>
+      <div class="diagram-node"><b>Eligible set E_t</b><small>approved · denied · pending — nothing else</small></div>
+      <div class="diagram-node hub-center"><b>Grammar mask (new step)</b><small>zeroes every ineligible token, then renormalizes</small></div>
+      <div class="diagram-node"><b>Masked top pick: "approved"</b><small>same underlying scores, now a legal value</small></div>
+      <div class="diagram-node"><b>Decode rule (Concept 07)</b><small>picks from whichever distribution it's handed — unchanged either way</small></div>
+    </div>
+  </div>
+  <figcaption>One routing decision, one set of raw scores. Left unmasked, the highest-scoring token is "unclear" — fluent, but invalid. Masked down to the three legal enum values, the same scores renormalize and "approved" wins instead. Section 10 of the advanced lesson runs this exact flip with real numbers.</figcaption>
+  <ol class="diagram-key"><li><b>Same scores, both branches:</b> nothing about the model's raw judgment changes between the two paths.</li><li><b>The mask only removes options:</b> it never adds a token that wasn't already a candidate.</li><li><b>The decode rule is untouched:</b> Concept 07's greedy/temperature/top-k logic runs identically on whichever distribution it receives.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Six moving parts, one narrow job each</h3>
+<div class="example-grid">
+<article class="info-card"><span>AUTOMATON STATE</span><h3>How much of the shape exists so far</h3><p>A grammar/schema automaton tracks how much of the target output has already been produced at this exact step.</p></article>
+<article class="info-card"><span>ELIGIBLE TOKEN SET</span><h3>What could legally come next</h3><p>From that state, the automaton computes exactly which tokens would keep the output inside the required shape.</p></article>
+<article class="info-card"><span>LOGIT MASKING</span><h3>Zero out everything else</h3><p>Every token outside the eligible set has its probability driven to zero before any decoding decision happens.</p></article>
+<article class="info-card"><span>RENORMALIZE</span><h3>One unit of weight, redistributed</h3><p>The surviving tokens' scores are renormalized so they still sum to one — Concept 04's softmax guarantee, run over a smaller set.</p></article>
+<article class="info-card"><span>HANDOFF TO CONCEPT 07</span><h3>The decode rule runs unmodified</h3><p>Greedy, temperature, top-k — whichever rule Concept 07 already defined runs exactly as before, just on the narrowed distribution.</p></article>
+<article class="info-card"><span>NOT A CONTENT CHECK</span><h3>Shape only, never truth</h3><p>The mask never asks whether a token is factually correct — only whether it's legal at this position in the grammar.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One new step, inserted between two steps that already existed</h3>
+<div class="scroll-flow">
+<span>Prompt</span><i>→</i>
+<span>Forward pass</span><i>→</i>
+<span>Logits (Concept 04)</span><i>→</i>
+<span>Grammar mask — new</span><i>→</i>
+<span>Decode rule (Concept 07, unchanged)</span><i>→</i>
+<span>Append token</span><i>→</i>
+<span>Automaton advances, repeat</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where this sits in the full RAG pipeline</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents chunked and retrieved (Module 03 territory, future)</span><i>↓</i>
+<span>Prompt assembled: instructions + evidence + question</span><i>↓</i>
+<span>Forward pass → logits (Concept 04)</span><i>↓</i>
+<span>Grammar mask computes the eligible set — this concept, new</span><i>↓</i>
+<span>Decode rule generates from the masked distribution (Concept 07, unchanged)</span><i>↓</i>
+<span>Token appended, automaton advances — repeat until the automaton and the ordinary stop condition both agree the output is complete</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs that get flattened into "make it output JSON"</h3>
+<div class="distinction-table" role="table" aria-label="Structured generation distinctions">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Prompted formatting ("please respond in JSON")</span><span role="cell">Enforced masking (this concept)</span><span role="cell">A request changes what's likely; a mask changes what's possible</span></div>
+<div role="row"><span role="cell">JSON-syntax-only validity</span><span role="cell">Full schema/enum validity</span><span role="cell">Syntactically valid JSON can still have the wrong fields, types, or an invalid enum value</span></div>
+<div role="row"><span role="cell">Generate-then-validate-and-retry</span><span role="cell">Prevent-invalid-at-generation-time</span><span role="cell">One catches bad output after the call; the other makes bad output unreachable during it</span></div>
+<div role="row"><span role="cell">Shape validity (this concept)</span><span role="cell">Factual/content correctness (Concept 09)</span><span role="cell">A perfectly-shaped JSON object can still contain a hallucinated fact — the mask never checks truth</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"JSON mode guarantees my exact fields and types."</b><p>Plain JSON mode typically guarantees syntactically valid JSON only — not that your specific keys, types, or enum values show up, unless schema-aware guided decoding is layered on top.</p></div>
+<div><b>"Constrained decoding fixes hallucinated facts."</b><p>It constrains form, not content. A grammar-valid answer can still be confidently, fluently wrong — Concept 09's boundary doesn't move.</p></div>
+<div><b>"This requires retraining or fine-tuning the model."</b><p>It's a decode-time technique. Zero training happens; the mask is computed fresh at inference, on top of whatever model you already have.</p></div>
+<div><b>"It replaces greedy or temperature decoding."</b><p>It doesn't replace Concept 07's decode rule at all — it narrows what that rule gets to choose from, then hands off unchanged.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>CITATION FORMAT</span><b>Force a fixed tag, e.g. [Doc3]</b><p>Instead of free-text attribution the model might or might not include reliably, a citation grammar forces exactly the tag pattern the downstream citation validator expects, every call.</p></div>
+<div><span>TEXT-TO-SQL TOOL CALLS</span><b>Force valid tool-call/argument JSON</b><p>The Text-to-SQL branch needs a tool call whose argument JSON always parses and always matches the expected argument schema — a generation-shape control, not a retrieval improvement.</p></div>
+<div><span>WHAT THIS ISN'T</span><b>Not a retrieval mechanism</b><p>Both examples control the shape of what the model generates after evidence is already in hand. Retrieval itself — actually finding that evidence — is what Module 03 starts building next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Mask-then-decode ordering</b><p>The grammar mask runs first, narrowing the candidates; Concept 07's decode rule runs second, unchanged, on what's left.</p></div>
+<div><b>Shape vs. factual correctness</b><p>The mask guarantees the output is well-formed. It says nothing about whether the content inside that shape is true.</p></div>
+<div><b>No training required</b><p>This is a decode-time technique — applied at inference, with zero changes to the model's weights.</p></div>
+<div><b>Bigger models still need it</b><p>A larger or better model may need the mask less often, but "usually right" is never the same guarantee as "structurally cannot be wrong."</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>In what order does the grammar mask run relative to Concept 07's decode rule, and why does that order matter?</li>
+<li>What's the precise difference between shape validity and factual correctness?</li>
+<li>Why doesn't a bigger or better model remove the need for this guarantee on machine-critical output?</li>
+<li>Why is "please respond in JSON" in the prompt not the same guarantee as a grammar mask?</li>
+<li>Name one Oracle RAG use case for this that is not a retrieval improvement.</li>
+<li>What does constrained decoding never check, no matter how strict the grammar is?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick shape-vs-content exercise</summary>
+<div>
+<ol>
+<li>"Model outputs syntactically valid JSON with a hallucinated fact inside a correctly-typed field" — <b>shape valid, content wrong — the mask did its job; Concept 09's gap did not close</b>.</li>
+<li>"Model outputs approved/denied/pending exactly, and the routing decision is correct" — <b>shape valid and content correct — both properties satisfied independently</b>.</li>
+<li>"Model outputs the word unclear for a three-value enum field" — <b>shape invalid — this is exactly what the mask exists to prevent</b>.</li>
+<li>"Model is asked nicely in the prompt to always use JSON, no mask applied, and one call in five hundred returns plain text" — <b>expected; a request was never a guarantee</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: What exactly is Retrieval-Augmented Generation?</h3>
+<p>That's all eleven concepts of Module 02, LLM &amp; transformer foundations for RAG. You now have the model mechanics — tokens, attention, decoding, context windows, hallucination, positional bias, and structured output — that every later module will keep citing rather than re-teaching. Module 03, "RAG mental model &amp; problem framing," opens next by defining the architecture, its purpose, and its boundaries — starting with what RAG actually is.</p>
+<div class="beginner-memory"><b>Concept 11 is complete.</b> Continue to What exactly is Retrieval-Augmented Generation?.</div>
+<a class="button primary" href="module-03-concept-01.html">Start Concept 01 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required mechanism, optional depth.</h2>
+<p>Master the mask-then-decode ordering and the shape-vs-content boundary first. Open the masked-softmax mathematics, from-scratch code, and the grammar mask lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Enforced masking (a guarantee) from prompted formatting (a request).</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>The mask's eligible-set step against Concept 07's untouched decode rule.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Citation tags and tool-call JSON are generation-shape controls Oracle RAG will use once retrieval exists.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the masked-softmax mathematics, code, and the grammar mask lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 11 path:</b> Prompt → forward pass → logits (Concept 04) → grammar mask, new → decode rule (Concept 07, unchanged) → append, automaton advances → repeat until both agree the output is complete.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the constrained-decoding deep dive</b><em>The masked-softmax mathematics, a from-scratch decode-step wrapper, and the grammar mask stepper lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 02's last concept, sitting just before RAG proper</h2></div></header>
+<p>Concept 10 asked where attention lands inside a long context. This concept sits right after it and asks a different question entirely: once the model has decided what to say, can its output shape be trusted every single call? Concept 07's decode loop and Concept 04's softmax are assumed as given here, not re-derived — this section only adds one new step to a pipeline both of them already built. Module 03 begins immediately after this concept closes, and it's where prompts stop being hand-assembled text and start being built from real retrieved evidence.</p>
+<div class="flow">
+<div class="flow-node">Prompt (future retrieval territory)</div>
+<div class="flow-node">Forward pass</div>
+<div class="flow-node">Logits (Concept 04)</div>
+<div class="flow-node hot">Grammar mask — new</div>
+<div class="flow-node hot">Decode rule (Concept 07, unchanged)</div>
+<div class="flow-node">Module 03: RAG proper</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State the mask and eligible set precisely</h3><p>Name constrained/grammar-guided decoding and the eligible-token-set/mask concept without hand-waving.</p></article>
+<article class="info-card"><span>TRACE</span><h3>Follow the automaton across steps</h3><p>Show how an automaton's state changes the eligible set from one decode step to the next.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Two boundaries, kept separate</h3><p>Prompted formatting versus enforced masking; shape validity versus factual correctness.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Name what stays Concept 07's job</h3><p>Greedy, temperature, top-k, top-p, and beam search are decoding-rule territory, not re-taught here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Softmax over logits (Concept 04):</b> the exact equation this concept masks — cited, not rederived.</li>
+<li><b>The decode-append loop and its decoding rules (Concept 07):</b> assumed fully known and reused completely unmodified, on a narrowed input.</li>
+<li><b>Hallucination and the fact-vs-form boundary (Concept 09):</b> cited so shape validity is never confused with truth — that boundary doesn't move here.</li>
+<li><b>Looking ahead, informally:</b> Module 11's "Source identifiers and citations" and Module 17's "Structured outputs and citation validation" will deepen this in a retrieval-aware setting once evidence actually exists to cite.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A form whose pen physically cannot ink the wrong thing</h2></div></header>
+<p>Picture a fill-in-the-blank form with a locked template: a numeral box whose pen only inks digits, a checkbox whose pen only inks checked or unchecked. You can't write "maybe" in the numeral box — not because you were told not to, but because the pen simply won't make that mark there. That's constrained decoding. Compare it to writing freely on a blank page, where nothing physically stops you from writing anything at all, no matter what the instructions at the top of the page ask for.</p>
+<div class="callout warning"><b>Analogy boundary</b>Unlike a paper form, this mask isn't set once at print time — it's recomputed fresh at every single token position, from a live automaton that's tracking exactly how much of the shape exists so far. And it never once inspects whether what's being written is true. It only ever asks whether the mark is legal at that blank — form validity and content correctness are handled by two completely different checks.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Constrained / grammar-guided decoding</td><td>Masking a model's per-step token distribution so every generated token keeps the output inside a fixed shape</td><td>A decode-time technique; no model weights are touched</td></tr>
+<tr><td>Grammar</td><td>The formal description of the allowed shape — a regular language, a context-free grammar, a JSON Schema, or a fixed enum</td><td>Different grammar formalisms trade expressiveness for how cheaply the eligible set can be computed</td></tr>
+<tr><td>Automaton state / partial parse</td><td>How much of the target grammar has been legally produced by the tokens generated so far</td><td>Recomputed at every step; not a property of the model itself</td></tr>
+<tr><td>Eligible token set / mask</td><td>The subset of the vocabulary the automaton state says could legally come next</td><td>Chosen by grammar legality, not by probability — it can differ completely from Concept 07's top-k subset</td></tr>
+<tr><td>Syntactic JSON validity</td><td>The output parses as JSON at all</td><td>Says nothing about which keys, types, or values are present</td></tr>
+<tr><td>Schema validity</td><td>The output is syntactically valid JSON that also matches a specific schema's fields, types, and enums</td><td>A stronger, independently-failable property on top of syntactic validity</td></tr>
+<tr><td>Factual validity</td><td>The content inside a valid shape is actually true</td><td>Entirely independent of the other two — Concept 09's boundary, unaffected by any grammar</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>One lane untouched, one lane new and running first</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>LANE A — CONCEPT 07'S DECODE STEP, UNCHANGED</span>
+<div class="lane-flow">
+<div>Logits arrive</div>
+<div>Temperature / greedy / top-k chooses among whatever candidates it's given</div>
+<div>Nothing about this lane's logic is modified by this concept</div>
+</div>
+</article>
+<article class="lane"><span>LANE B — THE NEW MASKING STEP, RUNS FIRST</span>
+<div class="lane-flow">
+<div>Automaton state read for this position</div>
+<div>Eligible set E_t computed from that state</div>
+<div>Non-eligible logits set to −∞, distribution renormalized</div>
+</div>
+</article>
+</div>
+<p>Lane B always runs before Lane A, and Lane B never replaces Lane A — it only shrinks what Lane A is allowed to pick from. If Lane B narrows the field to exactly one token, Lane A's choice is trivial. If Lane B leaves ten tokens standing, Lane A's greedy/temperature/top-k logic still decides among them exactly as Concept 07 defined.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Same position, same logits, two different fates</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable split diagram showing the same position right after an opening JSON key forking into an unconstrained decode that can pick a shape-breaking token and a grammar-masked decode that can only pick shape-continuing tokens">
+  <div class="diagram-split">
+    <div class="diagram-node"><b>Position: right after an opening JSON key — e.g. {"status":</b><small>one shared raw logit distribution</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node"><b>Unconstrained decode</b><small>free to select any token, including one that breaks JSON syntax right here</small></div>
+    <div class="diagram-node active"><b>Grammar-masked decode</b><small>only tokens that keep the JSON parseable survive — e.g. a quote, a digit, an opening brace</small></div>
+  </div>
+</div>
+<ol class="diagram-key"><li><b>Input:</b> the same raw logits over the same vocabulary at the same decode step.</li><li><b>Mask:</b> the automaton's current state defines exactly which tokens keep the JSON well-formed from here.</li><li><b>Output:</b> the unconstrained branch can select a shape-breaking token; the masked branch cannot, by construction.</li><li><b>Consequence:</b> only the masked branch is guaranteed parseable on every single call — the unconstrained branch merely tends to be.</li></ol>
+<p>Section 09 turns this picture into the exact masked-softmax equation behind it, and Section 10 runs the equation on real numbers.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits inside the RAG skeleton's LLM box</h2></div></header>
+<div class="pipeline-preview">
+<span>Prompt assembled (Module 03 onward: real retrieved evidence)</span><i>↓</i>
+<span>Forward pass → logits (Concept 04)</span><i>↓</i>
+<span>Grammar automaton computes the eligible set</span><i>↓</i>
+<span>Mask + decode rule (Concept 07) pick the next token</span><i>↓</i>
+<span>Token appended, automaton advances — repeat</span><i>↓</i>
+<span>Automaton and stop condition both agree: structurally valid output</span><i>↓</i>
+<span>Module 03 onward: this becomes the interface layer for tool calls and citation formatting once retrieval exists</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Formalizing the mask, then handing off to Concept 07's softmax</h2></div></header>
+<p>The mask itself is a simple substitution over the raw logits, keyed by the eligible set E_t the automaton computes for the current step:</p>
+<div class="equation">z'_i = z_i, for i ∈ E_t; z'_i = −∞, for i ∉ E_t</div>
+<p>Plug the masked logits z' straight into Concept 07's already-taught softmax-with-temperature equation — cited, not rederived — restricted to the surviving indices:</p>
+<div class="equation">P(token_i) = exp(z'_i / T) / Σ_{j∈E_t} exp(z_j / T)</div>
+<p>Contrast this against Concept 07's top-k: top-k's candidate subset is chosen by probability rank — the k highest-scoring tokens, whatever they happen to be. This concept's E_t is chosen by grammar legality — whichever tokens the automaton says are allowed, regardless of their score. The two subsets need not overlap at all. E_t can shrink to exactly one token, in which case the "decoding decision" is really just the mask deciding for you — or, in a buggy or over-strict grammar, E_t can shrink to size zero, an automaton deadlock covered in Section 16.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The routing field, with real numbers</h2></div></header>
+<p>Back to Section 03's enum field. Raw logits over four candidate tokens at this decode step: <code>approved = 2.1</code>, <code>denied = 1.8</code>, <code>pending = 1.2</code>, <code>unclear = 2.6</code>. Run Concept 07's ordinary softmax over all four, unconstrained:</p>
+<div class="equation">exp(2.1)=8.17, exp(1.8)=6.05, exp(1.2)=3.32, exp(2.6)=13.46 — sum ≈ 31.00</div>
+<div class="equation">unconstrained weights → approved 26.3%, denied 19.5%, pending 10.7%, unclear 43.4% — "unclear" wins</div>
+<p>Now apply this concept's mask. The grammar only allows the three enum values, so E_t = {approved, denied, pending} and unclear's logit goes to −∞ before renormalizing over the survivors:</p>
+<div class="equation">exp(2.1)=8.17, exp(1.8)=6.05, exp(1.2)=3.32 — sum ≈ 17.54</div>
+<div class="equation">masked weights → approved 46.6%, denied 34.5%, pending 18.9% — "approved" wins</div>
+<p>Same three real scores throughout. Masking alone flips the argmax from an invalid token to a valid one — nothing about the model's underlying judgment changed, only what it was allowed to say out loud.</p>
+<div class="mask-panels">
+  <div class="mask-panel">
+    <span class="mask-panel-title">UNCONSTRAINED DECODE — SAME LOGITS, NO MASK</span>
+    <div class="prob-bars">
+      <div class="prob-row winner"><span class="token-label">unclear</span><div class="bar-track"><div class="bar-fill" style="width:43.4%"></div></div><span>43.4%</span></div>
+      <div class="prob-row"><span class="token-label">approved</span><div class="bar-track"><div class="bar-fill" style="width:26.3%"></div></div><span>26.3%</span></div>
+      <div class="prob-row"><span class="token-label">denied</span><div class="bar-track"><div class="bar-fill" style="width:19.5%"></div></div><span>19.5%</span></div>
+      <div class="prob-row"><span class="token-label">pending</span><div class="bar-track"><div class="bar-fill" style="width:10.7%"></div></div><span>10.7%</span></div>
+    </div>
+  </div>
+  <div class="mask-panel">
+    <span class="mask-panel-title">GRAMMAR-MASKED DECODE — SAME LOGITS, ENUM ONLY</span>
+    <div class="prob-bars">
+      <div class="prob-row ineligible"><span class="token-label">unclear<span class="token-reason">not valid here — expects an enum value</span></span><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><span>—</span></div>
+      <div class="prob-row winner"><span class="token-label">approved</span><div class="bar-track"><div class="bar-fill" style="width:46.6%"></div></div><span>46.6%</span></div>
+      <div class="prob-row"><span class="token-label">denied</span><div class="bar-track"><div class="bar-fill" style="width:34.5%"></div></div><span>34.5%</span></div>
+      <div class="prob-row"><span class="token-label">pending</span><div class="bar-track"><div class="bar-fill" style="width:18.9%"></div></div><span>18.9%</span></div>
+    </div>
+  </div>
+</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>TOOL-CALL SCHEMA</span><h3>Text-to-SQL argument JSON</h3><p>A future Oracle RAG branch that forces tool-call arguments to always match the expected schema, field for field.</p></article>
+<article class="info-card"><span>CITATION GRAMMAR</span><h3>A fixed tag like [DocN]</h3><p>Forces attribution into one parseable pattern instead of free-text phrasing a citation validator would have to guess at.</p></article>
+<article class="info-card"><span>ENUM ROUTING</span><h3>Section 10's approved/denied/pending field</h3><p>The clearest case: a small, closed set of legal values, masked directly.</p></article>
+<article class="info-card"><span>PERMISSIVE-SCHEMA BOUNDARY</span><h3>"Any non-empty string"</h3><p>When the schema is this loose, masking removes almost nothing — most of the vocabulary was already eligible.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>Forcing a rigid schema onto an open-ended explanation</h3><p>A schema this strict can needlessly truncate the reasoning space, producing a worse — if perfectly valid — answer than an unconstrained one would have given.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"A schema-valid answer must be a good answer"</h3><p>Section 10's flip shows form winning; nothing here says the resulting content is complete or well-reasoned.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Wrapping Concept 07's decode step, not replacing it</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>def eligible_tokens(tokens_so_far, grammar):
+    # toy grammar checker -- returns the set of token ids that keep
+    # tokens_so_far inside the target shape one step further
+    return grammar.next_allowed(tokens_so_far)
+
+def masked_decode_step(logits, tokens_so_far, grammar, temperature):
+    allowed = eligible_tokens(tokens_so_far, grammar)     # E_t for this step
+    masked_logits = [
+        value if token_id in allowed else float("-inf")
+        for token_id, value in enumerate(logits)
+    ]
+    # decode_step is Concept 07's existing function -- completely untouched.
+    # only its input changed: a narrower, renormalized distribution.
+    return decode_step(masked_logits, temperature)
+
+# usage inside Concept 07's unmodified generation loop:
+# next_token = masked_decode_step(logits, tokens_so_far, grammar, temperature=0.7)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where this actually lives in production today</h2></div></header>
+<p>llama.cpp's GBNF grammars compile a BNF grammar into per-state token masks computed at inference time — a concrete, widely-deployed implementation of exactly Section 06's Lane B. Outlines-style guided generation (Willard &amp; Louf) takes a different route to the same eligible set: it compiles a regex, CFG, or JSON Schema into a finite-state automaton up front, so the eligible set is looked up per step instead of recomputed by brute force — the practical answer to Section 16's latency failure mode. Provider-level structured-output and function-calling APIs expose this whole layer as a schema argument on the call, hiding the automaton entirely behind the API surface. LangChain's later structured-output wrappers, further into this course, call into exactly this decoding layer rather than implementing a competing algorithm of their own.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Grammar mask stepper</h2></div></header>
+<div class="lab">
+<p>Pick a grammar, then step through the decode loop one token at a time. Every step runs the identical raw logits through two softmax computations side by side — one unconstrained, one masked to whatever the automaton currently allows — so the only thing that ever differs between the two panels is which tokens survived the mask.</p>
+<div class="lab-actions" role="group" aria-label="Choose a grammar">
+<button type="button" class="active" id="grammarFreeform0211" data-grammar="freeform">Free-form — no grammar</button>
+<button type="button" id="grammarEnum0211" data-grammar="enum">Enum field — approved / denied / pending</button>
+<button type="button" id="grammarCitation0211" data-grammar="citation">Citation tag — [Doc + digit + ]</button>
+</div>
+<p class="sample-output" id="automatonState0211" aria-live="polite">state: pick a grammar to begin</p>
+<div class="mask-panels">
+  <div class="mask-panel">
+    <span class="mask-panel-title">UNCONSTRAINED DECODE</span>
+    <div class="prob-bars" id="unconstrainedBars0211" aria-live="polite"></div>
+  </div>
+  <div class="mask-panel">
+    <span class="mask-panel-title">GRAMMAR-MASKED DECODE</span>
+    <div class="prob-bars" id="maskedBars0211" aria-live="polite"></div>
+  </div>
+</div>
+<div class="lab-actions" role="group" aria-label="Step through the grammar mask stepper">
+<button type="button" id="stepButton0211">Step ▶</button>
+<button type="button" id="runAllButton0211">Run all steps</button>
+<button type="button" class="secondary" id="resetButton0211">Reset</button>
+</div>
+<p class="sample-output" id="generatedTrace0211" aria-live="polite">generated so far: (nothing yet)</p>
+<div class="sample-output" id="maskSummary0211" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Four responses to the same shape problem</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Response</th><th>What it costs</th><th>What it actually guarantees</th></tr></thead>
+<tbody>
+<tr><td>Prompt-only formatting request</td><td>Free</td><td>Nothing — raises the odds of the right shape, guarantees none of it</td></tr>
+<tr><td>Generate-then-validate-and-retry</td><td>Simple to add, but wastes calls — can loop or exhaust retries on a stubborn model</td><td>Eventually valid output, or a defined failure after N attempts — never a per-call guarantee</td></tr>
+<tr><td>Constrained / grammar-guided decoding (this concept)</td><td>Per-step masking overhead; needs a compiled grammar or schema up front</td><td>Shape validity on every single call, by construction</td></tr>
+<tr><td>Fine-tuning on formatted examples</td><td>Requires training data and a training run</td><td>Improves the model's raw tendency toward the right shape — still not a hard per-token guarantee</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>DEGENERATE FILLER</span><h3>Valid but empty of content</h3><p>An over-strict schema can force repetitive, degenerate filler that passes every validity check while saying nothing useful.</p></article>
+<article class="info-card"><span>AUTOMATON DEADLOCK</span><h3>An empty eligible set, no defined fallback</h3><p>A buggy grammar can produce E_t = ∅ at some step, with no legal token to pick — a grammar bug, not a model failure, and generation has nothing sane to do next unless a fallback exists.</p></article>
+<article class="info-card"><span>UNCOMPILED-GRAMMAR LATENCY</span><h3>Recomputing the eligible set from scratch</h3><p>Computing E_t by brute force over a large vocabulary at every step, instead of via a precompiled automaton, adds real per-token cost.</p></article>
+<article class="info-card"><span>VALID MISTAKEN FOR TRUE</span><h3>Concept 09's boundary again</h3><p>"Passed JSON-schema validation" and "factually correct" are two separate properties — passing one never implies the other.</p></article>
+<article class="info-card"><span>GRAMMAR/SCHEMA VERSION DRIFT</span><h3>The decoder and the parser disagree</h3><p>The grammar the decoder enforces and the schema the downstream parser expects can quietly fall out of sync across a deploy.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"JSON mode guarantees my exact schema"</td><td>Plain JSON mode guarantees valid JSON syntax only, unless schema-specific guided decoding is layered on top.</td></tr>
+<tr><td>"Constrained decoding fixes hallucination"</td><td>It only constrains form. Content can still be false — Concept 09's boundary is untouched.</td></tr>
+<tr><td>"This needs retraining"</td><td>It's a decode-time technique with zero training involved — computed fresh at inference on the existing model.</td></tr>
+<tr><td>"The decoding rule gets replaced"</td><td>Concept 07's decode rule still runs, exactly as before, just over a smaller, masked candidate set.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Version and test grammars/schemas alongside prompts, as first-class deploy artifacts — not an afterthought bolted onto a prompt template.</li>
+<li>Define an explicit fallback for automaton deadlocks — an early, schema-valid close, for instance — instead of letting generation hang with no legal move.</li>
+<li>Log both the raw and the masked decision at spot-checked steps, so debugging a bad output doesn't require guessing which lane caused it.</li>
+<li>Keep schema-validity checks and faithfulness/factuality evaluation as two separate metrics, never a single pass/fail number.</li>
+<li>Account for grammar-compilation cost separately from per-token decoding cost when sizing latency — an uncompiled grammar can dominate the wrong part of the budget.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does the mask run before, not instead of, Concept 07's decode rule?</summary><div>The mask only narrows the candidate set the decode rule is allowed to choose from. If it replaced the decode rule, there'd be nothing left to decide among multiple surviving legal tokens — Lane A still does that job, just on a smaller input.</div></details>
+<details class="quiz"><summary>Why isn't a valid-JSON guarantee the same as a schema guarantee?</summary><div>Valid JSON only means the string parses. A schema guarantee additionally requires the right keys, types, and enum values — a strictly stronger, independently-failable property.</div></details>
+<details class="quiz"><summary>Why doesn't constrained decoding reduce hallucination of facts?</summary><div>The mask only ever evaluates grammar legality at each step, never truth. A hallucinated fact that happens to fit the required shape passes the mask without being detected at all.</div></details>
+<details class="quiz"><summary>What is an automaton deadlock, and why is it a grammar bug rather than a model failure?</summary><div>It's a step where the eligible set E_t is empty — no token keeps the output legal. The model didn't fail to produce a good token; the grammar failed to leave any token available at all, which is a defect in the grammar's design.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A toy citation-tag grammar requires the exact pattern <code>[Doc</code> + one digit + <code>]</code>. At the decode step right after the tokens <code>[Doc</code> have already been generated, the top-5 unconstrained candidate logits are: <code>"1" = 1.4</code>, <code>"2" = 1.1</code>, <code>"3" = 0.9</code>, <code>"]" = 2.3</code>, <code>"the" = 1.8</code>. Mark which of these five the grammar would mask out at this position, recompute the renormalized winner over only the survivors by hand, and state plainly whether the unconstrained winner and the masked winner differ.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open the worked solution</summary><div>At this position — right after <code>[Doc</code>, before a closing bracket is legal — the grammar demands exactly one digit next. That masks out both <code>"]"</code> and <code>"the"</code>, leaving E_t = {"1", "2", "3"}. Unconstrained, the full five-way softmax gives <code>"]"</code> the highest share at roughly 39.0% — the model's overall top pick, and an invalid one, since it would close the tag before any digit appears. Masked to just the three digits, exp(1.4)=4.06, exp(1.1)=3.00, exp(0.9)=2.46, summing to about 9.52; the renormalized weights come out to roughly "1" 42.6%, "2" 31.6%, "3" 25.8% — "1" wins. The unconstrained and masked winners differ: <code>"]"</code> unconstrained, <code>"1"</code> masked — the identical pattern Section 10 already showed with the enum field, now applied to a citation tag. Teach-back: in your own words, explain why the mask has to be recomputed fresh at every single token position rather than computed once for the whole output.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>Constrained decoding is a mask over Concept 07's per-step distribution, sitting inside the LLM box between the logits and the decode rule. Its core equation is a masked softmax restricted to the eligible set E_t — the identical raw scores, renormalized over fewer survivors. Use cases include tool-call arguments, citation tags, and enum routing. Warning signs are automaton deadlock and mistaking a valid shape for true content.</p></div>
+<div><h3>Selection rule</h3><ul><li>Grammar mask runs first; Concept 07's decode rule runs second, unmodified</li><li>Shape validity and factual correctness are two separate, independently-failable checks</li><li>No training required — this is purely a decode-time technique</li><li>Memorable example: masking flips the argmax from invalid "unclear" to valid "approved" using the exact same raw scores</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A teammate only knows "JSON mode." How do you explain grammar-constrained decoding to them?</summary><div>JSON mode guarantees the string parses as JSON. Grammar-constrained decoding goes further: it compiles a schema or grammar into per-step eligible token sets, so the output can be guaranteed to match your exact fields, types, and enum values too — not just be parseable at all.</div></details>
+<details class="quiz"><summary>Why can't a bigger model alone replace this guarantee?</summary><div>A bigger model can raise the odds of the right shape, but "usually right" is a tendency, not a guarantee — a machine-critical parser needs the shape to be structurally impossible to violate, which only a per-step mask provides regardless of model size.</div></details>
+<details class="quiz"><summary>How would you debug a grammar that occasionally deadlocks in production?</summary><div>Log the automaton state and the eligible set at every step for the failing calls, find the state where E_t comes back empty, and trace that back to the grammar rule that failed to leave any legal continuation — then add either a grammar fix or an explicit fallback transition for that state.</div></details>
+<details class="quiz"><summary>Compare the cost, latency, and guarantee trade-offs of constrained decoding versus generate-then-validate-and-retry.</summary><div>Constrained decoding adds per-step masking overhead and needs a compiled grammar, but guarantees valid shape on every call with no wasted generations. Generate-then-validate-and-retry is simpler to bolt on but can waste calls, loop, or exhaust retries, and only guarantees validity eventually, not on the first attempt.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2305.13971"><b>Geng, Josifoski, Peyrard &amp; West — Grammar-Constrained Decoding for Structured NLP Tasks without Finetuning</b><br><span>Core academic grounding for the mask-eligible-tokens-per-step mechanism itself, behind Sections 01, 05, 06 and 09.</span></a>
+<a href="https://arxiv.org/abs/2307.09702"><b>Willard &amp; Louf — Efficient Guided Generation for Large Language Models</b><br><span>The Outlines algorithm: compiling a regex/CFG/JSON-schema into a finite-state automaton so the eligible-token lookup is cheap per step, behind Sections 09 and 13.</span></a>
+<a href="https://arxiv.org/abs/2305.15334"><b>Patil, Zhang, Wang &amp; Gonzalez — Gorilla: Large Language Model Connected with Massive APIs</b><br><span>Motivates why exact tool-call and argument schemas matter in practice, behind Section 11's Text-to-SQL project mapping.</span></a>
+<a href="https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md"><b>llama.cpp — GBNF Guide</b><br><span>A concrete, widely-used production implementation of grammar-constrained decoding, behind Section 13's ecosystem claim and Section 12's code sanity check.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 02 COMPLETE · CONCEPT 11 DONE</span>
+<h3>All eleven concepts of Module 02 are done — Module 03 starts retrieval next</h3>
+<p>Before moving on, state the mask-then-decode ordering, the difference between shape validity and factual correctness, and why even a bigger model still needs this guarantee for machine-critical output. Module 03, "RAG mental model &amp; problem framing," begins next: defining the architecture, its purpose, its boundaries, and the problems it should — or should not — solve, opening with "What exactly is Retrieval-Augmented Generation?" Structured outputs — citation formats, tool-call schemas — become one practical lever the real RAG system will lean on once retrieval exists.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-01.html">Start Concept 01 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: What exactly is Retrieval-Augmented Generation?</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 11 · Complete</p>
+<a href="module-02-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

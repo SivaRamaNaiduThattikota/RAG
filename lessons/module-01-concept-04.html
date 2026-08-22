@@ -1,0 +1,1037 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson about foundation models and large language models, their boundaries, adaptation, and role in RAG.">
+<title>Foundation models and large language models — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-04.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 04</p>
+<h1>Foundation models<br>
+<em>and LLMs</em>
+</h1>
+<p class="lesson-lead">Understand what makes a model a foundation, what makes a language model large, how the terms overlap, and why neither term describes a complete RAG application.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Fourth Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Major generative model families</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Separate model, adaptation, and application</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You separated the reusable foundation model, LLM, adaptation, retrieval, database, orchestration, and complete application.</p>
+<b>4 CONCEPTS COMPLETED</b>
+</section>
+
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The model is a foundation—not the whole building.</h2>
+</div>
+<p>We begin with the reusable-model idea, then locate LLMs inside it and finally place the model inside your Oracle RAG application.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>What is a foundation model?</h3>
+<p>A <b>foundation model</b> is trained on broad data—usually with self-supervision at scale—and can be adapted to many downstream tasks. It is called a foundation because many applications can be built on top of the same reusable model.</p>
+<p>A <b>language model</b> assigns probabilities to language or predicts missing/next linguistic units. An <b>LLM</b> is a language model with large-scale parameters, data, and computation. Many LLMs are foundation models because they are broadly pretrained and adaptable, but foundation models can also focus on vision, speech, molecules, or multiple modalities.</p>
+<div class="beginner-memory">
+<b>First memory:</b> foundation model describes broad pretraining and reuse; LLM describes a large model of language.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why pretrain one broad model?</h3>
+<p>Training a separate model from scratch for every task requires labelled data, specialist effort, and compute. Broad pretraining lets one model learn reusable patterns once, then transfer them through prompting, fine-tuning, adapters, or task-specific heads.</p>
+<p>This creates leverage: improvements can benefit many applications. It also creates concentration risk: bias, security weaknesses, missing languages, or factual limitations can propagate into many downstream systems.</p>
+<div class="mental-compare">
+<div>
+<span>OLD TASK-SPECIFIC PATTERN</span>
+<p>Task data → train one model → solve one narrow task</p>
+</div>
+<div>
+<span>FOUNDATION PATTERN</span>
+<p>Broad data → pretrain reusable model → adapt to many tasks and products</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One base model, several employee-assistant jobs</h3>
+<p>The same pretrained language model might summarize a retrieved leave policy, convert a question into a constrained JSON route, draft a candidate SQL query, or explain a verified database result. The model is reused, but each job has different instructions, tools, validation, and risk.</p>
+<div class="context-demo">
+<div>
+<span>BASE CAPABILITY</span>
+<p>General language patterns learned during broad pretraining.</p>
+</div>
+<div>
+<span>ADAPTATION</span>
+<p>Prompt, examples, fine-tuning, adapters, retrieval context, or a task head.</p>
+</div>
+<div>
+<span>APPLICATION</span>
+<p>Identity, permissions, Oracle, vector search, validation, monitoring, and UI surrounding the model.</p>
+</div>
+</div>
+<p>The company assistant is therefore not “the LLM.” It is a system that uses an LLM as one component.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>From broad data to a downstream capability</h3>
+<ol>
+<li>
+<b>Represent input:</b> convert text or other modalities into model-readable units.</li>
+<li>
+<b>Pretrain:</b> optimize a self-supervised objective over broad data, such as next-token or masked-token prediction.</li>
+<li>
+<b>Store learned patterns:</b> model parameters encode statistical regularities—not a queryable table of exact records.</li>
+<li>
+<b>Adapt:</b> use prompting, demonstrations, fine-tuning, adapters, tools, or retrieval.</li>
+<li>
+<b>Infer:</b> run the frozen or adapted model on a new request.</li>
+<li>
+<b>Validate:</b> apply task-specific evidence, security, and quality checks.</li>
+</ol>
+<div class="beginner-memory">
+<b>Scope boundary:</b> Concept 5 owns training, fine-tuning, and inference in depth; here they establish the foundation-model lifecycle.</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c04-visual-title">
+  <strong class="concept-visual-title" id="c04-visual-title">VISUAL · ONE FOUNDATION, MANY DOWNSTREAM SYSTEMS</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable foundation model adaptation map"><div class="diagram-hub"><div class="diagram-node"><b>Broad pretraining data</b><small>General patterns and representations</small></div><div class="diagram-node hub-center"><b>Foundation model</b><small>Reusable pretrained parameters</small></div><div class="diagram-node"><b>Prompting</b><small>Instructions without weight updates</small></div><div class="diagram-node"><b>Fine-tuning</b><small>Task adaptation with parameter updates</small></div><div class="diagram-node"><b>RAG + tools</b><small>External knowledge and actions at inference</small></div></div></div>
+  <figcaption>The foundation model is the reusable center, not the complete application. Different downstream systems combine it with prompting, adaptation, retrieval, databases, and controls.</figcaption>
+  <ol class="diagram-key"><li><b>Upstream:</b> broad pretraining creates the reusable model.</li><li><b>Downstream:</b> teams adapt or augment it for a particular job.</li><li><b>Product boundary:</b> the employee assistant includes much more than the foundation model.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Separate model creation from application use</h3>
+<div class="mental-compare">
+<div>
+<span>UPSTREAM · BUILD THE FOUNDATION</span>
+<p>Broad data → self-supervised objective → large-scale training → base model → evaluation</p>
+</div>
+<div>
+<span>DOWNSTREAM · BUILD THE PRODUCT</span>
+<p>Base model → adaptation + tools + private data + controls → task application</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>Foundation model</span>
+<i>→</i>
+<span>Prompt / adaptation</span>
+<i>→</i>
+<span>Retriever + Oracle tools</span>
+<i>→</i>
+<span>Verified context</span>
+<i>→</i>
+<span>LLM inference</span>
+<i>→</i>
+<span>Grounded answer</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the complete system skeleton</summary>
+<div>
+<div class="pipeline-preview">
+<span>User identity</span>
+<i>↓</i>
+<span>Question</span>
+<i>↓</i>
+<span>Route</span>
+<i>↓</i>
+<span>Retrieval / SQL</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>LLM</span>
+<i>↓</i>
+<span>Validation</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Similar terms, different scopes</h3>
+<div class="distinction-table" role="table" aria-label="Foundation model distinctions">
+<div role="row">
+<b role="cell">Term</b>
+<b role="cell">What it describes</b>
+<b role="cell">Not automatically</b>
+</div>
+<div role="row">
+<span role="cell">Foundation model</span>
+<span role="cell">Broad pretraining and downstream adaptability</span>
+<span role="cell">A language-only or generative model</span>
+</div>
+<div role="row">
+<span role="cell">Language model</span>
+<span role="cell">A probability model over language</span>
+<span role="cell">Large or broadly reusable</span>
+</div>
+<div role="row">
+<span role="cell">LLM</span>
+<span role="cell">Large-scale language model</span>
+<span role="cell">A complete assistant or database</span>
+</div>
+<div role="row">
+<span role="cell">Transformer</span>
+<span role="cell">A neural architecture</span>
+<span role="cell">A training objective or product</span>
+</div>
+<div role="row">
+<span role="cell">RAG</span>
+<span role="cell">Retrieval plus generation architecture</span>
+<span role="cell">A model family</span>
+</div>
+</div>
+<p>Encoder models such as BERT can be foundation models without being open-ended autoregressive generators. Decoder-style LLMs commonly generate left-to-right. Encoder-decoder models map an input sequence to an output sequence.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Foundation model means the biggest available model.”</b>
+<p>Scale matters, but breadth of pretraining and adaptability are central.</p>
+</div>
+<div>
+<b>“Every foundation model is an LLM.”</b>
+<p>Foundation models also exist for vision, speech, biology, robotics, and multimodal data.</p>
+</div>
+<div>
+<b>“Every LLM is a chatbot.”</b>
+<p>A chatbot is an application layer with instructions, state, tools, safety controls, and an interface.</p>
+</div>
+<div>
+<b>“Parameters are a reliable database.”</b>
+<p>Parameters encode distributed statistical patterns; they do not provide guaranteed current records or provenance.</p>
+</div>
+<div>
+<b>“Bigger means grounded and correct.”</b>
+<p>Scale may improve capabilities but does not guarantee factuality, authorization, freshness, or task safety.</p>
+</div>
+<div>
+<b>“RAG retrains the LLM on my documents.”</b>
+<p>Ordinary RAG retrieves evidence at inference time; it does not update model weights.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where the foundation model sits in Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>LLM</span>
+<b>Language and reasoning component</b>
+<p>Interprets instructions and generates a response from approved context.</p>
+</div>
+<div>
+<span>ORACLE</span>
+<b>Authoritative structured data</b>
+<p>Returns exact balances and governed records through validated SQL.</p>
+</div>
+<div>
+<span>RETRIEVER</span>
+<b>External evidence access</b>
+<p>Finds applicable policies with metadata, permissions, and relevance controls.</p>
+</div>
+<div>
+<span>LANGCHAIN / LANGGRAPH</span>
+<b>Orchestration—not the model</b>
+<p>May coordinate prompts, tools, state, retries, and graph transitions later in the roadmap.</p>
+</div>
+</div>
+<p>The LLM can draft Text-to-SQL, but validation and Oracle execution determine safety and truth. It can summarize a policy, but retrieval supplies the applicable source passage.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Foundation model</b>
+<p>Broadly pretrained and adaptable.</p>
+</div>
+<div>
+<b>LLM</b>
+<p>Large-scale model of language.</p>
+</div>
+<div>
+<b>Adaptation</b>
+<p>Specializes or conditions the reusable base.</p>
+</div>
+<div>
+<b>Application</b>
+<p>Model plus data, tools, controls, and interface.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is an LLM often, but not always, discussed as a foundation model?</li>
+<li>Can a foundation model be non-generative in its downstream use?</li>
+<li>Why are parameters not an Oracle replacement?</li>
+<li>Where does RAG add knowledge without changing weights?</li>
+<li>What risk follows from reusing one model across many products?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick boundary exercise</summary>
+<div>
+<ol>
+<li>GPT-style base model — <b>LLM and foundation model</b>.</li>
+<li>BERT used for classification — <b>language foundation model; downstream use is discriminative</b>.</li>
+<li>Oracle leave table — <b>authoritative database, not a model</b>.</li>
+<li>LangGraph workflow — <b>orchestration layer</b>.</li>
+<li>Retriever — <b>external evidence component</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Training, fine-tuning and inference</h3>
+<p>Now that the reusable model and application layers are separate, Concept 5 examines when parameters change and when they do not: pretraining, continued pretraining, supervised fine-tuning, preference/alignment stages, parameter-efficient adaptation, and inference.</p>
+<div class="beginner-memory">
+<b>Concept 04 is complete.</b> Continue to the model lifecycle and weight-change boundary.</div>
+<a class="button primary" href="module-01-concept-05.html">Start Concept 05 →</a>
+</article>
+</div>
+</div>
+</section>
+
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required system boundary and optional depth.</h2>
+<p>Master the vocabulary and project placement first. Open formal objectives, scale, adaptation, risks, and interviews only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Define</b>
+<small>Separate foundation model, language model, and LLM.</small>
+</a>
+<a href="#b05">
+<span>02</span>
+<b>Locate</b>
+<small>Place the model inside the full application.</small>
+</a>
+<a href="#b09">
+<span>03</span>
+<b>Teach back</b>
+<small>Prove the boundaries in a realistic system.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open formalism, scaling, risks, code, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 04 path:</b> Reusable base → adaptation → application boundary → RAG placement.</div>
+</section>
+
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the foundation-model and LLM deep dive</b>
+<em>Objectives, transfer, scale, adaptation, system boundaries, risks and interviews</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Lifecycle</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>From family to reusable foundation</h2>
+</div>
+</header>
+<p>Concept 3 classified generative mechanisms. Concept 4 adds the training-and-reuse paradigm: broad pretraining produces a base that supports many downstream adaptations. Concept 5 will inspect the lifecycle stages in depth.</p>
+<div class="flow">
+<div class="flow-node">Generative AI</div>
+<div class="flow-node">Objectives</div>
+<div class="flow-node">Families</div>
+<div class="flow-node hot">Foundation models</div>
+<div class="flow-node">Lifecycle</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational learning objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>DEFINE</span>
+<h3>Use precise scope</h3>
+<p>Distinguish foundation model, LM, LLM, Transformer, and application.</p>
+</article>
+<article class="info-card">
+<span>TRACE</span>
+<h3>Follow reuse</h3>
+<p>Trace broad pretraining through adaptation into a downstream system.</p>
+</article>
+<article class="info-card">
+<span>FORMALIZE</span>
+<h3>Read objectives</h3>
+<p>Interpret autoregressive and masked-language objectives.</p>
+</article>
+<article class="info-card">
+<span>ARCHITECT</span>
+<h3>Place RAG correctly</h3>
+<p>Separate model knowledge from retrieved and database evidence.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>Generative versus discriminative objectives.</li>
+<li>Autoregressive factorization and conditional probability.</li>
+<li>Parameters as learned numerical weights.</li>
+<li>Retrieval, database lookup, and generation as separate jobs.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>A reusable engine with inherited properties</h2>
+</div>
+</header>
+<p>A foundation model resembles a powerful general engine delivered to many product teams. Each team adds an interface, instructions, data, tools, and controls. Reuse amortizes training cost, but every downstream product inherits some capabilities, gaps, biases, and attack surface from the shared base.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>The model is not a deterministic engine specification. Its behavior is statistical, context-sensitive, and only partially characterized by evaluation.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal scope of the terms</h2>
+</div>
+</header>
+<p>A foundation model is trained on broad data, generally using self-supervision at scale, and is adaptable to many downstream tasks. A language model defines or approximates <code>p(x)</code> over linguistic sequences or conditional variants. “Large” has no universal numerical threshold; it is a relational description involving model, data, and compute scale.</p>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Axis</th>
+<th>Foundation model</th>
+<th>LLM</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Defining emphasis</td>
+<td>Breadth and adaptability</td>
+<td>Language modelling at scale</td>
+</tr>
+<tr>
+<td>Modalities</td>
+<td>One or many</td>
+<td>Language-centered, possibly multimodal</td>
+</tr>
+<tr>
+<td>Downstream behavior</td>
+<td>Generative or discriminative</td>
+<td>Generation, scoring, classification, extraction, embeddings, tool use</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>Pretrain, adapt, infer, govern</h2>
+</div>
+</header>
+<div class="two-lane">
+<article class="lane">
+<span>MODEL SUPPLY CHAIN</span>
+<div class="lane-flow">
+<div>Collect and filter broad data</div>
+<div>Choose objective and architecture</div>
+<div>Pretrain at scale</div>
+<div>Evaluate and document base</div>
+<div>Distribute weights or service</div>
+</div>
+</article>
+<article class="lane">
+<span>APPLICATION SUPPLY CHAIN</span>
+<div class="lane-flow">
+<div>Select model</div>
+<div>Adapt or prompt</div>
+<div>Connect retrieval and tools</div>
+<div>Evaluate task behavior</div>
+<div>Monitor production</div>
+</div>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>One base, branching applications</h2>
+</div>
+</header>
+<div class="scroll-flow">
+<span>Broad corpus</span>
+<i>→</i>
+<span>Self-supervised pretraining</span>
+<i>→</i>
+<span>Base foundation model</span>
+<i>→</i>
+<span>Prompted assistant</span>
+<i>·</i>
+<span>Fine-tuned classifier</span>
+<i>·</i>
+<span>RAG generator</span>
+<i>·</i>
+<span>Embedding service</span>
+</div>
+<p>The branches may share a base but require different evaluations and controls.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>The model’s exact boundary in RAG</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Identity</span>
+<i>↓</i>
+<span>Question</span>
+<i>↓</i>
+<span>Retriever / Oracle</span>
+<i>↓</i>
+<span>Evidence</span>
+<i>↓</i>
+<span>LLM inference</span>
+<i>↓</i>
+<span>Verification</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>The base LLM contributes language capability and parametric patterns. RAG contributes non-parametric external evidence. Oracle contributes governed current records.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Two common language pretraining objectives</h2>
+</div>
+</header>
+<div class="equation">Autoregressive negative log-likelihood: L<sub>AR</sub>(θ) = − Σₜ log pθ(xₜ | x&lt;t)</div>
+<div class="equation">Masked-language objective: L<sub>MLM</sub>(θ) = − Σₜ∈M log pθ(xₜ | x\M)</div>
+<p>The autoregressive objective predicts the next unit from a prefix. The masked objective reconstructs selected hidden units using surrounding context. Architecture and objective are related choices, not synonyms.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Why reuse can reduce labelled-data needs</h2>
+</div>
+</header>
+<p>Imagine 20 HR intents. Training from scratch might require many labelled examples for every class. A broadly pretrained model already represents language patterns; adaptation only has to teach the task boundary and label meaning. This is transfer—not proof that the base model knows company truth.</p>
+<div class="equation">Downstream system = pretrained parameters + task adaptation + runtime context + controls</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>FOUNDATION MODEL</span>
+<h3>BERT-like encoder</h3>
+<p>Broad language pretraining adapted to classification or retrieval.</p>
+</article>
+<article class="info-card">
+<span>LLM FOUNDATION MODEL</span>
+<h3>GPT-style decoder</h3>
+<p>Broad autoregressive pretraining adapted by prompts or tuning.</p>
+</article>
+<article class="info-card">
+<span>NON-LANGUAGE</span>
+<h3>Vision foundation model</h3>
+<p>Broad visual pretraining reused across downstream visual tasks.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>Narrow spam classifier</h3>
+<p>A task-specific model trained only for one label set is not automatically a foundation model.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>Make the application boundary explicit</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · ARCHITECTURE SKELETON</span>
+<pre>
+<code>def answer(question, user):
+    scope = authorize(user, question)
+    records = oracle_lookup(question, scope)
+    passages = retrieve_policy(question, scope)
+    context = build_context(records, passages)
+    draft = llm_generate(question, context)
+    return verify_and_cite(draft, context)
+</code>
+</pre>
+</div>
+<p>Only one line calls the LLM. The surrounding functions provide authority, evidence, and enforcement.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>Model interfaces versus orchestration</h2>
+</div>
+</header>
+<p>A model provider or local runtime exposes inference. LangChain may compose model and retrieval calls. LangGraph may represent stateful cycles and decisions. Oracle stores and queries governed data. A vector store indexes embeddings. These components are complementary, not competing names for an LLM.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>System-layer explorer</h2>
+</div>
+</header>
+<div class="lab">
+<div class="lab-actions" role="group" aria-label="Choose a system layer">
+<button type="button" class="layer-button active" data-layer="model" aria-pressed="true">Foundation model</button>
+<button type="button" class="layer-button secondary" data-layer="adaptation" aria-pressed="false">Adaptation</button>
+<button type="button" class="layer-button secondary" data-layer="rag" aria-pressed="false">RAG</button>
+<button type="button" class="layer-button secondary" data-layer="database" aria-pressed="false">Oracle</button>
+<button type="button" class="layer-button secondary" data-layer="orchestration" aria-pressed="false">Orchestration</button>
+</div>
+<div class="sample-output" id="layerOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Reuse creates leverage and dependency</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Benefit</th>
+<th>Corresponding concern</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reuse across many tasks</td>
+<td>One defect can propagate widely</td>
+</tr>
+<tr>
+<td>Less task-specific labelled data</td>
+<td>Unknown pretraining data may affect behavior</td>
+</tr>
+<tr>
+<td>Prompt-based adaptation</td>
+<td>Behavior can be brittle and hard to specify</td>
+</tr>
+<tr>
+<td>Central model improvement</td>
+<td>Vendor, cost, version, and availability dependency</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes by layer</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>BASE MODEL</span>
+<h3>Inherited bias or gaps</h3>
+<p>Broad training data underrepresents a language, domain, or group.</p>
+</article>
+<article class="info-card">
+<span>ADAPTATION</span>
+<h3>Task mismatch</h3>
+<p>Prompt or tuning data teaches the wrong behavior.</p>
+</article>
+<article class="info-card">
+<span>RAG</span>
+<h3>Bad evidence</h3>
+<p>Retrieval misses or selects an inapplicable passage.</p>
+</article>
+<article class="info-card">
+<span>SYSTEM</span>
+<h3>Authority failure</h3>
+<p>The application lets generated text override database or access rules.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Foundation means flawless base</td>
+<td>The term emphasizes reuse and incompleteness, not reliability.</td>
+</tr>
+<tr>
+<td>LLM knowledge is a document store</td>
+<td>Parametric patterns lack guaranteed freshness and provenance.</td>
+</tr>
+<tr>
+<td>RAG is fine-tuning</td>
+<td>RAG normally changes runtime context, not weights.</td>
+</tr>
+<tr>
+<td>Model scale defines product quality</td>
+<td>Data, retrieval, controls, UX, latency, and evaluation also determine quality.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Track exact model and prompt versions.</li>
+<li>Evaluate the base, adaptation, retrieval, and full application separately.</li>
+<li>Plan for rate limits, latency, cost, context limits, and model retirement.</li>
+<li>Document data governance, privacy, licensing, security, and regional constraints.</li>
+<li>Re-test every downstream workflow after a base-model change.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Is every LLM a foundation model?</summary>
+<div>Not necessarily. Broad pretraining and downstream adaptability establish the foundation role; “LLM” alone emphasizes large-scale language modelling.</div>
+</details>
+<details class="quiz">
+<summary>Can an encoder be a foundation model?</summary>
+<div>Yes. A broadly pretrained encoder can be adapted to many discriminative or retrieval tasks.</div>
+</details>
+<details class="quiz">
+<summary>What does RAG change?</summary>
+<div>It supplies selected external context at inference time; ordinary RAG does not update base-model parameters.</div>
+</details>
+<details class="quiz">
+<summary>Why is homogenization risky?</summary>
+<div>Many downstream applications inherit failures or vulnerabilities from the same shared base.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>Draw the leave assistant as seven labelled nodes. For each node, state whether it belongs to the foundation model, adaptation, retrieval, Oracle, deterministic control, orchestration, or user interface. Then name one failure and one metric for each node.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one defensible seven-node mapping</summary>
+<div>Identity and authorization—deterministic control; request routing—orchestration/classification; policy retrieval—retrieval; balance query—Oracle; context construction—orchestration; response drafting—LLM inference; claim/citation check—verification. The LLM is one node, not all seven.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Definitions</h3>
+<p>Foundation model: broad pretraining + adaptability.<br>LLM: large-scale language model.<br>RAG: external retrieval + generation system.</p>
+</div>
+<div>
+<h3>Boundary test</h3>
+<ul>
+<li>What was broadly pretrained?</li>
+<li>How is it adapted?</li>
+<li>Which facts come from tools?</li>
+<li>Which layer enforces authority?</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Foundation model versus LLM?</summary>
+<div>Foundation model emphasizes broad pretraining and reuse; LLM emphasizes language modelling at large scale. The sets overlap but are not identical.</div>
+</details>
+<details class="quiz">
+<summary>Why can BERT be a foundation model?</summary>
+<div>It is broadly pretrained and adaptable across language tasks even though its common uses are not open-ended generation.</div>
+</details>
+<details class="quiz">
+<summary>Why does RAG not solve every LLM limitation?</summary>
+<div>Retrieval can improve evidence access, but generation, reasoning, security, retrieval quality, and application controls can still fail.</div>
+</details>
+<details class="quiz">
+<summary>How would you evaluate a model upgrade?</summary>
+<div>Freeze a representative dataset and compare retrieval-independent model behavior, full RAG answers, latency, cost, safety, structured outputs, and regression slices.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and completion</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://crfm.stanford.edu/report.html">
+<b>Stanford CRFM — On the Opportunities and Risks of Foundation Models</b>
+<br>
+<span>Definition, adaptation paradigm, homogenization, capabilities, and risks.</span>
+</a>
+<a href="https://arxiv.org/abs/2005.14165">
+<b>Brown et al. — Language Models are Few-Shot Learners</b>
+<br>
+<span>Large autoregressive language modelling and in-context task adaptation.</span>
+</a>
+<a href="https://arxiv.org/abs/1810.04805">
+<b>Devlin et al. — BERT</b>
+<br>
+<span>Broad bidirectional language pretraining adapted across downstream tasks.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 04 is complete. Its formal definitions, layer explorer, risks, production implications, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-05.html">Start Concept 05 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Training, fine-tuning and inference.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 04 · Complete</p>
+<a href="module-01-concept-05.html">Concept 05 →</a>
+</footer>
+</body>
+</html>
+

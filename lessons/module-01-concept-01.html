@@ -1,0 +1,1891 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A deep, visual and mathematical lesson explaining what Generative AI is and how generation differs from retrieval, prediction and copying.">
+  <title>What is Generative AI? — RAG Atlas</title>
+  <link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+  <script defer src="../shell.js">
+</script>
+<script defer src="lesson-01.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+  <a class="skip-link" href="#lesson">Skip to lesson</a>
+  <header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+
+  <main id="lesson">
+    <section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 01</p>
+<h1>What is<br>
+<em>Generative AI?</em>
+</h1>
+<p class="lesson-lead">Start with the beginner path: learn one clear definition, see a simple flow, separate generation from retrieval and calculation, then complete a small exercise. The original 24-section technical lesson remains available as an optional advanced deep dive.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Foundation of the entire course</b>
+</div>
+<div>
+<span>STARTING LEVEL</span>
+<b>Beginner core first</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>None</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>Preserved and optional</b>
+</div>
+</div>
+</section>
+    <section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You established the core Generative AI mental model and explicitly chose to continue. The advanced deep dive remains available for revision.</p>
+<b>1 / 1 CONCEPT COMPLETED</b>
+</section>
+
+    <section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+      <header class="beginner-heading">
+<div>
+<p class="lesson-crumb">START HERE · PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Build intuition, then add the mechanism.</h2>
+</div>
+<p>Study one idea at a time. Every section connects Generative AI to the Oracle, metadata, and Text-to-SQL system you will build later.</p>
+</header>
+      <div class="beginner-layout">
+        <aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+        <div class="beginner-content">
+          <article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>What does Generative AI mean?</h3>
+<p>
+<b>Generative AI is a class of AI systems that produces content from an input or instruction.</b> The output may be text, code, an image, audio, video, or another form of data.</p>
+<p>The word <b>generative</b> describes the system’s job: it constructs an output for the current request. A text model creates a sequence of words or tokens; an image model creates pixel patterns; an audio model creates a waveform. The output type changes, but the central idea stays the same.</p>
+<h4>Input does not mean only a short prompt</h4>
+<p>The model may receive an instruction, earlier conversation, an image, retrieved passages, database results, tool outputs, or a combination of them. Everything supplied for the current request helps condition what it generates.</p>
+<div class="guided-example">
+<span>INPUT</span>
+<p>“Explain how diabetes affects the human body in language a teenager can understand.”</p>
+<span>OUTPUT</span>
+<p>A newly produced explanation whose topic, tone, and level follow the instruction and the patterns learned during training.</p>
+</div>
+<div class="inline-flow" aria-label="Basic Generative AI flow">
+<b>User</b>
+<i>→</i>
+<b>Prompt and context</b>
+<i>→</i>
+<b>Generative model</b>
+<i>→</i>
+<b>Generated response</b>
+</div>
+<h4>What does “new content” mean?</h4>
+<p>It means the system produced this output for this request instead of selecting one fixed answer from a normal lookup table. It does <b>not</b> guarantee that every idea is original, that every claim is factual, or that the output is safe to use.</p>
+<div class="beginner-memory">
+<b>Core idea:</b> learn patterns → receive an input and context → generate content. Generation describes how the output is produced, not whether the output is true.</div>
+</article>
+          <article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>What problem does it solve?</h3>
+<p>Many software problems have one exact result. A calculator should return the same sum each time, and a database lookup should return the stored row. But language and creative tasks often have many acceptable outputs. There is no single fixed sentence that explains every policy to every employee.</p>
+<p>Generative AI is useful when software must create an output that fits a request: drafting an email, rewriting technical material for a beginner, summarizing several passages, answering a question conversationally, producing code, or creating an image.</p>
+<div class="mental-compare">
+<div>
+<span>DETERMINISTIC SOFTWARE</span>
+<p>Explicit rules + exact data → expected result</p>
+</div>
+<div>
+<span>GENERATIVE AI</span>
+<p>Instruction + context + learned patterns → one suitable response</p>
+</div>
+</div>
+<h4>Why is an LLM alone not enough for company questions?</h4>
+<p>Its learned parameters are not a live connection to your company. The model does not automatically know private documents, the latest Oracle records, a policy changed this morning, or which employee is allowed to see which data.</p>
+<p>Worse, the model’s job is to continue text plausibly. When evidence is missing, it may still produce confident-looking language. This creates the central RAG problem: <b>how do we give a language generator the right external evidence at answer time?</b>
+</p>
+<div class="beginner-memory">
+<b>Why RAG exists:</b> the LLM is useful for language, but external systems must supply current, private, authoritative, and access-controlled knowledge.</div>
+</article>
+          <article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A company-policy assistant</h3>
+<p>Imagine that your company stores one thousand HR documents. One current, authorized passage says:</p>
+<blockquote>Employees can work remotely up to three days per week.</blockquote>
+<p>An employee asks, “How many days can I work remotely?” An ordinary public LLM cannot be expected to know this private rule. Even if it guesses “three,” a guess is not acceptable evidence.</p>
+<h4>What the RAG system does</h4>
+<ol class="mechanism-list">
+<li>Receives the employee’s question.</li>
+<li>Searches the authorized company knowledge base.</li>
+<li>Finds the passage that directly answers the question.</li>
+<li>Adds the question and passage to the LLM’s input.</li>
+<li>Asks the LLM to answer using that passage.</li>
+</ol>
+<div class="context-demo">
+<div>
+<span>QUESTION</span>
+<p>How many days can I work remotely?</p>
+</div>
+<div>
+<span>RETRIEVED CONTEXT</span>
+<p>Employees can work remotely up to three days per week.</p>
+</div>
+<div>
+<span>GENERATED ANSWER</span>
+<p>You can work remotely up to three days per week.</p>
+</div>
+</div>
+<h4>Who contributed what?</h4>
+<p>The retriever did not write the final sentence; it found evidence. The LLM did not discover the company policy from its parameters; it expressed the supplied evidence in natural language.</p>
+<div class="beginner-memory">
+<b>Evidence path:</b> company document → retrieved passage → LLM input → answer. If the passage cannot be found or the employee cannot access it, the system should not invent the policy.</div>
+</article>
+          <article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What happens internally?</h3>
+<p>There are two different moments to understand: <b>training</b>, when the model learns patterns, and <b>inference</b>, when the trained model generates an answer for a user.</p>
+<h4>During training</h4>
+<p>The model processes many examples. When its prediction differs from the training example, a learning algorithm adjusts millions or billions of internal numerical values called <b>parameters</b>. Repeating this process teaches the model statistical relationships between words, ideas, structures, and styles.</p>
+<p>The model does not normally preserve the training material as a neat library of questions and answers. What it carries forward is a distributed set of learned parameters.</p>
+<h4>During inference</h4>
+<ol class="mechanism-list">
+<li>
+<b>Tokenize:</b> convert the prompt into smaller units called tokens.</li>
+<li>
+<b>Process context:</b> use the prompt, conversation, and any supplied evidence to form the current context.</li>
+<li>
+<b>Predict:</b> assign probabilities to possible next tokens.</li>
+<li>
+<b>Select:</b> choose one token according to the decoding settings.</li>
+<li>
+<b>Repeat:</b> append that token and predict again until a stopping condition is reached.</li>
+</ol>
+<div class="inline-flow" aria-label="Simplified LLM mechanism">
+<b>Prompt</b>
+<i>→</i>
+<b>Tokens</b>
+<i>→</i>
+<b>Next-token probabilities</b>
+<i>→</i>
+<b>Selected token</b>
+<i>→</i>
+<b>Repeat</b>
+</div>
+<p>A response therefore emerges token by token. This explains two important properties: the wording can vary between runs, and plausible wording can be generated without a factual source.</p>
+<div class="code-mini">
+<span>CONCEPTUAL PSEUDOCODE</span>
+<pre>
+<code>response = ""
+while not finished:
+    probabilities = model.predict_next(prompt + response)
+    next_token = choose(probabilities)
+    response = response + next_token</code>
+</pre>
+</div>
+<div class="beginner-memory">
+<b>For now:</b> understand training versus inference and the token-by-token loop. Tokens, probability, transformers, attention, and decoding each receive their own later lesson.</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c01-visual-title">
+  <strong class="concept-visual-title" id="c01-visual-title">VISUAL · HOW ONE RESPONSE GROWS</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable next-token generation diagram"><div class="diagram-strip"><div class="diagram-node"><b>Prompt</b><small>What the user supplied</small></div><div class="diagram-node"><b>Model state</b><small>Prompt plus tokens already generated</small></div><div class="diagram-node"><b>Probabilities</b><small>Scores for possible next tokens</small></div><div class="diagram-node active"><b>Choose one token</b><small>According to decoding rules</small></div><div class="diagram-node"><b>Append and repeat</b><small>Stop when the response is complete</small></div></div></div>
+  <figcaption>The model does not write the whole paragraph in one action. It repeatedly predicts a next token, adds the selected token to its working context, and predicts again.</figcaption>
+  <ol class="diagram-key"><li><b>Input:</b> the prompt begins the sequence.</li><li><b>Generation:</b> every selected token becomes input to the following step.</li><li><b>Consequence:</b> fluent continuation does not itself prove factual correctness.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where does generation sit in RAG?</h3>
+<p>RAG means <b>Retrieval-Augmented Generation</b>. The name describes the online answering sequence: retrieve evidence, augment the model’s input with that evidence, and generate an answer.</p>
+<div class="rag-name">
+<div>
+<b>Retrieval</b>
+<span>Find information relevant to the question.</span>
+</div>
+<div>
+<b>Augmented</b>
+<span>Place the selected information inside the model’s context.</span>
+</div>
+<div>
+<b>Generation</b>
+<span>Produce an answer that uses the supplied context.</span>
+</div>
+</div>
+<h4>The short online flow</h4>
+<div class="explanation-flow" aria-label="Basic RAG architecture">
+<div>User question</div>
+<i>↓</i>
+<div>Retrieve trusted information</div>
+<i>↓</i>
+<div>Build question + evidence context</div>
+<i>↓</i>
+<div>LLM</div>
+<i>↓</i>
+<div class="active">Grounded answer</div>
+</div>
+<h4>The system actually has two lifecycles</h4>
+<div class="mental-compare">
+<div>
+<span>OFFLINE · PREPARE KNOWLEDGE</span>
+<p>Documents → parse → chunk → embed → index</p>
+</div>
+<div>
+<span>ONLINE · ANSWER A QUESTION</span>
+<p>Question → retrieve → construct context → generate → verify</p>
+</div>
+</div>
+<p>The offline lifecycle makes knowledge searchable before a user asks anything. The online lifecycle uses that prepared index to answer a particular question. Document updates may cause part of the offline lifecycle to run again.</p>
+<details class="beginner-answer">
+<summary>Preview the complete engineering skeleton</summary>
+<div>
+<p class="flow-instruction">Scroll horizontally to follow every stage. Each later module will open one of these boxes.</p>
+<div class="pipeline-preview" aria-label="Production RAG pipeline preview">
+<span>Documents</span>
+<i>↓</i>
+<span>Parsing</span>
+<i>↓</i>
+<span>Chunking</span>
+<i>↓</i>
+<span>Embedding model</span>
+<i>↓</i>
+<span>Vectors / index</span>
+<i>↓</i>
+<span>User query</span>
+<i>↓</i>
+<span>Retrieval</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>LLM</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+</div>
+</details>
+<div class="beginner-memory">
+<b>Do not memorize the long skeleton yet.</b> Keep only this model: retrieval supplies knowledge; context carries it to the model; the LLM generates language from it.</div>
+</article>
+          <article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Similar words, different engineering jobs</h3>
+<p>A reliable RAG system depends on assigning each job to the correct component. If we ask an LLM to perform an exact lookup, or mistake a vector database for an embedding model, the architecture becomes unreliable.</p>
+<div class="job-grid">
+<div class="job-card generate">
+<span>GENERATE</span>
+<b>Explain a policy</b>
+<p>Produces new wording from supplied facts.</p>
+</div>
+<div class="job-card">
+<span>RETRIEVE</span>
+<b>Find the policy</b>
+<p>Searches existing documents for evidence.</p>
+</div>
+<div class="job-card">
+<span>LOOK UP</span>
+<b>Get leave balance</b>
+<p>Reads an exact Oracle row or API value.</p>
+</div>
+<div class="job-card">
+<span>CALCULATE</span>
+<b>Compute remaining days</b>
+<p>Applies deterministic rules or arithmetic.</p>
+</div>
+</div>
+<h4>Parsing versus extraction</h4>
+<p>
+<b>Parsing</b> turns a file’s structure into usable content: pages, paragraphs, tables, headings, and metadata. <b>Extraction</b> selects particular facts from that content, such as a policy effective date or employee category. Parsing gives the system readable material; extraction identifies specific fields.</p>
+<h4>Embedding model versus vector database</h4>
+<p>An <b>embedding model</b> converts text into numerical vectors that represent useful semantic patterns. A <b>vector database or vector index</b> stores those vectors and searches them efficiently. The model creates the representation; the database stores and searches it.</p>
+<div class="distinction-table" role="table" aria-label="Important RAG distinctions">
+<div role="row">
+<b role="cell">Component</b>
+<b role="cell">Question it answers</b>
+<b role="cell">Example output</b>
+</div>
+<div role="row">
+<span role="cell">Parser</span>
+<span role="cell">What content and structure are in this file?</span>
+<span role="cell">Heading + paragraph + table</span>
+</div>
+<div role="row">
+<span role="cell">Embedding model</span>
+<span role="cell">How can this text be represented numerically?</span>
+<span role="cell">A vector</span>
+</div>
+<div role="row">
+<span role="cell">Vector index</span>
+<span role="cell">Which stored vectors are nearest to this query?</span>
+<span role="cell">Candidate chunk IDs</span>
+</div>
+<div role="row">
+<span role="cell">Oracle / SQL</span>
+<span role="cell">What exact structured record matches?</span>
+<span role="cell">Leave balance = 12</span>
+</div>
+<div role="row">
+<span role="cell">LLM</span>
+<span role="cell">How should supplied evidence be explained?</span>
+<span role="cell">Readable answer</span>
+</div>
+</div>
+<div class="beginner-memory">
+<b>Design rule:</b> parse files, embed meaning, search an index, retrieve documents, look up records, calculate exact results, and use generation to explain verified information.</div>
+</article>
+          <article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<p>These mistakes are dangerous because the resulting system can still look impressive during a short demonstration. A fluent interface can hide an incorrect architecture.</p>
+<div class="mistake-list">
+<div>
+<b>“The LLM is a database.”</b>
+<p>It generates from learned parameters. It does not reliably return an exact stored company record. Use the authoritative database or API.</p>
+</div>
+<div>
+<b>“Fluent means factual.”</b>
+<p>Smooth grammar is evidence of language ability, not proof that a claim is supported. Require retrieved evidence, validation, and citations.</p>
+</div>
+<div>
+<b>“RAG means PDF → LLM.”</b>
+<p>A real pipeline includes parsing, cleaning, chunking, embedding, indexing, retrieval, filtering, authorization, context construction, and evaluation.</p>
+</div>
+<div>
+<b>“RAG fixes every hallucination.”</b>
+<p>Retrieval can return irrelevant or outdated passages, and the model can ignore good evidence. Retrieval and generation must both be evaluated.</p>
+</div>
+<div>
+<b>“More context is always better.”</b>
+<p>Extra passages can distract the model, increase cost, and bury the useful evidence. Context should be selected deliberately.</p>
+</div>
+<div>
+<b>“The LLM should calculate exact values.”</b>
+<p>Use SQL, APIs, rules, or calculators for deterministic work. Let the LLM explain their verified results.</p>
+</div>
+</div>
+<h4>How can an answer be fluent but unsafe?</h4>
+<p>Suppose the assistant correctly retrieves a general carry-forward policy but accidentally exposes another employee’s leave balance because access control was applied after retrieval. The sentence may be clear and factually correct, yet the answer is unsafe because confidential data reached the wrong user.</p>
+<div class="beginner-memory">
+<b>Quality has several dimensions:</b> readable language, correct evidence, current data, correct authorization, and appropriate uncertainty. Fluency covers only the first.</div>
+</article>
+          <article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>How this maps to Oracle, metadata, and Text-to-SQL</h3>
+<p>Now apply the concept to the project question: <b>“What is my remaining leave balance, and summarize the relevant carry-forward policy?”</b> This is not one AI task. It is a coordinated workflow containing identity, structured lookup, document retrieval, generation, and verification.</p>
+<div class="project-map">
+<div>
+<span>IDENTITY + ACCESS</span>
+<b>Who is asking?</b>
+<p>Authenticate the user, resolve the employee ID, and determine which records and policies the user may access.</p>
+</div>
+<div>
+<span>ORACLE / TEXT-TO-SQL</span>
+<b>What is the exact balance?</b>
+<p>Translate the balance request into constrained SQL or select a prepared query, validate it, and query the authoritative structured record.</p>
+</div>
+<div>
+<span>METADATA + RETRIEVAL</span>
+<b>Which policy applies?</b>
+<p>Filter policy content by region, employment type, leave type, effective date, version, and permission before semantic retrieval.</p>
+</div>
+<div>
+<span>LLM GENERATION</span>
+<b>How should it be explained?</b>
+<p>Combine only the verified balance and retrieved policy passage into a clear answer that cites its source.</p>
+</div>
+</div>
+<h4>The seven-node answer flow</h4>
+<div class="scroll-flow" aria-label="Seven node leave assistant flow">
+<span>User identity</span>
+<i>→</i>
+<span>Authorize scope</span>
+<i>→</i>
+<span>Oracle balance lookup</span>
+<i>→</i>
+<span>Metadata-filtered policy retrieval</span>
+<i>→</i>
+<span>Construct grounded prompt</span>
+<i>→</i>
+<span>LLM generation</span>
+<i>→</i>
+<span>Verify, cite, answer</span>
+</div>
+<h4>What must the generator never invent?</h4>
+<ul class="simple-list">
+<li>The employee’s leave balance, used days, entitlement, or any other exact database value.</li>
+<li>The policy’s carry-forward limit, expiry date, eligibility rule, exception, or effective version.</li>
+</ul>
+<h4>When should the system abstain?</h4>
+<p>It should not give a definite answer when identity or authorization fails, the Oracle lookup fails, no applicable current policy is retrieved, sources conflict, or the retrieved evidence does not support the requested claim. A useful abstention names the missing requirement instead of merely saying “I don’t know.”</p>
+<div class="code-mini">
+<span>FUTURE IMPLEMENTATION SHAPE</span>
+<pre>
+<code>user = authenticate(request)
+scope = authorize(user)
+balance = oracle.query(validated_sql, employee_id=user.id)
+policy = retriever.search(question, metadata=scope)
+
+if balance is missing or policy is unsupported:
+    return abstain_with_reason()
+
+answer = llm.generate(question, balance, policy)
+return verify_and_cite(answer)</code>
+</pre>
+</div>
+</article>
+          <article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<p>You do not need to remember embedding mathematics or write a production pipeline yet. You are ready when you can explain the responsibilities of the major components without mixing them together.</p>
+<div class="readiness-grid">
+<div>
+<b>Meaning</b>
+<p>Generative AI produces content from input, context, and learned patterns.</p>
+</div>
+<div>
+<b>Limitation</b>
+<p>A plausible response is not automatically factual or grounded.</p>
+</div>
+<div>
+<b>Separation of jobs</b>
+<p>Oracle looks up exact records; retrieval finds policy evidence; the LLM explains.</p>
+</div>
+<div>
+<b>RAG connection</b>
+<p>Retrieved evidence augments the input before generation.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Explain Generative AI in one simple sentence and give one example.</li>
+<li>Why can a fluent answer still be wrong?</li>
+<li>In the leave scenario, what comes from Oracle, what comes from retrieval, and what comes from generation?</li>
+<li>What is the difference between an embedding model and a vector database?</li>
+<li>Name one condition in which the assistant must abstain.</li>
+</ol>
+<details class="beginner-answer">
+<summary>Practice: choose the correct job</summary>
+<div>
+<ol>
+<li>Write a birthday message — <b>generate</b>.</li>
+<li>Find the latest leave policy — <b>retrieve</b>.</li>
+<li>Return employee 1042’s balance — <b>look up</b>.</li>
+<li>Subtract used days from allocated days — <b>calculate</b>.</li>
+<li>Explain the verified result politely — <b>generate</b>.</li>
+</ol>
+<p>Notice that one real answer may use several jobs in sequence.</p>
+</div>
+</details>
+<p>Answer the five teach-back questions in our conversation. Grammar does not matter; I will check the mental model and clarify anything uncertain.</p>
+</article>
+          <article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Discriminative versus generative modelling</h3>
+<p>Concept 1 defined Generative AI. Concept 2 now separates two different modelling goals: predicting a label or outcome from an input, and modelling how data is distributed so that examples can be generated.</p>
+<h4>Why this comes next</h4>
+<p>The distinction prevents a common confusion: a model can use a discriminator during training without being “only discriminative,” and a system can classify a query without generating the final answer. Understanding the objectives comes before comparing major generative model families.</p>
+<h4>What the next lesson will answer</h4>
+<ul class="simple-list">
+<li>What does a discriminative model learn?</li>
+<li>What does a generative model learn?</li>
+<li>How do <code>p(y|x)</code>, <code>p(x,y)</code>, and <code>p(x|y)</code> differ?</li>
+<li>When should a RAG system classify, retrieve, or generate?</li>
+<li>Can one architecture contain both discriminative and generative components?</li>
+</ul>
+<div class="beginner-memory">
+<b>Canonical roadmap:</b> Concept 02 is Discriminative versus generative modelling. LLM foundations appear later, after major generative model families.</div>
+<a class="button primary" href="module-01-concept-02.html">Start Concept 02 →</a>
+</article>
+        </div>
+      </div>
+    </section>
+
+    <section class="beginner-path previous-beginner" hidden aria-hidden="true">
+      <header class="beginner-heading">
+<div>
+<p class="lesson-crumb">START HERE · BEGINNER CORE</p>
+<h2>One idea before everything else.</h2>
+</div>
+<p>You do not need equations, model families, coding, or production architecture to complete this concept. First build the correct mental model.</p>
+</header>
+
+      <article class="core-block guided-explanation">
+        <span class="core-step">GUIDED EXPLANATION · READ THIS FIRST</span>
+        <h3>What is Generative AI?</h3>
+        <p>
+<b>Generative AI is a class of AI systems that can produce new content from an input or instruction.</b> The generated content can be text, code, images, audio, video, or other forms of data.</p>
+        <div class="guided-example">
+<span>EXAMPLE REQUEST</span>
+<p>“Explain how diabetes affects the human body.”</p>
+<span>WHAT HAPPENS</span>
+<p>The generative model produces an explanation using patterns and knowledge learned during training.</p>
+</div>
+        <h4>The basic idea</h4>
+        <div class="explanation-flow" aria-label="Basic Generative AI flow">
+<div>User</div>
+<i>↓</i>
+<div>Prompt or input</div>
+<i>↓</i>
+<div>Generative model</div>
+<i>↓</i>
+<div class="active">Generated response</div>
+</div>
+        <p>For a large language model, the generated response is normally text:</p>
+        <div class="inline-flow" aria-label="LLM generation flow">
+<b>User</b>
+<i>→</i>
+<b>Prompt</b>
+<i>→</i>
+<b>LLM</b>
+<i>→</i>
+<b>Text response</b>
+</div>
+
+        <hr>
+        <h3>The important limitation</h3>
+        <p>An LLM does not automatically know your company’s private documents, the latest values in your databases, today’s internal policies, or information that appeared after its training.</p>
+        <p>More importantly, it can generate an answer that sounds reasonable even when it does not have the required information. <b>Sounding correct and being supported by evidence are different things.</b>
+</p>
+        <div class="beginner-memory">
+<b>This limitation leads us toward RAG:</b> if the model does not possess the required knowledge, retrieve trustworthy external information before asking it to answer.</div>
+
+        <hr>
+        <h3>What exactly is RAG?</h3>
+        <p>
+<b>RAG stands for Retrieval-Augmented Generation.</b>
+</p>
+        <div class="rag-name">
+<div>
+<b>Retrieval</b>
+<span>Find relevant information.</span>
+</div>
+<div>
+<b>Augmented</b>
+<span>Add that information to the model’s input.</span>
+</div>
+<div>
+<b>Generation</b>
+<span>Let the model answer using the supplied information.</span>
+</div>
+</div>
+        <div class="explanation-flow" aria-label="Basic RAG flow">
+<div>User question</div>
+<i>↓</i>
+<div>Retrieve relevant information</div>
+<i>↓</i>
+<div>Add it to the model input</div>
+<i>↓</i>
+<div>LLM</div>
+<i>↓</i>
+<div class="active">Grounded answer</div>
+</div>
+
+        <hr>
+        <h3>A simple company-policy example</h3>
+        <p>Suppose the company has one thousand internal documents. One authorized document says:</p>
+        <blockquote>Employees can work remotely up to three days per week.</blockquote>
+        <p>The employee asks, “How many days can I work remotely?” A normal LLM may not know this private policy. A RAG system first finds the relevant passage and then supplies it to the LLM.</p>
+        <div class="context-demo">
+<div>
+<span>USER QUESTION</span>
+<p>How many days can I work remotely?</p>
+</div>
+<div>
+<span>RETRIEVED CONTEXT</span>
+<p>Employees can work remotely up to three days per week.</p>
+</div>
+<div>
+<span>GENERATED ANSWER</span>
+<p>You can work remotely up to three days per week.</p>
+</div>
+</div>
+        <p>The <b>retrieval system supplies the knowledge</b>. The <b>LLM generates the explanation</b>.</p>
+
+        <hr>
+        <h3>RAG is not simply “chatting with documents”</h3>
+        <p>A prototype may look like <code>PDF → LLM → answer</code>, but a serious RAG system has an engineering pipeline underneath it. You do not need to learn these boxes now; this is only a preview of the path ahead.</p>
+        <div class="pipeline-preview" aria-label="Production RAG pipeline preview">
+<span>Documents</span>
+<i>↓</i>
+<span>Ingestion + parsing</span>
+<i>↓</i>
+<span>Cleaning + chunking</span>
+<i>↓</i>
+<span>Embeddings + indexing</span>
+<i>↓</i>
+<span>Knowledge store</span>
+<i>↓</i>
+<span>User query</span>
+<i>↓</i>
+<span>Retrieval + ranking</span>
+<i>↓</i>
+<span>Context construction</span>
+<i>↓</i>
+<span>LLM answer</span>
+<i>↓</i>
+<span>Evaluation + monitoring</span>
+</div>
+
+        <hr>
+        <h3>The mental model to keep</h3>
+        <p>Think of the LLM as the <b>language-generation engine</b>. RAG is a mechanism that gives this engine relevant external knowledge when the question is asked.</p>
+        <div class="mental-compare">
+<div>
+<span>LLM ALONE</span>
+<p>Question → LLM → Answer</p>
+</div>
+<div>
+<span>RAG</span>
+<p>Question → Retriever → Relevant knowledge → LLM → Answer</p>
+</div>
+</div>
+        <div class="beginner-memory">
+<b>Do not memorize the long pipeline yet.</b> For Concept 1, remember only: Generative AI produces content; retrieval supplies external knowledge; RAG connects them.</div>
+      </article>
+
+      <article class="core-block core-definition">
+<span class="core-step">01 · ONE-SENTENCE DEFINITION</span>
+<h3>Generative AI learns patterns from examples and uses those patterns to produce new content.</h3>
+<p>The content can be text, images, audio, video, code, or another digital form. “New” means the system produces an output for this request; it does not guarantee that the idea is original, correct, or safe.</p>
+<div class="beginner-memory">
+<b>Remember:</b> learn patterns → receive an input → generate content.</div>
+</article>
+
+      <article class="core-block">
+<span class="core-step">02 · SIMPLE VISUAL MODEL</span>
+<h3>How to picture it</h3>
+<div class="beginner-flow" aria-label="Simple Generative AI flow">
+<div>
+<small>EXAMPLES</small>
+<b>Text, images, audio, code</b>
+</div>
+<i>→</i>
+<div>
+<small>LEARNING</small>
+<b>Model learns patterns</b>
+</div>
+<i>→</i>
+<div>
+<small>INPUT</small>
+<b>Prompt or other context</b>
+</div>
+<i>→</i>
+<div class="highlight">
+<small>OUTPUT</small>
+<b>Generated content</b>
+</div>
+</div>
+<p class="simple-note">The model is not simply copying one stored answer. It uses learned patterns to construct a response that fits the input.</p>
+</article>
+
+      <article class="core-block">
+<span class="core-step">03 · WHAT IT IS AND IS NOT</span>
+<h3>Four jobs that look similar but are different</h3>
+<div class="job-grid">
+<div class="job-card generate">
+<span>GENERATE</span>
+<b>Write a friendly explanation</b>
+<p>Produces new wording from available context.</p>
+</div>
+<div class="job-card">
+<span>RETRIEVE</span>
+<b>Find the current policy</b>
+<p>Searches existing documents for relevant information.</p>
+</div>
+<div class="job-card">
+<span>LOOK UP</span>
+<b>Get your leave balance</b>
+<p>Reads an exact value from an authoritative database or API.</p>
+</div>
+<div class="job-card">
+<span>CALCULATE</span>
+<b>Add or subtract days</b>
+<p>Uses deterministic rules or a calculator for an exact result.</p>
+</div>
+</div>
+<div class="beginner-memory">
+<b>Design rule:</b> retrieve facts, look up records, calculate exact values, and use Generative AI to explain or synthesize them.</div>
+</article>
+
+      <article class="core-block">
+<span class="core-step">04 · GUIDED EXAMPLE</span>
+<h3>The leave assistant, simplified</h3>
+<p>The employee asks: “What is my remaining leave balance, and summarize the carry-forward policy?”</p>
+<div class="beginner-flow leave-flow" aria-label="Simple leave assistant flow">
+<div>
+<small>IDENTIFY</small>
+<b>Who is asking?</b>
+</div>
+<i>→</i>
+<div>
+<small>LOOK UP</small>
+<b>Exact leave balance</b>
+</div>
+<i>→</i>
+<div>
+<small>RETRIEVE</small>
+<b>Current policy</b>
+</div>
+<i>→</i>
+<div class="highlight">
+<small>GENERATE</small>
+<b>Explain both clearly</b>
+</div>
+</div>
+<ul class="simple-list">
+<li>The balance must come from the company’s leave system.</li>
+<li>The policy rules must come from the authorized current policy.</li>
+<li>Generative AI combines those facts into a readable answer.</li>
+<li>If the facts are unavailable, the assistant should say it cannot answer reliably.</li>
+</ul>
+</article>
+
+      <article class="core-block">
+<span class="core-step">05 · FAMILIAR EXAMPLES</span>
+<h3>Recognize the job</h3>
+<div class="example-grid beginner-examples">
+<article class="info-card">
+<span>GENERATIVE AI</span>
+<h3>Draft an email</h3>
+<p>Creates wording from your instructions.</p>
+</article>
+<article class="info-card">
+<span>GENERATIVE AI</span>
+<h3>Create an image</h3>
+<p>Produces pixels from a description or reference.</p>
+</article>
+<article class="info-card">
+<span>NOT GENERATION</span>
+<h3>Show bank balance</h3>
+<p>Looks up an exact stored record.</p>
+</article>
+<article class="info-card">
+<span>NOT GENERATION</span>
+<h3>Calculate tax</h3>
+<p>Applies exact rules and arithmetic.</p>
+</article>
+</div>
+</article>
+
+      <article class="core-block">
+<span class="core-step">06 · FIVE WORDS ONLY</span>
+<h3>Small vocabulary</h3>
+<div class="word-grid">
+<div>
+<b>Examples</b>
+<span>The content used to learn patterns.</span>
+</div>
+<div>
+<b>Model</b>
+<span>The learned system that produces outputs.</span>
+</div>
+<div>
+<b>Input</b>
+<span>A prompt, image, document, or other context.</span>
+</div>
+<div>
+<b>Generate</b>
+<span>Produce a new output from learned patterns.</span>
+</div>
+<div>
+<b>Plausible</b>
+<span>Looks or sounds reasonable—but may still be wrong.</span>
+</div>
+</div>
+</article>
+
+      <article class="core-block">
+<span class="core-step">07 · BASIC EXERCISE</span>
+<h3>Choose the correct job</h3>
+<p>For each request, decide whether the main job is <b>generate</b>, <b>retrieve</b>, <b>look up</b>, or <b>calculate</b>.</p>
+<ol class="basic-exercise">
+<li>Write a polite birthday message for a teammate.</li>
+<li>Find the company’s current work-from-home policy.</li>
+<li>Show the customer’s current account balance.</li>
+<li>Calculate the total price of three items.</li>
+<li>Explain the retrieved work-from-home policy in simple language.</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check the answers</summary>
+<div>
+<ol>
+<li>
+<b>Generate</b> — produce new wording.</li>
+<li>
+<b>Retrieve</b> — find an existing authoritative document.</li>
+<li>
+<b>Look up</b> — return an exact stored record.</li>
+<li>
+<b>Calculate</b> — apply arithmetic.</li>
+<li>
+<b>Generate</b> — summarize the information that retrieval supplied.</li>
+</ol>
+</div>
+</details>
+</article>
+
+      <article class="core-block core-checkpoint">
+<span class="core-step">08 · BEGINNER CHECKPOINT</span>
+<h3>You are ready when you can explain these three things</h3>
+<ol>
+<li>What is Generative AI in your own words?</li>
+<li>Why can generated content sound correct but still be wrong?</li>
+<li>In the leave example, what is looked up, what is retrieved, and what is generated?</li>
+</ol>
+<p>Answer these in our conversation. Grammar does not matter; I will check only the mental model.</p>
+<div class="beginner-memory">
+<b>Advanced material is not required yet.</b> Open it only for curiosity or later revision. We will revisit its mathematics and engineering concepts in their proper modules.</div>
+</article>
+    </section>
+
+    <section class="lesson-bridge" aria-labelledby="lesson-map-title">
+      <header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">What to do, and what is optional.</h2>
+<p>Use this map after reading the beginner explanation. You do not need to finish the advanced material to complete Concept 1.</p>
+</header>
+      <div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Read</b>
+<small>Follow the ten progressive sections from intuition to project mapping.</small>
+</a>
+<a href="#b09">
+<span>02</span>
+<b>Practice</b>
+<small>Complete the job-classification exercise and trace the leave example.</small>
+</a>
+<a href="#b09">
+<span>03</span>
+<b>Teach back</b>
+<small>Answer the five beginner readiness questions in our conversation.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open mathematics, code, architectures, production topics, and interviews only when wanted.</small>
+</a>
+</div>
+      <div class="bridge-rule">
+<b>Concept 1 completion path:</b> Read → Practice → Teach back. The advanced deep dive is preserved for curiosity and later revision.</div>
+    </section>
+
+    <details class="advanced-lesson" id="advanced-lesson">
+      <summary>
+<span>
+<small>OPTIONAL · PRESERVED IN FULL</small>
+<b>Open the original 24-section advanced deep dive</b>
+<em>Mathematics, code, sampler, architectures, production and interviews</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+
+    <div class="lesson-layout">
+      <aside class="lesson-toc" aria-label="Lesson sections">
+<span>LESSON MAP · 24 SECTIONS</span>
+        <a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definition</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> From-scratch code</a>
+<a href="#s13">
+<i>13</i> Library code</a>
+<a href="#s14">
+<i>14</i> Interactive lab</a>
+<a href="#s15">
+<i>15</i> Alternatives</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Knowledge check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+      </aside>
+
+      <div class="lesson-content">
+        <section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where this concept sits</h2>
+</div>
+</header>
+<p>RAG means <b>Retrieval-Augmented Generation</b>. Before studying retrieval or augmentation, we need an exact model of <em>generation</em>. Otherwise it is easy to imagine that an LLM searches an internal database, copies a stored answer, or checks every sentence against reality. Those mental models are wrong.</p>
+<div class="flow" aria-label="Course dependency flow">
+<div class="flow-node hot">Generative AI<br>
+<small>you are here</small>
+</div>
+<div class="flow-node">LLMs + transformers</div>
+<div class="flow-node">Knowledge limitations</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">Grounded context</div>
+<div class="flow-node">RAG answer</div>
+</div>
+<div class="callout">
+<b>Dependency claim</b>If you understand that generation produces a statistically plausible candidate rather than a database lookup, hallucination stops being mysterious and RAG becomes a logical engineering response.</div>
+</section>
+
+        <section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>What you should be able to do</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>DEFINE</span>
+<h3>State a precise definition</h3>
+<p>Explain model, learned distribution, conditioning, sampling, synthetic output, and why “new” does not automatically mean novel or correct.</p>
+</article>
+<article class="info-card">
+<span>DISTINGUISH</span>
+<h3>Separate neighboring ideas</h3>
+<p>Differentiate generation from classification, retrieval, deterministic transformation, templating, and literal memorization.</p>
+</article>
+<article class="info-card">
+<span>TRACE</span>
+<h3>Follow two lifecycles</h3>
+<p>Trace training from examples to parameters and inference from a condition plus randomness to an output.</p>
+</article>
+<article class="info-card">
+<span>REASON</span>
+<h3>Use the probability model</h3>
+<p>Interpret maximum likelihood, autoregressive factorization, sampling, and temperature at an introductory level.</p>
+</article>
+<article class="info-card">
+<span>DIAGNOSE</span>
+<h3>Spot false confidence</h3>
+<p>Explain why fluent output may be unsupported, stale, biased, unsafe, or inconsistent.</p>
+</article>
+<article class="info-card">
+<span>CONNECT</span>
+<h3>Motivate RAG</h3>
+<p>Show where retrieval adds external evidence and where it still cannot guarantee truth.</p>
+</article>
+</div>
+</section>
+
+        <section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<p>This first concept has no course prerequisite. Three small ideas are enough:</p>
+<ul>
+<li>
+<b>Data:</b> recorded examples such as text, images, audio, tables, or code.</li>
+<li>
+<b>Model:</b> a parameterized computational function whose behavior can be fitted from data.</li>
+<li>
+<b>Probability:</b> a number between 0 and 1 representing uncertainty, with mutually exclusive outcomes summing to 1.</li>
+</ul>
+<details class="quiz">
+<summary>Thirty-second probability refresher</summary>
+<div>If a generator assigns probabilities 0.5, 0.3, and 0.2 to three possible next tokens, their sum is 1. Sampling does not always select 0.5; it selects outcomes with those long-run frequencies. The most probable outcome is not the only possible one.</div>
+</details>
+</section>
+
+        <section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>A map of plausible artifacts</h2>
+</div>
+</header>
+<p>Imagine studying thousands of building plans. A discriminative system might learn to label each plan “residential” or “commercial.” A generative system learns enough structure to propose another plan that resembles the collection—rooms connect, walls align, and dimensions look plausible.</p>
+<p>The generator is not a filing cabinet that finds a plan. It has learned a <b>landscape of possibilities</b>. A prompt or other condition points toward one region; sampling chooses a path through it. More capable models learn richer structure, but the central idea remains: <b>learn patterns, then produce a candidate consistent with them.</b>
+</p>
+<div class="callout warning">
+<b>Where the analogy breaks</b>A learned model does not necessarily understand buildings, physical laws, or safety codes. It may reproduce correlations without possessing the external knowledge needed to validate the result.</div>
+</section>
+
+        <section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal definition and boundaries</h2>
+</div>
+</header>
+<p>
+<b>Generative AI is the class of AI models and systems that learn structural and statistical characteristics of data and use the learned mechanism to produce derived synthetic content.</b> The content can be text, images, audio, video, code, molecules, 3D structures, or combinations of modalities.</p>
+<h3>Unpacking the definition</h3>
+<ul>
+<li>
+<b>Model:</b> parameters <code>θ</code> encode behavior learned during training.</li>
+<li>
+<b>Distribution:</b> the model assigns probability or density to possible outputs, explicitly or through a generative process.</li>
+<li>
+<b>Condition:</b> generation may depend on a prompt, image, class label, retrieved passages, or other context <code>c</code>.</li>
+<li>
+<b>Sample:</b> inference produces one candidate from many possible candidates.</li>
+<li>
+<b>Synthetic:</b> the output is machine-produced. It may be useful and original, derivative, memorized, or erroneous.</li>
+</ul>
+<h3>Classical generative learning versus modern “GenAI”</h3>
+<p>In classical supervised learning, “generative” can mean modelling <code>p(x|y)</code> and <code>p(y)</code> so Bayes’ rule can classify. Modern usage usually emphasizes models that synthesize rich content. They share the idea of modelling how data could be generated, but the scopes are not identical.</p>
+</section>
+
+        <section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM PREVIEW</span>
+<h2>Training and generation are different operations</h2>
+</div>
+</header>
+<div class="two-lane">
+<article class="lane">
+<span>OFFLINE · TRAINING</span>
+<div class="lane-flow">
+<div>Collect and prepare examples</div>
+<div>Represent them numerically</div>
+<div>Predict / reconstruct / denoise</div>
+<div>Measure error or objective</div>
+<div>Update parameters θ repeatedly</div>
+<div>Save a trained model</div>
+</div>
+</article>
+<article class="lane">
+<span>ONLINE · INFERENCE</span>
+<div class="lane-flow">
+<div>Receive condition c</div>
+<div>Compute output probabilities</div>
+<div>Select or sample an outcome</div>
+<div>Feed state into next step</div>
+<div>Stop at a rule or limit</div>
+<div>Return and validate artifact</div>
+</div>
+</article>
+</div>
+<p>Training changes the model’s parameters. Ordinary inference usually does not. Supplying a prompt gives temporary context; it does not normally retrain the model.</p>
+<div class="callout">
+<b>Scope boundary</b>This section only establishes the distinction needed to define Generative AI. Module 01, Concept 05 teaches pretraining, fine-tuning, and inference in depth; the LLM module later adds token-level inference and alignment.</div>
+</section>
+
+        <section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>The generation loop</h2>
+</div>
+</header>
+<div class="flow" aria-label="Conditional generation flow">
+<div class="flow-node">Prompt / condition c</div>
+<div class="flow-node">Model parameters θ</div>
+<div class="flow-node">Probability distribution</div>
+<div class="flow-node hot">Sample candidate</div>
+<div class="flow-node">Update generated state</div>
+<div class="flow-node">Stop or repeat</div>
+</div>
+<p>For text, the loop commonly operates one token at a time. For diffusion image models, the loop progressively removes noise. For a VAE, a latent vector is decoded. For a GAN, a generator transforms noise while competing with a discriminator during training. These mechanisms differ, but each turns learned structure plus an input or random source into a synthetic candidate.</p>
+</section>
+
+        <section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Its place in the RAG skeleton</h2>
+</div>
+</header>
+<div class="flow" aria-label="RAG system skeleton">
+<div class="flow-node">Documents</div>
+<div class="flow-node">Chunks</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">Evidence context</div>
+<div class="flow-node hot">Generative model</div>
+<div class="flow-node">Grounded answer</div>
+</div>
+<p>RAG does not replace generation. It changes what the generator is conditioned on. Instead of relying only on learned parameters and the user’s prompt, the system retrieves relevant external evidence and places it in context.</p>
+<div class="callout">
+<b>Critical boundary</b>Retrieval can supply evidence, but the generator can still ignore, distort, or overextend it. Grounding therefore requires prompt design, citations, validation, evaluation, and sometimes abstention—not merely attaching a vector database.</div>
+</section>
+
+        <section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Learn a distribution, then sample</h2>
+</div>
+</header>
+<p>Let training examples be drawn from an unknown real-world data distribution <code>p_data(x)</code>. We choose a model family <code>p_θ(x|c)</code>, where <code>θ</code> are learned parameters and <code>c</code> is an optional condition.</p>
+<div class="equation">Training goal (maximum likelihood):<br>θ* = arg max<sub>θ</sub> Σ<sub>i=1..N</sub> log p<sub>θ</sub>(x<sub>i</sub> | c<sub>i</sub>)</div>
+<p>Maximizing log-likelihood rewards parameters that assign high probability to observed training examples. Equivalently, minimizing negative log-likelihood penalizes surprising observed data.</p>
+<div class="equation">Autoregressive text factorization:<br>p<sub>θ</sub>(x<sub>1:T</sub> | c) = ∏<sub>t=1..T</sub> p<sub>θ</sub>(x<sub>t</sub> | x<sub>&lt;t</sub>, c)</div>
+<p>A sequence probability becomes a product of next-token probabilities. At each step, the model conditions on the preceding tokens and context. This equation describes probability, not factual verification.</p>
+<div class="equation">Temperature-adjusted sampling:<br>q(x<sub>t</sub>=j) = exp(z<sub>j</sub>/τ) / Σ<sub>k</sub> exp(z<sub>k</sub>/τ)</div>
+<table class="notation">
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>x</code>
+</td>
+<td>A data item or generated sequence</td>
+</tr>
+<tr>
+<td>
+<code>c</code>
+</td>
+<td>Condition: prompt, label, image, or retrieved evidence</td>
+</tr>
+<tr>
+<td>
+<code>θ</code>
+</td>
+<td>Learned model parameters</td>
+</tr>
+<tr>
+<td>
+<code>z_j</code>
+</td>
+<td>Raw score (logit) for candidate j</td>
+</tr>
+<tr>
+<td>
+<code>τ</code>
+</td>
+<td>Temperature; lower sharpens, higher flattens</td>
+</tr>
+</tbody>
+</table>
+<div class="callout warning">
+<b>Do not over-interpret likelihood</b>A high-probability continuation is one the model considers plausible under its learned patterns. Plausibility, truth, usefulness, fairness, safety, and originality are different properties.</div>
+</section>
+
+        <section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE · TOY ONLY</span>
+<h2>A tiny next-word generator by hand</h2>
+</div>
+</header>
+<p>Suppose a toy corpus contains ten sentences beginning “RAG is …”:</p>
+<table class="worked-table">
+<thead>
+<tr>
+<th>Next word</th>
+<th>Count</th>
+<th>Maximum-likelihood probability</th>
+<th>Cumulative interval</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>useful</td>
+<td>5</td>
+<td>5/10 = 0.50</td>
+<td>[0.00, 0.50)</td>
+</tr>
+<tr>
+<td>reliable</td>
+<td>3</td>
+<td>3/10 = 0.30</td>
+<td>[0.50, 0.80)</td>
+</tr>
+<tr>
+<td>risky</td>
+<td>2</td>
+<td>2/10 = 0.20</td>
+<td>[0.80, 1.00)</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li>Estimate each probability from relative frequency.</li>
+<li>Draw a uniform random number <code>u</code> between 0 and 1.</li>
+<li>If <code>u = 0.72</code>, it lies in <code>[0.50, 0.80)</code>, so the sample is <b>reliable</b>.</li>
+<li>A greedy decoder would always choose <b>useful</b>; sampling preserves diversity.</li>
+</ol>
+<p>This intentionally tiny example proves only that generation can sample from a learned distribution. It is not the LLM lesson: contextual token probabilities, transformers, and decoding receive their own later treatment.</p>
+</section>
+
+        <section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples, counterexamples, and boundary cases</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>GENERATIVE</span>
+<h3>Text continuation</h3>
+<p>Produces one of many possible continuations conditioned on earlier tokens.</p>
+</article>
+<article class="info-card">
+<span>GENERATIVE</span>
+<h3>Image synthesis</h3>
+<p>Creates pixels or latent representations from text, an image, noise, or other conditioning.</p>
+</article>
+<article class="info-card">
+<span>GENERATIVE</span>
+<h3>Code generation</h3>
+<p>Proposes source code from instructions and context; execution or tests determine behavior.</p>
+</article>
+<article class="info-card">
+<span>GENERATIVE</span>
+<h3>Molecule design</h3>
+<p>Proposes candidate structures; simulation and laboratory validation remain necessary.</p>
+</article>
+<article class="info-card">
+<span>NOT BY ITSELF</span>
+<h3>Database lookup</h3>
+<p>Returning the stored salary for employee 42 is retrieval, even if a model later verbalizes it.</p>
+</article>
+<article class="info-card">
+<span>NOT BY ITSELF</span>
+<h3>Classification</h3>
+<p>Choosing “spam” from fixed labels is discriminative prediction, though a generative model can be prompted to perform it.</p>
+</article>
+<article class="info-card">
+<span>BOUNDARY</span>
+<h3>Template filling</h3>
+<p>A mail merge creates content but does not learn a generative distribution from data.</p>
+</article>
+<article class="info-card">
+<span>MISTAKE</span>
+<h3>Exact financial balance</h3>
+<p>Generate prose around a retrieved/computed balance; never ask a probabilistic model to invent the number.</p>
+</article>
+</div>
+</section>
+
+        <section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>From-scratch categorical generation</h2>
+</div>
+</header>
+<p>This JavaScript exposes every essential operation: convert scores to probabilities, draw a uniform random number, walk the cumulative distribution, and select a token.</p>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · NO ML FRAMEWORK</span>
+<pre>
+<code>const logits = { useful: 2.2, reliable: 1.4, risky: 0.7 };
+
+function softmax(scores, temperature = 1) {
+  const scaled = Object.entries(scores)
+    .map(([token, score]) =&gt; [token, Math.exp(score / temperature)]);
+  const total = scaled.reduce((sum, [, value]) =&gt; sum + value, 0);
+  return scaled.map(([token, value]) =&gt; [token, value / total]);
+}
+
+function sample(distribution, random = Math.random()) {
+  let cumulative = 0;
+  for (const [token, probability] of distribution) {
+    cumulative += probability;
+    if (random &lt; cumulative) return token;
+  }
+  return distribution.at(-1)[0]; // floating-point fallback
+}
+
+const distribution = softmax(logits, 1.0);
+console.log(distribution);
+console.log("RAG is", sample(distribution, 0.72));</code>
+</pre>
+</div>
+<p>Inspection questions: What changes if temperature approaches zero? Why is the random number injectable? Why is a floating-point fallback included? The interactive lab uses this same mechanism with a seeded random-number generator.</p>
+</section>
+
+        <section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>A library model hides the loop—not the principle</h2>
+</div>
+</header>
+<p>A high-level text-generation library performs tokenization, model execution, decoding, and text reconstruction. This optional example is for later experimentation; no installation is required for this lesson.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · TRANSFORMERS EXAMPLE</span>
+<pre>
+<code># Optional local experiment; model download and package install required.
+from transformers import pipeline, set_seed
+
+set_seed(42)
+generator = pipeline("text-generation", model="distilgpt2")
+result = generator(
+    "Retrieval-augmented generation is",
+    max_new_tokens=30,
+    do_sample=True,
+    temperature=0.8,
+    top_p=0.9,
+)
+print(result[0]["generated_text"])</code>
+</pre>
+</div>
+<table class="compare-table">
+<thead>
+<tr>
+<th>From scratch</th>
+<th>Library implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Probability and sampling are visible.</td>
+<td>Production integrations and model execution are convenient.</td>
+</tr>
+<tr>
+<td>Toy scores; no learned language capability.</td>
+<td>Large learned parameter set; many hidden defaults.</td>
+</tr>
+<tr>
+<td>Excellent for mechanism inspection.</td>
+<td>Useful for application experiments—if versions, licenses, resources, and risks are controlled.</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+        <section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">INTERACTIVE LAB</span>
+<h2>Shape a distribution and sample from it</h2>
+</div>
+</header>
+<div class="lab">
+<div class="lab-controls">
+<div class="control">
+<label for="temperature">Temperature</label>
+<input id="temperature" type="range" min="0.2" max="2" step="0.1" value="1">
+<output id="temperatureValue">1.0</output>
+</div>
+<div class="control">
+<label for="seed">Seed</label>
+<input id="seed" type="number" value="42" min="1" max="999999">
+</div>
+<div class="control">
+<label for="sampleCount">Samples</label>
+<input id="sampleCount" type="range" min="1" max="30" value="12">
+<output id="sampleCountValue">12</output>
+</div>
+<div class="control">
+<label>Fixed logits</label>
+<output>2.2 · 1.4 · 0.7</output>
+</div>
+</div>
+<div class="lab-actions">
+<button id="generateSamples" type="button">Generate samples</button>
+<button id="resetLab" class="secondary" type="button">Reset experiment</button>
+</div>
+<div class="prob-bars" aria-live="polite">
+<div class="prob-row">
+<span>useful</span>
+<div class="bar-track">
+<div class="bar-fill" data-bar="useful">
+</div>
+</div>
+<b data-prob="useful">
+</b>
+</div>
+<div class="prob-row">
+<span>reliable</span>
+<div class="bar-track">
+<div class="bar-fill" data-bar="reliable">
+</div>
+</div>
+<b data-prob="reliable">
+</b>
+</div>
+<div class="prob-row">
+<span>risky</span>
+<div class="bar-track">
+<div class="bar-fill" data-bar="risky">
+</div>
+</div>
+<b data-prob="risky">
+</b>
+</div>
+</div>
+<h3>Generated sequence</h3>
+<div class="sample-output" id="sampleOutput" aria-live="polite">
+</div>
+</div>
+<h3>Experiments to run</h3>
+<ol>
+<li>Set temperature to 0.2. Observe concentration around the highest logit.</li>
+<li>Set it to 2.0. Observe a flatter distribution and more minority samples.</li>
+<li>Keep seed and settings fixed; regenerate. The sequence repeats.</li>
+<li>Change only the seed. The distribution stays fixed, but the sampled sequence changes.</li>
+</ol>
+</section>
+
+        <section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">ROADMAP PREVIEW · NOT MASTERY</span>
+<h2>Preview only: major generative families</h2>
+</div>
+</header>
+<div class="trade-grid">
+<article class="info-card">
+<span>AUTOREGRESSIVE</span>
+<h3>Predict the next element</h3>
+<p>Factorizes a sequence into conditional steps. Natural for text and other ordered data; inference is sequential.</p>
+</article>
+<article class="info-card">
+<span>VAE</span>
+<h3>Encode and decode latents</h3>
+<p>Learns a structured latent distribution and decoder; supports smooth latent manipulation but may trade sharpness for tractability.</p>
+</article>
+<article class="info-card">
+<span>GAN</span>
+<h3>Generator versus discriminator</h3>
+<p>Adversarial training can yield sharp samples but may be unstable and omit modes.</p>
+</article>
+<article class="info-card">
+<span>DIFFUSION</span>
+<h3>Learn iterative denoising</h3>
+<p>Transforms noise into a sample through repeated denoising; often high quality but computationally iterative.</p>
+</article>
+<article class="info-card">
+<span>FLOW</span>
+<h3>Invertible transformations</h3>
+<p>Provides tractable likelihood in suitable architectures with constraints on transformations.</p>
+</article>
+<article class="info-card">
+<span>HYBRID</span>
+<h3>Combine mechanisms</h3>
+<p>Modern systems may combine transformers, latent models, retrieval, tools, filters, and verifiers.</p>
+</article>
+</div>
+<p>The cards prove only that “Generative AI” is not one architecture. Concept 03 owns the actual comparison: objectives, training mechanisms, mathematics, strengths, failures, and selection criteria for every family.</p>
+<div class="callout">
+<b>Why keep this preview?</b>A definition needs counterexamples and breadth. The preview names the families; it deliberately does not teach them to completion.</div>
+</section>
+
+        <section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes and evidence</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>FABRICATION</span>
+<h3>Plausible but unsupported</h3>
+<p>Symptom: fluent false claim. Evidence: no supporting source or contradiction. Remedy: retrieve, cite, validate, abstain.</p>
+</article>
+<article class="info-card">
+<span>MEMORIZATION</span>
+<h3>Training data leakage</h3>
+<p>Symptom: near-verbatim sensitive or copyrighted material. Evidence: matching analysis. Remedy: data governance, privacy testing, filters.</p>
+</article>
+<article class="info-card">
+<span>MODE COLLAPSE</span>
+<h3>Missing diversity</h3>
+<p>Symptom: narrow repeated outputs. Commonly discussed for GANs. Remedy depends on objective, data, and training method.</p>
+</article>
+<article class="info-card">
+<span>BIAS</span>
+<h3>Unequal or harmful patterns</h3>
+<p>Symptom: systematic performance or representation differences. Remedy: scoped evaluation and risk controls, not a generic safety prompt.</p>
+</article>
+<article class="info-card">
+<span>DRIFT</span>
+<h3>World changed after training</h3>
+<p>Symptom: stale policies, people, prices, or facts. Remedy: external current sources and freshness-aware retrieval.</p>
+</article>
+<article class="info-card">
+<span>PROMPT SENSITIVITY</span>
+<h3>Small wording, large change</h3>
+<p>Symptom: unstable answers. Remedy: controlled prompts, structured outputs, test suites, and uncertainty handling.</p>
+</article>
+</div>
+</section>
+
+        <section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">MISCONCEPTIONS</span>
+<h2>Tempting mental models to discard</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correct model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>“It searches its training data for an answer.”</td>
+<td>Inference computes outputs from learned parameters and current context; literal memorization can occur, but generation is not ordinary record retrieval.</td>
+</tr>
+<tr>
+<td>“The most fluent answer is the most true.”</td>
+<td>Fluency measures learned linguistic regularity, not external verification.</td>
+</tr>
+<tr>
+<td>“Random means arbitrary.”</td>
+<td>Sampling is random under a structured learned distribution; candidates are not equally likely.</td>
+</tr>
+<tr>
+<td>“Generative AI always creates something original.”</td>
+<td>Outputs range from novel combinations to close reproduction. Novelty requires separate measurement.</td>
+</tr>
+<tr>
+<td>“An LLM is the same as Generative AI.”</td>
+<td>LLMs are a major subset. Image, audio, molecule, and other generators may use different architectures.</td>
+</tr>
+<tr>
+<td>“RAG retrains the model with documents.”</td>
+<td>Typical RAG retrieves evidence at inference time and conditions generation; it does not update model weights.</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+        <section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">PRODUCTION</span>
+<h2>A generator is one component, not the product</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Quality:</b> define task-specific correctness, usefulness, faithfulness, safety, and citation metrics.</li>
+<li>
+<b>Latency:</b> model size, number of generated tokens, decoding method, network calls, and validation stages matter.</li>
+<li>
+<b>Cost:</b> training, inference, input/output tokens, GPUs, storage, retrieval, and evaluation all contribute.</li>
+<li>
+<b>Security:</b> prompts and outputs can expose sensitive data; retrieved content can carry malicious instructions.</li>
+<li>
+<b>Governance:</b> record model, prompt, data, index, policy, and evaluation versions.</li>
+<li>
+<b>Human control:</b> high-impact use cases need review, escalation, and clear responsibility.</li>
+<li>
+<b>Provenance:</b> synthetic output should not be mistaken for a source. Preserve links to evidence and content history.</li>
+</ul>
+<div class="callout">
+<b>Production design rule</b>Use a generator for synthesis and language transformation. Use databases, retrieval, calculators, business rules, tools, and human review for the kinds of authority they actually possess.</div>
+</section>
+
+        <section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">KNOWLEDGE CHECK</span>
+<h2>Test the mental model</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>1. Does generation require randomness?</summary>
+<div>No. Greedy or otherwise deterministic decoding can select the same output for the same state. The model is still generative because it defines or realizes a content-generating mechanism; sampling is one decoding choice.</div>
+</details>
+<details class="quiz">
+<summary>2. Why can a high-probability sentence be false?</summary>
+<div>The probability reflects patterns under the learned model and context. The objective is not automatically a truth-verification objective, and the model may lack current or private evidence.</div>
+</details>
+<details class="quiz">
+<summary>3. Is a calculator generative AI?</summary>
+<div>Ordinary deterministic arithmetic is computation, not learned generative modelling. A generative model can emit arithmetic text, but correctness should be delegated to a calculator when exactness matters.</div>
+</details>
+<details class="quiz">
+<summary>4. What does RAG change?</summary>
+<div>It retrieves external evidence and adds it to the model’s inference-time context. It does not inherently retrain the model or guarantee faithful use of the evidence.</div>
+</details>
+<details class="quiz">
+<summary>5. What is the distinction between p(x|y) and p(y|x)?</summary>
+<div>A classical generative classifier models how features x arise given class y (plus class priors); a discriminative classifier directly models the label given features. Modern content generation often models p(x) or p(x|c) for rich artifacts.</div>
+</details>
+</section>
+
+        <section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">HANDS-ON</span>
+<h2>Classify the system and design its boundary</h2>
+</div>
+</header>
+<p>A company wants an assistant that answers: “What is my remaining leave balance, and summarize the relevant carry-forward policy?”</p>
+<h3>Your task</h3>
+<ol>
+<li>Identify which part requires retrieval, exact computation/database lookup, and generation.</li>
+<li>Draw a seven-node flow from user identity to final answer.</li>
+<li>State two claims the generator must not invent.</li>
+<li>Define an abstention condition.</li>
+<li>Explain one way the answer can be fluent but unsafe.</li>
+</ol>
+<p>
+<b>Success criteria:</b> your design keeps permissions and exact balance outside probabilistic invention, uses generation only after authoritative evidence is available, and distinguishes evidence failure from wording quality.</p>
+</section>
+
+        <section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">SOLUTION + TEACH-BACK</span>
+<h2>Compare only after attempting</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Reveal one defensible solution</summary>
+<div>
+<ol>
+<li>Authenticate user → resolve employee and tenant.</li>
+<li>Query authoritative leave system → exact remaining balance.</li>
+<li>Retrieve current policy version with permission and effective-date filters.</li>
+<li>Validate that both balance and policy evidence are present.</li>
+<li>Construct context separating computed facts from retrieved policy text.</li>
+<li>Generate a concise explanation with citations.</li>
+<li>Validate citations and numeric preservation; otherwise abstain or escalate.</li>
+</ol>
+<p>The generator must not invent the balance or policy effective date. Abstain if identity, balance, authorized current policy, or citation support is missing. A fluent answer is unsafe if it leaks another employee’s record or cites an obsolete policy.</p>
+</div>
+</details>
+<h3>Teach-back prompts</h3>
+<ul>
+<li>Explain generative AI in one sentence without using the word “create.”</li>
+<li>Explain why “probabilistic” does not mean “completely random.”</li>
+<li>Explain generation versus retrieval using the leave-balance example.</li>
+<li>Explain the purpose of temperature without saying “creativity slider.”</li>
+</ul>
+</section>
+
+        <section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">CONCEPT CARD</span>
+<h2>Portable memory</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Definition</h3>
+<p>A learned probability-producing mechanism that generates derived synthetic content, optionally conditioned on context.</p>
+<h3>Core equation</h3>
+<p>
+<code>p(x₁:T|c) = ∏ p(xₜ|x&lt;t,c)</code>
+</p>
+</div>
+<div>
+<h3>Remember</h3>
+<ul>
+<li>Plausibility is not truth.</li>
+<li>Sampling follows structure.</li>
+<li>Inference is not training.</li>
+<li>Generation is not retrieval.</li>
+<li>RAG supplies external evidence.</li>
+</ul>
+</div>
+</div>
+<p>
+<b>Memorable example:</b> retrieve the leave balance and policy; generate only the explanation.</p>
+</article>
+</section>
+
+        <section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">INTERVIEW PRACTICE</span>
+<h2>Questions you should be able to defend</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Conceptual: What makes a model generative?</summary>
+<div>It models or realizes a process capable of producing samples consistent with learned data structure, often as pθ(x) or pθ(x|c), rather than only mapping inputs to fixed labels.</div>
+</details>
+<details class="quiz">
+<summary>Mathematical: Why use log-likelihood?</summary>
+<div>It converts products of probabilities into sums, improves numerical handling, and yields an objective that rewards probability assigned to observed examples.</div>
+</details>
+<details class="quiz">
+<summary>Debugging: Same prompt, inconsistent answers—why?</summary>
+<div>Sampling, temperature, provider/model versions, hidden context, nondeterministic kernels, or external-tool variability. Capture configuration and traces before diagnosing.</div>
+</details>
+<details class="quiz">
+<summary>System design: Where should exact facts come from?</summary>
+<div>Authoritative databases, retrieval systems, calculators, or tools. The generator should synthesize those results under validation.</div>
+</details>
+<details class="quiz">
+<summary>Risk: Why can RAG still hallucinate?</summary>
+<div>Retrieval may fail, context may be irrelevant, or the generator may distort/extend evidence. Each stage requires separate evaluation.</div>
+</details>
+<details class="quiz">
+<summary>Trade-off: Greedy versus sampling?</summary>
+<div>Greedy decoding is predictable but can be repetitive or locally suboptimal. Sampling provides diversity but increases variability; use case and evaluation determine the policy.</div>
+</details>
+</div>
+</section>
+
+        <section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and completion</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://csrc.nist.gov/glossary/term/generative_artificial_intelligence">
+<b>NIST CSRC — Generative AI definition</b>
+<br>
+<span>Institutional definition covering derived synthetic text, image, video, audio, and other content.</span>
+</a>
+<a href="https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence">
+<b>NIST AI 600-1 — Generative AI Profile</b>
+<br>
+<span>Lifecycle risk-management context for generative AI systems.</span>
+</a>
+<a href="https://cs229.stanford.edu/notes2020fall/notes2020fall/cs229-notes2.pdf">
+<b>Stanford CS229 — Generative Learning Algorithms</b>
+<br>
+<span>Classical distinction between modelling p(y|x) and modelling p(x|y) with p(y).</span>
+</a>
+<a href="https://arxiv.org/abs/1706.03762">
+<b>Vaswani et al. — Attention Is All You Need</b>
+<br>
+<span>The Transformer architecture underlying modern autoregressive LLMs.</span>
+</a>
+<a href="https://arxiv.org/abs/1312.6114">
+<b>Kingma & Welling — Auto-Encoding Variational Bayes</b>
+<br>
+<span>Foundational variational autoencoder work.</span>
+</a>
+<a href="https://arxiv.org/abs/2006.11239">
+<b>Ho, Jain & Abbeel — Denoising Diffusion Probabilistic Models</b>
+<br>
+<span>Foundational modern diffusion-model formulation.</span>
+</a>
+<a href="https://arxiv.org/abs/2005.14165">
+<b>Brown et al. — Language Models are Few-Shot Learners</b>
+<br>
+<span>Large autoregressive language modelling and in-context task behavior.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Your explicit decision to continue completes Concept 01. The equations, sampler, architectures, production concerns, and interviews remain available whenever you want deeper revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-02.html">Start Concept 02 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Discriminative versus generative modelling.</p>
+</div>
+</section>
+      </div>
+    </div>
+    </details>
+  </main>
+  <footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 01 · Complete</p>
+<a href="module-01-concept-02.html">Concept 02 →</a>
+</footer>
+</body>
+</html>
+

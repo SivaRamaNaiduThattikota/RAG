@@ -1,0 +1,7 @@
+const advancedLesson04=document.querySelector('#advanced-lesson');
+function syncAdvancedTarget04(){if(advancedLesson04)advancedLesson04.open=location.hash==='#advanced-lesson'||/^#s(?:0[1-9]|1[0-9]|2[0-4])$/.test(location.hash)}
+addEventListener('hashchange',syncAdvancedTarget04);syncAdvancedTarget04();
+const layerDescriptions={model:'Broadly pretrained reusable parameters. Supplies learned language patterns, but not guaranteed current company facts.',adaptation:'Prompts, demonstrations, task heads, adapters, or fine-tuning shape the base toward a downstream job.',rag:'Retrieves external evidence and places selected context into the inference request without ordinarily changing model weights.',database:'Oracle executes governed queries and returns authoritative structured records such as the current leave balance.',orchestration:'Application logic coordinates identity, routing, retrieval, tools, state, retries, validation, and the model call.'};
+const layerButtons=[...document.querySelectorAll('.layer-button')];const layerOutput=document.querySelector('#layerOutput');
+function selectLayer(button){layerButtons.forEach(item=>{const active=item===button;item.classList.toggle('active',active);item.classList.toggle('secondary',!active);item.setAttribute('aria-pressed',String(active))});if(layerOutput)layerOutput.textContent=layerDescriptions[button.dataset.layer]}
+layerButtons.forEach(button=>button.addEventListener('click',()=>selectLayer(button)));if(layerButtons[0])selectLayer(layerButtons[0]);

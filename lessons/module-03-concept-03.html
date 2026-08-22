@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Names the three independently-failable categories where Concept 02's closed-loop argument bites in practice: knowledge cutoffs, private company knowledge, and frequently-changing information -- and why a single fact can trip one, two, or all three at once.">
+<title>Knowledge cutoffs, private knowledge and frequently changing information — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 03</p>
+<h1>Knowledge cutoffs, private knowledge,<br>and <em>frequently changing information</em></h1>
+<p class="lesson-lead">Concept 02 proved one general argument: a plain LLM's forward pass has no read channel to anything outside its frozen weights, so it can't supply knowledge that was never in its training corpus. That argument is airtight, but it's still abstract — it doesn't yet tell you which knowledge, in the field, is actually going to trip it. This concept names three independently-failable categories where the "can't" bites: <b>knowledge cutoffs</b> (anything dated after the corpus was collected), <b>private or proprietary knowledge</b> (anything never in any public corpus, regardless of age), and <b>frequently-changing information</b> (facts true at training time that have since moved). A single fact can trip one of these, two, or all three at once — and telling them apart is a prerequisite skill for picking the right fix later, not busywork.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's frozen-weights / no-read-channel / zero-terms argument, plus Module 02 Concept 09's coverage-density and informal cutoff idea</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three independently-failable categories and classify a query into one, two, or all three</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> Hold three named categories, not one blurred idea: a knowledge cutoff is a single fixed boundary — the fact postdates the corpus's collection date. Private or proprietary knowledge never touches the public-corpus axis at all, at any date — publicness, not recency, is the gate. Frequently-changing information was correctly captured once, but the real world has since moved while the frozen weights have not. Any single fact can fail one of these checks, two of them, or all three simultaneously — they are independently-failable, not mutually exclusive, and which one (or combination) applies changes what fix actually works later.</p>
+<b>3 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One root cause, three names for where it bites</h2>
+</div>
+<p>Concept 02 settled the "why." This concept is a taxonomy, not a re-argument — it names the three places that single cause shows up in practice, because diagnosing which one (or which combination) you're facing is what tells you, in Concepts 07 and 08, which fix actually applies.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three names for when the "can't" bites</h3>
+<p>Concept 02 already argued the general case: a plain LLM can't supply a fact that was never in its training corpus. This concept isn't a second attempt at that argument — it's a taxonomy of <b>when</b> it fires. Three categories, each independently able to trigger it on its own:</p>
+<div class="mental-compare">
+<div><span>1 · KNOWLEDGE CUTOFFS</span><p>Anything dated after the training corpus was collected. It might be fully public today — it just wasn't public yet when the snapshot was taken.</p></div>
+<div><span>2 · PRIVATE / PROPRIETARY KNOWLEDGE</span><p>Anything never in any public training corpus, regardless of how old it is. Internal company documents are the standing example.</p></div>
+<div><span>3 · FREQUENTLY-CHANGING INFORMATION</span><p>Facts that were true and correctly captured at training time, but have since changed. Distinct from a cutoff because even retraining on a schedule can't keep pace with how often the real value moves.</p></div>
+</div>
+<p>Say this plainly: a single fact can trip one of these, two of them, or all three at once. They aren't three flavors of the same failure lined up on a shelf — they're three separate gates, and a fact only has to fail one to be unreachable.</p>
+<div class="beginner-memory"><b>First memory:</b> cutoff, private, and frequently-changing are three independently-failable categories, not three names for one thing — a fact can trip one, two, or all three at the same time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>The "why" was settled. The "which one" wasn't.</h3>
+<p>It might seem like busywork to name three categories once Concept 02 has already nailed down the single root cause underneath all of them. It isn't. Each category implies a different real-world consequence once this course reaches fix-selection in Concepts 07 and 08 — a private-data problem is fixed by a connector and an authorization policy, a frequently-changing problem is fixed by continuous re-indexing, and neither is fixed by simply retraining more often. Diagnosing which category (or which combination) a failing query belongs to is a prerequisite skill for choosing the right fix, not an academic exercise in labeling.</p>
+<div class="mental-compare">
+<div><span>WHAT THIS SECTION COVERS</span><p>Three named categories of "the model can't know this," and why a fact can belong to more than one at once.</p></div>
+<div><span>WHAT IT DOESN'T COVER YET</span><p>What retrieval actually buys back once wired in — reduced hallucination, grounding, provenance — that's Concept 04's job, next.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three Oracle RAG queries, one category each</h3>
+<p>Three questions someone might ask an Oracle RAG assistant, each failing for a mechanically different reason:</p>
+<div class="context-demo">
+<div><span>(A) · CUTOFF</span><p>"What's in the engineering runbook doc uploaded last week?" No foundation model's training window reaches next week — this document postdates any corpus collection date by construction, no matter how public it eventually becomes.</p></div>
+<div><span>(B) · PRIVATE</span><p>"What's our internal engineering incident-response escalation policy?" Internal engineering documents were never posted anywhere public, so they were never a candidate for any training corpus — this one could be five years old and still fail the exact same way.</p></div>
+<div><span>(C) · FREQUENTLY-CHANGING</span><p>"Who's on the payments team's on-call rotation this week?" True today, false in a few days, with no retraining cadence realistic enough to track it. Whoever the model "remembers" being on call is only ever a snapshot of one week among many.</p></div>
+</div>
+<p>Same symptom on the surface — a wrong or unverifiable answer — three distinct reasons underneath.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Zero terms, twice, then one new wrinkle: stale terms</h3>
+<p>Concept 02's argument was f-not-in-C: if a fact never appeared in the training corpus, it contributed zero terms to training, so nothing pushed the weights toward it. Each category reconnects to that argument for a mechanically distinct real-world reason:</p>
+<div class="mental-compare">
+<div><span>CUTOFF → ZERO TERMS</span><p>The document didn't exist yet when the corpus was collected. It couldn't have contributed training terms — not "didn't," couldn't, because it wasn't there to contribute.</p></div>
+<div><span>PRIVATE → ZERO TERMS</span><p>The document existed the whole time, but was never public, so it was never even a candidate for any corpus. Age is irrelevant; publicness is the gate.</p></div>
+<div><span>FREQUENTLY-CHANGING → STALE TERMS</span><p>The fact <i>was</i> in the corpus and correct when collected. But the world's true value has since moved while the frozen weights haven't. This is the one genuinely new mechanical case this concept adds — call it "stale-terms," not "zero-terms."</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One shared boundary, three different relationships to it</h3>
+<p>Concept 02 already drew the closed LLM loop — frozen weights in, nothing external ever read, decode loop out. Every one of this concept's three categories sits on top of that exact same loop; what changes is only where each one lands relative to the training corpus's collection boundary, T_cutoff. Cutoff facts land just past it. Private facts never land on that axis at all, no matter the date. Frequently-changing facts land on it correctly once, then quietly split into two different values as time moves on without the weights moving too.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0303-visual-title">
+  <strong class="concept-visual-title" id="c0303-visual-title">VISUAL · ONE T_CUTOFF LINE, THREE WAYS TO MISS</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram placing knowledge cutoff, private knowledge, and frequently-changing information against the same T-cutoff boundary and the same closed LLM loop from Concept 02">
+    <div class="diagram-family-grid">
+      <div class="diagram-node"><b>Cutoff — just after the line</b><small>the document existed, it just arrived after T_cutoff. Same closed LLM loop from Concept 02, same zero-terms outcome.</small></div>
+      <div class="diagram-node"><b>Private — never on the axis</b><small>internal documents never touch the public-corpus timeline at any date. The line's position doesn't even apply to them.</small></div>
+      <div class="diagram-node active"><b>Frequently-changing — splits after the line</b><small>a baked-in value (frozen at T_cutoff) and a current-real value (drifting since) — one fact, two diverging answers.</small></div>
+    </div>
+  </div>
+  <figcaption>Same closed LLM loop underneath all three, same T_cutoff boundary on the public timeline — only where each fact sits relative to that line, or whether it ever touches the line at all, differs.</figcaption>
+  <ol class="diagram-key"><li><b>Cutoff is one fixed boundary on the public timeline:</b> the fact existed publicly, it just arrived after collection stopped.</li><li><b>Private never touches the public-corpus axis, at any date:</b> it could be ten years old and still be zero-density in training.</li><li><b>Frequently-changing is two values splitting apart, not one missing value:</b> the model still answers — just with the wrong one.</li></ol>
+</figure>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three pairs that look alike and aren't</h3>
+<div class="distinction-table" role="table" aria-label="Distinctions between knowledge cutoffs, private knowledge, frequently-changing information, and sparse coverage">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Knowledge cutoff</span><span role="cell">Frequently-changing information</span><span role="cell">Cutoff is one fixed boundary at T_cutoff; frequently-changing reopens after every single retraining cycle, since each new cutoff can itself go stale again</span></div>
+<div role="row"><span role="cell">Private / proprietary knowledge</span><span role="cell">Knowledge cutoff</span><span role="cell">Private data can be arbitrarily old — the failing gate is publicness, not recency; a cutoff fact just arrived too late, but was always headed for the public corpus eventually</span></div>
+<div role="row"><span role="cell">Sparse coverage (Module 02, Concept 09)</span><span role="cell">Any of these three categories</span><span role="cell">Sparse means present in training data but thin; all three categories here can be zero-density regardless of thinness — the same wrong-answer symptom, a different failure shape entirely</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Retraining more often solves frequently-changing information."</b><p>No — any fixed retraining cadence is still discrete, and a discrete cadence can't structurally track a continuously-changing fact. This is only a preview line; the full rate argument comes later in the advanced section's math.</p></div>
+<div><b>"An old document must be inside the training cutoff."</b><p>No — private documents can predate the cutoff by years and still never have been seen, because publicness is the gate, not age. Old and private are independent properties.</p></div>
+<div><b>"These three are really just one problem."</b><p>No — same root cause per Concept 02, but different fix implications, addressed directly in Concepts 07 and 08. Lumping them together hides which fix you actually need.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>All three, mapped onto Oracle RAG</h3>
+<div class="project-map">
+<div><span>PRIVATE</span><b>Internal engineering documentation is the flagship case</b><p>Design docs, runbooks, and incident postmortems were never posted anywhere public — no amount of retraining or clever prompting reaches them, because publicness was never satisfied in the first place.</p></div>
+<div><span>CUTOFF</span><b>A schema or policy change merged this morning</b><p>Even once it becomes fully public, it postdates any foundation model's training snapshot the moment it lands — a completely different route to the same wall.</p></div>
+<div><span>FREQUENTLY-CHANGING</span><b>Current sprint, on-call, and open-incident status</b><p>True this hour, false by tomorrow, with no retraining schedule fast enough to track it.</p></div>
+</div>
+<p>State this plainly: this is exactly why Oracle RAG needs a retriever pointed at live, internal, continuously-refreshed sources — not a smarter prompt, and not a retrain-more-often schedule either.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Three named categories</b><p>Knowledge cutoff, private/proprietary knowledge, and frequently-changing information — each with a one-line definition you can state on demand.</p></div>
+<div><b>Private ≠ cutoff, even when overlapping</b><p>A fact that is both old and never-public is still private, not cutoff — publicness is the gate that fails, not recency.</p></div>
+<div><b>Frequently-changing ≠ cutoff</b><p>Frequently-changing is mechanically distinct: nonzero training terms that have gone stale, not zero terms from arriving too late.</p></div>
+<div><b>Independently-failable, not mutually exclusive</b><p>A single fact can trip one, two, or all three categories at once — overlap is normal, not an edge case.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Name all three categories, each with a one-line definition.</li>
+<li>Explain why private and cutoff differ even when a fact is both old and never-public.</li>
+<li>Explain why frequently-changing is mechanically distinct from cutoff, not just a variant of it.</li>
+<li>Give a worked example of a fact that trips two categories at once, and say why that's normal rather than a contradiction.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Hallucination reduction, grounding and provenance</h3>
+<p>Today's job was naming precisely which knowledge is externally required, and why each of the three categories fails differently. Concept 04 covers what retrieval buys back once it's actually wired in — reduced hallucination, grounding, and provenance/citations — without yet detailing the full offline/online pipeline, which is Concept 06's job.</p>
+<div class="beginner-memory"><b>Concept 03 is complete.</b> Continue to Hallucination reduction, grounding and provenance.</div>
+<a class="button primary" href="module-03-concept-04.html">Start Concept 04 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Three categories, one shared cause.</h2>
+<p>Master the taxonomy first: knowledge cutoffs, private knowledge, frequently-changing information, and the fact that they overlap. Open the stale-terms drift math, the classification code, and the Three Clocks lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Name the three categories — cutoff, private, frequently-changing — independently-failable, not mutually exclusive.</small></a>
+<a href="#b04"><span>02</span><b>Separate</b><small>Zero-terms (cutoff, private) from stale-terms (frequently-changing) — the one new mechanical wrinkle.</small></a>
+<a href="#b06"><span>03</span><b>Distinguish</b><small>Cutoff vs. frequently-changing, private vs. cutoff, sparse coverage vs. any of the three.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the drift math, the classify_knowledge_gap code, and The Three Clocks lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Cutoff = zero terms, arrived too late. Private = zero terms, never public at any date. Frequently-changing = nonzero terms, gone stale since collection. One fact can trip one, two, or all three at once.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the cutoff / private / frequently-changing deep dive</b><em>The stale-terms drift math, a classify_knowledge_gap code walkthrough, and "The Three Clocks" lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 03's third of twelve concepts</h2></div></header>
+<p>Concept 02 proved the general closed-loop argument. This concept extends it into three named, independently-failable categories — knowledge cutoffs, private/proprietary knowledge, and frequently-changing information. It explicitly defers: the fix mechanics, grounding, and provenance (Concept 04); the full offline/online retrieval pipeline (Concept 06); and the complete RAG-versus-fine-tuning-versus-retraining decision framework (Concepts 07 and 08).</p>
+<div class="flow">
+<div class="flow-node">Concept 02 complete</div>
+<div class="flow-node hot">Cutoff</div>
+<div class="flow-node hot">Private</div>
+<div class="flow-node hot">Frequently-changing</div>
+<div class="flow-node">Independently-failable</div>
+<div class="flow-node">Concept 04 next</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State the three categories with precise boundaries</h3><p>Knowledge cutoff, private/proprietary knowledge, frequently-changing information — each with the exact condition that triggers it.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Tell every pair apart</h3><p>Cutoff versus private, cutoff versus frequently-changing, private versus frequently-changing — three genuinely different mechanisms behind one surface symptom.</p></article>
+<article class="info-card"><span>CLASSIFY</span><h3>Sort a novel query into the right bucket(s)</h3><p>Into one category, two, or all three at once — overlap is the normal case, not an exception.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not yet cover</h3><p>Fix mechanics and grounding (Concept 04), the ingestion pipeline (Concept 06), and the full decision framework (Concepts 07-08).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Frozen weights, no read channel, and the zero-training-terms argument (Module 03, Concept 02):</b> cited, not re-derived — this concept only adds named categories on top of it.</li>
+<li><b>The retriever/corpus/generator/grounding vocabulary (Module 03, Concept 01):</b> cited, not re-derived.</li>
+<li><b>Coverage density, hallucination, and the informal knowledge-cutoff definition (Module 02, Concept 09):</b> this concept formalizes cutoff further and introduces the other two categories alongside it.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A date-stamped textbook, three different reasons it fails you</h2></div></header>
+<p>Extend Concept 02's handcuffed-exam-taker analogy with one more detail: the textbook this student was handed is date-stamped. It was printed on a fixed date — anything that happened afterward simply isn't in it, no matter how thoroughly it was studied. Some material was never given to this student at all, because it was confidential to a different class entirely — printing date is irrelevant, it was never going to be handed over. And some material describes a school rule that has since been amended, quietly, without anyone reprinting the book — the student can recite the old rule fluently and confidently, and be wrong every time. Three distinct reasons the same closed-book student can't answer "what's true right now" — not one blurry excuse.</p>
+<div class="callout warning"><b>Analogy boundary</b>The student, unlike the model, would eventually notice the book felt outdated. The model has no such awareness — this is a structural property of frozen weights and a bounded corpus, not a motivational gap. Lazaridou et al.'s temporal-generalization work is the paper-level version of this same point: language models measurably degrade the further a query drifts past their training window, exactly the "date-stamped textbook" problem stated formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Knowledge cutoff</td><td>T_cutoff, the corpus collection boundary. A fact f that postdates T_cutoff satisfies f∉C by construction.</td><td>A single fixed date per model version — the same boundary Concept 02's argument already used, now given a name.</td></tr>
+<tr><td>Private / proprietary knowledge</td><td>f was never published in any candidate public corpus, independent of date. f∉C_public for every public corpus C, regardless of T_cutoff.</td><td>Publicness is the gate, not recency — a private fact can be arbitrarily old and still never have been a candidate for training.</td></tr>
+<tr><td>Frequently-changing information</td><td>f_true(t) is time-varying. f was correctly captured in C, reflecting f_true(T_cutoff) — but f_true(t) diverges from f_true(T_cutoff) faster than any realistic retraining cadence can track.</td><td>Nonzero training terms at collection time, going stale afterward — mechanically distinct from the zero-terms cases above.</td></tr>
+<tr><td>Independently-failable</td><td>A query can trip one, two, or all three categories simultaneously.</td><td>Not mutually exclusive — overlap is the expected case, not a special one.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Zero-terms, twice, then the new case: stale-terms</h2></div></header>
+<p>Trace one instance of each category through Concept 02's f∉C argument:</p>
+<div class="equation">Cutoff: f postdates T_cutoff  ⇒  f ∉ C  ⇒  0 training terms</div>
+<div class="equation">Private: f ∉ C_public for every public C, regardless of T_cutoff  ⇒  0 training terms</div>
+<div class="equation">Frequently-changing: f ∈ C at T_cutoff (nonzero terms) — but f_true(t) ≠ f_true(T_cutoff) for t &gt; T_cutoff  ⇒  "stale-terms," not "zero-terms"</div>
+<p>Cutoff and private both land on zero training terms, for different real-world reasons — one arrived too late, one was never a candidate at all. Frequently-changing is the one new mechanical case this concept adds: f <i>was</i> in C, correctly, at collection time. The terms exist. They just support a value the real world has since walked away from.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Zero-terms versus stale-terms, on one shared axis</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram contrasting zero-terms cutoff and private facts against the stale-terms frequently-changing fact, all measured against the same T-cutoff line">
+  <div class="diagram-family-grid">
+    <div class="diagram-node"><b>Cutoff fact — f ∉ C, just after T_cutoff</b><small>zero training terms, for the plainest reason: it postdates collection</small></div>
+    <div class="diagram-node"><b>Private fact — f ∉ C at any T_cutoff</b><small>zero training terms regardless of date; publicness, not recency, is the gate</small></div>
+    <div class="diagram-node active"><b>Frequently-changing fact — f ∈ C, but stale-terms</b><small>nonzero training terms, correct at collection time; the world's true value has since moved while θ has not</small></div>
+  </div>
+</div>
+<ol class="diagram-key"><li><b>Cutoff and private both land on zero-terms:</b> the mechanism from Concept 02 applies unchanged, just for two different real-world reasons.</li><li><b>Frequently-changing lands on stale-terms instead:</b> nonzero, correct-at-the-time terms that the real world has since outrun.</li><li><b>This is the static precursor to the s14 lab:</b> the lab animates these same three nodes over simulated time instead of freezing them at one moment.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Different modules solve for different subsets of this taxonomy</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunking</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span class="hot">Vectors / index</span><i>↓</i>
+<span>Retrieval</span><i>↓</i>
+<span>Context</span><i>↓</i>
+<span>LLM</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>Reuse the Documents-to-Answer skeleton from Concept 02's Section 08, and annotate it against today's taxonomy. Ingestion pipelines (Module 06) have to actually reach private sources, or the private category stays unsolved no matter how good the rest of the pipeline is. Vector indexes (Modules 09-10) need to support incremental updates, or frequently-changing content just goes stale inside the index the same way it goes stale inside frozen weights. Cutoff-only content is the easy case here — it needs only a single ingestion pass, because once captured, it's static.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Formalizing the stale-terms drift</h2></div></header>
+<p>Define the drift of a frequently-changing fact past T_cutoff:</p>
+<div class="equation">drift(t) = f_true(t) − f_true(T_cutoff)</div>
+<p>θ was optimized against f_true(T_cutoff) only — nothing in training ever saw f_true(t) for t &gt; T_cutoff. Let r_fact be the real-world rate at which the fact changes, and r_retrain be the retraining cadence. The failure condition:</p>
+<div class="equation">r_fact &gt; r_retrain, for some t between retraining cycles</div>
+<p>This is precisely why b07's misconception — "just retrain more often" — reduces the size of the gap without structurally eliminating it. Any fixed r_retrain still leaves a window where drift(t) ≠ 0 for at least part of every cycle, unless r_fact happens to be zero, which is exactly the case where the fact wasn't frequently-changing to begin with. Every symbol here — θ, C, T_cutoff — ties directly back to Concept 02's original notation; only drift(t), r_fact, and r_retrain are new. Dhingra et al.'s TempLAMA framing — a dataset built explicitly around facts whose correct answer changes over time — is the closest published anchor for this exact rate argument.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>90-day retraining against a 7-day rotation</h2></div></header>
+<p>Put numbers on it. Retraining every 90 days gives r_retrain = 1/90 per day. An on-call rotation that changes every 7 days gives r_fact = 1/7 per day — roughly 12 to 13 times more frequent than the retraining cycle. That means, between any two retrains, there are on the order of 12-13 separate stale windows of up to 7 days each where the baked-in on-call name and the real one simply don't match.</p>
+<div class="scroll-flow" aria-label="Timeline of stale windows between two 90-day retraining cycles">
+<span>Day 0 — retrain (fresh)</span><i>→</i>
+<span>Days 1-7 — stale window 1</span><i>→</i>
+<span>Days 8-14 — stale window 2</span><i>→</i>
+<span>Days 15-21 — stale window 3</span><i>→</i>
+<span>… roughly 9 more 7-day stale windows …</span><i>→</i>
+<span>Day 90 — retrain again (fresh, briefly)</span>
+</div>
+<p>Even at the expense of a full retraining run every 90 days, the fact is wrong for most of the interval between cycles — purely from lag, before accounting for anything else going wrong. Frequently-changing information is not a "retrain harder" problem; it's a rate problem, and the rate is against you.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Five cards: four pure cases, one deliberate overlap</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>GOOD FIT</span><h3>A stable, old, public fact</h3><p>No retrieval needed — this is the same boundary Concept 01/Concept 02 already drew, not this concept's problem case.</p></article>
+<article class="info-card"><span>PURE CUTOFF</span><h3>A policy change merged this morning</h3><p>Public, eventually. Just too late for any existing training snapshot.</p></article>
+<article class="info-card"><span>PURE PRIVATE</span><h3>An internal incident postmortem</h3><p>Structurally unreachable regardless of age — publicness was never satisfied.</p></article>
+<article class="info-card"><span>PURE FREQUENTLY-CHANGING</span><h3>This week's on-call rotation</h3><p>Correct once, at collection time, then stale — no realistic retraining cadence tracks it.</p></article>
+<article class="info-card"><span>DELIBERATE OVERLAP</span><h3>A private policy that also changes weekly</h3><p>Trips private AND frequently-changing at once — reinforcing that these categories are independently-failable, not mutually exclusive.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>classify_knowledge_gap: a set, not a single label</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>class Fact:
+    # a tiny stand-in record -- real usage would probably be a
+    # dataclass. It only needs a name and the value that was true
+    # when the corpus was collected, so the classifier below can
+    # detect whether the world has since drifted away from it.
+    def __init__(self, name, value_at_collection):
+        self.name = name
+        self.value_at_collection = value_at_collection
+
+
+def classify_knowledge_gap(
+    fact,               # a Fact record, see above
+    corpus_public,      # was this fact's *source* ever in a public corpus at all?
+    collection_date,    # T_cutoff for the model being asked
+    current_date,       # "now"
+    last_public_seen,   # date this fact's current value went public, or None
+    current_true_value, # the fact's real-world value right now
+):
+    # never a single label -- the three categories are
+    # independently-failable, so this returns a SET that can hold
+    # one, two, or all three at once (s05's last row).
+    triggered = set()
+
+    # s05 / private: never published in ANY public corpus, regardless
+    # of date. Publicness is the gate -- this check doesn't even look
+    # at collection_date.
+    if not corpus_public:
+        triggered.add("private")
+
+    # s05 / cutoff: f postdates T_cutoff by construction. last_public_seen
+    # is None when this value has no public record yet at all; it's a
+    # real date once the fact actually went public.
+    if corpus_public and (last_public_seen is None or last_public_seen > collection_date):
+        triggered.add("cutoff")
+
+    # s05 / frequently-changing: f WAS in C -- last_public_seen is on
+    # or before collection_date, so some version of this fact had
+    # nonzero training terms -- but the real value has moved since,
+    # so what's baked into theta no longer equals current_true_value.
+    # This is s06's "stale-terms," not "zero-terms."
+    if (
+        corpus_public
+        and last_public_seen is not None
+        and last_public_seen <= collection_date
+        and fact.value_at_collection != current_true_value
+    ):
+        triggered.add("frequently-changing")
+
+    return triggered
+
+
+# the three Oracle RAG examples from b03/s10, run through the classifier
+runbook = Fact("engineering runbook doc", value_at_collection=None)
+print(classify_knowledge_gap(
+    runbook, corpus_public=True, collection_date="2026-06-01",
+    current_date="2026-08-22", last_public_seen="2026-08-15",
+    current_true_value="v3 of the runbook",
+))
+# {'cutoff'} -- uploaded last week, after T_cutoff
+
+escalation_policy = Fact("incident-response escalation policy", value_at_collection="internal-only")
+print(classify_knowledge_gap(
+    escalation_policy, corpus_public=False, collection_date="2026-06-01",
+    current_date="2026-08-22", last_public_seen=None,
+    current_true_value="internal-only",
+))
+# {'private'} -- never public at any date, so cutoff never even applies
+
+on_call = Fact("payments team on-call", value_at_collection="Alex")
+print(classify_knowledge_gap(
+    on_call, corpus_public=True, collection_date="2026-06-01",
+    current_date="2026-08-22", last_public_seen="2026-05-01",
+    current_true_value="Priya",
+))
+# {'frequently-changing'} -- captured fine at collection time, stale now
+
+weekly_private_policy = Fact("regional pricing exception list", value_at_collection="Tier A")
+print(classify_knowledge_gap(
+    weekly_private_policy, corpus_public=False, collection_date="2026-06-01",
+    current_date="2026-08-22", last_public_seen=None,
+    current_true_value="Tier C",
+))
+# {'private', 'frequently-changing'} -- s11's deliberate overlap case
+</code></pre>
+</div>
+<p>Notice the last call returns two categories at once, and that this is the intended behavior, not a bug — the function's whole job is to refuse collapsing "independently-failable" into "one label per fact."</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Production systems solve each category with a different piece</h2></div></header>
+<p>Production RAG systems operationalize this taxonomy as three separate engineering concerns, not one. Cutoff is handled by the initial ingestion and index build (Modules 06-10) — a single pass suffices, since cutoff-only content is static once captured. Private is handled by connector access and authorization — Module 06's source inventory decides what gets ingested at all, and Module 20's authorization-aware retrieval (forward-referenced, not detailed here) decides who can see it once it is. Frequently-changing is handled by incremental, event-driven ingestion and explicit freshness SLOs — Module 06's incremental-ingestion concept and Module 19's freshness SLOs (both forward-referenced) exist specifically because a single ingestion pass is not enough here. Gao et al.'s RAG survey frames private and enterprise data access as one of the primary real-world motivations for retrieval-augmented systems in the first place; Dhingra et al.'s TempLAMA framing is the closest published anchor for the frequently-changing category specifically.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Three Clocks</h2></div></header>
+<div class="lab">
+<p>Three facts, three clocks. Advance simulated time and watch each one drift differently. Try retraining to fix what breaks — then wire in retrieval instead and see what changes.</p>
+<div class="sample-output" id="clockWeekReadout0303" aria-live="polite"></div>
+<div class="context-demo" id="clockTracks0303">
+  <div data-track="cutoff"><span>CUTOFF FACT</span><p id="trackCutoff0303"></p></div>
+  <div data-track="private"><span>PRIVATE FACT</span><p id="trackPrivate0303"></p></div>
+  <div data-track="changing"><span>FREQUENTLY-CHANGING FACT</span><p id="trackChanging0303"></p></div>
+</div>
+<div class="lab-actions" role="group" aria-label="Advance simulated time">
+<button type="button" class="clock-advance-button" id="advanceWeekButton0303">Advance one week &#9656;</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Retrain the model">
+<button type="button" class="clock-retrain-button" id="retrainNowButton0303">Retrain the model now (costly)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Wire in retrieval instead">
+<button type="button" class="clock-retrieval-button" id="wireRetrievalButton0303">Wire in retrieval instead &#8594;</button>
+</div>
+<div class="lab-actions">
+<button type="button" class="secondary" id="resetClocksButton0303">Reset</button>
+</div>
+<div class="sample-output" id="clocksLog0303" aria-live="polite"></div>
+<div class="sample-output" id="clocksInsight0303" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>One row per category, one fix that actually clears it</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Category</th><th>What's enough</th><th>What's overkill or doesn't work</th></tr></thead>
+<tbody>
+<tr><td>Cutoff</td><td>A single ingestion pass — the content is static once captured</td><td>Retraining is overkill for a fact that never changes again after it's captured</td></tr>
+<tr><td>Private</td><td>Ingestion plus retrieval, pointed at the actual private source</td><td>Fine-tuning directly on private documents reopens Concepts 07-08's decision-framework territory rather than fixing anything specific to this category</td></tr>
+<tr><td>Frequently-changing</td><td>Continuously-refreshed retrieval — the only approach that wins at any sane cost</td><td>Any fixed retraining cadence, per s09-s10's rate inequality — r_fact almost always outruns r_retrain</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Three failure modes specific to misdiagnosing the category</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>CUTOFF CREEP</span><h3>Treating one ingestion pass as permanently fresh</h3><p>An index built once looks solved forever, but new cutoff-type facts keep arriving on their own schedule — "indexed once" isn't the same as "current."</p></article>
+<article class="info-card"><span>PRIVATE-DATA LEAKAGE MISDIAGNOSIS</span><h3>Mistaking zero-density private data for sparse coverage</h3><p>A wrong answer about private data can look exactly like Module 02 Concept 09's sparse-coverage hallucination. It isn't — it's zero-density private data, and it needs a completely different fix: a connector, not more examples.</p></article>
+<article class="info-card"><span>FRESHNESS BLIND SPOT</span><h3>"Correct at index time" quietly becomes "solved forever"</h3><p>A frequently-changing fact that was right when indexed gets treated as done, with no re-index schedule or explicit freshness policy ever attached to it.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"All three categories are really the same problem"</td><td>Same root cause per Concept 02, but different practical consequences — and different fixes, addressed in Concepts 07-08.</td></tr>
+<tr><td>"Cutoff is the only one that matters, because it's the most discussed"</td><td>Private and frequently-changing are equally architecturally required to solve — they just get less airtime in general discussion of "AI knowledge."</td></tr>
+<tr><td>"A fact can only belong to one category"</td><td>Overlap is normal, not an exception — s11's deliberate boundary case (a private, weekly-changing policy) trips two categories at once by design.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Freshness SLOs need to be defined per data source, not globally — a company wiki and an on-call schedule do not share one freshness policy (Module 19, forward-referenced).</li>
+<li>Private-data ingestion carries authorization and governance stakes that go well beyond mere staleness — access control matters as much as freshness (Module 20, forward-referenced).</li>
+<li>Cutoff-only content is the cheapest tier to solve — one ingestion pass, and it's done.</li>
+<li>Frequently-changing content is usually the most operationally expensive tier, precisely because s09's rate inequality never fully resolves on any fixed schedule. Gao et al.'s enterprise-governance framing applies directly here, too.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Distinguish private from cutoff using a concrete example.</summary><div>An internal HR policy document that's ten years old is private, not cutoff — it was never public at any point, so publicness (not recency) is what fails. A policy revision issued yesterday is cutoff, not private — it's headed for the public corpus eventually, it just arrived after the training snapshot.</div></details>
+<details class="quiz"><summary>Why isn't frequently-changing solved by more frequent retraining?</summary><div>Per s09's rate inequality, r_fact &gt; r_retrain for at least part of every cycle unless retraining happens continuously — which is just retrieval by another name. Any fixed cadence still leaves a lag window where the baked-in value and the real value disagree.</div></details>
+<details class="quiz"><summary>Give an example fact that trips two categories at once.</summary><div>A private pricing exception list that also changes weekly trips both private (never public, at any date) and frequently-changing (correct once, then stale) simultaneously — s11's deliberate overlap case.</div></details>
+<details class="quiz"><summary>Restate r_fact &gt; r_retrain in plain language.</summary><div>The real-world fact is changing faster than the model gets retrained, so there's always some stretch of time where what the model "knows" and what's actually true don't match.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A hypothetical company asks its RAG assistant five new questions. Classify each into one, two, or three categories, and justify each answer using s05's formal definitions — mirror the branching logic from s12's <code>classify_knowledge_gap</code>.</p>
+<ol>
+<li>"What's our unpublished Q3 pricing strategy memo say?"</li>
+<li>"Who approved yesterday's emergency infrastructure change?"</li>
+<li>"What's the current exchange rate we're using for EU invoices this week?"</li>
+<li>"What's in the confidential legal settlement signed three years ago?"</li>
+<li>"What's the capital of France?"</li>
+</ol>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open the worked solution</summary><div>(1) Private — an unpublished internal memo was never a candidate for any public corpus, regardless of how recent it is. (2) Cutoff — the change is presumably public-facing eventually, it just postdates any training snapshot by construction. (3) Frequently-changing — the exchange rate was correct at some point and has since moved; no fixed retraining cadence tracks a weekly rate. (4) Private — three years old and still never public; age doesn't matter, publicness does. (5) None of the three — a stable, dense, public fact, exactly the "good fit" case from s11 where a plain LLM is fine. Teach-back: in your own words, explain why lumping all three into one undifferentiated "the model doesn't know things" bucket would make it harder to design the right fix later — name at least one fix that would be wrongly applied to the wrong category if the taxonomy were collapsed.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The three categories</h3><ul><li><b>Cutoff:</b> zero terms, arrived too late — one fixed boundary</li><li><b>Private:</b> zero terms, never public at any date — publicness is the gate</li><li><b>Frequently-changing:</b> stale terms, correct once, then drifted — r_fact &gt; r_retrain</li></ul></div>
+<div><h3>Oracle RAG trio</h3><p>Runbook doc = cutoff. Incident-response escalation policy = private. On-call rotation = frequently-changing. Memorable, and independently-failable — a single fact can trip more than one.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain to a stakeholder why "we fine-tuned last quarter" doesn't fix the on-call-rotation problem.</summary><div>Fine-tuning bakes in whatever was true at the moment of that training run. An on-call rotation changes weekly, so within days the fine-tuned model is already answering from a stale snapshot — the fix has to be re-applied constantly to stay current, which is exactly what makes retraining the wrong tool for anything that changes faster than the retraining schedule.</div></details>
+<details class="quiz"><summary>Design question: given a single wrong-answer log line, how would you determine which category caused it?</summary><div>Check whether the source document was ever public — if not, it's private, regardless of the date. If it was public, compare the document's publish date to the model's training cutoff — if it postdates the cutoff, it's a cutoff failure. If the document predates the cutoff and was captured correctly, but the real-world value has since changed, it's frequently-changing. Any two of these can be true at once.</div></details>
+<details class="quiz"><summary>Coding: sketch the branching logic behind classify_knowledge_gap.</summary><div>Three independent if-checks, each adding to a set rather than returning early: not corpus_public adds "private"; corpus_public and (no public record yet, or the public record postdates collection) adds "cutoff"; corpus_public and captured on or before collection but the value has since diverged adds "frequently-changing." Returning a set, not a single label, is the whole point — see s12.</div></details>
+<details class="quiz"><summary>Production scenario: a newly-acquired company's internal wiki gets ingested. Which category did it start in, and does that change once it's indexed?</summary><div>Before ingestion it's purely private — never public, regardless of age. Once it's ingested into your own retrieval index, it stops being a knowledge-gap problem at all, because it's no longer being answered from frozen weights — it's being retrieved live. The category label describes the gap in parametric knowledge, not a permanent property of the document.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2102.01951"><b>Lazaridou, Kuncoro, Gribovskaya et al. — Mind the Gap: Assessing Temporal Generalization in Neural Language Models</b><br><span>Grounds the knowledge-cutoff category and the general temporal-degradation argument — behind Sections 04 and 09.</span></a>
+<a href="https://arxiv.org/abs/2106.15110"><b>Dhingra, Cole, Eisenschlos et al. — Time-Aware Language Models as Temporal Knowledge Bases</b><br><span>Introduces TempLAMA, a dataset of facts whose correct answer changes over time — the closest published anchor for frequently-changing information specifically, behind Sections 06/10 and 13.</span></a>
+<a href="https://arxiv.org/abs/2312.10997"><b>Gao, Xiong, Gao et al. — Retrieval-Augmented Generation for Large Language Models: A Survey</b><br><span>Frames private and enterprise data access as a primary real-world RAG motivation — behind Sections 13 and 18.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 · COMPLETE</span>
+<h3>Three named categories, independently-failable</h3>
+<p>Before moving on, be able to restate all three: a knowledge cutoff is one fixed boundary; private knowledge never touches the public-corpus axis at any date; frequently-changing information was correct once and has since drifted. A single fact can trip one, two, or all three at once. Concept 04, "Hallucination reduction, grounding and provenance," is next — it covers what retrieval buys back once wired in, now that this concept has named precisely which knowledge is externally required.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-04.html">Start Concept 04 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Hallucination reduction, grounding and provenance.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 03 · Complete</p>
+<a href="module-03-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

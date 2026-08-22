@@ -1,0 +1,1098 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A progressive and advanced lesson comparing discriminative and generative modelling and connecting both to production RAG systems.">
+  <title>Discriminative versus generative modelling — RAG Atlas</title>
+  <link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+  <script defer src="../shell.js">
+</script>
+<script defer src="lesson-02.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+  <a class="skip-link" href="#lesson">Skip to lesson</a>
+  <header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+  <main id="lesson">
+    <section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 02</p>
+<h1>Discriminative<br>
+<em>versus generative</em>
+</h1>
+<p class="lesson-lead">Learn the difference between predicting an outcome from observed data and modelling how the data itself could arise. Then place both jobs inside a real RAG system.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Second Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>What is Generative AI?</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Separate the two modelling objectives</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+    <section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You separated discriminative, generative, deterministic, retrieval, and database responsibilities. The advanced deep dive remains available for revision.</p>
+<b>2 CONCEPTS COMPLETED</b>
+</section>
+    <section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+      <header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two goals, not two buzzwords.</h2>
+</div>
+<p>Start with the question each model is trained to answer. The probability notation comes only after the intuition is clear.</p>
+</header>
+      <div class="beginner-layout">
+        <aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+        <div class="beginner-content">
+          <article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>What is the difference?</h3>
+<p>A <b>discriminative model</b> learns to decide an output from an observed input. A <b>generative model</b> learns a model of the data—or of data conditioned on something—so it can describe how examples arise and often produce new examples.</p>
+<div class="mental-compare">
+<div>
+<span>DISCRIMINATIVE QUESTION</span>
+<p>Given this email, is it spam or not spam?</p>
+</div>
+<div>
+<span>GENERATIVE QUESTION</span>
+<p>What do spam and non-spam emails tend to look like, and can we produce an example?</p>
+</div>
+</div>
+<p>Think of discrimination as learning a <b>decision boundary</b>. Think of generation as learning enough of the <b>data-producing pattern</b> to assign probabilities or create samples.</p>
+<div class="beginner-memory">
+<b>First memory:</b> discriminative modelling predicts <em>which outcome fits this input</em>; generative modelling represents <em>how data and outcomes could be produced</em>.</div>
+</article>
+          <article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why do we need both objectives?</h3>
+<p>Many applications only need a decision: approve or reject, spam or legitimate, route to HR or Finance, relevant or irrelevant. Directly learning that decision can be efficient because the model does not spend capacity representing every detail of the input.</p>
+<p>Other applications need to create, complete, simulate, reconstruct, or explain data. They need a model that captures the structure of possible examples rather than only a boundary between labels.</p>
+<h4>The practical trade-off</h4>
+<p>If the only goal is classification and enough labelled data exists, a discriminative model often gives a direct path to strong predictive performance. A generative model may use more assumptions, but it can support sampling, missing-data reasoning, density estimation, semi-supervised learning, and other tasks beyond a single label.</p>
+<div class="beginner-memory">
+<b>Architecture principle:</b> choose the objective from the job. Do not use a generator merely because the product contains Generative AI.</div>
+</article>
+          <article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One employee question, several model jobs</h3>
+<div class="beginner-memory">
+<b>Continuity from Concept 01:</b> we intentionally reuse the leave assistant as a controlled example. Concept 01 separated retrieval, lookup, calculation, and generation; this lesson adds the new discriminative routing and relevance objectives.</div>
+<p>The employee asks: “What is my remaining leave balance, and summarize the relevant carry-forward policy?” Before answering, the system may need to decide what kind of request this is.</p>
+<div class="context-demo">
+<div>
+<span>DISCRIMINATIVE STEP</span>
+<p>Classify the request as requiring both a structured balance lookup and policy retrieval.</p>
+</div>
+<div>
+<span>AUTHORITATIVE STEPS</span>
+<p>Query Oracle for the exact balance and retrieve the applicable policy passage.</p>
+</div>
+<div>
+<span>GENERATIVE STEP</span>
+<p>Produce a clear answer using only the verified balance and retrieved policy.</p>
+</div>
+</div>
+<p>The classifier does not write the final explanation. The generator should not decide the authoritative balance. A production system coordinates different components because their objectives are different.</p>
+<h4>A simpler image example</h4>
+<p>A discriminative cat detector receives an image and predicts “cat” or “not cat.” A generative image model receives a condition such as “a cat sleeping beside a laptop” and produces an image. Both may use neural networks, but they are optimized for different outputs.</p>
+</article>
+          <article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What does each model learn?</h3>
+<p>Let <code>x</code> be the observed input and <code>y</code> be a label or target. For an email example, <code>x</code> is the email and <code>y</code> is spam or not spam.</p>
+<div class="mental-compare">
+<div>
+<span>DISCRIMINATIVE</span>
+<p>Learn <code>p(y|x)</code> or a direct function <code>f(x) → y</code>.</p>
+</div>
+<div>
+<span>GENERATIVE</span>
+<p>Learn <code>p(x,y)</code>, often through <code>p(x|y)p(y)</code>, or learn <code>p(x|c)</code> for a condition <code>c</code>.</p>
+</div>
+</div>
+<h4>Read the notation in words</h4>
+<ul class="simple-list">
+<li>
+<code>p(y|x)</code>: probability of a label after observing the input.</li>
+<li>
+<code>p(x|y)</code>: probability of observing this kind of input for a chosen label.</li>
+<li>
+<code>p(y)</code>: prior probability of the label before observing the input.</li>
+<li>
+<code>p(x,y)</code>: joint probability of seeing the input and label together.</li>
+</ul>
+<p>A classical generative classifier can learn <code>p(x|y)</code> and <code>p(y)</code>, then use Bayes’ rule to compute <code>p(y|x)</code>. So “generative” and “can classify” are not opposites: a generative model can support classification because its joint distribution contains enough information.</p>
+<div class="beginner-memory">
+<b>Key distinction:</b> classify by directly learning the destination, or model how examples arise and derive the destination.</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c02-visual-title">
+  <strong class="concept-visual-title" id="c02-visual-title">VISUAL · TWO LEARNING OBJECTIVES</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable discriminative and generative objective diagram"><div class="diagram-split"><div class="diagram-node"><b>Observed input x</b><small>For example, an employee question</small></div><div class="diagram-fork" aria-hidden="true">↗<br>↘</div><div class="diagram-node active"><b>Discriminative path</b><small>Learn p(y|x): choose a label, route, or boundary</small></div><div class="diagram-node"><b>Generative path</b><small>Learn a data distribution: score or produce content</small></div></div></div>
+  <figcaption>The same input can be sent to different models because the required output is different. A router decides what kind of request it is; a generator produces new wording.</figcaption>
+  <ol class="diagram-key"><li><b>Ask “which class?”</b> Use a discriminative objective.</li><li><b>Ask “what content could follow?”</b> Use a generative objective.</li><li><b>In RAG:</b> classification can route the request before generation explains the evidence.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Follow the two modelling paths</h3>
+<div class="mental-compare">
+<div>
+<span>DISCRIMINATIVE TRAINING</span>
+<p>Labelled examples → learn boundary → predict label for new input</p>
+</div>
+<div>
+<span>GENERATIVE TRAINING</span>
+<p>Examples and conditions → learn data distribution → score or produce examples</p>
+</div>
+</div>
+<div class="scroll-flow" aria-label="Combined discriminative and generative RAG flow">
+<span>User question</span>
+<i>→</i>
+<span>Intent / route classifier</span>
+<i>→</i>
+<span>Oracle + retrieval tools</span>
+<i>→</i>
+<span>Evidence validation</span>
+<i>→</i>
+<span>Generative model</span>
+<i>→</i>
+<span>Grounded answer</span>
+</div>
+<p>In this RAG flow, discrimination appears in routing, relevance classification, policy selection, safety checks, and answer verification. Generation appears where the system rewrites, summarizes, explains, or produces the final response.</p>
+<details class="beginner-answer">
+<summary>Where this concept sits in the course skeleton</summary>
+<div>
+<div class="pipeline-preview" aria-label="Course flow">
+<span>Generative AI</span>
+<i>↓</i>
+<span>Discriminative vs generative</span>
+<i>↓</i>
+<span>Model families</span>
+<i>↓</i>
+<span>LLMs</span>
+<i>↓</i>
+<span>Retrieval</span>
+<i>↓</i>
+<span>RAG system</span>
+</div>
+</div>
+</details>
+</article>
+          <article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that sound similar but are not identical</h3>
+<h4>Classifier versus discriminator</h4>
+<p>A classifier predicts a class for an input. A discriminator is a component trained to distinguish categories such as real versus generated. In a GAN, the discriminator guides the generator during training; the whole GAN is still a generative system.</p>
+<h4>Generative model versus Generative AI product</h4>
+<p>A generative model is a statistical or computational model. A Generative AI product is a larger system that may include classifiers, retrievers, databases, guardrails, tools, and one or more generative models.</p>
+<h4>Conditional generation versus classification</h4>
+<p>Both use an input. Classification maps the input to a restricted decision such as one label. Conditional generation produces a richer object—text, image, audio, or code—conditioned on the input.</p>
+<div class="distinction-table" role="table" aria-label="Discriminative and generative distinctions">
+<div role="row">
+<b role="cell">Question</b>
+<b role="cell">Discriminative</b>
+<b role="cell">Generative</b>
+</div>
+<div role="row">
+<span role="cell">Primary target</span>
+<span role="cell">Label, score, boundary, ranking</span>
+<span role="cell">Distribution, likelihood, sample, sequence</span>
+</div>
+<div role="row">
+<span role="cell">Typical probability</span>
+<span role="cell">
+<code>p(y|x)</code>
+</span>
+<span role="cell">
+<code>p(x,y)</code> or <code>p(x|c)</code>
+</span>
+</div>
+<div role="row">
+<span role="cell">Example</span>
+<span role="cell">Is this query about leave?</span>
+<span role="cell">Explain the leave result.</span>
+</div>
+</div>
+</article>
+          <article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Generative models cannot classify.”</b>
+<p>A joint model can derive class probabilities with Bayes’ rule. The distinction is what was modelled, not whether a label can be produced.</p>
+</div>
+<div>
+<b>“Every neural network is generative.”</b>
+<p>No. Neural networks can be trained with discriminative, generative, self-supervised, contrastive, or combined objectives.</p>
+</div>
+<div>
+<b>“A discriminator makes the whole system discriminative.”</b>
+<p>A GAN uses a discriminator as a training signal for a generator. Judge the complete objective and output.</p>
+</div>
+<div>
+<b>“LLMs should make routing decisions freely.”</b>
+<p>They can classify, but high-risk routing may require constrained outputs, calibrated classifiers, rules, and tests.</p>
+</div>
+<div>
+<b>“Generation means factual knowledge.”</b>
+<p>A model may generate plausible data without access to the authoritative current fact.</p>
+</div>
+<div>
+<b>“Discriminative always means better.”</b>
+<p>It may win for a fixed prediction task, but it does not automatically provide sampling, reconstruction, or rich generation.</p>
+</div>
+</div>
+</article>
+          <article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>How both objectives appear in Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>QUERY ROUTING · DISCRIMINATIVE</span>
+<b>Which path is required?</b>
+<p>Predict policy retrieval, Oracle lookup, both, or unsupported request.</p>
+</div>
+<div>
+<span>RELEVANCE · DISCRIMINATIVE</span>
+<b>Is this passage useful?</b>
+<p>A reranker or relevance grader scores candidate evidence.</p>
+</div>
+<div>
+<span>ORACLE · DETERMINISTIC</span>
+<b>What is the exact value?</b>
+<p>Validated SQL returns the authoritative employee record.</p>
+</div>
+<div>
+<span>ANSWER · GENERATIVE</span>
+<b>How should evidence be explained?</b>
+<p>The LLM produces a response grounded in approved context.</p>
+</div>
+</div>
+<h4>Metadata and Text-to-SQL</h4>
+<p>Metadata filters such as region, leave type, employee class, effective date, and access scope are deterministic constraints. A model may classify or extract those attributes from the question, but the database applies the actual filter. Text-to-SQL generates a candidate query; validation and Oracle execution determine whether it is safe and what exact data is returned.</p>
+<div class="scroll-flow" aria-label="Oracle RAG modelling flow">
+<span>Question</span>
+<i>→</i>
+<span>Discriminative route</span>
+<i>→</i>
+<span>Metadata constraints</span>
+<i>→</i>
+<span>Validated SQL + retrieval</span>
+<i>→</i>
+<span>Generative synthesis</span>
+<i>→</i>
+<span>Verification</span>
+</div>
+<div class="beginner-memory">
+<b>Do not force a binary choice on the whole product.</b> A production RAG application is a composed system containing discriminative, generative, retrieval, database, and rule-based components.</div>
+</article>
+          <article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Discriminative goal</b>
+<p>Predict a target or boundary from the observed input.</p>
+</div>
+<div>
+<b>Generative goal</b>
+<p>Represent a data distribution and often produce samples.</p>
+</div>
+<div>
+<b>Probability view</b>
+<p>Separate <code>p(y|x)</code> from <code>p(x,y)</code> and <code>p(x|y)</code>.</p>
+</div>
+<div>
+<b>System view</b>
+<p>Real RAG products combine both objectives with tools and databases.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Explain the difference without using probability notation.</li>
+<li>What do <code>x</code> and <code>y</code> mean in the spam example?</li>
+<li>Why can a generative model still classify?</li>
+<li>Which leave-assistant steps are discriminative, deterministic, and generative?</li>
+<li>Why is Text-to-SQL generation not the authoritative database result?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick classification exercise</summary>
+<div>
+<ol>
+<li>Predict whether a passage is relevant — <b>discriminative</b>.</li>
+<li>Write a grounded summary — <b>generative</b>.</li>
+<li>Return an Oracle balance — <b>deterministic lookup</b>.</li>
+<li>Generate a synthetic support ticket — <b>generative</b>.</li>
+<li>Predict ticket priority — <b>discriminative</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+          <article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Major generative model families</h3>
+<p>Now that “generative” describes a modelling objective rather than a single architecture, the next lesson compares the major families that realize that objective: autoregressive models, variational autoencoders, GANs, diffusion models, flows, energy-based models, and hybrids.</p>
+<h4>Why LLMs are not next yet</h4>
+<p>The roadmap first builds the broader map of generative families. Foundation models and LLMs follow after that, so an LLM is understood as one important branch—not as the definition of all Generative AI.</p>
+<div class="beginner-memory">
+<b>Concept 02 is complete.</b> Continue to Concept 03 when ready; the roadmap order remains authoritative.</div>
+<a class="button primary" href="module-01-concept-03.html">Start Concept 03 →</a>
+</article>
+        </div>
+      </div>
+    </section>
+    <section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required core and optional depth.</h2>
+<p>Complete the beginner teach-back first. The 24-section mathematical and implementation layer remains optional for now.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Read</b>
+<small>Build the intuition and probability vocabulary.</small>
+</a>
+<a href="#b08">
+<span>02</span>
+<b>Apply</b>
+<small>Map both objectives to the Oracle RAG project.</small>
+</a>
+<a href="#b09">
+<span>03</span>
+<b>Teach back</b>
+<small>Answer the five readiness questions.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open mathematics, code, failures, production, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 02 path:</b> Intuition → objective → system mapping → teach-back.</div>
+</section>
+    <details class="advanced-lesson" id="advanced-lesson">
+      <summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the discriminative versus generative deep dive</b>
+<em>Probability, Bayes, code, diagnostics, production and interviews</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+      <div class="lesson-layout">
+        <aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> From-scratch code</a>
+<a href="#s13">
+<i>13</i> Library code</a>
+<a href="#s14">
+<i>14</i> Interactive lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Knowledge check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+        <div class="lesson-content">
+          <section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where this concept sits</h2>
+</div>
+</header>
+<p>Concept 01 established generation as producing content from learned patterns. Concept 02 separates the statistical objective from the product label. This distinction supports later comparisons of model families, loss functions, rerankers, routers, generators, and evaluators.</p>
+<div class="flow">
+<div class="flow-node">Generative AI</div>
+<div class="flow-node hot">Discriminative vs generative</div>
+<div class="flow-node">Model families</div>
+<div class="flow-node">Foundation models</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+          <section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>What you should be able to do</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>DEFINE</span>
+<h3>State both objectives</h3>
+<p>Explain direct conditional prediction versus modelling a joint or data distribution.</p>
+</article>
+<article class="info-card">
+<span>DERIVE</span>
+<h3>Use Bayes’ rule</h3>
+<p>Derive a posterior class probability from a prior and class-conditional likelihood.</p>
+</article>
+<article class="info-card">
+<span>IDENTIFY</span>
+<h3>Inspect system components</h3>
+<p>Classify routers, rerankers, generators, lookups, and validators correctly.</p>
+</article>
+<article class="info-card">
+<span>CHOOSE</span>
+<h3>Match objective to task</h3>
+<p>Explain trade-offs using data, output, calibration, and operational needs.</p>
+</article>
+</div>
+</section>
+          <section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Feature or input <code>x</code>:</b> observed information supplied to a model.</li>
+<li>
+<b>Target <code>y</code>:</b> label or value to predict.</li>
+<li>
+<b>Conditional probability:</b> probability after observing information.</li>
+<li>
+<b>Distribution:</b> how probability mass or density is assigned across outcomes.</li>
+</ul>
+<details class="quiz">
+<summary>Fast conditional-probability reminder</summary>
+<div>
+<code>p(spam|email)</code> and <code>p(email|spam)</code> reverse the condition and are generally not equal.</div>
+</details>
+</section>
+          <section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>Boundary learner versus data storyteller</h2>
+</div>
+</header>
+<div class="two-lane">
+<article class="lane">
+<span>DISCRIMINATIVE</span>
+<h3>The exam marker</h3>
+<p>Looks at an answer and decides which category or score applies. It need not learn how to write a realistic answer.</p>
+</article>
+<article class="lane">
+<span>GENERATIVE</span>
+<h3>The example writer</h3>
+<p>Learns structure needed to produce or score possible examples, optionally under a condition.</p>
+</article>
+</div>
+<div class="callout warning">
+<b>Analogy boundary</b>Real generative models do not necessarily understand a causal story of the world; they learn a mathematical data distribution or generation procedure.</div>
+</section>
+          <section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal definitions</h2>
+</div>
+</header>
+<p>A discriminative model estimates <code>pθ(y|x)</code> or learns a decision function <code>fθ(x)</code>. A generative model estimates a joint distribution <code>pθ(x,y)</code>, a marginal <code>pθ(x)</code>, a class-conditional model <code>pθ(x|y)</code>, or a conditional data model <code>pθ(x|c)</code>.</p>
+<div class="callout">
+<b>Operational test</b>Ask what probability or mapping is optimized and what outputs the trained model can produce—not merely what neural architecture is used.</div>
+</section>
+          <section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>Two training routes</h2>
+</div>
+</header>
+<div class="two-lane">
+<article class="lane">
+<span>DIRECT CONDITIONAL ROUTE</span>
+<div class="lane-flow">
+<div>Collect labelled pairs (x,y)</div>
+<div>Compute prediction fθ(x)</div>
+<div>Measure classification loss</div>
+<div>Move the decision boundary</div>
+<div>Return p(y|x) or label</div>
+</div>
+</article>
+<article class="lane">
+<span>JOINT / GENERATIVE ROUTE</span>
+<div class="lane-flow">
+<div>Collect examples and conditions</div>
+<div>Model p(x|y), p(y), or p(x|c)</div>
+<div>Optimize likelihood or surrogate</div>
+<div>Score or sample data</div>
+<div>Optionally derive p(y|x)</div>
+</div>
+</article>
+</div>
+</section>
+          <section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>What information flows where?</h2>
+</div>
+</header>
+<div class="scroll-flow">
+<span>Observed x</span>
+<i>→</i>
+<span>Discriminative model</span>
+<i>→</i>
+<span>Label / score y</span>
+<i>·</i>
+<span>Condition c</span>
+<i>→</i>
+<span>Generative model</span>
+<i>→</i>
+<span>Generated x</span>
+</div>
+<p>The same object can appear in different roles. A label <code>y</code> is an output for a classifier but can be a condition supplied to a class-conditional generator.</p>
+</section>
+          <section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Highlight both roles in RAG</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Question</span>
+<i>↓</i>
+<span>Intent classifier</span>
+<i>↓</i>
+<span>Retriever</span>
+<i>↓</i>
+<span>Relevance scorer</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>Generator</span>
+<i>↓</i>
+<span>Claim verifier</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>Classifiers and scorers control routing and evidence. The generator produces language. Oracle and other tools remain authoritative for exact structured values.</p>
+</section>
+          <section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Joint, conditional, and Bayes</h2>
+</div>
+</header>
+<div class="equation">Joint factorization:<br>p(x,y) = p(x|y)p(y) = p(y|x)p(x)</div>
+<div class="equation">Bayes’ rule:<br>p(y|x) = p(x|y)p(y) / p(x)</div>
+<div class="equation">Discriminative cross-entropy for one example:<br>L = − Σᵧ 1[y=y*] log pθ(y|x)</div>
+<p>A generative classifier estimates the likelihood and prior, then normalizes across classes. A discriminative classifier optimizes the posterior or decision boundary directly.</p>
+</section>
+          <section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Spam classification with Bayes</h2>
+</div>
+</header>
+<p>Suppose <code>p(spam)=0.20</code>. The word “offer” appears with likelihood <code>p(offer|spam)=0.60</code> and <code>p(offer|not spam)=0.10</code>.</p>
+<div class="equation">p(spam|offer) = (0.60×0.20) / [(0.60×0.20)+(0.10×0.80)] = 0.12/0.20 = 0.60</div>
+<p>The generative classifier modelled how words appear under each class and derived a 60% posterior. A logistic classifier would instead learn the posterior or decision score directly.</p>
+</section>
+          <section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>DISCRIMINATIVE</span>
+<h3>Query routing</h3>
+<p>Choose vector search, Oracle, both, or refusal.</p>
+</article>
+<article class="info-card">
+<span>DISCRIMINATIVE</span>
+<h3>Cross-encoder reranking</h3>
+<p>Score whether a passage matches a question.</p>
+</article>
+<article class="info-card">
+<span>GENERATIVE</span>
+<h3>Answer synthesis</h3>
+<p>Produce text conditioned on question and evidence.</p>
+</article>
+<article class="info-card">
+<span>DETERMINISTIC</span>
+<h3>SQL execution</h3>
+<p>Neither category: execute a validated query.</p>
+</article>
+</div>
+</section>
+          <section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>From-scratch Gaussian view</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · CONCEPTUAL</span>
+<pre>
+<code>import math
+
+def gaussian(x, mean, std):
+    z = (x - mean) / std
+    return math.exp(-0.5*z*z) / (std*math.sqrt(2*math.pi))
+
+classes = {
+    "relevant": {"prior": .4, "mean": .8, "std": .1},
+    "irrelevant": {"prior": .6, "mean": .3, "std": .2},
+}
+score = .72
+joint = {label: c["prior"]*gaussian(score,c["mean"],c["std"])
+         for label,c in classes.items()}
+posterior = {k:v/sum(joint.values()) for k,v in joint.items()}</code>
+</pre>
+</div>
+<p>The class-conditional Gaussian is generative; normalization yields a discriminative posterior.</p>
+</section>
+          <section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>Library implementations</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · SCIKIT-LEARN</span>
+<pre>
+<code>from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+
+direct = LogisticRegression().fit(X_train, y_train)
+joint_based = GaussianNB().fit(X_train, y_train)
+print(direct.predict_proba(X_test))
+print(joint_based.predict_proba(X_test))</code>
+</pre>
+</div>
+<p>The interface looks similar, but the assumptions and estimated quantities differ.</p>
+</section>
+          <section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Bayes posterior lab</h2>
+</div>
+</header>
+<div class="lab">
+<div class="lab-controls">
+<div class="control">
+<label for="priorSpam">Prior spam</label>
+<input id="priorSpam" type="range" min="5" max="95" value="20">
+<output id="priorSpamValue">20%</output>
+</div>
+<div class="control">
+<label for="likeSpam">P(offer|spam)</label>
+<input id="likeSpam" type="range" min="1" max="99" value="60">
+<output id="likeSpamValue">60%</output>
+</div>
+<div class="control">
+<label for="likeHam">P(offer|not spam)</label>
+<input id="likeHam" type="range" min="1" max="99" value="10">
+<output id="likeHamValue">10%</output>
+</div>
+</div>
+<div class="sample-output" id="bayesOutput">Posterior will appear here.</div>
+<p class="fine-print">Evidence and the base rate jointly determine the posterior.</p>
+</div>
+</section>
+          <section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Trade-offs and selection</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Concern</th>
+<th>Discriminative tendency</th>
+<th>Generative tendency</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fixed prediction</td>
+<td>Direct objective; often strong</td>
+<td>May model unnecessary structure</td>
+</tr>
+<tr>
+<td>Sampling</td>
+<td>Not normally available</td>
+<td>Central capability</td>
+</tr>
+<tr>
+<td>Missing data</td>
+<td>Task-specific handling</td>
+<td>Distribution may support inference</td>
+</tr>
+<tr>
+<td>Label scarcity</td>
+<td>Can struggle without labels</td>
+<td>May exploit unlabelled structure</td>
+</tr>
+</tbody>
+</table>
+</section>
+          <section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>BOUNDARY SHIFT</span>
+<h3>Classifier drift</h3>
+<p>Intent distribution changes and routing accuracy falls.</p>
+</article>
+<article class="info-card">
+<span>MODEL MISMATCH</span>
+<h3>Bad likelihood assumptions</h3>
+<p>A generative classifier models features unrealistically.</p>
+</article>
+<article class="info-card">
+<span>CALIBRATION</span>
+<h3>Overconfidence</h3>
+<p>Scores do not match observed frequencies.</p>
+</article>
+<article class="info-card">
+<span>SHORTCUT</span>
+<h3>Spurious features</h3>
+<p>Models exploit correlations that fail after deployment.</p>
+</article>
+</div>
+</section>
+          <section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Generative means neural network</td>
+<td>Naive Bayes is a classical generative classifier.</td>
+</tr>
+<tr>
+<td>Discriminative means no probabilities</td>
+<td>Many estimate conditional probabilities.</td>
+</tr>
+<tr>
+<td>A product is one category</td>
+<td>Systems compose different objectives.</td>
+</tr>
+<tr>
+<td>Generated SQL is authoritative</td>
+<td>Validated database execution produces the record.</td>
+</tr>
+</tbody>
+</table>
+</section>
+          <section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Measure routing accuracy separately from answer faithfulness.</li>
+<li>Calibrate thresholds and provide abstention routes.</li>
+<li>Version classifiers, generators, prompts, and evaluation sets independently.</li>
+<li>Enforce access control deterministically.</li>
+<li>Trace which component made each decision.</li>
+</ul>
+</section>
+          <section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Which distribution does logistic regression model?</summary>
+<div>It directly models a conditional class probability such as <code>p(y|x)</code>.</div>
+</details>
+<details class="quiz">
+<summary>Why is Naive Bayes generative?</summary>
+<div>It models priors and class-conditional feature likelihoods, defining a joint model.</div>
+</details>
+<details class="quiz">
+<summary>Is a reranker generative?</summary>
+<div>Usually it is discriminative: it scores query-document relevance.</div>
+</details>
+<details class="quiz">
+<summary>Is an LLM always used generatively?</summary>
+<div>No. It can be used for classification, scoring, extraction, or generation.</div>
+</details>
+</div>
+</section>
+          <section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>For intent routing, Text-to-SQL, SQL execution, policy retrieval, reranking, answer generation, and claim verification, record the input, output, objective category, authoritative source, failure behavior, and evaluation metric.</p>
+</section>
+          <section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one defensible classification</summary>
+<div>Routing, reranking, and claim grading are discriminative. Text-to-SQL and answer writing are generative but constrained. SQL execution is deterministic. Policy retrieval is search. Authorization is deterministic policy enforcement.</div>
+</details>
+</section>
+          <section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Discriminative</h3>
+<p>Learn <code>p(y|x)</code> or a direct boundary.</p>
+<h3>Generative</h3>
+<p>Learn <code>p(x,y)</code>, <code>p(x)</code>, or <code>p(x|c)</code>.</p>
+</div>
+<div>
+<h3>Remember</h3>
+<ul>
+<li>Objective beats architecture name.</li>
+<li>Generative models may classify.</li>
+<li>Products combine both.</li>
+<li>Databases remain authoritative.</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+          <section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Compare logistic regression and Naive Bayes.</summary>
+<div>Logistic regression directly models the posterior; Naive Bayes models priors and class-conditional likelihoods.</div>
+</details>
+<details class="quiz">
+<summary>Can a discriminative component improve generation?</summary>
+<div>Yes. Rerankers, safety classifiers, routers, and verifiers can guide or evaluate generation.</div>
+</details>
+<details class="quiz">
+<summary>When prefer a direct classifier?</summary>
+<div>For a stable, well-labelled prediction task where generation adds no value.</div>
+</details>
+<details class="quiz">
+<summary>Where is this visible in RAG?</summary>
+<div>Routing and relevance scoring are commonly discriminative; answer synthesis is generative.</div>
+</details>
+</div>
+</section>
+          <section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and completion</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://cs229.stanford.edu/notes2020fall/notes2020fall/cs229-notes2.pdf">
+<b>Stanford CS229 — Generative Learning Algorithms</b>
+<br>
+<span>Classical generative classification, Gaussian discriminant analysis, and Naive Bayes.</span>
+</a>
+<a href="https://www.cs.cmu.edu/~epxing/Class/10701-19/notes-19/10701-scribe-lecture-03.pdf">
+<b>CMU 10-701 — Generative and discriminative classifiers</b>
+<br>
+<span>Probability factorization and modelling-objective comparison.</span>
+</a>
+<a href="https://scikit-learn.org/stable/modules/naive_bayes.html">
+<b>scikit-learn — Naive Bayes</b>
+<br>
+<span>Reference implementation and assumptions.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 02 is complete. Its probability comparison, Bayes lab, production boundaries, and interview questions remain available whenever you want deeper revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-03.html">Start Concept 03 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Major generative model families.</p>
+</div>
+</section>
+        </div>
+      </div>
+    </details>
+  </main>
+  <footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 02 · Complete</p>
+<a href="module-01-concept-03.html">Concept 03 →</a>
+</footer>
+</body>
+</html>
+

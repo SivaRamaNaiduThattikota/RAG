@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on prompting principles and prompt roles: instruction clarity and specificity, few-shot examples as in-context demonstrations, why system/user/assistant role separation is a structural technique the model was actually trained to respect, and how prompt templates turn all of it into a reusable, testable artifact.">
+<title>Prompting principles and prompt roles — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 08</p>
+<h1>Prompting principles<br><em>and prompt roles</em></h1>
+<p class="lesson-lead">Concept 07 fixed the budget a prompt has to fit inside and showed that worked examples can shift a model's output with zero weight change. This concept asks the craft question that budget makes urgent: given that fixed space and that in-context effect, how do you actually fill the window well — a clear instruction, a few well-chosen examples, and a system/user/assistant structure the model was specifically trained to treat differently, not just formatting it happens to notice.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>Context windows and in-context learning</b></div>
+<div><span>BEGINNER GOAL</span><b>Structure a prompt with a specific instruction, effective few-shot examples, and correct system/user/assistant roles</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You separated instruction specificity, few-shot placement, and role separation into three distinct levers, and explained why system/user/assistant roles only carry weight because Concept 06's fine-tuning stage trained the model to treat them differently.</p>
+<b>8 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Filling the window well, not just filling it</h2>
+</div>
+<p>Concept 07 established the budget and the in-context effect. Neither one tells you what to actually write. This concept is about the writing: how specific the instruction needs to be, where worked examples earn their token cost, and why calling something a "system" message changes how the model treats it at all.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A prompt is a structured request, not a paragraph</h3>
+<p>A well-built prompt has four moving parts. An <b>instruction</b> states the task — vague or specific. <b>Few-shot examples</b> are worked demonstrations placed in the prompt so Concept 07's in-context learning has something concrete to condition on. <b>Roles</b> — <b>system</b>, <b>user</b>, and <b>assistant</b> — label who is "speaking" in each part of the input. And a <b>prompt template</b> is the reusable shape that assembles instruction, examples, retrieved context, and the live question the same way every time a real request comes in.</p>
+<p>The roles are not a labeling convention you invented at the API layer. Concept 06 showed that supervised fine-tuning trains a model on data formatted with exactly these role delimiters, teaching it to weight system-tagged tokens as authoritative instructions and treat user-tagged tokens as the task to perform. That is why role separation changes behavior — it is a trained prior, not a cosmetic tag.</p>
+<div class="beginner-memory"><b>First memory:</b> instruction, examples, and roles are three separate levers on the same prompt — and the roles only work because Concept 06's fine-tuning stage taught the model to respect them.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>An unstructured block of text is ambiguous to fill</h3>
+<p>Concept 07 showed that a context window doesn't care what filled it — every token you send competes for the same budget, and attention treats them all as tokens to condition on. Without deliberate structure, "policy," "question," and "example answer" are indistinguishable to the model except by their content. A vague instruction like "answer well" gives the output distribution almost nothing to sharpen against; an unlabeled paragraph gives the model no signal about which part is the rule and which part is the data.</p>
+<div class="mental-compare">
+<div><span>ONE UNSTRUCTURED BLOCK</span><p>Instructions, evidence, and the question run together; nothing marks which part carries authority.</p></div>
+<div><span>A STRUCTURED PROMPT</span><p>A specific instruction, chosen examples, and role labels the model was trained to weight differently.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Same question, two very different prompts</h3>
+<p>Prompt A: <i>"You are a helpful assistant. Answer the user's question about leave policy using the context below and the question below."</i> — everything in one block, one vague verb ("answer"), no worked example. Prompt B assigns a <b>system</b> message ("Answer only using the numbered policy sections provided. Cite the section number in parentheses. If the context does not contain the answer, say so explicitly."), a <b>user</b> message carrying just the retrieved sections and the question, and one <b>assistant</b>-role few-shot example showing the exact citation format wanted.</p>
+<div class="context-demo">
+<div><span>PROMPT A</span><p>Vague instruction, no examples, no role separation — the model has to guess what "answer well" means here.</p></div>
+<div><span>PROMPT B</span><p>Specific instruction, one worked example, roles assigned — same underlying question, far less room for drift.</p></div>
+<div><span>WHAT ACTUALLY CHANGED</span><p>Not the model, not the retrieved evidence — only how the exact same information was structured before the forward pass.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0208-visual-title">
+  <strong class="concept-visual-title" id="c0208-visual-title">VISUAL · WHAT ONE PROMPT IS ACTUALLY MADE OF</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the system role, few-shot examples, retrieved context and the user role all feeding one assembled prompt template">
+    <div class="diagram-hub">
+      <div class="diagram-node"><b>System role</b><small>instruction + policy</small></div>
+      <div class="diagram-node"><b>Few-shot examples</b><small>worked demonstrations</small></div>
+      <div class="diagram-node hub-center"><b>Prompt template</b><small>one assembled input</small></div>
+      <div class="diagram-node"><b>Retrieved context</b><small>evidence, not instructions</small></div>
+      <div class="diagram-node"><b>User role</b><small>the live question</small></div>
+    </div>
+  </div>
+  <figcaption>Four different kinds of content, assembled into one template before it ever reaches Concept 07's context window. The lab in the advanced section lets you break this apart on purpose and watch what happens.</figcaption>
+  <ol class="diagram-key"><li><b>Roles carry weight:</b> system-tagged tokens are trained (Concept 06) to read as authoritative; retrieved context is data, never a role of its own.</li><li><b>Examples condition, not train:</b> few-shot content works through Concept 07's in-context learning, not through any weight update.</li><li><b>One template, many requests:</b> the shape stays fixed; only the retrieved context and question change per call.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What each part of the prompt is actually doing</h3>
+<div class="example-grid">
+<article class="info-card"><span>SYSTEM ROLE</span><h3>Trained to carry policy</h3><p>Concept 06's fine-tuning data associates system-tagged content with instructions the model should follow ahead of the user's own phrasing.</p></article>
+<article class="info-card"><span>USER ROLE</span><h3>The task to perform</h3><p>Carries the live question and any evidence you want treated as this turn's input, not as a standing rule.</p></article>
+<article class="info-card"><span>ASSISTANT ROLE</span><h3>Prior output — and few-shot demos</h3><p>Normally the model's own past turns; also used to plant worked example answers the model conditions on via Concept 07's in-context learning.</p></article>
+<article class="info-card"><span>INSTRUCTION SPECIFICITY</span><h3>Narrows what "good" means</h3><p>"Cite the section number in parentheses" gives the output distribution something concrete to sharpen toward; "answer well" does not.</p></article>
+<article class="info-card"><span>FEW-SHOT EXAMPLES</span><h3>Concept 07's mechanism, used deliberately</h3><p>Each example is attended over like any other prompt token — no fine-tuning job, just a demonstration placed where the forward pass can use it.</p></article>
+<article class="info-card"><span>PROMPT TEMPLATE</span><h3>The reusable shape</h3><p>Fixes where the instruction, examples, and role boundaries sit so every real request gets assembled the same way.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Designing the template, then filling it per request</h3>
+<div class="mental-compare">
+<div><span>TEMPLATE DESIGN</span><p>Done once: draft the instruction, pick few-shot examples, decide the role structure.</p></div>
+<div><span>REQUEST ASSEMBLY</span><p>Done every call: drop in the live retrieved context and question, then send.</p></div>
+</div>
+<div class="scroll-flow">
+<span>Draft a specific instruction</span><i>→</i>
+<span>Choose few-shot examples</span><i>→</i>
+<span>Assign system / user / assistant roles</span><i>→</i>
+<span>Fill in retrieved context + question, per request</span><i>→</i>
+<span>Check against Concept 07's context window</span><i>→</i>
+<span>Forward pass (Concepts 03–05)</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where prompt assembly sits across the full RAG pipeline</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents → chunks (built later)</span><i>↓</i>
+<span>Retrieval → candidate chunks</span><i>↓</i>
+<span>Prompt template: instruction + examples + roles — this concept</span><i>↓</i>
+<span>Fits inside Concept 07's context window</span><i>↓</i>
+<span>LLM forward pass → answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Five terms that get flattened into "the prompt"</h3>
+<div class="distinction-table" role="table" aria-label="Prompting and prompt role distinctions">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Prompt</span><span role="cell">The full assembled input for one model call</span><span role="cell">Confused with just the instruction sentence</span></div>
+<div role="row"><span role="cell">Prompt template</span><span role="cell">The reusable structure a prompt is built from</span><span role="cell">Confused with any one filled-in example of it</span></div>
+<div role="row"><span role="cell">System role</span><span role="cell">Content trained to be weighted as instruction/policy</span><span role="cell">Assumed to be a guarantee, not a strong trained prior</span></div>
+<div role="row"><span role="cell">Few-shot example</span><span role="cell">A worked demonstration the model conditions on in-context</span><span role="cell">Assumed to be a small, permanent fine-tuning update</span></div>
+<div role="row"><span role="cell">Retrieved context</span><span role="cell">Evidence carried in the user turn, not a role of its own</span><span role="cell">Treated as if it carries the same authority as a system instruction</span></div>
+</div>
+<p>That last row matters for later security material: retrieved text is data by default, and the moment it starts being treated like an instruction is a boundary this course returns to as prompt injection in Module 20 — previewed here only.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"Role labels are just formatting the API happens to want."</b><p>They correspond to a distinction the model was trained on during Concept 06's fine-tuning stage — removing them changes behavior, not just appearance.</p></div>
+<div><b>"A longer instruction is a more specific instruction."</b><p>Specificity means stating the exact rule and format wanted; padding a vague instruction with more words does not add that.</p></div>
+<div><b>"More few-shot examples always helps."</b><p>Each example costs tokens against Concept 07's fixed budget, and returns diminish well before the window fills.</p></div>
+<div><b>"Putting the whole policy document in the user role works the same as a system instruction."</b><p>Both are tokens the model attends over, but only system-tagged content carries the trained instruction-following weight.</p></div>
+<div><b>"The system role guarantees compliance."</b><p>It strongly conditions the output distribution; it does not force a particular token to be chosen every time.</p></div>
+<div><b>"A prompt template is a nice-to-have, not a real artifact."</b><p>It is the thing that actually gets versioned, tested, and reused across every request — treat it like code.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>SYSTEM ROLE</span><b>Carries the citation policy</b><p>"Answer only from the provided sections; cite section numbers" belongs in the system role, not buried in the question.</p></div>
+<div><span>FEW-SHOT FORMATTING</span><b>One or two worked citation examples</b><p>Deliberate use of Concept 07's in-context learning to lock in an exact answer shape, without a training job.</p></div>
+<div><span>USER ROLE</span><b>Retrieved chunks + the live question</b><p>Evidence and the question travel together as this turn's input — never labeled as instructions.</p></div>
+<div><span>TEMPLATE VERSIONING</span><b>One reusable shape, tested like code</b><p>Changing the instruction or the examples is a template change worth tracking, not a one-off edit.</p></div>
+</div>
+<p>LangChain's <code>ChatPromptTemplate</code> and Anthropic's and OpenAI's chat APIs both expose system/user/assistant as first-class message roles — they didn't invent the distinction; they expose the exact trained behavior Concept 06 already put in the model.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Instruction specificity</b><p>A concrete, checkable rule beats a vague verb like "answer well."</p></div>
+<div><b>Few-shot examples</b><p>Worked demonstrations that use Concept 07's in-context learning deliberately.</p></div>
+<div><b>Role separation</b><p>Meaningful because Concept 06's fine-tuning trained the model to weight roles differently.</p></div>
+<div><b>Prompt template</b><p>The reusable, versionable shape a real request gets assembled from.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does calling something a "system" message change model behavior, rather than just labeling it?</li>
+<li>What makes an instruction specific rather than vague?</li>
+<li>Why are few-shot examples an application of Concept 07's mechanism rather than a new one?</li>
+<li>Why shouldn't retrieved context be treated as if it carries system-role authority?</li>
+<li>What costs does adding another few-shot example actually impose?</li>
+<li>What is a prompt template, and why should it be versioned like code?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick role-assignment exercise</summary>
+<div>
+<ol>
+<li>"Cite the section number in parentheses after every claim." — <b>belongs in the system role: a policy/instruction, not the question itself</b>.</li>
+<li>"What is the carryover limit for unused leave?" — <b>belongs in the user role: the live question</b>.</li>
+<li>A worked sample answer showing the exact citation format — <b>belongs in the assistant role, used as a few-shot demonstration</b>.</li>
+<li>Three retrieved policy paragraphs — <b>belongs in the user role as evidence, never labeled as an instruction</b>.</li>
+<li>"Be helpful and thorough." — <b>vague; rewrite it as a specific, checkable rule before it earns a spot in the system role</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: LLM knowledge limitations, parametric knowledge and hallucination</h3>
+<p>Concept 09 turns to what a well-structured prompt still cannot fix: the model's own parametric knowledge has a training-data cutoff and can be confidently wrong. That boundary — separate from anything a context window or a prompt template controls — is exactly why Module 03 builds retrieval in the first place.</p>
+<div class="beginner-memory"><b>Concept 08 is complete.</b> Continue to LLM knowledge limitations, parametric knowledge and hallucination.</div>
+<a class="button primary" href="module-02-concept-09.html">Start Concept 09 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required structure, optional depth.</h2>
+<p>Master instruction specificity, few-shot placement, and role separation first. Open the role-weighting mathematics, from-scratch template code, and the injection-resistance lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Instruction, examples, roles, and template are four different levers.</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>System, user, assistant, and where few-shot examples actually sit.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Policy in the system role, evidence and question in the user role.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the role-weighting mathematics, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Draft a specific instruction → choose few-shot examples → assign roles → fill in context and question → check the window (Concept 07) → forward pass.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the prompting deep dive</b><em>Role-weighting mathematics, a from-scratch template-assembly demo, and the role-separation lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where this sits between Concept 07 and Concept 09</h2></div></header>
+<p>Concept 07 fixed the token budget and named in-context learning as a real, zero-weight-change effect. This concept does not re-derive either — it assumes the context window and in-context learning are known, and asks how to deliberately use them: writing a specific instruction, choosing few-shot examples, and assigning system/user/assistant roles that Concept 06's fine-tuning stage made meaningful. It does not re-teach the decoding loop or sampling parameters — those belong to Module 01, Concept 07, and are cited, not repeated. Concept 09 picks up immediately after, on the boundary a good prompt still cannot fix: the model's own parametric knowledge.</p>
+<div class="flow">
+<div class="flow-node">Fine-tuned roles (Concept 06)</div>
+<div class="flow-node hot">Instruction + examples</div>
+<div class="flow-node hot">Role-structured template</div>
+<div class="flow-node">Context window (Concept 07)</div>
+<div class="flow-node">Forward pass (Concepts 03–05)</div>
+<div class="flow-node">Answer</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State what each role is trained to carry</h3><p>Name what system, user, and assistant roles are, and why the distinction is behavioral, not cosmetic.</p></article>
+<article class="info-card"><span>WRITE</span><h3>Turn a vague instruction into a specific one</h3><p>Identify what "specific" actually adds beyond length or politeness.</p></article>
+<article class="info-card"><span>PLACE</span><h3>Position few-shot examples correctly</h3><p>Use Concept 07's in-context learning deliberately, inside a role-structured template.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate this from Concept 09's territory</h3><p>State what a good prompt cannot fix about the model's own knowledge.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Context window (Concept 07):</b> the fixed budget every part of a prompt has to fit inside.</li>
+<li><b>In-context learning (Concept 07):</b> the exact mechanism few-shot examples in this concept rely on.</li>
+<li><b>Supervised fine-tuning and alignment (Concept 06):</b> the training stage that made role labels behaviorally meaningful in the first place — cited, not re-derived.</li>
+<li><b>Tokenization (Concept 02):</b> what actually gets counted when a template's token budget is checked.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A labeled work order versus one paragraph of notes</h2></div></header>
+<p>Imagine handing a new hire a labeled work order — a "policy" section, a "reference materials" section, a "task" section — instead of one unlabeled paragraph that mixes all three. The labeled version isn't just tidier; a hire who was specifically trained to treat "policy" sections as binding will follow them more reliably than the same words with no label at all. Prompting works the same way: role labels aren't decoration, they're read by something that was trained to read them a specific way.</p>
+<div class="callout warning"><b>Analogy boundary</b>A new hire's training happened in a classroom somewhere else; a model's happened in Concept 06's fine-tuning stage, over actual chat-formatted training examples with these same role delimiters. The analogy explains why labels can matter to a reader — it does not explain the mechanism. That mechanism is a trained statistical prior, not comprehension, and Section 09 formalizes it as a weight on the model's own logits.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Prompt</td><td>The full tokenized input assembled for one model call</td><td>Bounded by Concept 07's context window, not defined by it</td></tr>
+<tr><td>Prompt template</td><td>A fixed structure specifying where instruction, examples, roles, and live inputs go</td><td>Designed once; filled in per request</td></tr>
+<tr><td>Instruction specificity</td><td>The degree to which an instruction states a concrete, checkable rule rather than a general goal</td><td>Independent of instruction length</td></tr>
+<tr><td>Few-shot example / in-context demonstration</td><td>A worked input-output pair placed in the prompt to condition the model via Concept 07's in-context learning</td><td>Zero weight change — not a fine-tuning update</td></tr>
+<tr><td>System / user / assistant role</td><td>Labels a fine-tuned chat model was trained to weight differently during generation</td><td>Meaningful because of Concept 06's training, not by architectural default</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two different clocks: designing the template, filling it in</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>TEMPLATE DESIGN TIME — DONE ONCE</span>
+<div class="lane-flow">
+<div>Draft a specific instruction stating the exact rule and format wanted</div>
+<div>Choose a small number of few-shot examples that demonstrate that format</div>
+<div>Assign system role to policy/instruction, user role to question and evidence</div>
+<div>Save the template as a versioned artifact, not an inline string</div>
+</div>
+</article>
+<article class="lane"><span>REQUEST TIME — DONE EVERY CALL</span>
+<div class="lane-flow">
+<div>Retrieved chunks and the live question are dropped into the user-role slot</div>
+<div>The filled template is tokenized with its role delimiters intact</div>
+<div>The forward pass conditions attention more heavily on system-tagged tokens (Concept 06's trained prior)</div>
+<div>Few-shot examples, if present, condition the output via Concept 07's in-context learning</div>
+</div>
+</article>
+</div>
+<p>Design time decides the shape; request time decides the content. A bug in either lane produces a different failure — Section 16 separates them.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Role weighting as a hub, not a flat list</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the system role's trained instruction weight, the user role's task content, few-shot examples, and untrusted retrieved context all converging on the model's attention">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>System role</b><small>trained instruction weight (Concept 06)</small></div>
+    <div class="diagram-node"><b>Few-shot examples</b><small>in-context conditioning (Concept 07)</small></div>
+    <div class="diagram-node hub-center"><b>Model's attention</b><small>weighted by training, not by label alone</small></div>
+    <div class="diagram-node"><b>User role</b><small>the task to perform</small></div>
+    <div class="diagram-node"><b>Retrieved context</b><small>data — no role authority of its own</small></div>
+  </div>
+</div>
+<p>The center isn't attention in the abstract (Concept 04 already covered that mechanism) — it's the specific, trained bias toward reading system-tagged content as instruction. Retrieved context sits at the edge deliberately: it is data the user role carries, never a role with instruction-following weight by default.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where the template sits relative to the RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing → Chunks</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors → Retrieval</span><i>↓</i>
+<span>Prompt template: instruction + examples + roles — this concept</span><i>↓</i>
+<span>LLM — Concept 07's window and effect</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>Retrieval hands over candidate chunks; this concept decides how those chunks, the instruction, and any worked examples get assembled and role-tagged before Concept 07's window and forward pass ever run.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Formalizing "the budget" and "the trained weight"</h2></div></header>
+<p>A template's token cost is the sum of its parts, and it has to leave room for Concept 07's reserved output:</p>
+<div class="equation">tokens_template = tokens_system + tokens_instruction + n_shot·tokens_per_example + tokens_context + tokens_question</div>
+<div class="equation">tokens_template + tokens_reserved_output ≤ n_max  (Concept 07's context-window ceiling, cited, not re-derived)</div>
+<p>Separately, role separation's effect can be sketched as an additive bias on the model's own next-token logits — a simplified stand-in for what Concept 06's fine-tuning actually learned to do:</p>
+<div class="equation">logit'_i = logit_i + w_role · specificity(instruction, token_i)</div>
+<p><code>logit_i</code> is the token's raw score before this effect (Concept 05); <code>specificity(instruction, token_i)</code> is how strongly a candidate token matches what the instruction concretely asked for, scored higher for a specific instruction than a vague one; <code>w_role</code> is a learned coefficient — large when the instruction sits in a system-tagged position the fine-tuning stage trained to matter, near zero when the same words sit in an untagged or data-only position. This is not the model's real internal computation, only a way to reason about why identical wording produces a different outcome depending on where it sits.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Budgeting a template, then comparing two instructions</h2></div></header>
+<p>An Oracle RAG answer template: a 180-token system instruction, one 220-token few-shot example, three retrieved sections totaling 1,200 tokens, and a 40-token question.</p>
+<div class="equation">tokens_template = 180 + 220·1 + 1200 + 40 = 1,640</div>
+<div class="equation">1,640 + 400 (reserved output) = 2,040 ≤ 8,000 (n_max) — comfortably inside the window</div>
+<p>Now compare two versions of the instruction using Section 09's logit-bias sketch, with an illustrative <code>w_role = 3</code> for content correctly placed in the system role: a vague instruction ("answer well") scores <code>specificity ≈ 0.2</code>, giving a logit shift of about <code>0.6</code>; a specific instruction ("cite the section number in parentheses after every claim") scores <code>specificity ≈ 0.9</code>, giving a shift of about <code>2.7</code> — more than four times larger, for a token count that barely changed. Specificity, not instruction length, is what actually moves this number.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>SPECIFIC SYSTEM INSTRUCTION</span><h3>A checkable rule, not a goal</h3><p>"Cite the section number after every claim; say so if the context lacks the answer" — verifiable from the output alone.</p></article>
+<article class="info-card"><span>WELL-PLACED FEW-SHOT EXAMPLE</span><h3>Demonstrates the format, not the facts</h3><p>One worked citation example teaches the shape of a good answer without pretending to answer the live question.</p></article>
+<article class="info-card"><span>VERSIONED TEMPLATE</span><h3>Instruction and examples tracked like code</h3><p>A template change is a deployable change, reviewed the same way a retrieval change would be.</p></article>
+<article class="info-card"><span>DATA STAYING DATA</span><h3>Retrieved sections carry no instructions</h3><p>Evidence sits in the user role and is never treated as if it can redirect the system role's rules.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"The user role can carry policy just as well"</h3><p>The words can sit there, but the trained instruction-following weight Section 09 sketches mostly doesn't come along with them.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Five few-shot examples is strictly better than two"</h3><p>Diminishing returns on format compliance, paid for in real tokens against Concept 07's fixed budget.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A from-scratch prompt template assembler</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>def estimate_tokens(text, chars_per_token=4):
+    return max(1, round(len(text) / chars_per_token))
+
+def build_prompt(system_instruction, few_shot_examples, retrieved_context, question,
+                  context_window=8000, reserved_output=400):
+    # Roles are assembled as a list of tagged messages, not one flat string —
+    # the tag is what a fine-tuned chat model was trained to read differently.
+    messages = [{"role": "system", "content": system_instruction}]
+
+    for example in few_shot_examples:
+        messages.append({"role": "user", "content": example["question"]})
+        messages.append({"role": "assistant", "content": example["answer"]})   # few-shot, not the model's own prior turn
+
+    evidence_block = "\n\n".join(retrieved_context)                            # data — never given a "system" tag
+    messages.append({"role": "user", "content": f"{evidence_block}\n\nQuestion: {question}"})
+
+    total_tokens = sum(estimate_tokens(m["content"]) for m in messages)
+    budget_ok = (total_tokens + reserved_output) <= context_window
+    if not budget_ok:
+        raise ValueError(f"Template needs {total_tokens + reserved_output} tokens, "
+                          f"window only allows {context_window}")             # fail before the call, per Concept 07
+    return messages
+
+SYSTEM = ("Answer only using the numbered policy sections provided. "
+          "Cite the section number in parentheses after every claim. "
+          "If the sections do not contain the answer, say so explicitly.")     # specific, checkable — Section 09's high-specificity case
+
+FEW_SHOT = [{"question": "What is the notice period for resignation?",
+             "answer": "The standard notice period is two weeks (3.2)."}]
+
+prompt = build_prompt(SYSTEM, FEW_SHOT,
+                       retrieved_context=["(3.2) Employees must give two weeks' written notice..."],
+                       question="How much notice must I give before resigning?")
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>What production APIs and frameworks actually call this</h2></div></header>
+<p>OpenAI's and Anthropic's chat APIs expose <code>system</code>, <code>user</code>, and <code>assistant</code> as first-class message roles in every request body — the exact structure this concept describes, not an abstraction layered on top of it. LangChain's <code>ChatPromptTemplate</code> and its <code>MessagesPlaceholder</code> compose these same roles programmatically, including slots for few-shot examples, and tools such as LangSmith's prompt hub version and diff templates the same way source code is versioned. None of these tools change what a role or a few-shot example is — they operationalize the exact trained behavior Concept 06 already put in the model.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Prompt structure and role-separation lab</h2></div></header>
+<div class="lab">
+<p>Choose an instruction's specificity, how many few-shot examples accompany it, and whether role tags are actually present in the assembled prompt. Watch three independent readings update: whether the model's output would likely match the task, whether it would match the demonstrated format, and whether an instruction-shaped sentence hidden inside the retrieved context would get obeyed anyway.</p>
+<div class="lab-actions" role="group" aria-label="Choose instruction specificity">
+<button type="button" class="specificity-button active" data-specificity="vague" aria-pressed="true">Vague instruction</button>
+<button type="button" class="specificity-button secondary" data-specificity="specific" aria-pressed="false">Specific instruction</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose the number of few-shot examples">
+<button type="button" class="fewshot-count-button active" data-shots="0" aria-pressed="true">0 examples</button>
+<button type="button" class="fewshot-count-button secondary" data-shots="1" aria-pressed="false">1 example</button>
+<button type="button" class="fewshot-count-button secondary" data-shots="2" aria-pressed="false">2 examples</button>
+<button type="button" class="fewshot-count-button secondary" data-shots="3" aria-pressed="false">3 examples</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Toggle whether role delimiters are present">
+<button type="button" class="roletag-button active" data-roletags="on" aria-pressed="true">Role tags: on</button>
+<button type="button" class="roletag-button secondary" data-roletags="off" aria-pressed="false">Role tags: off</button>
+</div>
+<div class="prob-bars" id="promptLabMeters" aria-live="polite"></div>
+<div class="sample-output" id="promptLabOutput" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>One fixed template versus one adapted per query</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram comparing a single fixed prompt template used for every request against a template whose instruction and examples are chosen per query">
+  <div class="diagram-split">
+    <div class="diagram-node active"><b>Task requirements</b><small>what this query actually needs</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node active"><b>Fixed template</b><small>same instruction and examples, every call</small></div>
+    <div class="diagram-node"><b>Adaptive template</b><small>instruction/examples selected per query type</small></div>
+  </div>
+</div>
+<table class="compare-table">
+<thead><tr><th>Choice</th><th>What it costs</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>One fixed template</td><td>Simple to version and test; can be a poor fit for atypical queries</td><td>Predictable, cheap to reason about, sometimes under-specified</td></tr>
+<tr><td>Adaptive template per query type</td><td>Extra routing logic to pick instruction/examples before assembly</td><td>Better fit per query, but more surfaces to test and version</td></tr>
+</tbody>
+</table>
+<p>This concept only establishes that the choice exists; deciding when adaptive routing earns its complexity belongs to Module 15's query-transformation material, previewed here only by name.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>VAGUE INSTRUCTION</span><h3>Underspecified output distribution</h3><p>"Answer well" gives the model nothing concrete to sharpen toward — outputs drift in format and completeness across calls.</p></article>
+<article class="info-card"><span>ROLE CONFLATION</span><h3>Instructions placed in the user role</h3><p>The words are present, but without the system-tagged weighting, they compete with the question instead of governing it.</p></article>
+<article class="info-card"><span>FEW-SHOT OVERLOAD</span><h3>Diminishing returns, real cost</h3><p>Extra examples add tokens against Concept 07's budget and quadratic attention cost, past the point they still change the output.</p></article>
+<article class="info-card"><span>STALE EXAMPLES</span><h3>Format drift over time</h3><p>Few-shot examples written for an old answer format keep steering new requests toward a shape that's no longer wanted.</p></article>
+<article class="info-card"><span>UNTAGGED CONTEXT TREATED AS INSTRUCTION</span><h3>Prompt-injection preview</h3><p>A sentence inside retrieved text that reads like an instruction can get partial trained weight it should never have — Module 20 covers full defenses; only named as a boundary here.</p></article>
+<article class="info-card"><span>UNVERSIONED TEMPLATE EDITS</span><h3>Untracked behavior change</h3><p>Editing the live instruction or examples without versioning makes a behavior shift indistinguishable from a model or data change.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Role tags are cosmetic formatting</td><td>They correspond to a distinction Concept 06's fine-tuning stage specifically trained the model to weight differently.</td></tr>
+<tr><td>Few-shot examples are a lightweight form of fine-tuning</td><td>They work entirely through Concept 07's in-context learning — zero weight change, gone once the call ends.</td></tr>
+<tr><td>A longer instruction is automatically a more specific one</td><td>Specificity means stating a concrete, checkable rule; length alone doesn't add that.</td></tr>
+<tr><td>The assistant role is only for showing the final answer</td><td>It is also where few-shot demonstration answers are placed, ahead of the live question.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Version prompt templates the same way code is versioned — a changed instruction or example set is a behavior change worth a diff and a review.</li>
+<li>Keep retrieved context in the user role by default; treat any text that reads like an instruction inside it as a signal to investigate, not obey.</li>
+<li>Budget few-shot examples against Concept 07's token cost and quadratic attention cost — measure whether an added example still changes the output before keeping it.</li>
+<li>Test instruction changes against a fixed evaluation set before shipping them; a "small wording tweak" can shift output format noticeably.</li>
+<li>Log which template version produced which answer — the same reproducibility discipline Module 01 already applied to decoding parameters.</li>
+<li>None of this substitutes for retrieval quality or grounding — a perfectly structured prompt around wrong or missing evidence still produces a wrong answer.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does the system role change model behavior rather than just labeling content?</summary><div>Because Concept 06's supervised fine-tuning trained the model on data using these exact role delimiters, teaching it to weight system-tagged content as instruction — the effect is a trained prior, not a property of the label itself.</div></details>
+<details class="quiz"><summary>What distinguishes a specific instruction from a vague one?</summary><div>A specific instruction states a concrete, checkable rule and format; a vague instruction states only a general goal, giving the output distribution nothing precise to sharpen toward.</div></details>
+<details class="quiz"><summary>Are few-shot examples a form of fine-tuning?</summary><div>No — they work entirely through Concept 07's in-context learning, conditioning one forward pass with zero change to any stored weight.</div></details>
+<details class="quiz"><summary>Why is retrieved context kept in the user role rather than the system role?</summary><div>Because it is evidence for this turn, not a standing instruction; giving it system-role placement would grant it trained instruction-following weight it should not have.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Design a prompt template for a new Oracle RAG task: summarizing which leave-policy exceptions apply to a described employee scenario. Write one specific system instruction, decide how many few-shot examples to include and justify the count against Section 09's budget equation, and assign roles to a sample retrieved excerpt and question of your own choosing. Then compute the template's total token cost using Section 09's formula for a context window of 6,000 tokens with 500 reserved for output, and state whether it fits.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open one defensible template design</summary><div>A workable system instruction: "Given the described employee scenario and the numbered policy sections, list only the exceptions that apply, citing the section number for each. If no exception applies, say so explicitly." One few-shot example is usually enough here — the task is narrow and mostly about format (a cited list), so a second example would mostly add tokens rather than more format signal. Role assignment: the instruction above sits in the system role; the retrieved policy sections and the employee scenario sit together in the user role as evidence plus question; a worked "scenario → cited exception list" pair sits in the assistant role as the single few-shot demonstration. For a rough budget with a 160-token system instruction, one 200-token example, 900 tokens of retrieved sections, and a 70-token question: 160 + 200 + 900 + 70 = 1,330 tokens; adding the 500 reserved for output gives 1,830, comfortably under the 6,000-token window.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>Instruction specificity, few-shot placement (Concept 07's in-context learning), and system/user/assistant roles (meaningful because of Concept 06's fine-tuning) combine into a versioned prompt template.</p></div>
+<div><h3>Selection rule</h3><ul><li>State a checkable rule, not a general goal</li><li>Keep policy in the system role, evidence and question in the user role</li><li>Add few-shot examples until format compliance stops improving, not further</li><li>Version the template; never treat retrieved text as an instruction</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain why system/user/assistant roles affect model output rather than being purely organizational.</summary><div>Because the model was fine-tuned (Concept 06) on chat-formatted data using these exact delimiters, it learned to weight system-tagged content as instruction more heavily than the same words in an untagged or user-tagged position — a trained behavioral prior, not a labeling convention the API layer invented.</div></details>
+<details class="quiz"><summary>A colleague says adding five more few-shot examples can only help. How do you respond?</summary><div>Each example costs real tokens against the context window and adds to attention's quadratic cost (Concept 07); format compliance from additional examples diminishes well before the window is full, so the right question is whether the next example still measurably changes the output, not whether there's room for it.</div></details>
+<details class="quiz"><summary>Why should retrieved context never be placed in the system role?</summary><div>The system role carries trained instruction-following weight; placing retrieved, potentially untrusted text there would grant it authority a passage of evidence should never have — the same boundary that motivates prompt-injection defenses later in the course.</div></details>
+<details class="quiz"><summary>What's the difference between a prompt and a prompt template?</summary><div>A prompt is one fully assembled input for a single model call; a template is the reusable, versioned structure — instruction, example slots, and role boundaries — that produces a new prompt each time it is filled with a live question and retrieved context.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.14165"><b>Brown et al. — Language Models are Few-Shot Learners</b><br><span>The foundational demonstration that worked examples placed in a prompt change model behavior without any parameter update — the basis of this lesson's few-shot guidance.</span></a>
+<a href="https://arxiv.org/abs/2203.02155"><b>Ouyang et al. — Training Language Models to Follow Instructions with Human Feedback</b><br><span>Shows how instruction-tuning and preference alignment (Concept 06's territory) are exactly what makes structured, role-labeled instructions behaviorally meaningful.</span></a>
+<a href="https://arxiv.org/abs/2102.09690"><b>Zhao et al. — Calibrate Before Use: Improving Few-Shot Performance of Language Models</b><br><span>Documents how sensitive few-shot behavior is to example choice and ordering — grounds this lesson's diminishing-returns and drift failure modes.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>You already rewrote a vague instruction into a specific one, placed a few-shot example and a piece of retrieved evidence correctly by role, and can explain why role separation only works because of Concept 06's fine-tuning. The 24-section deep dive above stays here for revisiting the role-weighting mathematics, the template-assembly code, and the interview questions whenever you want them again.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-09.html">Start Concept 09 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: LLM knowledge limitations, parametric knowledge and hallucination.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 08 · Complete</p>
+<a href="module-02-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>

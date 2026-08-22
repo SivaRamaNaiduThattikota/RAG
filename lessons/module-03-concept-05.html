@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Names, for the first time, the two memory types Concept 04's grounding argument already relied on informally: parametric memory baked into frozen weights, and non-parametric memory held in a searchable, updatable corpus.">
+<title>Parametric and non-parametric memory — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 05</p>
+<h1>Parametric and<br><em>non-parametric memory.</em></h1>
+<p class="lesson-lead">Concept 04's grounding argument already leaned on a distinction it never named: evidence "physically in the prompt" versus whatever the model "remembers" from frozen weights. This concept names both sides formally — <b>parametric memory</b>, Module 02 Concept 09's lossy statistical residue baked into weights during pretraining, and <b>non-parametric memory</b>, the external, searchable corpus Concept 01 already called by name. RAG's actual mechanism, stated precisely for the first time: conditioning generation on non-parametric memory retrieved at query time, rather than relying on parametric memory alone.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's corpus/retriever/generator vocabulary; Module 02 Concept 09's parametric-knowledge mechanism (cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name which memory type a described fact lives in, and state the freshness/write-cost asymmetry between them</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You named both memory types precisely — parametric memory baked into weights by pretraining's gradient, non-parametric memory an external corpus searchable and editable at any time — and stated the one property, editability, that explains the freshness asymmetry between them. RAG conditions generation on non-parametric memory retrieved at query time; it does not replace parametric memory, which the generator still needs for language ability itself.</p>
+<b>5 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Naming what Concept 04 already relied on</h2>
+</div>
+<p>Concept 04 contrasted "evidence in the prompt" against "whatever the model remembers" without ever naming either side formally. This concept gives both sides their real names — and the one property, editability, that explains everything else about how they differ.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two memory types, named for the first time</h3>
+<div class="mental-compare">
+<div><span>PARAMETRIC MEMORY</span><p>Module 02 Concept 09's lossy statistical residue, baked into the weights by pretraining's gradient. No read channel back to any specific fact — only a forward pass that activates weight groups shaped by everything the model ever saw.</p></div>
+<div><span>NON-PARAMETRIC MEMORY</span><p>An external corpus — Concept 01's term — held as separate, inspectable text, searchable and editable at any time. Retrieval reads it directly; nothing has to be baked in first.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> parametric memory is baked in and only changes by retraining; non-parametric memory is a corpus you can edit directly, any time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 04's distinction, finally given its real names</h3>
+<p>Concept 04 said grounding means evidence "physically in the prompt," contrasted against a model just "remembering" from frozen weights. Those two sides are exactly parametric and non-parametric memory — Concept 04 used the idea without the vocabulary. This concept supplies the vocabulary, and the one property — editability — that actually explains why RAG needs both.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THE NAMES</span><p>"Evidence in the prompt" versus "whatever the model remembers" — usable, but imprecise.</p></div>
+<div><span>WITH THE NAMES</span><p>Non-parametric memory retrieved at query time, versus parametric memory baked in at training time — precise, and ready for Concept 06's pipeline breakdown.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A headcount number, updated Tuesday</h3>
+<p>Oracle's internal headcount changes weekly. A model trained six months ago has some headcount number baked into its parametric memory — stale by definition, and there is no way to edit just that one fact without retraining the whole model. A non-parametric corpus document, "Company headcount: updated weekly," gets edited Tuesday, and a query on Wednesday retrieves the new number instantly. Same underlying fact, two completely different update stories.</p>
+<div class="context-demo">
+<div><span>PARAMETRIC PATH</span><p>Stale number, baked in since the last training run — fixing it means retraining or fine-tuning the whole model.</p></div>
+<div><span>NON-PARAMETRIC PATH</span><p>Edit the corpus document directly — the very next query sees the update, with zero training involved.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The same fact, stored two structurally different ways</h3>
+<div class="example-grid">
+<article class="info-card"><span>WRITE COST</span><h3>Retrain vs. edit a document</h3><p>Parametric: an entire training run. Non-parametric: a direct edit to the corpus, no training involved.</p></article>
+<article class="info-card"><span>READ MECHANISM</span><h3>A forward pass vs. a retrieval query</h3><p>Parametric: activates weight groups shaped by everything ever seen. Non-parametric: a search returns the specific passage.</p></article>
+<article class="info-card"><span>FRESHNESS</span><h3>Frozen at cutoff vs. current as of the last edit</h3><p>Parametric memory's freshness is fixed at training time. Non-parametric memory's freshness is fixed at last edit time — which can be seconds ago.</p></article>
+<article class="info-card"><span>WHAT NEITHER REPLACES</span><h3>Language ability itself stays parametric</h3><p>Non-parametric memory supplies facts to condition on; the generator still needs Module 02's parametric mechanism to read, reason, and produce fluent language at all.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0305-visual-title">
+<strong class="concept-visual-title" id="c0305-visual-title">VISUAL · TWO MEMORIES, TWO UPDATE PATHS</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram contrasting the parametric retrain path against the non-parametric edit path for the same fact">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Parametric — baked into weights</b><small>a fact update means a full retraining run before the model reflects it.</small></div>
+<div class="diagram-node active"><b>Non-parametric — a corpus document</b><small>a fact update is a direct edit, live for the very next query.</small></div>
+</div>
+</div>
+<figcaption>Same underlying fact, same importance to get right — but the update path is structurally different, not just faster on one side.</figcaption>
+<ol class="diagram-key"><li><b>Parametric path:</b> requires retraining — Module 02's pretraining mechanism, unchanged, is the only way in.</li><li><b>Non-parametric path:</b> a direct corpus edit — no model weight is touched.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where each memory type actually lives in the RAG skeleton</h3>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span class="hot">Non-parametric corpus</span><i>↓</i>
+<span>Retrieval</span><i>↓</i>
+<span>Context</span><i>↓</i>
+<span class="hot">LLM — parametric memory inside</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>Non-parametric memory lives in the corpus, outside the model entirely — everything left of "Retrieval." Parametric memory lives inside the LLM box itself, unchanged from Module 02. RAG's whole shape is retrieving from the left side to condition generation on the right side — Concept 06 covers how the left side is actually built and queried; this concept only names what each side is.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this pair is not</h3>
+<div class="distinction-table" role="table" aria-label="Parametric versus non-parametric memory distinguished from related but different ideas">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Non-parametric memory</span><span role="cell">Fine-tuning data</span><span role="cell">Fine-tuning bakes information into weights, becoming parametric; non-parametric memory stays external and searchable — the full contrast is Concept 08's job</span></div>
+<div role="row"><span role="cell">Editing the corpus</span><span role="cell">Retraining the model</span><span role="cell">A corpus edit touches zero weights; only retraining or fine-tuning changes parametric memory</span></div>
+<div role="row"><span role="cell">RAG's memory split</span><span role="cell">A replacement for parametric memory</span><span role="cell">The generator still needs parametric memory for language ability itself — RAG adds a second memory source, it doesn't remove the first</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"RAG means the model no longer uses parametric memory."</b><p>False — the generator still relies on parametric memory for grammar, reasoning, and language ability; non-parametric memory only supplies additional facts to condition on.</p></div>
+<div><b>"Updating the corpus updates the model."</b><p>False — a corpus edit changes what retrieval can find; it never touches a single weight.</p></div>
+<div><b>"Non-parametric memory is just a bigger context window."</b><p>No — a context window holds whatever's currently in the prompt; non-parametric memory is the whole searchable corpus, only a retrieved slice of which ever reaches the prompt.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Oracle RAG's two memories, named concretely</h3>
+<div class="project-map">
+<div><span>NON-PARAMETRIC</span><b>The policy-document corpus</b><p>Editable any time — a policy change goes live the moment the document is updated, no retraining required.</p></div>
+<div><span>PARAMETRIC</span><b>The generator's language ability</b><p>Fixed until a new model release — the LLM's capacity to read a retrieved passage and answer fluently, unchanged from Module 02.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Parametric memory</b><p>Baked into weights by pretraining; only updates via retraining.</p></div>
+<div><b>Non-parametric memory</b><p>An external, searchable corpus; updates via a direct edit, no training.</p></div>
+<div><b>The freshness asymmetry</b><p>Non-parametric memory is current as of the last edit; parametric memory is frozen at training cutoff.</p></div>
+<div><b>What RAG actually does</b><p>Conditions generation on retrieved non-parametric memory — it doesn't replace parametric memory.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Which memory type does a corpus edit change, and which does it leave untouched?</li>
+<li>Why can't RAG fully replace parametric memory?</li>
+<li>Name the one property that explains the freshness difference between the two.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 05 is complete.</b> Continue to The offline indexing and online query pipelines.</h3>
+<p>Today named the two memory types. Concept 06 opens up the non-parametric side specifically — how a corpus actually becomes searchable (offline indexing) and how a query actually reaches it (online query), the two pipelines Concept 01 explicitly deferred to this point.</p>
+<div class="beginner-memory"><b>Concept 05 is complete.</b> Continue to The offline indexing and online query pipelines.</div>
+<a class="button primary" href="module-03-concept-06.html">Start Concept 06 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Baked in, or searchable.</h2>
+<p>Master the naming and the freshness asymmetry first. Open the formal definitions, the update-cost math, and The Update Race lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Name</b><small>Parametric = baked into weights. Non-parametric = a searchable, editable corpus.</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>Write cost, read mechanism, and freshness — the same fact, two structurally different stories.</small></a>
+<a href="#b08"><span>03</span><b>Map</b><small>Oracle's policy corpus (non-parametric) versus the generator's language ability (parametric).</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the formal math, code, and The Update Race lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Concept 04's "evidence versus remembering" → named formally as non-parametric versus parametric memory → the update-cost and freshness asymmetry explains why RAG needs both, not just one.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the memory-types deep dive</b><em>Formal definitions, the write-cost/freshness math, a from-scratch corpus-vs-weights code contrast, and The Update Race lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Naming what Concepts 01 and 04 already used informally</h2></div></header>
+<p>Concept 01 coined "corpus" without contrasting it against anything. Concept 04 contrasted "evidence in the prompt" against "remembering" without naming either side. This concept closes that gap: parametric memory (cited from Module 02 Concept 09) and non-parametric memory (formalizing Concept 01's corpus), plus the one property — editability — that explains the freshness asymmetry driving the rest of this module.</p>
+<div class="flow">
+<div class="flow-node">Concept 04 — grounding, provenance</div>
+<div class="flow-node hot">Parametric vs. non-parametric memory</div>
+<div class="flow-node">Concept 06 — offline/online pipelines</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State both memory types precisely</h3><p>Parametric as weight-baked residue; non-parametric as an external, searchable corpus.</p></article>
+<article class="info-card"><span>COMPARE</span><h3>Contrast write cost, read mechanism, freshness</h3><p>Retrain vs. edit; forward pass vs. retrieval query; frozen-at-cutoff vs. current-as-of-last-edit.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what RAG does not replace</h3><p>The generator's parametric language ability remains necessary regardless of retrieval.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Name which memory type the policy corpus versus the generator's language ability each is.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 02 Concept 09's parametric-knowledge mechanism:</b> cited, not re-derived — the weight-baked residue this concept names "parametric memory."</li>
+<li><b>Concept 01's corpus/retriever/generator vocabulary:</b> "corpus" is formalized here as one instance of non-parametric memory.</li>
+<li><b>Concept 04's grounding argument:</b> the informal "evidence vs. remembering" contrast this concept names precisely.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A memorized fact versus a sticky note on the fridge</h2></div></header>
+<p>A memorized fact is baked into how you think — updating it means genuinely relearning, slowly, through repeated exposure. A sticky note on the fridge is external and instantly editable — cross out yesterday's number, write today's, done. Parametric memory is the memorized fact; non-parametric memory is the sticky note.</p>
+<div class="callout warning"><b>Analogy boundary</b>A person can consciously decide to trust the sticky note over a shaky memory. A model has no equivalent judgment call built in by default — Concept 04's "silent override" failure mode is exactly a case where the model effectively ignores its own sticky note. The analogy conveys the update-cost asymmetry, not the model's actual behavior when the two memories conflict.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Parametric memory</td><td>Information encoded in a model's weights via pretraining's gradient — Module 02 Concept 09's lossy statistical residue.</td><td>No read channel to any single fact; only a forward pass activating weight groups shaped by everything seen.</td></tr>
+<tr><td>Non-parametric memory</td><td>Information held as external, structured text — Concept 01's corpus — searchable and editable independent of any model weight.</td><td>Requires a retrieval step to reach the model at all; nothing is "in" the model until retrieved.</td></tr>
+<tr><td>Write cost</td><td>The effort required to change one fact within a memory type.</td><td>Parametric: a training run. Non-parametric: a document edit.</td></tr>
+<tr><td>Freshness</td><td>How recently a memory type's content was last updated relative to now.</td><td>Parametric: fixed at training cutoff. Non-parametric: fixed at last corpus edit.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The same fact, traced through both memory types</h2></div></header>
+<div class="lane-flow">
+<div>A fact changes in the real world (e.g. Tuesday's headcount update)</div>
+<div>Parametric path: the fact is not reflected anywhere until the next training run touches it — potentially months away</div>
+<div>Non-parametric path: the corpus document is edited directly — the change is live immediately</div>
+<div>A query arrives asking about the fact</div>
+<div>Parametric-only generation answers from whatever residue was baked in at the last training cutoff — possibly stale</div>
+<div>RAG's retrieval step reaches into non-parametric memory instead, returning the current document — the freshness asymmetry resolved in non-parametric memory's favor</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Update-cost and freshness, side by side</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram comparing parametric and non-parametric memory across write cost and freshness">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Parametric</b><small>write cost: a full training run. freshness: frozen at cutoff.</small></div>
+<div class="diagram-node active"><b>Non-parametric</b><small>write cost: a direct document edit. freshness: current as of last edit.</small></div>
+</div>
+</div>
+<ol class="diagram-key"><li><b>Write cost:</b> the effort to change one fact — retraining versus editing.</li><li><b>Freshness:</b> how current the memory is relative to right now.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where each memory type sits in the RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span class="hot">Non-parametric corpus</span><i>↓</i><span>Retrieval</span><i>↓</i><span>Context</span><i>↓</i><span class="hot">LLM (parametric memory inside)</span><i>↓</i><span>Answer</span>
+</div>
+<p>Non-parametric memory is everything to the left of "Retrieval" — external to the model entirely. Parametric memory is inside the "LLM" box, unchanged from Module 02. The offline side of this skeleton (how the corpus becomes searchable) and the online side (how a query actually reaches it) are both Concept 06's job — this concept only names the two boxes involved.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Freshness as a function of last-update time</h2></div></header>
+<p>Define <code>t_now</code> as the current time, <code>t_train</code> as a model's last training-data cutoff, and <code>t_edit(d)</code> as a corpus document d's last edit time.</p>
+<div class="equation">Parametric freshness gap: t_now − t_train  (grows every day between training runs, with no way to shrink it except retraining)</div>
+<div class="equation">Non-parametric freshness gap: t_now − t_edit(d)  (can be reset to ≈0 at any moment, by editing d)</div>
+<p>The structural asymmetry: the parametric gap only grows, monotonically, until the next training run resets it. The non-parametric gap can be reset independently, document by document, at any time — this is what "editable" actually buys, made precise.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The headcount fact, dated</h2></div></header>
+<p>Model trained with data up to <code>t_train</code> = January 1. Corpus document "Company headcount" last edited <code>t_edit</code> = Tuesday (this week). Query arrives Wednesday (<code>t_now</code>).</p>
+<table class="worked-table">
+<thead><tr><th>Memory type</th><th>Freshness gap</th><th>Answer quality</th></tr></thead>
+<tbody>
+<tr><td>Parametric only</td><td>t_now − t_train ≈ several months</td><td>Whatever headcount existed as of January 1 — likely stale</td></tr>
+<tr><td>Non-parametric (retrieved)</td><td>t_now − t_edit ≈ 1 day</td><td>Tuesday's actual number</td></tr>
+</tbody>
+</table>
+<p>The parametric gap will not shrink until a new training run. The non-parametric gap resets to nearly zero the moment the document is edited — no retraining required at all.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A frequently-changing fact in a corpus document</h3><p>Headcount, pricing, policy — all resolve cleanly to non-parametric memory's fast update path.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A fact that's both stable and widely memorized</h3><p>Something like basic arithmetic barely benefits from retrieval — parametric memory already handles it reliably, echoing Concept 04's "2+2" counterexample.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>General reasoning ability</h3><p>Not a "fact" retrieval can supply at all — this stays squarely parametric, retrieval or not.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming a bigger model reduces the need for non-parametric memory</h3><p>A bigger model still only has parametric memory frozen at its own training cutoff — size doesn't buy freshness.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Two update paths, contrasted directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · UPDATE COST, PARAMETRIC VS. NON-PARAMETRIC</span>
+<pre><code># Non-parametric: a fact lives in an editable corpus dict.
+# Updating it is O(1) -- no training loop involved at all.
+corpus = {"headcount": {"value": 41_200, "last_edit": "2026-08-18"}}
+
+def update_non_parametric(corpus, key, new_value, today):
+    corpus[key] = {"value": new_value, "last_edit": today}
+    # done -- the very next retrieval sees this immediately
+
+update_non_parametric(corpus, "headcount", 41_350, "2026-08-19")
+print(corpus["headcount"])  # {'value': 41350, 'last_edit': '2026-08-19'}
+
+
+# Parametric: a fact is smeared across weight groups by a full
+# training run. There is no update_parametric(fact, new_value)
+# function -- the ONLY path is retraining, illustrated as a stub
+# to make the asymmetry explicit rather than implemented for real.
+def update_parametric_requires_full_retrain(model_weights, training_corpus):
+    # This is not a targeted edit -- it is an entire training run
+    # over the whole corpus, which happens to also shift this one
+    # fact along with everything else. No function call updates
+    # "just headcount" in a parametric model.
+    raise NotImplementedError(
+        "no such targeted update exists -- retraining changes "
+        "everything the gradient touches, not one isolated fact"
+    )
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where this distinction shows up in the literature</h2></div></header>
+<p>Lewis et al. (2020) coined "parametric memory" and "non-parametric memory" as the exact pair this concept names — the original RAG paper's own framing. Petroni et al. (2019), the LAMA probe, empirically measures what parametric memory actually contains by querying language models like fill-in-the-blank knowledge bases. Khandelwal et al. (2020), kNN-LM, shows non-parametric memory can augment a parametric language model at inference time with zero retraining, by nearest-neighbor lookup over a datastore. Borgeaud et al. (2021), RETRO, scales the same non-parametric-memory idea to retrieval from trillions of tokens, still without retraining the underlying model for each new fact.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Update Race</h2></div></header>
+<div class="lab">
+<p>Update the same kind of fact two ways and race them. Editing the non-parametric corpus takes one click. "Retraining" the parametric model steps through four simulated stages, one at a time. Query both after each step to see which one already reflects the update.</p>
+<div class="lab-actions" role="group" aria-label="Update paths">
+<button type="button" id="editCorpusButton0305">Edit the non-parametric corpus (one click)</button>
+<button type="button" id="stepRetrainButton0305">Step the parametric retrain pipeline →</button>
+</div>
+<div class="sample-output" id="updateRaceStatus0305" aria-live="polite">Neither path started yet. Old fact: "Headcount: 41,200 (as of Jan 1)."</div>
+<div class="lab-actions" role="group" aria-label="Query both memories">
+<button type="button" class="secondary" id="queryBothButton0305">Query both memories now</button>
+</div>
+<div class="sample-output" id="updateRaceQueryOutput0305" aria-live="polite"></div>
+<div class="lab-actions"><button type="button" class="secondary" id="resetRaceButton0305">Reset</button></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>When each memory type actually wins</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Situation</th><th>Better source</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>A frequently-changing fact</td><td>Non-parametric</td><td>Editable in place; parametric memory can't keep up without constant retraining</td></tr>
+<tr><td>General language ability, reasoning</td><td>Parametric</td><td>Not a retrievable "fact" — this is what makes the generator work at all</td></tr>
+<tr><td>A stable, widely-known fact (e.g. basic arithmetic)</td><td>Parametric, usually sufficient</td><td>Already reliable without retrieval overhead — Concept 04's "2+2" case</td></tr>
+<tr><td>Private, never-public information</td><td>Non-parametric, necessarily</td><td>Could never have been in any training corpus at all — Concept 03's category</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>STALE-CORPUS ASSUMPTION</span><h3>Believing an unedited corpus stays reliable forever</h3><p>Non-parametric memory is only as fresh as its last edit — an unmaintained corpus can go stale exactly like parametric memory can.</p></article>
+<article class="info-card"><span>RETRAIN-AVOIDANCE OVERREACH</span><h3>Trying to solve every freshness problem with retrieval</h3><p>Some things (general reasoning ability) simply aren't facts retrieval can supply — Section 11's counterexample.</p></article>
+<article class="info-card"><span>SILENT OVERRIDE, REVISITED</span><h3>Parametric memory winning when it shouldn't</h3><p>Concept 04's silent-override failure is this concept's memory conflict made concrete: the model answers from parametric memory even with fresher non-parametric evidence retrieved.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>RAG removes the need for parametric memory</td><td>The generator still needs parametric memory for language ability itself — RAG adds a second source, it doesn't remove the first.</td></tr>
+<tr><td>A bigger model needs less non-parametric memory</td><td>Model size doesn't change freshness — any model's parametric memory is frozen at its own training cutoff regardless of size.</td></tr>
+<tr><td>Non-parametric memory is just a longer context window</td><td>A context window holds only what's currently in the prompt; non-parametric memory is the full searchable corpus, of which only a retrieved slice ever reaches the prompt.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Track a corpus document's last-edit timestamp so staleness is measurable, not just assumed away.</li>
+<li>Retraining cadence sets parametric memory's freshness floor — a fact that changes faster than the retrain schedule must live in the corpus.</li>
+<li>An unmaintained corpus is its own risk: non-parametric memory's freshness advantage only holds if edits actually happen.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Which memory type does editing a corpus document change?</summary><div>Non-parametric memory only — no model weight is touched by a corpus edit.</div></details>
+<details class="quiz"><summary>Why can't RAG fully replace parametric memory?</summary><div>The generator still needs parametric memory for language ability and reasoning itself; non-parametric memory only supplies facts to condition generation on.</div></details>
+<details class="quiz"><summary>State the freshness asymmetry precisely.</summary><div>Parametric freshness gap (t_now − t_train) only grows until the next training run; non-parametric freshness gap (t_now − t_edit) can be reset to near-zero at any moment by editing the document.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A company wants a chatbot to always state this quarter's current pricing correctly. Decide which memory type the pricing fact should live in, and explain what would go wrong if it were stored the other way.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>Pricing that changes quarterly should live in non-parametric memory — a corpus document editable the moment pricing changes, with the next query reflecting it immediately. Stored parametrically instead, the pricing fact would be frozen at whatever the last training run captured, and every quarterly change would require a full retrain just to stay current — an unworkable update cadence for a fact that changes this often.</div>
+</details>
+<p>Teach-back: explain in your own words why "just retrain more often" is not a real fix for this freshness problem.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The two memories</h3><ul><li><b>Parametric:</b> baked into weights, update cost = retrain</li><li><b>Non-parametric:</b> a searchable corpus, update cost = edit</li><li><b>Core rule:</b> RAG adds non-parametric memory, it doesn't replace parametric memory</li></ul></div>
+<div><h3>Memorable example</h3><p>The headcount fact updated Tuesday — instantly current in the corpus, frozen at January 1 in the weights until the next training run.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain parametric versus non-parametric memory to a non-technical stakeholder.</summary><div>Parametric memory is like something the model memorized during training — hard to change without retraining it. Non-parametric memory is like a reference document it can look up — easy to edit any time, with the change visible immediately.</div></details>
+<details class="quiz"><summary>Why doesn't a larger model reduce the need for retrieval?</summary><div>A larger model still only has parametric memory frozen at its own training cutoff — size doesn't add freshness, it just changes how much was memorized as of that cutoff.</div></details>
+<details class="quiz"><summary>Design question: a fact changes hourly. Which memory type, and what's the risk?</summary><div>Non-parametric memory, necessarily — hourly changes are far faster than any realistic retraining cadence. The risk is corpus-edit latency and reliability: the non-parametric path only wins if the hourly edit actually happens on schedule.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.11401"><b>Lewis, Perez, Piktus et al. — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</b><br><span>Coined "parametric memory" and "non-parametric memory" as the exact pair this concept names.</span></a>
+<a href="https://arxiv.org/abs/1909.01066"><b>Petroni et al. — Language Models as Knowledge Bases? (LAMA)</b><br><span>Empirically probes what parametric memory actually contains — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/1911.00172"><b>Khandelwal, Levy, Jurafsky, Zettlemoyer, Lewis — Generalization through Memorization (kNN-LM)</b><br><span>Non-parametric memory augmenting a parametric model with zero retraining — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2112.04426"><b>Borgeaud et al. — Improving Language Models by Retrieving from Trillions of Tokens (RETRO)</b><br><span>Non-parametric memory at scale, still without per-fact retraining — behind Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 · COMPLETE</span>
+<h3>Advanced layer remains optional revision</h3>
+<p>You've proven the naming and the freshness asymmetry it explains. Revisit Section 10's worked example or Section 14's Update Race lab any time — nothing further is required before continuing.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-06.html">Start Concept 06 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: The offline indexing and online query pipelines.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 05 · Complete</p>
+<a href="module-03-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on LLM knowledge limitations: why parametric knowledge is lossy statistical residue baked into pretraining's weight groups, and why hallucination is a direct, mechanical consequence of a decoding loop that always emits a token whether or not any verification step exists.">
+<title>LLM knowledge limitations, parametric knowledge and hallucination — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 09</p>
+<h1>LLM knowledge limitations,<br><em>parametric knowledge and hallucination</em></h1>
+<p class="lesson-lead">Module 01, Concept 08 already told you to route exact, current, or high-stakes questions away from raw generation. It could not yet tell you why generation fails those questions at the mechanism level — tokens, weight groups, and the decoding loop hadn't been named yet. They have now. This concept traces hallucination and parametric knowledge back to the exact matrices and the exact loop that produce them.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>Prompting principles and prompt roles</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why hallucination and knowledge gaps are a mechanical certainty, not an occasional glitch</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You stated precisely what parametric knowledge is — the lossy, compressed statistical residue Concept 06's pretraining gradient leaves in the embedding table, every block's attention and feed-forward weights, and the output head — and explained why Module 01 Concept 07's decoding loop always emits a fluent token whether or not any verification step exists, because none does anywhere in this architecture.</p>
+<b>9 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Fluent every time — correct only sometimes</h2>
+</div>
+<p>Module 01, Concept 08 already taught you to route exact or high-stakes tasks to retrieval or human review instead of trusting raw generation. That was the judgment call. This concept is the mechanism underneath it: exactly which matrices hold what a model "knows," and exactly why the loop that turns those matrices into text never once checks whether it's right.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Parametric knowledge is compressed residue, not a lookup</h3>
+<p><b>Parametric knowledge</b> is whatever statistical trace Concept 06's pretraining gradient left behind in the embedding table, every block's attention and feed-forward weights, and the output head. It is not a stored fact, retrievable on demand — it is a lossy compression of patterns across an entire training corpus, squeezed into a fixed number of parameters that has to represent everything at once.</p>
+<p><b>Hallucination</b> is any fluent output the decoding loop produces that isn't actually supported by verifiable evidence. Module 01, Concept 08 already told you what to do about that — route it to retrieval or human review. This concept explains why it happens at all: nothing between a logit and a printed sentence ever compares that sentence to reality.</p>
+<div class="beginner-memory"><b>First memory:</b> parametric knowledge is a lossy statistical residue baked into weight groups during pretraining, not a lookup table — and hallucination is what the decoding loop keeps doing regardless of whether that residue is dense, thin, or missing entirely.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Nothing in the loop was ever built to check truth</h3>
+<p>Concept 05 showed the output head turning a final hidden vector into logits, then softmax normalizing those logits into a probability distribution — for any input, every time, regardless of whether the topic is well covered in training data or entirely absent from it. Module 01, Concept 07's decoding loop then always picks one token from that distribution and always appends it, repeating until a stop condition fires. How well a fact was covered during pretraining changes what the logits look like. It changes nothing about whether the loop keeps running and keeps emitting.</p>
+<div class="mental-compare">
+<div><span>SOFTMAX'S JOB</span><p>Normalize whatever logits the weight groups produced into a distribution that sums to one — every single time, no exceptions.</p></div>
+<div><span>DECODING'S JOB</span><p>Pick a token from that distribution and append it — every single time, with no comparison against any outside source.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Same loop, three very different outcomes</h3>
+<p>Ask the identical model, running the identical mechanism, three questions that differ only in how densely they were covered during pretraining. "How many hours are in a standard full-time work week?" is common, well-represented text — the model answers "40 hours" and is right. "What is the exact unused-sick-leave carryover cap in the internal policy?" is a narrow, private detail that was thinly represented, if at all — the model still answers fluently, with a specific number, and that number can simply be wrong. "What changed in the policy revision issued last week?" describes an event that happened after the model's training data was collected — it cannot be in the weight groups at any density, yet the model still produces a fluent, detailed-sounding answer.</p>
+<div class="context-demo">
+<div><span>DENSE COVERAGE</span><p>Common pattern, seen constantly in training data — the loop's output usually lines up with reality.</p></div>
+<div><span>SPARSE COVERAGE</span><p>Rare, narrow detail — the loop still answers confidently, with no signal marking the guess as thin.</p></div>
+<div><span>ABSENT COVERAGE</span><p>Past the training cutoff — physically cannot exist in the weight groups, yet the loop answers anyway.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0209-visual-title">
+  <strong class="concept-visual-title" id="c0209-visual-title">VISUAL · WHY THE LOOP NEVER STOPS TO CHECK</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing weight groups feeding logits, softmax always normalizing them, and the decoding loop always emitting a token, with no verification step anywhere in the path">
+    <div class="diagram-hub">
+      <div class="diagram-node"><b>Weight groups</b><small>parametric knowledge (Concept 06)</small></div>
+      <div class="diagram-node"><b>Softmax distribution</b><small>always produced (Concept 05)</small></div>
+      <div class="diagram-node hub-center"><b>Decoding loop</b><small>always emits (Module 01, Concept 07)</small></div>
+      <div class="diagram-node"><b>Coverage: dense / sparse / absent</b><small>shapes the logits, not whether the loop runs</small></div>
+      <div class="diagram-node"><b>Verification step</b><small>does not exist in this path</small></div>
+    </div>
+  </div>
+  <figcaption>Coverage density changes what the weight groups produce as logits. It changes nothing about the two steps that always run regardless: softmax normalizing, and decoding emitting. The lab in the advanced section lets you run this loop against three coverage levels and watch confidence stay high in all three.</figcaption>
+  <ol class="diagram-key"><li><b>Coverage shapes logits, not behavior:</b> dense, sparse, and absent coverage all still reach softmax and decoding the same way.</li><li><b>No branch back to a source:</b> nothing in this path reads an external document — that arrives only when Module 03 adds retrieval.</li><li><b>Fluency is guaranteed; correctness isn't:</b> the loop's stop condition is about sequence length and end tokens, never about truth.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Where the limitation actually comes from</h3>
+<div class="example-grid">
+<article class="info-card"><span>WEIGHT GROUPS</span><h3>Where parametric knowledge lives</h3><p>The embedding table, every block's attention and feed-forward weights, and the output head — the exact three groups Concept 06 named as gradient targets.</p></article>
+<article class="info-card"><span>COVERAGE DENSITY</span><h3>Dense, sparse, or absent</h3><p>How often a pattern appeared during pretraining shapes the logits at inference — not whether an answer gets attempted.</p></article>
+<article class="info-card"><span>SOFTMAX</span><h3>Always produces a full distribution</h3><p>Concept 05's normalization gives every vocabulary token a probability regardless of how well-supported any of them actually are.</p></article>
+<article class="info-card"><span>DECODING LOOP</span><h3>Always emits, always continues</h3><p>Module 01, Concept 07's predict → decode → append → repeat cycle runs until a stop condition, with no truth check built in anywhere.</p></article>
+<article class="info-card"><span>KNOWLEDGE CUTOFF</span><h3>A hard boundary, not a thin patch</h3><p>Events after the training corpus was collected are absent from the weight groups entirely — not thinly represented, not represented at all.</p></article>
+<article class="info-card"><span>NO VERIFICATION STEP</span><h3>Architecturally absent, not switched off</h3><p>No layer, weight group, or stage in this pipeline compares a generated token against an external source — there is nothing to turn on.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One statistic baked in once, one loop that ignores it every time</h3>
+<div class="mental-compare">
+<div><span>TRAINING TIME — ONCE</span><p>Concept 06's gradient turns corpus-wide coverage density into weight-group statistics, then training stops.</p></div>
+<div><span>INFERENCE TIME — EVERY CALL</span><p>The forward pass and decoding loop run the same way regardless of how dense or absent that coverage was.</p></div>
+</div>
+<div class="scroll-flow">
+<span>Training corpus</span><i>→</i>
+<span>Gradient into weight groups (Concept 06)</span><i>→</i>
+<span>Parametric knowledge baked in, lossy</span><i>→</i>
+<span>Forward pass, one position (Concept 05)</span><i>→</i>
+<span>Softmax distribution, always produced</span><i>→</i>
+<span>Decoding loop, always emits (Module 01, Concept 07)</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where this gap sits in the full RAG pipeline</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents (not yet connected — Module 03 territory)</span><i>↓</i>
+<span>No retrieval step exists in this concept's path</span><i>↓</i>
+<span>Prompt = the question alone</span><i>↓</i>
+<span>Forward pass → logits → softmax</span><i>↓</i>
+<span>Decoding loop → fluent answer, correctness unchecked</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Five terms that get flattened into "the model is wrong"</h3>
+<div class="distinction-table" role="table" aria-label="Knowledge limitation distinctions">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Parametric knowledge</span><span role="cell">Lossy statistical residue in weight groups from pretraining (Concept 06)</span><span role="cell">Assumed to be a stored, retrievable fact table</span></div>
+<div role="row"><span role="cell">Hallucination</span><span role="cell">Any fluent, unverified output the decoding loop produces — happens at any coverage level</span><span role="cell">Assumed to only happen when the model "doesn't know"</span></div>
+<div role="row"><span role="cell">Knowledge cutoff</span><span role="cell">A hard absence — events after the corpus was collected exist nowhere in the weight groups</span><span role="cell">Confused with "sparse coverage," which is present but thin</span></div>
+<div role="row"><span role="cell">Softmax confidence</span><span role="cell">A normalized score over training-pattern likelihood (Concept 05)</span><span role="cell">Mistaken for a calibrated measure of factual truth</span></div>
+<div role="row"><span role="cell">Verification step</span><span role="cell">Absent from this architecture by construction</span><span role="cell">Assumed to be a setting that could simply be turned on</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"Hallucination only happens when the model doesn't know the answer."</b><p>Dense coverage lowers the odds, but the loop has no truth check either way — confidently wrong answers can happen on well-covered topics too.</p></div>
+<div><b>"A higher softmax probability means a more likely true fact."</b><p>It measures how strongly weight-group statistics support that token given the pattern, not agreement with reality.</p></div>
+<div><b>"The model has some kind of internal fact-lookup table."</b><p>Weight groups store compressed, lossy statistical residue, not addressable records — Concept 06 already named which matrices these are.</p></div>
+<div><b>"If the fact was in the training data, the weights are guaranteed to reproduce it correctly."</b><p>Compression is lossy; sparse coverage produces plausible-sounding approximations, not the exact original fact.</p></div>
+<div><b>"A bigger model would just check its own answers."</b><p>No layer in this architecture performs a source comparison at any scale — more parameters change coverage density, not the presence of a verification step.</p></div>
+<div><b>"Knowledge cutoff and hallucination are the same limitation."</b><p>Cutoff is an absence in the weight groups; hallucination is what the decoding loop keeps doing regardless of what is or isn't in them.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>ANY UNGROUNDED QUESTION</span><b>Zero built-in verification</b><p>Every question answered from parametric memory alone runs the identical unchecked loop from b04 — no exception for "easy" or well-known facts.</p></div>
+<div><span>POLICY UPDATES AFTER CUTOFF</span><b>Physically absent from the weight groups</b><p>A revision issued after the base model's training cutoff cannot exist in its embedding table, blocks, or output head — retrieval is the only way in.</p></div>
+<div><span>CONFIDENCE-LOOKING UI</span><b>Softmax isn't a truth score</b><p>Never expose raw generation probability to a user as "confidence" — Section 09 shows precisely what that number does and doesn't measure.</p></div>
+<div><span>THE ARCHITECTURAL FIX</span><b>Module 03 inserts retrieval before generation</b><p>The fix is not a decoding parameter from Module 01, Concept 07 — it's a new pipeline stage this course starts building next module.</p></div>
+</div>
+<p>Nothing here says generation is broken — Concepts 01–08 of this module describe a mechanism that works exactly as designed. The point is that "as designed" never included a source check, which is precisely the gap Module 03's retrieval-augmented generation exists to close.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Parametric knowledge</b><p>Lossy statistical residue in weight groups, not a lookup table.</p></div>
+<div><b>Hallucination</b><p>Any fluent, unverified output the decoding loop produces, at any coverage level.</p></div>
+<div><b>Knowledge cutoff</b><p>A hard absence in the weight groups, not thin coverage.</p></div>
+<div><b>No verification step</b><p>Architecturally absent from this pipeline — nothing to switch on.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does softmax always produce a full probability distribution, no matter how well a fact is covered in training data?</li>
+<li>Why does the decoding loop keep emitting tokens even when parametric knowledge on a topic is thin or absent?</li>
+<li>What's the mechanical difference between "sparse coverage" and "knowledge cutoff"?</li>
+<li>Why is softmax probability not a calibrated measure of truth?</li>
+<li>Which weight groups actually hold parametric knowledge, and in what form?</li>
+<li>What is missing from this architecture that Module 03 is about to add?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick coverage-and-outcome exercise</summary>
+<div>
+<ol>
+<li>"What is the standard length of a business week?" — <b>dense coverage; the loop's output usually matches reality</b>.</li>
+<li>"What is the exact equipment-stipend cap in our internal policy?" — <b>sparse coverage; expect a fluent, specific, possibly wrong number</b>.</li>
+<li>"What did this morning's system announcement say?" — <b>absent coverage; anything generated here is invented</b>.</li>
+<li>"Is this model's stated confidence proof the answer is correct?" — <b>no; softmax confidence reflects pattern likelihood, not verification</b>.</li>
+<li>"Would asking the same question with a bigger model fix the absent-coverage case?" — <b>no; scale changes coverage density, not whether a verification step exists</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Attention dilution and lost-in-the-middle effects</h3>
+<p>This concept covered what happens when relevant evidence was never in the weight groups at all. The next concept covers a different failure that shows up even after Module 03 puts evidence directly in the context window: where that evidence sits inside a long prompt changes whether attention actually uses it.</p>
+<div class="beginner-memory"><b>Concept 09 is complete.</b> Continue to Attention dilution and lost-in-the-middle effects.</div>
+<a class="button primary" href="module-02-concept-10.html">Start Concept 10 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required mechanism, optional depth.</h2>
+<p>Master what parametric knowledge actually is and why the decoding loop never checks it first. Open the coverage mathematics, from-scratch code, and the confidence-vs-coverage lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Parametric knowledge and hallucination are two different things.</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>Weight groups, coverage density, softmax, and the decoding loop.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Nothing here is fixed by a decoding parameter — only by retrieval.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the coverage mathematics, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Training corpus → weight groups (Concept 06) → logits → softmax (Concept 05) → decoding loop (Module 01, Concept 07) → fluent answer, correctness never checked.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the knowledge-limitations deep dive</b><em>Coverage-density mathematics, a from-scratch decoding-gap demo, and the confidence-vs-coverage lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where this sits between Concept 08 and Module 03</h2></div></header>
+<p>Module 01, Concept 08 drew the capability/limitation boundary and taught task routing — generation, retrieval, or human review, chosen by stakes and currency. That judgment call is assumed known here and is not re-taught. This concept opens the mechanism underneath it: which weight groups hold whatever a model "knows," and why the exact decoding loop Module 01, Concept 07 already traced always emits a token whether or not that knowledge is dense, thin, or missing. It does not re-derive the decoding loop itself, and it does not re-derive softmax — both are cited from where they were built. What it adds is the missing middle step: coverage density in training data feeds the same loop identically, which is precisely the gap Module 03 is about to close with retrieval.</p>
+<div class="flow">
+<div class="flow-node">Weight groups (Concept 06)</div>
+<div class="flow-node">Logits (Concept 05)</div>
+<div class="flow-node">Softmax distribution (Concept 05)</div>
+<div class="flow-node hot">Decoding loop, always emits (Module 01, Concept 07)</div>
+<div class="flow-node hot">No verification step</div>
+<div class="flow-node">Module 03: retrieval</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State parametric knowledge precisely</h3><p>Name it as lossy statistical residue in specific weight groups, not a retrievable record.</p></article>
+<article class="info-card"><span>TRACE</span><h3>Follow coverage density through the mechanism</h3><p>Show how dense, sparse, and absent coverage all still reach softmax and decoding identically.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate hallucination from knowledge cutoff</h3><p>One is a decoding behavior that happens at any coverage level; the other is a hard absence.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept cannot fix</h3><p>Name the exact missing step that motivates Module 03's retrieval architecture.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Output head, logits and softmax (Concept 05):</b> the forward-pass mechanism that always produces a full probability distribution.</li>
+<li><b>Weight groups and pretraining's cross-entropy gradient (Concept 06):</b> the embedding table, block attention/feed-forward weights, and output head — where parametric knowledge is actually stored.</li>
+<li><b>The decoding loop (Module 01, Concept 07):</b> predict, decode, append, repeat until a stop condition — assumed known, not re-derived.</li>
+<li><b>Capability, limitation and task routing (Module 01, Concept 08):</b> the judgment call this concept explains the mechanism behind, not repeats.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A lossy codec, not a filing cabinet</h2></div></header>
+<p>Think of pretraining as compressing an enormous corpus through a lossy codec into a fixed-size file — the weight groups. Common patterns survive compression clearly, the way a frequently repeated shape in an image survives a lossy codec well. Rare patterns survive faintly, if at all, the way fine detail in one corner of one frame gets smoothed away. When you play the file back — a forward pass plus a decoding loop — the codec always produces a full-resolution-looking image. It never inserts a gap or a warning where detail was lost; it just interpolates something plausible and keeps playing.</p>
+<div class="callout warning"><b>Analogy boundary</b>A codec's interpolation is a designed feature, and a human watching knows compression artifacts exist. A model's forward pass has no equivalent awareness — Section 09 shows that softmax normalizes into a full distribution whether the underlying logits reflect dense, sparse, or entirely absent training coverage, with no signal distinguishing the three cases from the output alone.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Parametric knowledge</td><td>The lossy statistical residue pretraining's gradient (Concept 06) leaves in the embedding table, block weights, and output head</td><td>Not an address-able record; nothing in the architecture can query "what does the model know about X" directly</td></tr>
+<tr><td>Coverage density</td><td>How often a given fact's pattern appeared during pretraining — informally dense, sparse, or absent</td><td>Shapes logits at inference; does not gate whether the decoding loop runs</td></tr>
+<tr><td>Hallucination</td><td>Fluent decoding-loop output with no verifiable supporting evidence</td><td>Occurs at any coverage density, including dense — not only when coverage is thin</td></tr>
+<tr><td>Knowledge cutoff</td><td>The date after which no events can appear in the weight groups, because the training corpus was already collected</td><td>A hard absence, distinct from sparse-but-present coverage</td></tr>
+<tr><td>Verification step</td><td>A stage that compares a generated claim against an external, authoritative source</td><td>Does not exist anywhere in Concepts 03–07's forward pass or decoding loop</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two different clocks: baking in coverage, ignoring it at inference</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>TRAINING TIME — DONE ONCE</span>
+<div class="lane-flow">
+<div>Corpus text passes through the block stack and output head (Concepts 03–05)</div>
+<div>Cross-entropy loss computed on the true next token's softmax probability (Concept 06)</div>
+<div>Gradient updates the embedding table, block weights, and output head toward that token</div>
+<div>Frequent patterns get many small pushes; rare patterns get few, if any</div>
+</div>
+</article>
+<article class="lane"><span>INFERENCE TIME — DONE EVERY CALL</span>
+<div class="lane-flow">
+<div>A new prompt runs the identical forward pass, regardless of how any topic was covered in training</div>
+<div>Logits reflect whatever the weight groups ended up encoding — strong, weak, or nonexistent</div>
+<div>Softmax normalizes those logits into a full distribution every time (Concept 05)</div>
+<div>Module 01, Concept 07's decoding loop picks and appends a token every time, with no source check</div>
+</div>
+</article>
+</div>
+<p>Training time is where coverage density gets baked in, once, as a side effect of minimizing a loss. Inference time runs the same two steps — normalize, then emit — no matter what got baked in. Section 16 separates the different ways this produces a wrong answer.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Coverage density feeding one unchanged outcome</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing dense, sparse, and absent coverage all feeding the same softmax-then-decode outcome with no verification branch">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>Dense coverage</b><small>frequent pattern, strong logits</small></div>
+    <div class="diagram-node"><b>Sparse coverage</b><small>rare pattern, weak logits</small></div>
+    <div class="diagram-node hub-center"><b>Softmax → decode</b><small>identical procedure, every case</small></div>
+    <div class="diagram-node"><b>Absent coverage</b><small>no pattern, arbitrary logits</small></div>
+    <div class="diagram-node"><b>Verification branch</b><small>does not exist — no arrow leads here</small></div>
+  </div>
+</div>
+<p>Three different inputs to the hub, one identical procedure out of it. The "verification branch" node has no arrow pointing to it anywhere in this diagram deliberately — there is no such branch in Concepts 03–07's mechanism for coverage density to route through.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this gap sits relative to the RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents — not yet connected, Module 03 territory</span><i>↓</i>
+<span>Chunks, embeddings, vectors, retrieval — do not exist in this concept's path</span><i>↓</i>
+<span>Prompt = the question alone, no evidence attached</span><i>↓</i>
+<span>Forward pass → logits → softmax (Concept 05)</span><i>↓</i>
+<span>Decoding loop → fluent answer, correctness unchecked (Module 01, Concept 07)</span>
+</div>
+<p>Everything on the left side of this skeleton is what the rest of the course builds specifically because the right side, on its own, has no way to check itself. Module 03 opens by inserting retrieval between the question and the forward pass — the first time this skeleton gains a step that reads an external source before generating.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Formalizing "always normalized" and "coverage shifts logits, not behavior"</h2></div></header>
+<p>Concept 05's softmax guarantees the following for any context, dense, sparse, or absent coverage alike:</p>
+<div class="equation">Σ P(token_i | context) = 1, for i = 1 … V — always, regardless of evidence quality</div>
+<p>A toy sketch of how coverage density enters the logits a weight group produces, without claiming this is the model's literal internal computation:</p>
+<div class="equation">logit'_i = logit_i + κ · coverage(fact, token_i)</div>
+<p><code>logit_i</code> is the baseline score the current weight groups produce for candidate token <code>i</code> at this position (Concept 05); <code>coverage(fact, token_i)</code> is an informal density term — high where training data reinforced that token in this kind of context many times, near zero where it appeared rarely, and exactly zero where the fact postdates the training cutoff; <code>κ</code> is a fixed scaling baked in by Concept 06's training, identical regardless of whether this particular claim turns out true. Even when <code>coverage(fact, token_i) = 0</code>, <code>logit'_i</code> is still a real number, and the first equation still applies to it — softmax still returns a full distribution, and decoding still picks from it. That is the mechanical guarantee this lesson is about, not a metaphor.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>A sparse-coverage question, traced through real numbers</h2></div></header>
+<p>Question: "What is the exact unused-sick-leave carryover cap?" — the true policy answer is 3 days, but this detail was thinly represented in pretraining. Say the position right after "up to" produces these toy logits over four candidate tokens: <code>3 → 1.1</code>, <code>5 → 1.3</code>, <code>10 → 0.4</code>, <code>unlimited → 0.2</code>.</p>
+<div class="equation">exp(1.1)=3.004, exp(1.3)=3.669, exp(0.4)=1.492, exp(0.2)=1.221 — sum = 9.386</div>
+<div class="equation">P(3) = 32.0%, P(5) = 39.1%, P(10) = 15.9%, P(unlimited) = 13.0%</div>
+<p>Greedy decoding (Module 01, Concept 07) picks the highest probability, "5", and the loop emits "up to 5 days of carryover" — fluent, specific, and wrong. The true answer, "3", wasn't even the low-probability tail case; it placed second at 32.0%, edged out by a similarly plausible wrong pattern. Nothing in softmax's normalization or the decoding rule flags that the winning token is incorrect — both ran exactly as designed.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>DENSE, CORRECT</span><h3>"A standard work week is 40 hours"</h3><p>A common pattern; weight-group statistics converge on the right token most of the time.</p></article>
+<article class="info-card"><span>SPARSE, SUBTLY WRONG</span><h3>The sick-leave carryover trace above</h3><p>A specific, fluent, incorrect number — no hedge, no visible sign of thin coverage.</p></article>
+<article class="info-card"><span>ABSENT, FABRICATED</span><h3>"What changed in last week's revision?"</h3><p>Past the training cutoff — every detail generated here was invented, not recalled.</p></article>
+<article class="info-card"><span>HIGH CONFIDENCE, STILL WRONG</span><h3>A widely repeated but incorrect pattern</h3><p>When training data itself over-represents a myth or mix-up, softmax can assign it a high probability — confidence tracks pattern frequency, not truth.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Lower temperature fixes this"</h3><p>Module 01, Concept 07's decoding parameters only reshape which token in the distribution gets picked — they never add a source comparison.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"A hedge like 'I'm not sure' proves it's checking itself"</h3><p>The hedge is just another token the decoding loop found probable in similar contexts — not evidence of an internal doubt mechanism.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A from-scratch demonstration of the missing branch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>import math
+
+def softmax(logits):
+    m = max(logits)
+    exps = [math.exp(x - m) for x in logits]           # always returns a full distribution
+    total = sum(exps)
+    return [e / total for e in exps]                    # Section 09's first equation, every call
+
+def simulate_weight_group_logits(coverage):
+    # coverage in {"dense", "sparse", "absent"} — a stand-in for Concept 06's baked-in statistics
+    base = {"dense": [0.2, 3.1, 0.4], "sparse": [1.1, 1.3, 0.4],
+            "absent": [0.6, 0.5, 0.7]}                  # absent: no real signal, just noise-level logits
+    return base[coverage]
+
+def decode_loop(logits, has_evidence=False):
+    # has_evidence is accepted but never read below — that omission IS the mechanism this lesson names.
+    probs = softmax(logits)
+    token_index = probs.index(max(probs))                # greedy (Module 01, Concept 07)
+    return token_index, probs[token_index]
+
+for coverage in ("dense", "sparse", "absent"):
+    logits = simulate_weight_group_logits(coverage)
+    token_index, confidence = decode_loop(logits, has_evidence=False)
+    print(coverage, "-> token", token_index, "confidence", round(confidence, 3))
+    # every branch prints a token and a confidence number — none of them ever check ground truth
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>How production systems work around this, not inside it</h2></div></header>
+<p>No mainstream inference stack adds a truth-check inside the forward pass or decoding loop — the gap this concept names is architectural, not a missing configuration flag. Instead, model providers publish a training-data cutoff date in their system cards, an explicit acknowledgment of the absent-coverage boundary from Section 05. Factuality and groundedness metrics from tools like RAGAS and TruLens measure the gap after generation, by comparing output against retrieved evidence — evaluation, covered properly in Module 18, not prevention. And retrieval-augmented generation itself, built starting with LangChain and LangGraph in Modules 12–13, is the concrete architectural answer: it inserts evidence before the forward pass runs, rather than trying to patch the forward pass itself.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Confidence-vs-coverage decoding lab</h2></div></header>
+<div class="lab">
+<p>Pick a coverage level, then run the decoding loop. Watch the tokens appear one at a time, exactly as Module 01, Concept 07's loop actually works, and watch the confidence reading during generation — then compare it against what the answer turns out to be.</p>
+<div class="lab-actions" role="group" aria-label="Choose training-data coverage for this query">
+<button type="button" class="coverage-button active" data-coverage="dense" aria-pressed="true">Dense coverage</button>
+<button type="button" class="coverage-button secondary" data-coverage="sparse" aria-pressed="false">Sparse coverage</button>
+<button type="button" class="coverage-button secondary" data-coverage="absent" aria-pressed="false">Absent (post-cutoff)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Run the decoding loop">
+<button type="button" class="run-generation-button" id="runGenerationButton">Run the decoding loop ▶</button>
+</div>
+<div class="sample-output" id="genQuery" aria-live="polite"></div>
+<div class="sample-output" id="genStream" aria-live="polite"></div>
+<div class="prob-bars" id="genConfidence" aria-live="polite"></div>
+<div class="sample-output" id="genOutcome" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three responses to the same gap</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Response</th><th>What it costs</th><th>What it actually fixes</th></tr></thead>
+<tbody>
+<tr><td>Ship parametric-only, no mitigation</td><td>Cheapest, fastest, simplest to build</td><td>Nothing — every failure mode from Section 16 stays live</td></tr>
+<tr><td>Tune decoding parameters (Module 01, Concept 07)</td><td>Near-zero extra cost</td><td>Run-to-run inconsistency only — not hallucination or cutoff</td></tr>
+<tr><td>Add retrieval before generation (Module 03 onward)</td><td>New pipeline stage, indexing, and evaluation to build</td><td>Missing or stale evidence — the actual gap this concept names</td></tr>
+</tbody>
+</table>
+<p>Only the third row changes what enters the forward pass. The first two leave Section 09's equations completely untouched.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT DENSE-COVERAGE ERROR</span><h3>Confident, common, still wrong</h3><p>A frequently repeated but inaccurate pattern in training data can outscore the correct one.</p></article>
+<article class="info-card"><span>SPARSE-COVERAGE CONFABULATION</span><h3>Specific and fluent, unsupported</h3><p>A thin pattern produces a plausible-sounding exact detail with no signal marking it as thin.</p></article>
+<article class="info-card"><span>CUTOFF BLINDNESS</span><h3>Treating absence as ignorance the model could "try harder" on</h3><p>No amount of prompting recovers information that was never in the training corpus.</p></article>
+<article class="info-card"><span>CONFIDENCE MISREAD AS TRUTH</span><h3>Softmax probability treated as a truth score</h3><p>Exposing raw generation probability as "confidence" gives users a false sense of verification.</p></article>
+<article class="info-card"><span>SCALE MISTAKEN FOR A FIX</span><h3>"A bigger model wouldn't do this"</h3><p>More parameters change coverage density; they don't add a verification step to the architecture.</p></article>
+<article class="info-card"><span>DECODING-PARAMETER MISTAKEN FOR A FIX</span><h3>"Lower temperature would prevent this"</h3><p>Temperature and top-k/top-p reshape sampling; none of them compare output to a source.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The model "decides" whether it knows something before answering</td><td>There is no such decision point — the forward pass and decoding loop run identically regardless of coverage density.</td></tr>
+<tr><td>Parametric knowledge is stored as discrete, retrievable facts</td><td>It is a lossy statistical compression spread across the embedding table, block weights, and output head — nothing addressable by fact.</td></tr>
+<tr><td>Knowledge cutoff is just an extreme case of sparse coverage</td><td>Cutoff is a hard absence — the pattern cannot exist in the weight groups at any density, because the corpus never contained it.</td></tr>
+<tr><td>Hallucination is rare and mostly happens on obscure questions</td><td>It is a structural property of the decoding loop and can occur at any coverage level, including dense, well-known topics.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Never expose raw softmax probability to end users as a "confidence" or "certainty" score — Section 09 shows what it does and does not measure.</li>
+<li>Treat a published training-data cutoff date as a hard boundary in design documents, not a soft approximation.</li>
+<li>Benchmark coverage density with long-tail-fact evaluation sets before assuming a domain is "well known" to a given model.</li>
+<li>Default to retrieval for anything outside a narrowly verified dense-coverage domain, rather than trusting parametric memory by default.</li>
+<li>Document, for any generation-only feature, exactly which failure modes from Section 16 remain unmitigated.</li>
+<li>Re-evaluate coverage assumptions whenever the underlying model is upgraded — coverage density changes with every new training run.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does softmax return a full distribution even for a fact absent from training data?</summary><div>Because softmax's normalization (Concept 05) operates on whatever logits the weight groups produce, and it always sums them to one — absent coverage changes what the logits look like, not whether softmax runs or normalizes.</div></details>
+<details class="quiz"><summary>What distinguishes sparse coverage from a knowledge cutoff?</summary><div>Sparse coverage means the pattern is present but thinly represented in the weight groups; a cutoff means the event happened after the training corpus was collected and cannot be represented at any density.</div></details>
+<details class="quiz"><summary>Does lowering temperature reduce hallucination?</summary><div>No — temperature (Module 01, Concept 07) only reshapes how a token is sampled from the distribution; it adds no comparison against an external source.</div></details>
+<details class="quiz"><summary>Where exactly does parametric knowledge live?</summary><div>In the embedding table, every block's attention and feed-forward weights, and the output head — the same three weight groups Concept 06 named as pretraining's gradient targets.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Pick three questions a real Oracle RAG user might ask, one you expect to be densely covered by a general-purpose base model, one you expect to be sparsely covered, and one that depends on information created after any plausible training cutoff. For each, predict the outcome type — correct, subtly wrong, or fabricated — and justify the prediction using Section 06's two-lane mechanism: what coverage density would have baked into the weight groups, and what the decoding loop does with that regardless.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open one worked reasoning pattern</summary><div>A dense-coverage pick — "What is a typical work week in hours?" — should predict "correct," because this pattern repeats constantly across general text, giving the weight groups strong, consistent statistics to converge on. A sparse-coverage pick — "What is our internal expense-report approval threshold?" — should predict "subtly wrong," because the detail is specific and privately held, so any pretrained base model only has thin, generic patterns to interpolate from, producing a fluent but likely incorrect number. An absent-coverage pick — "What was announced in this morning's all-hands?" — should predict "fabricated," because the event postdates any training cutoff by construction; nothing about phrasing the question more cleverly changes what is or isn't in the weight groups. In every case, the justification should point to Section 06's inference-time lane running identically regardless of which training-time outcome preceded it — that identical final step is the actual reason the model can't be trusted to flag its own uncertainty.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>Parametric knowledge is lossy statistical residue in Concept 06's weight groups. Coverage density shapes the logits Concept 05's softmax normalizes, but the decoding loop (Module 01, Concept 07) always emits a token regardless — no step anywhere compares output to a source.</p></div>
+<div><h3>Selection rule</h3><ul><li>Treat softmax probability as a fluency signal, never a truth signal</li><li>Treat "sparse coverage" and "knowledge cutoff" as mechanically different failures</li><li>Never expect a decoding parameter to add verification</li><li>Default to retrieval outside a narrowly confirmed dense-coverage domain</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain why a well-known fact and a fabricated one can be generated with the same apparent confidence.</summary><div>Softmax probability (Concept 05) reflects how strongly the weight groups' statistics support a token given the context, which is a function of training-data pattern frequency, not a function of whether the resulting claim is actually true — the decoding loop treats both cases identically.</div></details>
+<details class="quiz"><summary>A colleague claims a larger model will hallucinate less on private company facts. How do you respond?</summary><div>Scale changes how much general-language pattern coverage a model has, but a private company fact was never in any public pretraining corpus at any scale — that's an absent-coverage case, not a sparse one, and no amount of general-purpose scale fixes an absence; only retrieval over the actual private source does.</div></details>
+<details class="quiz"><summary>What's the mechanical reason retrieval-augmented generation reduces hallucination?</summary><div>It inserts an evidence-gathering step before the forward pass runs, so the decoding loop's logits are conditioned on retrieved, verifiable text rather than solely on lossy parametric statistics — it doesn't change the loop itself, it changes what the loop has to work with.</div></details>
+<details class="quiz"><summary>Why can't a verification step just be added to the decoding loop?</summary><div>It could be, in principle, but that's exactly what retrieval and grounding architectures do — inserting a source-comparison step is an architectural addition to the pipeline, not something implicit in the transformer block stack or the decoding rule itself.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2002.08910"><b>Roberts, Raffel &amp; Shazeer — How Much Knowledge Can You Pack Into the Parameters of a Language Model?</b><br><span>Directly measures parametric knowledge as a function of model capacity — the empirical grounding for this lesson's "lossy residue, not a lookup" framing.</span></a>
+<a href="https://arxiv.org/abs/2211.08411"><b>Kandpal et al. — Large Language Models Struggle to Learn Long-Tail Knowledge</b><br><span>Shows accuracy on a fact tracks how often it appeared in pretraining data — the source for this lesson's dense/sparse coverage distinction.</span></a>
+<a href="https://arxiv.org/abs/2311.05232"><b>Huang et al. — A Survey on Hallucination in Large Language Models</b><br><span>A mechanism-level taxonomy of hallucination causes across the generation pipeline, grounding this lesson's failure-mode catalogue.</span></a>
+<a href="https://arxiv.org/abs/2311.14648"><b>Kalai &amp; Vempala — Calibrated Language Models Must Hallucinate</b><br><span>Formal argument that some hallucination rate is a statistical consequence of calibrated next-token prediction, not merely a fixable bug.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>You already named which three weight groups hold parametric knowledge, explained why softmax always returns a full distribution regardless of coverage density, and can name the one thing missing from this entire mechanism that Module 03 is about to add. The 24-section deep dive above stays here for revisiting the coverage-density mathematics, the from-scratch decoding-gap code, and the confidence-vs-coverage lab whenever you want them again.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-10.html">Start Concept 10 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Attention dilution and lost-in-the-middle effects.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 09 · Complete</p>
+<a href="module-02-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

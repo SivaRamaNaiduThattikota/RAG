@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on self-attention's query/key/value mechanics and why positional information must be added separately, since attention alone cannot tell sequence order apart.">
+<title>Self-attention and positional information — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-02-04.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 04</p>
+<h1>Self-attention<br>
+<em>and positional information</em>
+</h1>
+<p class="lesson-lead">Concept 03 named self-attention as “the sublayer that mixes across positions” without showing how. Open the query/key/value mechanism itself, and the separate problem it creates: attention alone cannot tell word order apart at all.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Fourth LLM &amp; transformer foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Transformer architecture overview</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Trace one query through attention by hand</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You computed attention weights for one query over a small set of keys by hand and explained why the same computation would give identical weights regardless of word order without positional information.</p>
+<b>4 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A relevance search inside the model, with no sense of order</h2>
+</div>
+<p>Self-attention lets every position gather relevant context from every other position. That generality has a cost: the mechanism itself has no idea which position came first.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Query, key, value — and the order problem</h3>
+<p>For every position, self-attention produces three vectors from the same input: a <b>query</b> (what this position is looking for), a <b>key</b> (what every position offers to be matched against), and a <b>value</b> (what a position actually contributes once matched). A position’s new representation is a weighted sum of every position’s value, where the weights come from comparing its query against every key.</p>
+<p>This weighted-sum computation treats the sequence as a set, not a sequence — nothing in it depends on which position came before another. <b>Positional information</b> is added into the input before attention runs specifically to repair that gap.</p>
+<div class="beginner-memory">
+<b>First memory:</b> attention decides relevance; position has to be told to it separately.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Generality and order-blindness are the same trade-off</h3>
+<p>Concept 03 motivated self-attention as letting every position see every other position directly, computed in parallel. That is exactly what removes any built-in notion of order: a mechanism that treats every pair of positions symmetrically has no way to distinguish “A then B” from “B then A” unless something outside the comparison itself carries that information.</p>
+<div class="mental-compare">
+<div>
+<span>WHAT SELF-ATTENTION SOLVES</span>
+<p>Which positions are relevant to which, regardless of distance between them.</p>
+</div>
+<div>
+<span>WHAT IT DOES NOT SOLVE</span>
+<p>Which position came first. That is positional information’s job alone.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Resolving “it,” one query at a time</h3>
+<p>In “The trophy didn’t fit in the suitcase because it was too big,” the position holding <code>it</code> produces a query. That query is compared against the key of every other position. <code>trophy</code> and <code>suitcase</code> score higher than <code>the</code> or <code>because</code>; softmax turns those scores into weights that sum to one; the new representation for <code>it</code> becomes a weighted blend of every position’s value, dominated by <code>trophy</code> and <code>suitcase</code>.</p>
+<div class="context-demo">
+<div>
+<span>QUERY</span>
+<p><code>it</code> asks: which positions are relevant to me?</p>
+</div>
+<div>
+<span>SCORES → WEIGHTS</span>
+<p><code>trophy</code>, <code>suitcase</code> score highest; softmax normalizes.</p>
+</div>
+<div>
+<span>MISSING PIECE</span>
+<p>Nothing above used the fact that <code>it</code> comes after <code>suitcase</code>.</p>
+</div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0204-visual-title">
+  <strong class="concept-visual-title" id="c0204-visual-title">VISUAL · ONE QUERY, WEIGHTED OVER EVERY KEY</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing the query for it weighted over keys for trophy, suitcase, and other words">
+    <div class="diagram-split">
+      <div class="diagram-node active"><b>Query: “it”</b><small>what am I looking for?</small></div>
+      <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+      <div class="diagram-node active"><b>Key: “trophy” — high score</b><small>weight ≈ 0.45</small></div>
+      <div class="diagram-node"><b>Key: “suitcase” — high score</b><small>weight ≈ 0.35</small></div>
+      <div class="diagram-node"><b>Key: “because” — low score</b><small>weight ≈ 0.02</small></div>
+    </div>
+  </div>
+  <figcaption>Weights are illustrative, not computed from a real model — they show the shape of the mechanism, not exact numbers. The same weights would result even if the sentence’s word order were scrambled, because nothing here reads position.</figcaption>
+  <ol class="diagram-key"><li><b>Query vs. key:</b> the same underlying tokens, projected two different ways.</li><li><b>Weight:</b> softmax-normalized similarity — always sums to one across all keys.</li><li><b>Consequence:</b> order has to enter somewhere else — Section 05 shows where.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The six moving pieces</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>QUERY</span>
+<h3>What I’m looking for</h3>
+<p>One learned projection of a position’s input vector.</p>
+</article>
+<article class="info-card">
+<span>KEY</span>
+<h3>What I offer to be matched</h3>
+<p>A second, separately learned projection of the same input vector.</p>
+</article>
+<article class="info-card">
+<span>VALUE</span>
+<h3>What I contribute if picked</h3>
+<p>A third learned projection — what actually gets blended into the output.</p>
+</article>
+<article class="info-card">
+<span>SCORE</span>
+<h3>Query · key similarity</h3>
+<p>A dot product between one query and one key, before any normalization.</p>
+</article>
+<article class="info-card">
+<span>SOFTMAX WEIGHT</span>
+<h3>Normalized relevance</h3>
+<p>Scores turned into positive weights that sum to one across all positions.</p>
+</article>
+<article class="info-card">
+<span>WEIGHTED SUM</span>
+<h3>The actual output</h3>
+<p>Every position’s value, combined according to its weight.</p>
+</article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Position is added once, at the input</h3>
+<div class="mental-compare">
+<div>
+<span>SELF-ATTENTION</span>
+<p>Relevance-based mixing, computed fresh inside every block.</p>
+</div>
+<div>
+<span>POSITIONAL ENCODING</span>
+<p>Order information, added once to the token embeddings before the first block.</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>Token embedding</span>
+<i>→</i>
+<span>+ positional encoding</span>
+<i>→</i>
+<span>Query / key / value projections</span>
+<i>→</i>
+<span>Scores</span>
+<i>→</i>
+<span>Softmax weights</span>
+<i>→</i>
+<span>Weighted sum</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where this sits inside Concept 03’s block</summary>
+<div>
+<div class="pipeline-preview">
+<span>Positional encoding: added once, before block 1</span>
+<i>↓</i>
+<span>Self-attention sublayer: runs fresh inside every block</span>
+<i>↓</i>
+<span>Residual + norm</span>
+<i>↓</i>
+<span>Feed-forward sublayer</span>
+<i>↓</i>
+<span>Residual + norm</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that collapse into “attention”</h3>
+<div class="distinction-table" role="table" aria-label="Self-attention and positional information distinctions">
+<div role="row">
+<b role="cell">Term</b>
+<b role="cell">What it actually is</b>
+<b role="cell">Common confusion</b>
+</div>
+<div role="row">
+<span role="cell">Score</span>
+<span role="cell">Raw query·key dot product</span>
+<span role="cell">Confused with the final attention weight</span>
+</div>
+<div role="row">
+<span role="cell">Weight</span>
+<span role="cell">Softmax-normalized score</span>
+<span role="cell">Confused with the value being combined</span>
+</div>
+<div role="row">
+<span role="cell">Positional encoding</span>
+<span role="cell">Order information added at the input</span>
+<span role="cell">Assumed to be part of the attention computation itself</span>
+</div>
+<div role="row">
+<span role="cell">Attention “query”</span>
+<span role="cell">A learned vector used inside one attention computation</span>
+<span role="cell">Confused with a RAG retrieval query — same word, unrelated mechanism</span>
+</div>
+</div>
+<p>That last row matters specifically in this course: “query” means something entirely different when Module 03 starts discussing retrieval than it does here.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Attention already knows word order.”</b>
+<p>The weighted-sum computation is identical regardless of position order unless positional information was added first.</p>
+</div>
+<div>
+<b>“Query, key and value are three different kinds of tokens.”</b>
+<p>They are three learned projections of the exact same input vector.</p>
+</div>
+<div>
+<b>“The softmax weights are the attention mechanism’s output.”</b>
+<p>The weights are an intermediate step; the actual output is the weighted sum of values.</p>
+</div>
+<div>
+<b>“Positional encoding is a minor implementation detail.”</b>
+<p>Without it, shuffling a sentence’s words would not change the model’s attention weights at all.</p>
+</div>
+<div>
+<b>“An attention query is the same thing as a search query.”</b>
+<p>They share a name and a rough “what am I looking for” intuition, not a mechanism.</p>
+</div>
+<div>
+<b>“More attention heads means more attention to word order.”</b>
+<p>Multiple heads (previewed, not taught here) give multiple relevance perspectives — none of them add order on their own.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>PROMPT ORDER MATTERS</span>
+<b>System, context, and question all carry positional encoding</b>
+<p>Where retrieved evidence sits in the assembled prompt is not invisible to the model — position is encoded into every token.</p>
+</div>
+<div>
+<span>TWO DIFFERENT “QUERIES”</span>
+<b>Keep retrieval queries and attention queries mentally separate</b>
+<p>A user’s retrieval query selects which documents enter the prompt; attention queries then run inside the model on whatever tokens arrived.</p>
+</div>
+<div>
+<span>LONG CONTEXT COST</span>
+<b>Attention cost grows with sequence length</b>
+<p>A longer retrieved-context window means more query/key comparisons, not just more tokens to read.</p>
+</div>
+<div>
+<span>ENCODER VS. DECODER, AGAIN</span>
+<b>Embedding models and the generator both use self-attention</b>
+<p>The same query/key/value mechanism runs in both architecture families from Concept 03 — only the masking differs.</p>
+</div>
+</div>
+<p>LangChain and LangGraph never expose query/key/value directly — they operate above this layer entirely. This mechanism runs the same way regardless of which orchestration framework calls the model.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Query / key / value</b>
+<p>Three learned projections of the same input vector.</p>
+</div>
+<div>
+<b>Score → weight</b>
+<p>A dot product, normalized by softmax.</p>
+</div>
+<div>
+<b>Weighted sum</b>
+<p>The actual output of one attention computation.</p>
+</div>
+<div>
+<b>Positional encoding</b>
+<p>Order information, added once, separately from attention.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What are query, key, and value, and how do they relate to each other?</li>
+<li>Why is a raw score not the same thing as an attention weight?</li>
+<li>Why would scrambling a sentence’s word order not change plain self-attention’s output on its own?</li>
+<li>Why is “attention query” a different concept from a retrieval query, despite the shared name?</li>
+<li>Where does positional information enter the pipeline relative to the first attention computation?</li>
+<li>Why does longer retrieved context increase attention’s computational cost?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick query/key/value judgment exercise</summary>
+<div>
+<ol>
+<li>What a position contributes once matched — <b>value</b>.</li>
+<li>What a position uses to ask “what’s relevant to me?” — <b>query</b>.</li>
+<li>What every position offers to be compared against — <b>key</b>.</li>
+<li>What turns raw scores into weights summing to one — <b>softmax</b>.</li>
+<li>What tells the model “suitcase” came before “it” — <b>positional encoding, not attention itself</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Next-token probability and decoding</h3>
+<p>Concept 05 picks up where the block stack’s output head hands off: turning final representations into the next-token probability distribution that Concept 07’s decoding loop already showed you how to consume.</p>
+<div class="beginner-memory">
+<b>Concept 04 is complete.</b> Continue to next-token probability and decoding.</div>
+<a class="button primary" href="module-02-concept-05.html">Start Concept 05 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required mechanism, optional depth.</h2>
+<p>Master query/key/value and the order problem first. Open the scaled dot-product mathematics, from-scratch code, and the attention-weight lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>Attention decides relevance; position is told to it separately.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Query, key, value, score, weight, weighted sum.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>Two unrelated “queries” — keep them mentally separate.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open scaled dot-product math, code, and the attention lab.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 04 path:</b> Token embedding → + positional encoding → Q/K/V → scores → softmax weights → weighted sum.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the self-attention and positional information deep dive</b>
+<em>Scaled dot-product mathematics, sinusoidal encoding, from-scratch code, and the attention-weight lab</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where this opens Concept 03’s black box</h2>
+</div>
+</header>
+<p>Concept 03 treated self-attention as a named sublayer without showing its computation. This concept opens exactly that computation, and separately fixes the order-blindness that generality creates. Concept 05 picks up after the block stack finishes, at the output head.</p>
+<div class="flow">
+<div class="flow-node">Block stack</div>
+<div class="flow-node hot">Self-attention detail</div>
+<div class="flow-node hot">Positional info</div>
+<div class="flow-node">Feed-forward</div>
+<div class="flow-node">Output head</div>
+<div class="flow-node">Decoding</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>COMPUTE</span>
+<h3>Run attention by hand</h3>
+<p>Turn raw scores into softmax weights and a weighted sum.</p>
+</article>
+<article class="info-card">
+<span>DISTINGUISH</span>
+<h3>Separate six terms</h3>
+<p>Query, key, value, score, weight, and weighted sum.</p>
+</article>
+<article class="info-card">
+<span>EXPLAIN</span>
+<h3>Justify positional encoding</h3>
+<p>State why attention alone cannot recover word order.</p>
+</article>
+<article class="info-card">
+<span>SEPARATE</span>
+<h3>Two unrelated “queries”</h3>
+<p>Keep an attention query and a retrieval query mentally distinct.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Block, sublayer, residual connection:</b> self-attention is one of the two sublayers inside every block (Concept 03).</li>
+<li>
+<b>Token embedding:</b> the vector a token ID is looked up into (Module 01, Concept 6; Module 02, Concept 1).</li>
+<li>
+<b>Dot product and softmax:</b> comfort with a simple vector similarity score and its normalization into probabilities.</li>
+<li>
+<b>Output head and decoding:</b> where this mechanism’s result eventually feeds (Concept 07), formally covered next in Concept 05.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>A room where everyone asks, everyone answers</h2>
+</div>
+</header>
+<p>Picture every word in a sentence standing in a room holding up a question (its query) and a description of what it has to offer (its key). Every word compares its question against every other word’s description, and listens most closely to whoever’s description matches best — collecting a blend of what those best-matching words actually have to say (their values). Nobody in the room announces where they were standing in line before entering.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>Real queries, keys, and values are learned numeric projections, not spoken questions or descriptions — the comparison is a dot product, not a conversation, and “standing in line” is exactly the ordering information this analogy shows getting lost.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal definitions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Query (Q)</td>
+<td>A learned linear projection of a position’s input, used to probe relevance</td>
+<td>Recomputed at every attention layer</td>
+</tr>
+<tr>
+<td>Key (K)</td>
+<td>A learned linear projection of a position’s input, compared against queries</td>
+<td>Same input as the query, different learned weights</td>
+</tr>
+<tr>
+<td>Value (V)</td>
+<td>A learned linear projection of a position’s input, combined by weight</td>
+<td>What actually appears in the output, not the comparison</td>
+</tr>
+<tr>
+<td>Positional encoding</td>
+<td>A fixed or learned vector added to a token embedding, indexed by position</td>
+<td>Added before the first attention computation, not recomputed per layer</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>Two separate traces: attention, and position</h2>
+</div>
+</header>
+<div class="two-lane">
+<article class="lane">
+<span>SELF-ATTENTION, PER BLOCK</span>
+<div class="lane-flow">
+<div>Project input into Q, K and V</div>
+<div>Compute Q·K score for every pair of positions</div>
+<div>Scale scores, then apply softmax per query</div>
+<div>Take the weighted sum of V using those weights</div>
+</div>
+</article>
+<article class="lane">
+<span>POSITIONAL ENCODING, ONCE</span>
+<div class="lane-flow">
+<div>Take each position’s index (0, 1, 2, …)</div>
+<div>Compute a fixed or learned vector for that index</div>
+<div>Add it to the token embedding</div>
+<div>Feed the combined vector into block 1</div>
+</div>
+</article>
+</div>
+<p>Positional encoding runs once, before block 1. Self-attention’s query/key/value computation runs fresh inside every block in the stack.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>One attention computation, as a hub</h2>
+</div>
+</header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing query, key, value, score and softmax weight around one attention computation">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>Query projection</b><small>what am I looking for?</small></div>
+    <div class="diagram-node hub-center"><b>One attention computation</b><small>per query, over every key</small></div>
+    <div class="diagram-node"><b>Key projection</b><small>what do I offer?</small></div>
+    <div class="diagram-node"><b>Value projection</b><small>what do I contribute?</small></div>
+    <div class="diagram-node"><b>Softmax weight</b><small>normalized score</small></div>
+  </div>
+</div>
+<p>The center is repeated once per query position, every time attention runs — each query independently produces its own set of weights over every key in the sequence.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Position enters once; attention repeats everywhere</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Prompt tokens</span>
+<i>↓</i>
+<span>Embedding lookup</span>
+<i>↓</i>
+<span>+ positional encoding (once)</span>
+<i>↓</i>
+<span>Self-attention (every block)</span>
+<i>↓</i>
+<span>Feed-forward (every block)</span>
+<i>↓</i>
+<span>Output head → decoding</span>
+</div>
+<p>Whether the tokens came from a system instruction, retrieved evidence, or the user’s question, they all pass through this identical positional-encoding-then-attention path — nothing about RAG changes this mechanism, it only changes which tokens arrive at the input.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Scaled dot-product attention and sinusoidal position</h2>
+</div>
+</header>
+<div class="equation">$$\text{Attention}(Q,K,V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$</div>
+<p>
+<code>Q</code>, <code>K</code>, and <code>V</code> are matrices whose rows are per-position vectors; <code>d_k</code> is the key dimension. Dividing by <code>√d_k</code> before softmax keeps scores from growing so large that softmax saturates into near one-hot weights, which would starve gradient flow during training.</p>
+<div class="equation">$$PE(pos, 2i) = \sin\left(\frac{pos}{10000^{2i/d}}\right), \quad PE(pos, 2i+1) = \cos\left(\frac{pos}{10000^{2i/d}}\right)$$</div>
+<p>The original sinusoidal encoding assigns each position a vector built from sine and cosine waves at different frequencies, indexed by dimension <code>i</code> out of total dimension <code>d</code> — different frequencies let relative distances between positions be recovered from the encoding, not just absolute position.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Three positions, by hand</h2>
+</div>
+</header>
+<p>Three toy 2-dimensional vectors act as both keys and values: <code>k1=[1,0]</code>, <code>k2=[0,1]</code>, <code>k3=[1,1]</code>, with matching values <code>v1=[10,0]</code>, <code>v2=[0,10]</code>, <code>v3=[5,5]</code>. Query <code>q=[1,0.5]</code>.</p>
+<div class="equation">scores: q·k1=1, q·k2=0.5, q·k3=1.5 (d_k=2, so divide by √2≈1.414)</div>
+<div class="equation">scaled: [0.707, 0.354, 1.061] → softmax ≈ [0.32, 0.23, 0.45]</div>
+<div class="equation">weighted sum ≈ 0.32·[10,0] + 0.23·[0,10] + 0.45·[5,5] = [5.45, 4.55]</div>
+<p>The output <code>[5.45, 4.55]</code> leans slightly toward <code>v1</code> and <code>v3</code>, matching that <code>k3</code> scored highest and <code>k1</code> second — exactly what the weights predict, with no reference anywhere to which position came first.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>SELF-ATTENTION</span>
+<h3>Same sequence, both sides</h3>
+<p>Queries, keys, and values all come from the same input — this course’s decoder path.</p>
+</article>
+<article class="info-card">
+<span>CROSS-ATTENTION</span>
+<h3>Decoder attends to encoder</h3>
+<p>Queries from one sequence, keys and values from another — previewed, encoder-decoder models.</p>
+</article>
+<article class="info-card">
+<span>SINUSOIDAL ENCODING</span>
+<h3>Fixed, formula-based</h3>
+<p>No parameters to learn; used by the original Transformer.</p>
+</article>
+<article class="info-card">
+<span>LEARNED POSITIONAL EMBEDDING</span>
+<h3>Trained per position</h3>
+<p>A lookup table of position vectors, trained like any other embedding.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“Shuffling input changes attention on its own”</h3>
+<p>Without positional information, a permuted sequence produces the identical set of scores.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“An attention query retrieves documents”</h3>
+<p>It only ever operates on vectors already inside one model’s forward pass.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>Scaled dot-product attention, from scratch</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · NUMPY-STYLE PSEUDOCODE</span>
+<pre>
+<code>import numpy as np
+
+def softmax(x, axis=-1):
+    x = x - np.max(x, axis=axis, keepdims=True)
+    exp = np.exp(x)
+    return exp / np.sum(exp, axis=axis, keepdims=True)
+
+def attention(Q, K, V):
+    d_k = Q.shape[-1]
+    scores = Q @ K.T / np.sqrt(d_k)      # (n_queries, n_keys)
+    weights = softmax(scores, axis=-1)   # each row sums to 1
+    return weights @ V                   # (n_queries, d_v)
+
+def sinusoidal_positions(seq_len, d):
+    pos = np.arange(seq_len)[:, None]
+    i = np.arange(d)[None, :]
+    angle = pos / (10000 ** (2 * (i // 2) / d))
+    pe = np.zeros((seq_len, d))
+    pe[:, 0::2] = np.sin(angle[:, 0::2])
+    pe[:, 1::2] = np.cos(angle[:, 1::2])
+    return pe
+</code>
+</pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>What production LLMs actually use now</h2>
+</div>
+</header>
+<p>Production libraries implement this same computation with fused, hardware-optimized kernels rather than the naive matrix form above. Many current LLMs have also moved past both fixed sinusoidal and simple learned positional embeddings toward <b>rotary position embeddings (RoPE)</b>, which rotate query and key vectors by an angle proportional to position — giving attention scores a built-in, mathematically clean sense of relative distance that extends more gracefully to longer sequences than the original schemes.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Attention-weight explorer</h2>
+</div>
+</header>
+<div class="lab">
+<p>Pick a query word from the trophy/suitcase sentence and see its illustrative attention weights over the other words — a fixed demonstration table, not a live model, so you can see how the weight distribution changes shape with the query while staying focused on the mechanism.</p>
+<div class="lab-actions" role="group" aria-label="Choose a query word">
+<button type="button" class="attn-query-button active" data-query="it" aria-pressed="true">it</button>
+<button type="button" class="attn-query-button secondary" data-query="trophy" aria-pressed="false">trophy</button>
+<button type="button" class="attn-query-button secondary" data-query="suitcase" aria-pressed="false">suitcase</button>
+<button type="button" class="attn-query-button secondary" data-query="big" aria-pressed="false">big</button>
+<button type="button" class="attn-query-button secondary" data-query="fit" aria-pressed="false">fit</button>
+</div>
+<div class="sample-output" id="attnLabOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choosing a positional-encoding scheme</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Scheme</th>
+<th>Generalizes beyond trained length?</th>
+<th>Used by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sinusoidal (fixed)</td>
+<td>Reasonably, by formula</td>
+<td>The original Transformer</td>
+</tr>
+<tr>
+<td>Learned positional embedding</td>
+<td>Poorly past the trained maximum length</td>
+<td>Early encoder models such as BERT</td>
+</tr>
+<tr>
+<td>Rotary (RoPE)</td>
+<td>Well, via relative-position rotation</td>
+<td>Many current large language models</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>MISSING POSITION</span>
+<h3>Order-blind output</h3>
+<p>Omitting positional encoding makes permuted inputs indistinguishable to attention.</p>
+</article>
+<article class="info-card">
+<span>SCALING OMITTED</span>
+<h3>Softmax saturation</h3>
+<p>Skipping the √d_k scale can push softmax toward near one-hot weights and starve gradients.</p>
+</article>
+<article class="info-card">
+<span>ATTENTION COLLAPSE</span>
+<h3>Degenerate weighting</h3>
+<p>Nearly all weight concentrating on one position, reducing effective context use.</p>
+</article>
+<article class="info-card">
+<span>Q/K SWAP BUGS</span>
+<h3>Implementation error</h3>
+<p>Swapping query and key projections silently changes which side asks and which side answers.</p>
+</article>
+<article class="info-card">
+<span>LENGTH EXTRAPOLATION</span>
+<h3>Beyond trained context</h3>
+<p>Fixed schemes can degrade past the sequence lengths seen during training.</p>
+</article>
+<article class="info-card">
+<span>CROSS-ATTENTION MISWIRING</span>
+<h3>Wrong source sequence</h3>
+<p>Feeding keys/values from the wrong sequence in an encoder-decoder model.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attention inherently understands sequence order</td>
+<td>It computes an order-blind weighted sum; order comes only from positional information added beforehand.</td>
+</tr>
+<tr>
+<td>Query, key, and value are different token types</td>
+<td>They are three learned projections of the same input vector.</td>
+</tr>
+<tr>
+<td>The softmax scale factor is optional</td>
+<td>Removing it risks softmax saturation and unstable training at realistic dimension sizes.</td>
+</tr>
+<tr>
+<td>An attention query and a retrieval query are the same idea</td>
+<td>They share a name and a loose intuition; the mechanisms are unrelated.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Attention cost and memory grow quadratically with sequence length — a direct driver of long-context serving cost.</li>
+<li>Positional-encoding choice affects how gracefully a model handles sequences longer than it was trained on.</li>
+<li>RoPE and similar relative-position schemes are common in current production LLMs specifically for length generalization.</li>
+<li>Verify the √d_k scaling and masking are implemented correctly — both are easy, silent bugs.</li>
+<li>Multi-head attention (previewed here) adds parallel compute cost in exchange for multiple relevance perspectives.</li>
+<li>Never assume a framework’s default positional scheme matches the one a specific pretrained model actually used.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>What three vectors does self-attention compute per position, and what is each for?</summary>
+<div>Query (what this position seeks), key (what every position offers to be compared against), and value (what a position contributes once matched) — all three are learned projections of the same input.</div>
+</details>
+<details class="quiz">
+<summary>Why divide attention scores by √d_k before softmax?</summary>
+<div>To keep the scores from growing large enough to push softmax toward near one-hot weights, which would hurt gradient flow during training.</div>
+</details>
+<details class="quiz">
+<summary>Would scrambling a sentence’s word order change plain self-attention’s scores?</summary>
+<div>No — the score computation only depends on the query and key vectors present, not on their positions, unless positional information was added first.</div>
+</details>
+<details class="quiz">
+<summary>Why is an attention “query” unrelated to a RAG retrieval query, despite the name?</summary>
+<div>An attention query is a learned vector used only inside one model’s forward pass to weight other positions; a retrieval query is a request compared against a document index — different mechanisms that happen to share a name.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>Using the worked-example format from Section 10, choose three of your own toy 2-dimensional key/value pairs and one query vector. Compute the scaled scores, the softmax weights, and the final weighted sum by hand. Then explain in one or two sentences why reordering your three key/value pairs (keeping the same query) would not change your computed weighted sum at all, and what would have to be added for reordering to matter.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one worked reasoning pattern</summary>
+<div>Reordering the key/value pairs only relabels which row is which in the score and weight vectors — the query still produces the same set of scores against the same set of keys, so the weighted sum over the same values is identical. Order would only matter if a positional vector, tied to each pair’s position index, had been added into the keys or queries beforehand — at that point, the same key/value content in a different position would produce different scores.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>The mechanism</h3>
+<p>Attention(Q,K,V) = softmax(QKᵗ/√d_k)V. Query, key, value: three projections of one input. Position: added once, separately, before block 1.</p>
+</div>
+<div>
+<h3>Selection rule</h3>
+<ul>
+<li>No positional info → order-blind, always</li>
+<li>Never skip the √d_k scale</li>
+<li>Attention query ≠ retrieval query</li>
+<li>RoPE for length generalization in production</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Derive, at a high level, why self-attention needs positional encoding but a feed-forward layer does not.</summary>
+<div>Self-attention computes a symmetric, order-blind comparison across all positions; a feed-forward layer only ever processes one position’s vector independently, so it never had a notion of cross-position order to lose in the first place.</div>
+</details>
+<details class="quiz">
+<summary>What role does the √d_k scaling factor play mathematically?</summary>
+<div>It counteracts the growth in dot-product magnitude as dimensionality increases, keeping softmax inputs in a range where gradients remain informative rather than saturating.</div>
+</details>
+<details class="quiz">
+<summary>Compare sinusoidal, learned, and rotary positional encodings.</summary>
+<div>Sinusoidal is a fixed formula with reasonable length generalization; learned embeddings are trained per position but generalize poorly past training length; rotary embeddings rotate query/key vectors by a position-dependent angle, giving strong relative-position behavior and better length generalization, which is why many current LLMs use it.</div>
+</details>
+<details class="quiz">
+<summary>A colleague says “the retrieval query and the attention query are basically the same thing.” How do you respond?</summary>
+<div>They share a name and a loose “what am I looking for” intuition, but a retrieval query is compared against an external document index while an attention query is a learned vector compared against keys inside one model’s forward pass — conflating them causes real confusion when discussing a RAG system’s architecture.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1706.03762">
+<b>Vaswani et al. — Attention Is All You Need</b>
+<br>
+<span>The scaled dot-product attention formula and sinusoidal positional encoding traced in this lesson.</span>
+</a>
+<a href="https://arxiv.org/abs/1803.02155">
+<b>Shaw, Uszkoreit &amp; Vaswani — Self-Attention with Relative Position Representations</b>
+<br>
+<span>An early relative-position alternative to absolute sinusoidal or learned encodings.</span>
+</a>
+<a href="https://arxiv.org/abs/2104.09864">
+<b>Su et al. — RoFormer: Enhanced Transformer with Rotary Position Embedding</b>
+<br>
+<span>The rotary position embedding scheme referenced in Sections 13, 15 and 18 as common in current production LLMs.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 04 is complete. Its scaled dot-product mathematics, attention-weight lab, failure modes, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-05.html">Start Concept 05 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Next-token probability and decoding.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 02 · Concept 04 · Active</p>
+<a href="module-02-concept-03.html">← Concept 03</a>
+</footer>
+</body>
+</html>

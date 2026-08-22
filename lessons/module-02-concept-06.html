@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson grounding pretraining, fine-tuning and alignment in the actual transformer mechanics learned so far: which matrices update, what the pretraining loss concretely computes on the output head, and where alignment previews stop.">
+<title>LLM training versus inference: pretraining, tuning and alignment — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 06</p>
+<h1>LLM training versus inference:<br><em>pretraining, tuning and alignment</em></h1>
+<p class="lesson-lead">Module 01, Concept 05 already gave you the weight-change test — training updates parameters, inference does not. This concept does not re-run that test. It opens the architecture you now know — the block stack's attention and feed-forward weights, the embedding table, the output head — and asks exactly which of those matrices move, and what number the model is minimizing when they do.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>Next-token probability and decoding</b></div>
+<div><span>BEGINNER GOAL</span><b>Name which matrices update, and compute the loss they minimize</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You traced a pretraining step through the output head's own logits, computed the cross-entropy loss for a true next token by hand, and named which weight groups a gradient from that loss actually reaches.</p>
+<b>6 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The weight-change test, now pointed at real matrices</h2>
+</div>
+<p>Concept 05 opened the output head. This concept opens what pretraining, fine-tuning and alignment actually do to it — and to everything upstream of it — now that you can name the pieces.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>What pretraining actually nudges, now that you can name the parts</h3>
+<p>Module 01, Concept 05 already told you <b>training changes parameters, inference does not</b>. This concept does not repeat that test — it answers the question that test left open: <b>which parameters, specifically, and computed from what?</b> During pretraining, a gradient reaches the <b>token embedding table</b>, every block's <b>attention and feed-forward weights</b> (Concepts 03–04), and the <b>output head</b> (Concept 05) — all at once, every training step. What it is minimizing is the exact cross-entropy loss on the probability distribution Concept 05's softmax already produces for the true next token.</p>
+<p>Fine-tuning reaches the same weight groups, on different, curated data. Alignment changes what the loss compares against — previewed here only, since full RLHF mechanics are out of scope for RAG Atlas.</p>
+<div class="beginner-memory"><b>First memory:</b> pretraining, fine-tuning and alignment all touch the same weight groups you already met; they differ in the data and the objective, not in which matrices exist.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>"Training updates parameters" was abstract until you had parameters to name</h3>
+<p>Before Concepts 03–05, "training updates the model's weights" had no shape — you had not yet seen an attention weight, a feed-forward weight, or the output head's matrix. Now that you have, the same sentence can be made concrete: a training step computes a loss from the output head's own logits, and backpropagation carries a correction signal from that one loss value into every weight matrix the forward pass touched on the way there.</p>
+<div class="mental-compare">
+<div><span>WHAT CONCEPT 05 GAVE YOU</span><p>The forward-only path: hidden vector → output head → logits → softmax → distribution.</p></div>
+<div><span>WHAT THIS CONCEPT ADDS</span><p>A loss computed on that distribution, and a backward path carrying gradients into the output head, every block, and the embedding table.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One training step on "The leave policy allows…unlimited"</h3>
+<p>Take a pretraining document containing the sentence "The leave policy allows unlimited carryover." At the position after "…allows," the true next token is <code>unlimited</code>. The forward pass runs exactly as Concept 05 traced it: final hidden vector → output head → logits → softmax. Say softmax assigns <code>unlimited</code> a probability of 20% at this early, undertrained step. The loss for this one position is <code>-ln(0.20) ≈ 1.61</code>. Backpropagation then pushes every weight the forward pass used — that position's attention and feed-forward weights, the output head's row for <code>unlimited</code>, and the embedding rows for every input token — slightly toward assigning <code>unlimited</code> a higher probability next time.</p>
+<div class="context-demo">
+<div><span>FORWARD PASS</span><p>Identical mechanism to Concept 05 — nothing new here.</p></div>
+<div><span>LOSS</span><p>Cross-entropy on the true next token's softmax probability — new this concept.</p></div>
+<div><span>BACKWARD PASS</span><p>Gradients reach the embedding table, every block, and the output head — new this concept.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0206-visual-title">
+  <strong class="concept-visual-title" id="c0206-visual-title">VISUAL · FORWARD PASS VERSUS THE TRAINING STEP</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram comparing inference's forward-only pass with pretraining's forward pass plus loss plus backward pass">
+    <div class="diagram-split">
+      <div class="diagram-node active"><b>Embedding table + blocks + output head</b><small>the same weights, either way</small></div>
+      <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+      <div class="diagram-node active"><b>Inference: forward only</b><small>logits → softmax → decode (Concept 07)</small></div>
+      <div class="diagram-node"><b>Training: forward + loss + backward</b><small>cross-entropy → gradients into every weight above</small></div>
+    </div>
+  </div>
+  <figcaption>Same weights, same forward mechanism either way. The difference this concept opens is whether a loss gets computed and a gradient sent backward through them.</figcaption>
+  <ol class="diagram-key"><li><b>Shared weights:</b> the exact matrices Concepts 03–05 already named.</li><li><b>Inference:</b> Concept 05's path, stopped at the distribution.</li><li><b>Training:</b> this concept's addition — a number to minimize, and a path backward.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What each stage concretely touches</h3>
+<div class="example-grid">
+<article class="info-card"><span>PRETRAINING</span><h3>Embedding table + blocks + output head</h3><p>All three, every step, minimizing next-token cross-entropy from the output head's softmax on raw text.</p></article>
+<article class="info-card"><span>SUPERVISED FINE-TUNING</span><h3>Same weight groups, curated data</h3><p>The identical cross-entropy loss on the identical output head, computed only over curated instruction-response pairs rather than raw text.</p></article>
+<article class="info-card"><span>PREFERENCE / ALIGNMENT (PREVIEW)</span><h3>Same weights, a different comparison</h3><p>Instead of one true-token cross-entropy, the signal ranks or scores whole responses against each other. Full RLHF mechanics are out of scope for RAG Atlas — this is a boundary, not a derivation.</p></article>
+<article class="info-card"><span>LoRA / PEFT (FROM MODULE 01)</span><h3>Small matrices around a frozen stack</h3><p>Concept 05's block weights and output head stay frozen; only small adapter matrices, added alongside them, receive gradients.</p></article>
+<article class="info-card"><span>WHAT NEVER GETS A GRADIENT</span><h3>Fixed structural choices</h3><p>The number of blocks, the number of attention heads, and RoPE's fixed rotation angles (Concept 04) are architecture choices, not learned weights — no training stage touches them.</p></article>
+<article class="info-card"><span>INFERENCE</span><h3>Forward pass only</h3><p>Every weight above is read, none is written — Concept 05's path, unchanged.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The loss sits right where Concept 05 stopped</h3>
+<div class="mental-compare">
+<div><span>CONCEPT 05'S ENDPOINT</span><p>Softmax distribution over the whole vocabulary, handed to decoding.</p></div>
+<div><span>THIS CONCEPT'S ADDITION</span><p>Compare that distribution's true-token probability against a target, then send a correction backward.</p></div>
+</div>
+<div class="scroll-flow">
+<span>Embedding table</span><i>→</i>
+<span>Blocks (attn + FF)</span><i>→</i>
+<span>Output head</span><i>→</i>
+<span>Softmax</span><i>→</i>
+<span>Loss vs. true token</span><i>→</i>
+<span>Gradient backward through all four</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the full offline-versus-online picture</summary>
+<div>
+<div class="pipeline-preview">
+<span>Pretraining: forward + loss + backward, all weight groups</span><i>↓</i>
+<span>Fine-tuning: forward + loss + backward, same weight groups, narrower data</span><i>↓</i>
+<span>Alignment: forward + preference signal + backward, same weight groups (previewed only)</span><i>↓</i>
+<span>Your RAG calls: forward only — the provider already ran every stage above</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Now that the weights have names</h3>
+<div class="distinction-table" role="table" aria-label="Training stage distinctions grounded in transformer mechanics">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Forward pass</span><span role="cell">Reads every weight; runs in training and inference alike</span><span role="cell">Assumed to only happen during training</span></div>
+<div role="row"><span role="cell">Backward pass</span><span role="cell">Writes to every weight the forward pass touched; training only</span><span role="cell">Confused with the forward pass itself</span></div>
+<div role="row"><span role="cell">Pretraining / SFT loss</span><span role="cell">Cross-entropy on one true next token, from Concept 05's exact softmax</span><span role="cell">Assumed to be a different function from what Concept 05 already computes</span></div>
+<div role="row"><span role="cell">Alignment signal (preview)</span><span role="cell">A comparison between whole responses, not a single true token</span><span role="cell">Assumed to be the same cross-entropy as pretraining</span></div>
+</div>
+<p>Module 01 Concept 05's weight-change test still applies unchanged — this table just answers "which weights" and "measured how," for the "yes, weights change" side of that test.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"Only the output head updates during pretraining."</b><p>The embedding table and every block's attention and feed-forward weights update too — the output head is just where the loss is computed.</p></div>
+<div><b>"Fine-tuning uses a different loss function than pretraining."</b><p>Supervised fine-tuning almost always reuses the identical next-token cross-entropy; what changes is the data and, usually, which tokens count toward the loss.</p></div>
+<div><b>"Alignment is just fine-tuning with a stricter prompt set."</b><p>Alignment methods compare or rank whole responses instead of scoring one true next token — a genuinely different signal, previewed but not derived here.</p></div>
+<div><b>"RoPE's rotation angles get updated like the embedding table."</b><p>RoPE (Concept 04) is a fixed geometric rule, not a learned weight — no training stage changes it.</p></div>
+<div><b>"Backpropagation is a separate mechanism from the forward pass."</b><p>It reuses the exact same weights and the exact same computation graph the forward pass just built, run in reverse.</p></div>
+<div><b>"A frozen base model for LoRA means nothing in the stack changes."</b><p>The stack's own weights stay frozen; small adapter matrices added alongside them are exactly what receives the gradient.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>THE GENERATOR LLM</span><b>Already fully trained before you call it</b><p>Your Oracle RAG system calls a model whose embedding table, blocks, and output head were pretrained, fine-tuned, and aligned by the provider — your calls are inference only.</p></div>
+<div><span>THE EMBEDDING MODEL</span><b>A different pretraining objective, previewed</b><p>The retrieval embedding model (Module 08) is trained with a contrastive objective on pairs, not this concept's next-token cross-entropy — same "weights update via a loss" pattern, different loss.</p></div>
+<div><span>SELF-HOSTING DECISIONS</span><b>Full fine-tuning versus LoRA, now grounded</b><p>Module 01 Concept 05 named LoRA as an option; this concept lets you say precisely what LoRA freezes — the same blocks and output head just traced above.</p></div>
+<div><span>ALIGNMENT'S PRACTICAL EFFECT</span><b>Refusals and formatting, not knowledge freshness</b><p>An aligned model refuses more consistently and follows instructions better; it still cannot know Monday's policy change without retrieval — alignment does not substitute for RAG.</p></div>
+</div>
+<p>LangChain and LangGraph never run any of this — they call an already-trained model's inference endpoint, which is exactly the forward-only path this concept contrasts against training.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Weight groups</b><p>Embedding table, block attention/feed-forward weights, output head.</p></div>
+<div><b>Pretraining loss</b><p>Cross-entropy on Concept 05's softmax, for the true next token.</p></div>
+<div><b>Forward vs. backward</b><p>Forward reads weights; backward writes to them.</p></div>
+<div><b>Alignment boundary</b><p>Previewed only — compares responses, not one true token; full RLHF is out of scope here.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Name the three weight groups a pretraining gradient reaches.</li>
+<li>What loss is computed, and on which distribution from Concept 05?</li>
+<li>How does supervised fine-tuning's loss differ from pretraining's — or does it?</li>
+<li>What does alignment compare, at a level this course previews but does not derive?</li>
+<li>Why does inference never run a backward pass?</li>
+<li>What does LoRA freeze, and what does it add, in terms of the weight groups above?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick weight-group judgment exercise</summary>
+<div>
+<ol>
+<li>A gradient from pretraining's loss reaches — <b>the embedding table, every block's attention/feed-forward weights, and the output head</b>.</li>
+<li>The loss pretraining minimizes is — <b>cross-entropy on the true next token's softmax probability</b>.</li>
+<li>What SFT usually changes relative to pretraining — <b>the data and which tokens count, not the loss function itself</b>.</li>
+<li>What alignment compares, previewed only — <b>whole candidate responses against each other, not a single true token</b>.</li>
+<li>What stays untouched by every training stage — <b>fixed structural choices like block count and RoPE's rotation angles</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Context windows and in-context learning</h3>
+<p>Concept 07 steps back from training entirely and asks what a fixed, already-trained model can still do with what you put in front of it at inference time — how much text fits in context, and how examples placed there change behavior without touching any weight this concept just traced.</p>
+<div class="beginner-memory"><b>Concept 06 is complete.</b> Continue to Context windows and in-context learning.</div>
+<a class="button primary" href="module-02-concept-07.html">Start Concept 07 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required grounding, optional depth.</h2>
+<p>Master the three weight groups and the cross-entropy loss first. Open the gradient mathematics, from-scratch code, and the weight-map lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Same weights either way; training adds a loss and a backward pass.</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>Pretraining, SFT, alignment (preview), LoRA — same groups, different signal.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Your RAG calls are inference only — training already happened upstream.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the cross-entropy gradient, code, and the weight-map lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Embedding table + blocks + output head → forward pass (shared) → loss (training only) → backward pass (training only) → updated weights.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the training-versus-inference deep dive</b><em>Cross-entropy gradients through the output head, a from-scratch training step, and the weight-map lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where the loss attaches to the forward pass</h2></div></header>
+<p>Concept 05 finished the forward pass: final hidden state → output head → logits → softmax. Concept 06 attaches a loss to that exact distribution and traces where a gradient computed from it goes: back through the output head, back through every block's attention and feed-forward weights (Concepts 03–04), and back into the embedding table. Module 01 Concept 05's weight-change test, and its catalogue of continued pretraining, SFT, preference alignment and LoRA, are assumed already known and are not re-derived here — this concept adds the architecture-grounded layer underneath them. Concept 07 picks up immediately after, asking what a now-fixed model can do with context alone.</p>
+<div class="flow">
+<div class="flow-node">Embedding table</div>
+<div class="flow-node">Blocks (attn + FF)</div>
+<div class="flow-node">Output head</div>
+<div class="flow-node hot">Loss</div>
+<div class="flow-node hot">Backward pass</div>
+<div class="flow-node">Updated weights</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>List the weight groups</h3><p>State exactly which matrices a pretraining gradient reaches.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Calculate cross-entropy by hand</h3><p>Turn a Concept 05-style softmax distribution into a loss value for a given true token.</p></article>
+<article class="info-card"><span>DERIVE</span><h3>Write the softmax-cross-entropy gradient</h3><p>State dL/dz for the output head's logits without re-deriving softmax from scratch.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State the alignment boundary</h3><p>Explain what alignment previews compare, and why full RLHF mechanics stay out of scope here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Output head, logits, softmax (Concept 05):</b> this concept's loss is computed directly on that distribution — not re-derived here.</li>
+<li><b>Attention and feed-forward weights (Concepts 03–04):</b> the block-level matrices this concept's backward pass reaches.</li>
+<li><b>The weight-change test and lifecycle catalogue (Module 01, Concept 05):</b> pretraining, continued pretraining, SFT, preference alignment, and LoRA/PEFT are assumed known and referenced, not re-taught.</li>
+<li><b>Gradient descent and the LoRA update rule (Module 01, Concept 05's mathematics):</b> θ ← θ − η∇L and W′ = W₀ + BA are reused here, applied to specifically named matrices instead of an abstract θ.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Grading the scorecard, then correcting the whole chain that filled it in</h2></div></header>
+<p>Concept 05 compared the output head to a scorecard filled out in one pass. This concept adds a grader: it checks the score given to the one word that was actually correct, turns a low score into a "how wrong was this" number, and sends a correction backward through every step that helped produce that score — the blocks that built the hidden vector, and the embedding rows that started it.</p>
+<div class="callout warning"><b>Analogy boundary</b>Nothing here is a search over correction strategies. Backpropagation follows one fixed rule — the chain rule of calculus — through the exact same computation graph the forward pass already built; it does not "decide" how to fix the weights, it computes an exact derivative.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Training step</td><td>One forward pass, one loss computation, one backward pass, one optimizer update</td><td>Inference stops after the forward pass</td></tr>
+<tr><td>Cross-entropy loss (this concept)</td><td>L = −log(softmax(z)<sub>true</sub>), evaluated on Concept 05's own logits z</td><td>A single scalar per predicted position, not per training run</td></tr>
+<tr><td>Weight group (embedding / blocks / output head)</td><td>The three parameter sets a pretraining or SFT gradient reaches</td><td>Alignment previews and LoRA touch the same groups differently — see Sections 06 and 15</td></tr>
+<tr><td>Alignment signal (preview)</td><td>A comparison or ranking between candidate responses, not one true token</td><td>Full RLHF derivation is explicitly out of scope for RAG Atlas</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two paths through the same weights: forward-only and forward-plus-backward</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>INFERENCE — FORWARD ONLY</span>
+<div class="lane-flow">
+<div>Embedding lookup for the prompt tokens</div>
+<div>Blocks compute attention and feed-forward outputs</div>
+<div>Output head produces logits, softmax produces a distribution</div>
+<div>Decoding picks a token (Concept 07) — no loss, no gradient, no update</div>
+</div>
+</article>
+<article class="lane"><span>PRETRAINING / SFT — FORWARD + LOSS + BACKWARD</span>
+<div class="lane-flow">
+<div>Identical forward pass through embedding, blocks, output head</div>
+<div>Cross-entropy loss compares softmax's true-token probability to 1</div>
+<div>Backward pass computes ∂L/∂weight for every weight the forward pass used</div>
+<div>Optimizer nudges the embedding table, block weights, and output head</div>
+</div>
+</article>
+</div>
+<p>Both lanes run the exact same forward computation. The only structural difference this concept adds is whether a loss and a backward pass follow it.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The weight groups as a hub, with the loss feeding back in</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the loss at the center sending gradients out to the embedding table, the blocks, and the output head">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>Embedding table</b><small>gradient target</small></div>
+    <div class="diagram-node"><b>Blocks (attn + FF)</b><small>gradient target</small></div>
+    <div class="diagram-node hub-center"><b>Cross-entropy loss</b><small>−log(softmax(z)<sub>true</sub>)</small></div>
+    <div class="diagram-node"><b>Output head</b><small>gradient target</small></div>
+    <div class="diagram-node"><b>True next token</b><small>the label this loss compares against</small></div>
+  </div>
+</div>
+<p>The center is computed once per predicted position, every training step; the arrows out to each weight group are the backward pass this concept adds on top of Concept 05's forward path.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where training sits relative to the RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing → Chunks</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors → Retrieval → Context</span><i>↓</i>
+<span>LLM (this concept's weight groups)</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>Every earlier module concept treats the "LLM" node as inference only. This concept is the one place in the course that opens what produced that node's weights before your first retrieval query ever runs — pretraining, fine-tuning and alignment all happen upstream of the pipeline, not inside it.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Cross-entropy on Concept 05's own softmax, and its gradient</h2></div></header>
+<div class="equation">L = −log(p_true), where p = softmax(z) and z = h · W_out<sup>t</sup> + b</div>
+<p><code>z</code> is exactly Concept 05's logit vector; <code>p_true</code> is the softmax probability the model assigned to the token that actually came next. A confident, correct prediction (p_true near 1) gives a loss near 0; an confident wrong prediction gives a large loss.</p>
+<div class="equation">∂L/∂z_i = p_i − 1{i = true}</div>
+<p>This is the well-known softmax-plus-cross-entropy gradient: for the true token's logit it equals p_true − 1 (negative, pushing that logit up); for every other token it equals p_i (positive, pushing that logit down). This vector is exactly what flows backward into the output head's rows, and — via the chain rule, through every block — into the attention and feed-forward weights and the embedding table.</p>
+<div class="equation">θ ← θ − η · ∂L/∂θ, for θ ∈ {embedding table, block weights, output head}</div>
+<p>This is Module 01 Concept 05's gradient-descent update rule, unchanged; the only addition here is naming θ as the three specific weight groups this concept traced, instead of leaving it abstract.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Cross-entropy and its gradient on a toy three-token vocabulary</h2></div></header>
+<p>Toy logits for the position after "…allows," over three candidate tokens: <code>z = [1.2, 0.9, 0.3]</code> for <code>[unlimited, several, many]</code>, with true token <code>unlimited</code>.</p>
+<div class="equation">softmax: e^1.2≈3.32, e^0.9≈2.46, e^0.3≈1.35; sum≈7.13 → p ≈ [0.466, 0.345, 0.189]</div>
+<div class="equation">loss: L = −log(0.466) ≈ 0.764</div>
+<div class="equation">gradient ∂L/∂z: [0.466−1, 0.345, 0.189] = [−0.534, 0.345, 0.189]</div>
+<p>The negative entry on <code>unlimited</code> means training will push that logit up; the positive entries on <code>several</code> and <code>many</code> mean training will push those down — all from one loss value, computed on the same three logits Concept 05's mechanism already knows how to produce.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>PRETRAINING</span><h3>Raw web and book text</h3><p>Every token position becomes a true-next-token cross-entropy example, automatically, with no labeling.</p></article>
+<article class="info-card"><span>SUPERVISED FINE-TUNING</span><h3>Curated instruction pairs</h3><p>Same loss, computed only over the response tokens of a much smaller, curated dataset.</p></article>
+<article class="info-card"><span>ALIGNMENT (PREVIEW)</span><h3>Ranked response pairs</h3><p>The signal compares two full responses' desirability — previewed only, not derived at the loss level here.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A perfectly predicted token</h3><p>p_true → 1 makes L → 0; the gradient on that logit shrinks toward 0 as well.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"SFT needs a new loss function"</h3><p>It almost always reuses this exact cross-entropy; the data and token masking change, not the mathematics.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Inference computes this loss too"</h3><p>Inference has no true label to compare against and never computes L or a gradient.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>One training step, from scratch, on the output head</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NUMPY-STYLE PSEUDOCODE</span>
+<pre><code>import numpy as np
+
+def softmax(z):
+    z = z - np.max(z)
+    e = np.exp(z)
+    return e / np.sum(e)
+
+def cross_entropy_loss(z, true_index):
+    p = softmax(z)
+    return -np.log(p[true_index]), p
+
+def loss_gradient_wrt_logits(p, true_index):
+    grad = p.copy()
+    grad[true_index] -= 1          # softmax + cross-entropy gradient
+    return grad                    # this is what flows backward into W_out, then the blocks, then embeddings
+
+# one toy step, reusing Concept 05's forward mechanism
+h = np.array([1.0, 1.0])                       # final hidden vector
+W_out = np.array([[0.95, 0.95],                 # 'unlimited'
+                   [0.75, 0.75],                 # 'several'
+                   [0.30, 0.30]])                # 'many'
+true_index = 0                                  # 'unlimited' actually came next
+
+z = W_out @ h                                    # Concept 05's projection
+loss, p = cross_entropy_loss(z, true_index)      # new this concept
+grad_z = loss_gradient_wrt_logits(p, true_index) # new this concept
+
+# grad_z now backpropagates into W_out's rows, then — through the chain rule —
+# into every block's attention/feed-forward weights and the embedding table.
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>What production training code actually calls this</h2></div></header>
+<p>In Hugging Face <code>transformers</code>, a causal language model's forward call returns a <code>loss</code> field computed with exactly this shifted-cross-entropy pattern whenever <code>labels</code> are passed in; <code>Trainer</code> and <code>SFTTrainer</code> (from the <code>trl</code> library) wrap that same loss with data loading, optimizer scheduling, and checkpointing. Preference-alignment libraries such as <code>trl</code>'s DPO or PPO trainers replace this single-token cross-entropy with a pairwise or reward-based objective over whole responses — the same three weight groups traced above still receive the gradient, but the previewed alignment signal computing it is intentionally not derived in this course.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Weight-map and training-loss lab</h2></div></header>
+<div class="lab">
+<p>Pick a training stage to see which weight groups a gradient reaches, then pick a true next token to compute the live cross-entropy loss and its gradient on the output head's logits.</p>
+<div class="lab-actions" role="group" aria-label="Choose a training stage">
+<button type="button" class="stage-select-button active" data-stage="pretraining" aria-pressed="true">Pretraining</button>
+<button type="button" class="stage-select-button secondary" data-stage="sft" aria-pressed="false">Supervised fine-tuning</button>
+<button type="button" class="stage-select-button secondary" data-stage="alignment" aria-pressed="false">Alignment (preview)</button>
+<button type="button" class="stage-select-button secondary" data-stage="inference" aria-pressed="false">Inference</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose the true next token">
+<button type="button" class="truetoken-select-button active" data-token="0" aria-pressed="true">True token: "unlimited"</button>
+<button type="button" class="truetoken-select-button secondary" data-token="1" aria-pressed="false">True token: "several"</button>
+<button type="button" class="truetoken-select-button secondary" data-token="2" aria-pressed="false">True token: "many"</button>
+</div>
+<div class="diagram-hub" id="weightMapDiagram">
+  <div class="diagram-node" id="wmEmbed"><b>Embedding table</b><small>weight group</small></div>
+  <div class="diagram-node" id="wmBlocks"><b>Blocks (attn + FF)</b><small>weight group</small></div>
+  <div class="diagram-node hub-center" id="wmLoss"><b>Loss / signal</b><small id="wmLossLabel">—</small></div>
+  <div class="diagram-node" id="wmHead"><b>Output head</b><small>weight group</small></div>
+  <div class="diagram-node" id="wmTrue"><b>True next token</b><small id="wmTrueLabel">unlimited</small></div>
+</div>
+<div class="sample-output" id="trainingLabOutput" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Full fine-tuning versus LoRA, now grounded in named weights</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram comparing full fine-tuning, which updates the embedding table, blocks, and output head, with LoRA, which freezes all three and trains small adapter matrices alongside them">
+  <div class="diagram-split">
+    <div class="diagram-node active"><b>Embedding table + blocks + output head</b><small>the weight groups this concept traced</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node active"><b>Full fine-tuning: all three updated</b><small>same weight groups as pretraining</small></div>
+    <div class="diagram-node"><b>LoRA: all three frozen</b><small>small adapters trained alongside them</small></div>
+  </div>
+</div>
+<table class="compare-table">
+<thead><tr><th>Choice</th><th>What updates</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Full fine-tuning</td><td>Embedding table, every block's weights, output head</td><td>Highest capacity to change behavior, highest compute and storage cost per checkpoint</td></tr>
+<tr><td>LoRA / PEFT</td><td>Small adapter matrices only; the three groups above stay frozen</td><td>Cheap and reversible, but limited by the frozen base's existing representations</td></tr>
+</tbody>
+</table>
+<p>Module 01 Concept 05 already introduced this choice by name; this section is what "updated" and "frozen" now mean mechanically, in terms of the exact matrices Concepts 03–05 named.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>LOSS MASKING BUG</span><h3>Prompt tokens counted in the loss</h3><p>Failing to mask prompt/instruction tokens during SFT trains the model to also predict its own inputs.</p></article>
+<article class="info-card"><span>CATASTROPHIC FORGETTING</span><h3>All three groups move together</h3><p>Because fine-tuning touches the same weight groups as pretraining, aggressive updates can overwrite general capability while specializing.</p></article>
+<article class="info-card"><span>VANISHING/EXPLODING GRADIENTS</span><h3>Backward pass through many blocks</h3><p>The chain rule through a deep block stack can shrink or blow up gradients reaching the embedding table.</p></article>
+<article class="info-card"><span>REWARD HACKING (PREVIEW)</span><h3>Alignment optimizes the wrong signal</h3><p>A model can learn to satisfy a flawed preference or reward signal rather than genuine quality — a known risk of the alignment stage this concept only previews.</p></article>
+<article class="info-card"><span>MISMATCHED TOKENIZATION</span><h3>Fine-tuning data tokenized differently</h3><p>If fine-tuning data is tokenized inconsistently with pretraining, the embedding rows being updated may not align with what pretraining already learned.</p></article>
+<article class="info-card"><span>FROZEN-BASE ASSUMPTION</span><h3>Expecting LoRA to change everything</h3><p>Behavior LoRA cannot reach because the frozen base never represented it well in the first place.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Pretraining and fine-tuning use different loss mathematics</td><td>Both almost always use the identical cross-entropy on Concept 05's softmax; the data and masking differ, not the formula.</td></tr>
+<tr><td>Backpropagation only reaches the output head</td><td>The chain rule carries the same gradient signal back through every block and into the embedding table.</td></tr>
+<tr><td>Alignment is derivable from this concept's cross-entropy alone</td><td>Alignment compares whole responses; this course previews that boundary rather than deriving the reward or preference mathematics.</td></tr>
+<tr><td>LoRA means the model's own weights get slightly updated</td><td>The base weight groups stay fully frozen; only separate adapter matrices are trained.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Full fine-tuning requires storing gradients and optimizer state for every parameter in all three weight groups, multiplying memory cost well beyond the checkpoint size alone.</li>
+<li>LoRA and other PEFT methods reduce that trainable memory footprint by orders of magnitude, at the cost of representational capacity confined to the frozen base.</li>
+<li>Loss masking correctness in SFT pipelines is a common, quiet source of degraded instruction-following — verify which tokens contribute to the loss.</li>
+<li>Alignment pipelines (previewed only) typically add a separate reward or preference model and its own training and evaluation infrastructure, on top of everything this concept traced.</li>
+<li>None of this runs inside your RAG service at request time — the generator and embedding models you call were already through every stage above, and your system only performs inference.</li>
+<li>Track exactly which stage, dataset version, and base checkpoint produced any model you deploy — this concept's weight groups are meaningless without that lineage.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Which three weight groups does a pretraining gradient reach?</summary><div>The token embedding table, every block's attention and feed-forward weights, and the output head — all at once, from one loss value.</div></details>
+<details class="quiz"><summary>What loss does pretraining minimize, and on what distribution?</summary><div>Cross-entropy on the true next token's probability, computed directly on the softmax distribution Concept 05's output head already produces.</div></details>
+<details class="quiz"><summary>What is ∂L/∂z_i for the softmax-cross-entropy loss?</summary><div>p_i minus 1 for the true token's index, and p_i for every other token — the exact vector that starts the backward pass into the output head.</div></details>
+<details class="quiz"><summary>Why is alignment's mathematics only previewed here, not derived?</summary><div>Because it compares or ranks whole candidate responses rather than scoring one true token, and full RLHF derivation is explicitly out of scope for this course's depth.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using the worked-example format from Section 10, choose your own toy logits for four candidate tokens and a true-token index. Compute the softmax distribution, the cross-entropy loss, and the gradient vector ∂L/∂z by hand. Then state, in one or two sentences, which three weight groups that gradient vector would reach next if this were a real pretraining step, and why inference on the same logits would never produce a gradient at all.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open one worked reasoning pattern</summary><div>With four toy logits, softmax turns them into probabilities that sum to one; the cross-entropy loss is just the negative log of whatever probability landed on the true index. The gradient vector subtracts 1 from that one true-token entry and leaves the others as their raw probabilities — small if the model was already confident and correct, large if it was confidently wrong. From there, that gradient vector is exactly what the chain rule carries backward through the output head's matrix, through every block's attention and feed-forward weights, and into the embedding rows for the tokens that were actually fed in. Inference never produces this vector at all, because inference never computes a loss in the first place — there is no true label to compare against and nothing to send backward.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>L = −log(softmax(z)<sub>true</sub>), ∂L/∂z_i = p_i − 1{i=true}. Gradient reaches: embedding table, block attn/FF weights, output head. Inference: forward only, no loss, no gradient.</p></div>
+<div><h3>Selection rule</h3><ul><li>Pretraining/SFT: same weight groups, same cross-entropy, different data</li><li>Alignment: same groups, different signal — previewed only</li><li>LoRA: groups frozen, small adapters trained instead</li><li>Your RAG calls: inference only, every stage already ran upstream</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Walk through exactly what happens, mechanically, during one pretraining step.</summary><div>A forward pass produces logits from the output head and a softmax distribution over them, exactly as in Concept 05; cross-entropy compares the true next token's probability to 1; the resulting gradient vector backpropagates through the output head, every block's attention and feed-forward weights, and the embedding table, and an optimizer applies a small update to each.</div></details>
+<details class="quiz"><summary>Does supervised fine-tuning require a new loss function?</summary><div>Almost always no — it reuses the identical cross-entropy loss on the identical output head; what changes is the training data (curated instruction-response pairs) and often which tokens are masked out of the loss.</div></details>
+<details class="quiz"><summary>What does LoRA freeze, and what receives the gradient instead?</summary><div>It freezes the embedding table, block weights, and output head entirely; small low-rank adapter matrices added alongside the frozen weights receive the gradient instead.</div></details>
+<details class="quiz"><summary>A colleague claims alignment and pretraining optimize the same loss. How do you respond?</summary><div>Pretraining and SFT both score one true next token with cross-entropy; alignment methods instead compare or rank whole candidate responses against each other — a different signal touching the same weight groups, whose full mechanics this course previews but does not derive.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.14165"><b>Brown et al. — Language Models are Few-Shot Learners (GPT-3)</b><br><span>Concretely scales the pretraining next-token objective this lesson's loss is built on to a large model and corpus.</span></a>
+<a href="https://arxiv.org/abs/2001.08361"><b>Kaplan et al. — Scaling Laws for Neural Language Models</b><br><span>Studies how pretraining's cross-entropy loss behaves as the embedding table, block stack, and output head all scale together.</span></a>
+<a href="https://arxiv.org/abs/1706.03741"><b>Christiano et al. — Deep Reinforcement Learning from Human Preferences</b><br><span>The foundational preference-comparison signal behind this lesson's alignment preview — full derivation stays out of scope for RAG Atlas.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 06 is complete. Its formal definitions, cross-entropy gradient mathematics, from-scratch training step, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-07.html">Start Concept 07 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Context windows and in-context learning.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 06 · Active</p>
+<a href="module-02-concept-05.html">← Concept 05</a>
+</footer>
+</body>
+</html>

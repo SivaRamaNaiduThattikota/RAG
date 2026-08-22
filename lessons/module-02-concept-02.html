@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson tracing how byte-pair encoding actually builds a vocabulary from frequency counts, separating tokenizer training from tokenizer use, and explaining real vocabulary-size and digit-tokenization quirks.">
+<title>Tokens and tokenization in depth — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-02-02.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 02</p>
+<h1>Tokens and<br>
+<em>tokenization in depth</em>
+</h1>
+<p class="lesson-lead">Module 01 gave you the vocabulary: token, token ID, vocabulary, subword. This lesson goes underneath that vocabulary — tracing the actual byte-pair-encoding merge algorithm on real frequency counts, separating tokenizer <b>training</b> from tokenizer <b>use</b>, and showing exactly why digits and rare terms tokenize the way they do.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Second LLM &amp; transformer foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>What is a large language model?</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Trace how a vocabulary is actually built and applied</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You traced the BPE merge loop by hand, separated tokenizer training from tokenizer use, and saw why digits and rare terms fragment unpredictably.</p>
+<b>2 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Where the vocabulary actually comes from</h2>
+</div>
+<p>Module 01, Concept 6 already told you that a token is a vocabulary entry and that BPE, WordPiece, and SentencePiece exist. It did not show you how any of them actually pick their pieces. This lesson opens that box.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Tokenizer training and tokenizer use are two different jobs</h3>
+<p>You already know what a token, a token ID, and a vocabulary are (Module 01, Concept 6). What that lesson left open is where the vocabulary itself comes from, and what actually happens, step by step, when it is built.</p>
+<p>
+<b>Tokenizer training</b> is a one-time, offline process that reads a large text corpus, counts how often symbols sit next to each other, and repeatedly merges the single most frequent pair into a new vocabulary entry until a target vocabulary size is reached. <b>Tokenizer use</b> is the separate, much cheaper step of applying that already-learned list of merges, in order, to a brand-new piece of text at request time. Training happens once per tokenizer; use happens on every request that model ever serves.</p>
+<div class="beginner-memory">
+<b>First memory:</b> training builds the merge list from frequency counts, once; use only replays that fixed list, every time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why the training/use split matters, not just “subwords exist”</h3>
+<p>Module 01, Concept 6 explained why subword tokenization beats pure character-level or pure word-level splitting. It did not explain how the specific pieces in a real vocabulary get chosen, or why the exact same word can tokenize differently on two different models. Both questions have the same answer: a specific training corpus produced a specific set of merges, and only that exact set of merges is replayed at inference time.</p>
+<div class="mental-compare">
+<div>
+<span>WHAT MODULE 01 ALREADY ESTABLISHED</span>
+<p>Subword tokenization is a practical middle point between character-level and word-level splitting; BPE, WordPiece, and SentencePiece exist as named options.</p>
+</div>
+<div>
+<span>WHAT THIS CONCEPT ADDS</span>
+<p>Exactly how a BPE vocabulary gets built from frequency counts, how WordPiece and SentencePiece choose merges differently, and why digits and rare terms fragment the way they do.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A tiny vocabulary, built from four words</h3>
+<p>Picture a trainer given exactly one small corpus: the word <code>low</code> appears 5 times, <code>lower</code> 2 times, <code>newest</code> 6 times, and <code>widest</code> 3 times. Every word starts broken into individual characters plus a marker for the end of the word (written <code>·</code> below). The trainer’s only job is to repeatedly find the single most frequent adjacent pair of symbols anywhere in the corpus and glue it into one new symbol — then do it again.</p>
+<table class="worked-table">
+<thead>
+<tr>
+<th>Word</th>
+<th>Frequency</th>
+<th>Starting symbols</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>low</code></td>
+<td>5</td>
+<td><code>l o w ·</code></td>
+</tr>
+<tr>
+<td><code>lower</code></td>
+<td>2</td>
+<td><code>l o w e r ·</code></td>
+</tr>
+<tr>
+<td><code>newest</code></td>
+<td>6</td>
+<td><code>n e w e s t ·</code></td>
+</tr>
+<tr>
+<td><code>widest</code></td>
+<td>3</td>
+<td><code>w i d e s t ·</code></td>
+</tr>
+</tbody>
+</table>
+<p>Watching just the first move: the pair <code>(e, s)</code> occurs 9 times in total, across <code>newest</code> and <code>widest</code> — more than any other adjacent pair in this corpus — so <code>e</code> and <code>s</code> are glued into one new symbol, <code>es</code>. Section 06 of the advanced layer below carries this exact corpus through five full merges by hand.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The training loop, generically</h3>
+<div class="lane-flow">
+<div>Start every word as individual characters plus an end-of-word marker</div>
+<div>Count every adjacent symbol pair across the whole corpus, weighted by each word’s frequency</div>
+<div>Find the single pair with the highest total count</div>
+<div>Replace every occurrence of that pair with one new merged symbol; add it to the vocabulary</div>
+<div>Repeat counting and merging until a target vocabulary size or merge count is reached</div>
+<div>Save the finished, ordered list of merges — that saved list is the only thing tokenizer USE ever touches again</div>
+</div>
+<p>Nothing here is specific to English, or to any one domain — the algorithm only ever looks at frequencies. That is also its main limitation: it has no idea that <code>est</code> is a linguistically meaningful suffix, only that its two halves kept appearing together in this corpus.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0202-visual-title">
+  <strong class="concept-visual-title" id="c0202-visual-title">VISUAL · FIVE MERGES, ONE VOCABULARY GROWING</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing five sequential byte-pair-encoding merges growing a vocabulary from raw characters toward whole words">
+    <div class="diagram-strip">
+      <div class="diagram-node"><b>l o w · / n e w e s t ·</b><small>start: raw characters + end marker</small></div>
+      <div class="diagram-node"><b>+ es</b><small>merge 1 · weighted freq 9</small></div>
+      <div class="diagram-node"><b>+ est</b><small>merge 2 · weighted freq 9</small></div>
+      <div class="diagram-node"><b>+ est·</b><small>merge 3 · weighted freq 9</small></div>
+      <div class="diagram-node"><b>+ lo</b><small>merge 4 · weighted freq 7</small></div>
+      <div class="diagram-node active"><b>+ low</b><small>merge 5 · weighted freq 7</small></div>
+    </div>
+  </div>
+  <figcaption>Each box is one training step, not one request. The vocabulary only grows during training; nothing in this row runs again when the tokenizer is later used on new text.</figcaption>
+  <ol class="diagram-key"><li><b>First three merges:</b> build the shared suffix “est·” out of the two words that both end in it.</li><li><b>Last two merges:</b> build the whole word “low” out of its own characters, because “low” itself keeps recurring.</li><li><b>Consequence:</b> which strings end up as single tokens depends entirely on what recurred often in this training corpus — not on any human idea of word boundaries.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Training runs once; use runs on every request</h3>
+<div class="two-lane">
+<article class="lane">
+<span>OFFLINE · TOKENIZER TRAINING</span>
+<div class="lane-flow">
+<div>Collect a large representative text corpus</div>
+<div>Count adjacent symbol-pair frequencies</div>
+<div>Merge the most frequent pair, repeatedly</div>
+<div>Stop at a target vocabulary size</div>
+<div>Save the ordered merge list</div>
+</div>
+</article>
+<article class="lane">
+<span>ONLINE · TOKENIZER USE</span>
+<div class="lane-flow">
+<div>Receive new text at request time</div>
+<div>Split it into characters or bytes</div>
+<div>Apply the saved merges, in their trained order</div>
+<div>Emit token IDs into the model’s embedding lookup</div>
+<div>No counting and no merge decisions happen here</div>
+</div>
+</article>
+</div>
+<p>Both lanes sit entirely inside the LLM box and the embedding-model box from Concept 01 — retrieval, Oracle, and orchestration never see a token or a merge decision.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three training algorithms, three merge rules</h3>
+<div class="distinction-table" role="table" aria-label="Tokenizer training algorithm distinctions">
+<div role="row">
+<b role="cell">Algorithm</b>
+<b role="cell">How it picks the next merge</b>
+<b role="cell">Common confusion</b>
+</div>
+<div role="row">
+<span role="cell">Byte-pair encoding (BPE)</span>
+<span role="cell">Merges the pair with the highest raw weighted frequency count</span>
+<span role="cell">Assumed to use the same rule as WordPiece</span>
+</div>
+<div role="row">
+<span role="cell">WordPiece</span>
+<span role="cell">Merges the pair that most increases likelihood relative to its two parts occurring alone</span>
+<span role="cell">Assumed to be “just Google’s name for BPE”</span>
+</div>
+<div role="row">
+<span role="cell">SentencePiece (unigram mode)</span>
+<span role="cell">Starts from a large candidate set and prunes pieces that hurt a probabilistic model of the corpus</span>
+<span role="cell">Assumed to be one single fixed algorithm rather than a library offering several</span>
+</div>
+<div role="row">
+<span role="cell">Byte-level fallback</span>
+<span role="cell">Falls back to raw UTF-8 bytes for anything the trained vocabulary never learned</span>
+<span role="cell">Assumed to mean every tokenizer splits any given string identically</span>
+</div>
+</div>
+<p>BPE, WordPiece, and SentencePiece-unigram are three different training algorithms that all output the same kind of thing — a fixed vocabulary plus a fast way to apply it — but they choose which pieces belong in that vocabulary by three different rules.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Tokenizer training happens every time I call the API.”</b>
+<p>Training happened once, long before your request; a call only applies the already-saved merges.</p>
+</div>
+<div>
+<b>“BPE, WordPiece, and SentencePiece all use the same merge rule.”</b>
+<p>They score candidate merges differently — raw frequency, likelihood gain, and corpus probability, respectively.</p>
+</div>
+<div>
+<b>“A digit is always its own token.”</b>
+<p>Digit runs are chunked by whatever grouping was frequent in the training corpus, not by place value.</p>
+</div>
+<div>
+<b>“A bigger vocabulary is strictly better.”</b>
+<p>Every extra vocabulary entry adds a row to the embedding table and the output layer — it is not a free lunch.</p>
+</div>
+<div>
+<b>“Byte-level fallback means every model tokenizes the same string the same way.”</b>
+<p>Fallback only guarantees the string is representable, not that two tokenizers split it identically.</p>
+</div>
+<div>
+<b>“The training corpus doesn’t matter once you have BPE.”</b>
+<p>Merges are learned from that specific corpus’s frequencies — a domain mismatch changes which terms fragment.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG assistant</h3>
+<div class="project-map">
+<div>
+<span>VOCABULARY CHOICE</span>
+<b>Vocab size trades context budget against embedding-table memory</b>
+<p>A larger vocabulary shortens sequences but grows the model’s embedding and output layers; both embedding-model and generator choices carry this trade-off.</p>
+</div>
+<div>
+<span>NUMBER-HEAVY METADATA</span>
+<b>Never let the LLM compute a number token-by-token</b>
+<p>Digit-tokenization quirks mean an LLM can mis-add or mis-compare figures it reads; totals, counts, and dates belong in a real Oracle SQL calculation, not a generated answer.</p>
+</div>
+<div>
+<span>TRAINING VS USE, IN PRACTICE</span>
+<b>This project only ever uses pretrained tokenizers</b>
+<p>The embedding model and the LLM each ship an already-trained vocabulary; nothing in the RAG pipeline retrains one.</p>
+</div>
+<div>
+<span>BYTE FALLBACK</span>
+<b>Guarantees any ingested document text is representable</b>
+<p>Unusual encodings or domain symbols in a source document still tokenize into bytes rather than failing outright.</p>
+</div>
+</div>
+<p>Every concept from here forward keeps assuming token IDs already exist and moves inside the transformer stack that consumes them.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Tokenizer training</b>
+<p>An offline, one-time process that learns a merge list from corpus frequency counts.</p>
+</div>
+<div>
+<b>Tokenizer use</b>
+<p>Applying an already-learned merge list to new text, on every request.</p>
+</div>
+<div>
+<b>Merge criterion</b>
+<p>BPE picks the highest raw frequency; WordPiece and SentencePiece score candidates differently.</p>
+</div>
+<div>
+<b>Digit fragmentation</b>
+<p>Numbers chunk by training-corpus frequency, not by place value — a real arithmetic risk.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What exactly is different between tokenizer training and tokenizer use?</li>
+<li>Why does the pair <code>(e, s)</code> get merged first in the <code>low/lower/newest/widest</code> corpus?</li>
+<li>What is the difference between how BPE and WordPiece choose the next merge?</li>
+<li>Why can the same number tokenize inconsistently across two similar-length inputs?</li>
+<li>Why isn’t a bigger vocabulary automatically the right choice?</li>
+<li>What does byte-level fallback guarantee, and what does it not guarantee?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick judgment exercise</summary>
+<div>
+<ol>
+<li>Retraining a tokenizer from scratch on every incoming chat message — <b>wrong; training is offline and one-time, not per-request</b>.</li>
+<li>Assuming “48213” and “482134” tokenize into the same digit groupings — <b>wrong; digit chunking depends on training-corpus frequency, not length or place value</b>.</li>
+<li>Assuming BPE and WordPiece would merge the exact same first pair on the same corpus — <b>not guaranteed; their scoring rules differ</b>.</li>
+<li>Assuming a rare emoji will fail to tokenize entirely — <b>wrong; byte-level fallback represents it as bytes instead</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Transformer architecture overview</h3>
+<p>This lesson stopped at the token ID — the exact input the transformer stack consumes. Concept 03 opens the stack itself: how stacked self-attention and feed-forward blocks turn a sequence of token IDs into the representations the model reasons over. Self-attention’s own mechanics get their own concept right after that.</p>
+<div class="beginner-memory">
+<b>Concept 02 is complete.</b> Continue to the transformer's block architecture.</div>
+<a class="button primary" href="module-02-concept-03.html">Start Concept 03 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required trace, optional depth.</h2>
+<p>Master the training/use split and the merge-loop trace first. Open the merge mathematics, from-scratch code, vocabulary-size data, and the merge-trainer lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>Tokenizer training happens once; use happens every request.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Trace</b>
+<small>Count pairs, merge the most frequent, repeat.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>Never let the LLM do token-level arithmetic on real numbers.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open the full merge trace, code, vocab data, and the lab.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 02 path:</b> Corpus (offline, once) → counted pairs → merge loop → saved vocabulary → new text (online, every request) → applied merges → token IDs.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the tokenization deep dive</b>
+<em>Full BPE merge trace, WordPiece scoring, real vocabulary-size data, from-scratch code, and the merge-trainer lab</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where the merge loop sits</h2>
+</div>
+</header>
+<p>Concept 01 named the LLM box; Module 01, Concept 6 named its inputs at a survey level. This concept opens the one step neither of those covered: how the vocabulary those tokens are drawn from actually gets built, and how that building process differs from every request the finished tokenizer will ever serve.</p>
+<div class="flow">
+<div class="flow-node">LLM defined</div>
+<div class="flow-node">Vocabulary training</div>
+<div class="flow-node hot">Tokens</div>
+<div class="flow-node">Transformer stack</div>
+<div class="flow-node">Self-attention</div>
+<div class="flow-node">Decoding</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>TRAIN</span>
+<h3>Run the merge loop by hand</h3>
+<p>Count pairs, pick the maximum, merge, and repeat on a real toy corpus.</p>
+</article>
+<article class="info-card">
+<span>DISTINGUISH</span>
+<h3>Separate the three algorithms</h3>
+<p>State how BPE, WordPiece, and SentencePiece-unigram score a candidate merge differently.</p>
+</article>
+<article class="info-card">
+<span>PREDICT</span>
+<h3>Anticipate digit and rare-term fragmentation</h3>
+<p>Explain why the same number can tokenize inconsistently and what that risks.</p>
+</article>
+<article class="info-card">
+<span>ANTICIPATE</span>
+<h3>Preview the transformer stack</h3>
+<p>Recognize that everything past the token ID belongs to Concepts 03–04, not here.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Token, token ID, vocabulary:</b> a token is a vocabulary entry, not a word; a token ID is its integer index (Module 01, Concept 6).</li>
+<li>
+<b>BPE/WordPiece/SentencePiece exist:</b> named at a survey level, without their internal scoring rules (Module 01, Concept 6).</li>
+<li>
+<b>The LLM box:</b> a transformer decoder consumes token IDs as its input (Module 02, Concept 1).</li>
+<li>
+<b>Comfort with counting and ratios:</b> this lesson’s mathematics is frequency counting and simple ratios, nothing beyond that.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>An apprentice building a type case by counting, not guessing</h2>
+</div>
+</header>
+<p>Picture an apprentice building a printer’s type case by watching a huge stack of manuscripts: every time two adjacent letters keep showing up glued together, the apprentice casts one combined stamp for that pair instead of two separate ones, then keeps watching for the next most common pair. Given enough manuscripts, common suffixes and whole common words end up as single stamps, purely because they kept recurring — not because the apprentice understands grammar.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>The apprentice is greedy and local: each cast is “whatever is most frequent right now,” never a search for the best possible final type case. A different training corpus, or a different tie-breaking rule, produces a different set of stamps — this is exactly why Section 16 treats merge order as a real production risk.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal definitions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tokenizer training</td>
+<td>An offline process that learns an ordered merge list from corpus frequency counts</td>
+<td>Runs once per tokenizer version, never at request time</td>
+</tr>
+<tr>
+<td>Tokenizer use (encoding)</td>
+<td>Applying an already-learned merge list, in order, to new input text</td>
+<td>Runs on every request; makes no new merge decisions</td>
+</tr>
+<tr>
+<td>BPE merge criterion</td>
+<td>Merge the adjacent pair with the highest raw weighted frequency</td>
+<td>Purely a count; ignores how often the two parts occur alone</td>
+</tr>
+<tr>
+<td>WordPiece merge criterion</td>
+<td>Merge the pair that most increases likelihood relative to its parts occurring independently</td>
+<td>Requires tracking single-symbol frequencies, not just pair frequencies</td>
+</tr>
+</tbody>
+</table>
+<div class="equation">score_BPE(a, b) = freq(a, b)</div>
+<div class="equation">score_WordPiece(a, b) ≈ freq(a, b) / (freq(a) · freq(b))</div>
+<p>BPE always merges whichever pair is simply most common. WordPiece’s score is a commonly cited approximation of its actual likelihood criterion: it rewards a pair that co-occurs far more than its two parts’ individual frequencies alone would predict — a pair can lose to a rarer competitor if that competitor’s parts are individually even rarer.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>Five merges, traced by hand</h2>
+</div>
+</header>
+<p>Continuing the corpus from Section 03 of the beginner core — <code>low</code>:5, <code>lower</code>:2, <code>newest</code>:6, <code>widest</code>:3 — every step below recounts every adjacent pair from scratch after the previous merge, because a merge can create brand-new pairs that did not exist before it.</p>
+<table class="worked-table">
+<thead>
+<tr>
+<th>Step</th>
+<th>Top pair (weighted frequency)</th>
+<th>New symbol</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>(e, s) → 6 + 3 = 9</td><td><code>es</code></td></tr>
+<tr><td>2</td><td>(es, t) → 6 + 3 = 9</td><td><code>est</code></td></tr>
+<tr><td>3</td><td>(est, ·) → 6 + 3 = 9</td><td><code>est·</code></td></tr>
+<tr><td>4</td><td>(l, o) → 5 + 2 = 7</td><td><code>lo</code></td></tr>
+<tr><td>5</td><td>(lo, w) → 5 + 2 = 7</td><td><code>low</code></td></tr>
+</tbody>
+</table>
+<p>Ties (all three of steps 1–3 sit at weighted frequency 9) are broken here by picking whichever pair’s two symbols come first alphabetically, purely so the trace is reproducible — real implementations often break ties by insertion order instead, which is exactly why two runs over similar corpora can diverge. After step 5, <code>newest</code> and <code>widest</code> both contain the whole symbol <code>est·</code>, and <code>low</code> and <code>lower</code> both contain the whole symbol <code>low</code> — the vocabulary now has 5 new entries beyond the original characters, learned entirely from these four words’ frequencies.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>Three training algorithms, one output shape</h2>
+</div>
+</header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing three tokenizer training algorithms and byte-level fallback around a shared trained-vocabulary output">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>BPE</b><small>merge the highest raw pair frequency</small></div>
+    <div class="diagram-node hub-center"><b>Trained subword vocabulary</b><small>a fixed list, ready for tokenizer use</small></div>
+    <div class="diagram-node"><b>WordPiece</b><small>merge the highest likelihood-gain pair</small></div>
+    <div class="diagram-node"><b>SentencePiece unigram</b><small>prune a large candidate set by corpus probability</small></div>
+    <div class="diagram-node"><b>Byte-level fallback</b><small>raw UTF-8 bytes for anything never learned</small></div>
+  </div>
+</div>
+<p>All four satellites feed the same kind of center: a fixed vocabulary plus a fast way to apply it. They disagree only on the rule used to decide which pieces earned a place in that vocabulary — which is exactly why the same string can come out differently tokenized depending on which corner of this diagram produced the tokenizer.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Training never appears in this request diagram at all</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Documents</span>
+<i>↓</i>
+<span>Chunks</span>
+<i>↓</i>
+<span>Embedding-model tokenizer (use)</span>
+<i>↓</i>
+<span>Vectors</span>
+<i>↓</i>
+<span>Retrieval</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>LLM tokenizer (use)</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>Module 01, Concept 6 already placed two separate tokenizers on this diagram — one for the embedding model, one for the generator. The new layer here: neither one is training anything while this diagram runs. Both were trained long before the first document in this pipeline ever existed, on a corpus that has nothing to do with your Oracle RAG project’s documents. Only a rare, deliberate domain-adaptation decision (previewed, not taught, here) would ever retrain either one.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Scoring a merge, and measuring what it bought</h2>
+</div>
+</header>
+<table class="notation">
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr><td><code>freq(a, b)</code></td><td>Weighted count of adjacent pair (a, b) across the corpus</td></tr>
+<tr><td><code>freq(a)</code>, <code>freq(b)</code></td><td>Weighted count of symbol a, or b, occurring on its own</td></tr>
+<tr><td><code>|V|</code></td><td>Vocabulary size after training</td></tr>
+<tr><td><code>C</code></td><td>Total characters in a piece of text; <code>T</code> its resulting token count</td></tr>
+</tbody>
+</table>
+<div class="equation">compression(text) = C / T</div>
+<p>A larger, better-fitted vocabulary generally raises <code>C / T</code> — more characters packed per token — which is exactly why vocabulary size and typical sequence length trade against each other, a relationship Module 01, Concept 6 already stated qualitatively. What is new here is the mechanism producing <code>|V|</code> itself: it is the direct, countable output of however many merge steps the training loop ran, using whichever of the three scoring rules from Section 05 that algorithm uses.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Recomputing pair counts after a merge</h2>
+</div>
+</header>
+<p>Take just the transition from step 3 to step 4 in Section 06. Before step 4, the words stand as: <code>l o w ·</code> (×5), <code>l o w e r ·</code> (×2), <code>n e w est· </code> (×6), <code>w i d est·</code> (×3).</p>
+<div class="equation">(l, o): 5 (from low) + 2 (from lower) = 7</div>
+<div class="equation">(o, w): 5 (from low) + 2 (from lower) = 7</div>
+<div class="equation">(w, est·): 6 (from newest) + 3 (from widest) = 9 -- but est· was already fully merged in step 3, so this pair does not recur; the next available maximum is the (l, o) / (o, w) tie at 7</div>
+<p>Alphabetical tie-break compares the strings <code>"l§o"</code> and <code>"o§w"</code>: <code>l</code> precedes <code>o</code>, so <code>(l, o)</code> merges first, exactly as Section 06 reported. This is the same recomputation the interactive lab in Section 14 performs on every click, just on a different corpus.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Real vocabulary sizes, and where digits break</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>SMALL, TARGETED VOCAB</span>
+<h3>BERT-style WordPiece</h3>
+<p>Roughly 30,000 pieces — small enough to keep the embedding table modest.</p>
+</article>
+<article class="info-card">
+<span>SMALL, LANGUAGE-INDEPENDENT</span>
+<h3>SentencePiece unigram (Llama-2 class)</h3>
+<p>Roughly 32,000 pieces, trained directly on raw text without a separate word pre-split.</p>
+</article>
+<article class="info-card">
+<span>LARGE, BROAD-COVERAGE</span>
+<h3>cl100k-style BPE</h3>
+<p>Roughly 100,000 pieces — more single-token common words and code identifiers, at the cost of a bigger table.</p>
+</article>
+<article class="info-card">
+<span>VERY LARGE, MULTILINGUAL-LEANING</span>
+<h3>o200k-style BPE</h3>
+<p>Roughly 200,000 pieces — pushes further into shorter sequences for more scripts and symbols.</p>
+</article>
+<article class="info-card">
+<span>DIGIT QUIRK</span>
+<h3>Number grouping is a frequency accident</h3>
+<p>“48213” and “482134” routinely chunk into different digit groupings, not one-digit-per-token or fixed three-digit groups.</p>
+</article>
+<article class="info-card">
+<span>MISTAKE TO AVOID</span>
+<h3>Treating token count as a proxy for numeric precision</h3>
+<p>More tokens spent on a number says nothing about whether the model will add or compare it correctly.</p>
+</article>
+</div>
+<div class="prob-bars" aria-label="Approximate vocabulary sizes compared, relative to a 200,000-token maximum">
+<div class="prob-row"><span>WordPiece (BERT-base)</span><div class="bar-track"><div class="bar-fill" style="width:15%"></div></div><span>~30,522</span></div>
+<div class="prob-row"><span>SentencePiece (Llama-2)</span><div class="bar-track"><div class="bar-fill" style="width:16%"></div></div><span>~32,000</span></div>
+<div class="prob-row"><span>BPE (cl100k-style)</span><div class="bar-track"><div class="bar-fill" style="width:50%"></div></div><span>~100,000</span></div>
+<div class="prob-row"><span>BPE (o200k-style)</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>~200,000</span></div>
+</div>
+<p>The bars are approximate, order-of-magnitude figures, not exact vendor counts — but the roughly sevenfold spread between the smallest and largest is real, and it is entirely a training-time choice: how many merge steps the training loop was allowed to run.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>A real byte-pair-encoding trainer, not a stand-in</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH BPE TRAINER</span>
+<pre>
+<code>from collections import Counter
+
+def word_to_symbols(word):
+    return list(word) + ["&middot;"]
+
+def pair_counts(vocab):
+    # vocab: {tuple_of_symbols: weighted_frequency}
+    counts = Counter()
+    for symbols, freq in vocab.items():
+        for a, b in zip(symbols, symbols[1:]):
+            counts[(a, b)] += freq
+    return counts
+
+def merge_pair(vocab, pair):
+    a, b = pair
+    merged = a + b
+    new_vocab = {}
+    for symbols, freq in vocab.items():
+        out, i = [], 0
+        while i < len(symbols):
+            if i < len(symbols) - 1 and symbols[i] == a and symbols[i + 1] == b:
+                out.append(merged); i += 2
+            else:
+                out.append(symbols[i]); i += 1
+        new_vocab[tuple(out)] = new_vocab.get(tuple(out), 0) + freq
+    return new_vocab, merged
+
+corpus = {"low": 5, "lower": 2, "newest": 6, "widest": 3}
+vocab = {tuple(word_to_symbols(w)): f for w, f in corpus.items()}
+merges = []
+
+for _ in range(5):
+    counts = pair_counts(vocab)
+    if not counts:
+        break
+    best_pair = max(counts, key=lambda p: (counts[p], "".join(p)))
+    vocab, merged = merge_pair(vocab, best_pair)
+    merges.append((best_pair, merged, counts[best_pair]))
+
+print(merges)
+# -&gt; [(('e','s'),'es',9), (('es','t'),'est',9), (('est','&middot;'),'est&middot;',9),
+#     (('l','o'),'lo',7), (('lo','w'),'low',7)]
+</code>
+</pre>
+</div>
+<p>This is tokenizer <b>training</b>, running the same loop Section 06 traced by hand — <code>max(..., key=...)</code> is doing the tie-break, choosing the highest count and, on a tie, the alphabetically smallest joined pair. Contrast this with Concept 01’s Section 12, which trained a language model’s next-word counts; here the counting target is adjacent symbol pairs, not next words, and the output is a vocabulary, not a probability table.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>Training a real tokenizer, not just loading one</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · HUGGING FACE TOKENIZERS — TRAINING</span>
+<pre>
+<code>from tokenizers import Tokenizer, models, trainers, pre_tokenizers
+
+tokenizer = Tokenizer(models.BPE())
+tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+trainer = trainers.BpeTrainer(vocab_size=8000, min_frequency=2)
+
+tokenizer.train(files=["domain_corpus.txt"], trainer=trainer)
+tokenizer.save("domain-tokenizer.json")
+
+encoded = tokenizer.encode("Oracle23ai retrieves the widest policy match.")
+print(encoded.tokens)
+</code>
+</pre>
+</div>
+<p>Concept 01’s Section 13 only ever called <code>AutoTokenizer.from_pretrained(...)</code> — tokenizer <b>use</b>, on an already-trained vocabulary. This snippet does the other half: <code>BpeTrainer</code> runs the same count-and-merge loop from Section 12 over a real corpus, in optimized Rust, and writes out a new vocabulary file. Training your own vocabulary is rare in a RAG project — it only makes sense when domain terms fragment so badly that a general-purpose vocabulary is genuinely hurting retrieval quality or cost.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Byte-pair-encoding trainer lab</h2>
+</div>
+</header>
+<div class="lab">
+<p>Pick a RAG-pipeline-flavored corpus, then merge one pair at a time to watch the vocabulary grow exactly the way Sections 06 and 12 describe — just on different words. Every click recounts every pair from scratch, on whatever the words currently look like.</p>
+<div class="lab-actions" role="group" aria-label="Choose a training corpus">
+<button type="button" class="bpe-corpus-button active" data-corpus="chunk" aria-pressed="true">chunk / chunks / chunked / chunking</button>
+<button type="button" class="bpe-corpus-button secondary" data-corpus="embed" aria-pressed="false">embed / embeds / embedded / embedding</button>
+<button type="button" class="bpe-corpus-button secondary" data-corpus="index" aria-pressed="false">index / indexed / indexing / indexes</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Run the merge loop">
+<button type="button" class="bpe-step-button">Merge next pair →</button>
+<button type="button" class="bpe-reset-button secondary">Reset corpus</button>
+</div>
+<div class="sample-output" id="bpeLabOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choosing a training algorithm and a vocabulary size</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Approach</th>
+<th>Wins when</th>
+<th>Operational cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw BPE, moderate vocab (~30–50k)</td>
+<td>Fast, simple, well-understood training; general text and code</td>
+<td>Digit and rare-term fragmentation can still be inconsistent</td>
+</tr>
+<tr>
+<td>WordPiece</td>
+<td>Likelihood-aware merges give slightly better coverage of common morphology</td>
+<td>Training is more expensive to compute than raw frequency counting</td>
+</tr>
+<tr>
+<td>SentencePiece unigram</td>
+<td>Language-independent input (no whitespace pre-split needed); multilingual corpora</td>
+<td>Training and probabilistic re-segmentation are the most compute-intensive of the three</td>
+</tr>
+<tr>
+<td>Very large BPE vocab (~100–200k)</td>
+<td>Broad script and symbol coverage; shorter sequences per request</td>
+<td>Largest embedding table and output-layer memory footprint</td>
+</tr>
+</tbody>
+</table>
+<p>None of these rows change whether a generated number should be trusted — that risk, from Section 16, is addressed by pushing calculation into Oracle SQL, not by picking a different tokenizer.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes around training and digits</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>ARITHMETIC</span>
+<h3>Inconsistent digit grouping breaks addition</h3>
+<p>Frontier LLMs measurably struggle with multi-digit arithmetic partly because digit chunking is not aligned to place value.</p>
+</article>
+<article class="info-card">
+<span>VERSION DRIFT</span>
+<h3>Vocabulary/model mismatch after a retrain</h3>
+<p>Token IDs from a newly trained vocabulary are meaningless to a model trained on the old one.</p>
+</article>
+<article class="info-card">
+<span>UNICODE</span>
+<h3>Byte-fallback edge cases</h3>
+<p>Rare scripts or malformed encodings can fall back to raw bytes mid-word, producing an unexpectedly long token run.</p>
+</article>
+<article class="info-card">
+<span>MERGE ORDER</span>
+<h3>Tie-break sensitivity across corpora</h3>
+<p>A slightly different training corpus, or a different tie-break rule, changes which pairs merge first — and therefore the final vocabulary.</p>
+</article>
+<article class="info-card">
+<span>FORMATTING</span>
+<h3>Commas and decimals fragment differently</h3>
+<p>“1,234,567” and “1234567” are not guaranteed to tokenize into comparable pieces just because the digits match.</p>
+</article>
+<article class="info-card">
+<span>COST BLIND SPOT</span>
+<h3>Treating vocabulary size as training-time-only cost</h3>
+<p>A large vocabulary also enlarges the embedding table and output softmax at every single inference call.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tokenizer training happens on every request</td>
+<td>Training is offline and one-time; a request only ever applies an already-saved merge list</td>
+</tr>
+<tr>
+<td>All subword algorithms use the same merge rule</td>
+<td>BPE scores raw frequency; WordPiece scores likelihood gain; SentencePiece unigram prunes by corpus probability</td>
+</tr>
+<tr>
+<td>A digit always becomes its own token</td>
+<td>Digit runs chunk by training-corpus frequency, which rarely lines up with place value</td>
+</tr>
+<tr>
+<td>A bigger vocabulary is free because “it’s just a lookup table”</td>
+<td>Every added entry enlarges the embedding table and the output layer at inference time, not just at training time</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Pin the exact tokenizer/vocabulary version to the exact model checkpoint; never assume a retrain is a safe drop-in.</li>
+<li>Route arithmetic, counting, and date math to Oracle SQL or a calculator tool rather than trusting generated token-level digits.</li>
+<li>Log token-to-character ratios by content type in production — code, numbers, and non-English text routinely deviate from prose.</li>
+<li>Budget embedding-table and output-layer memory against vocabulary size, not just against expected sequence length.</li>
+<li>Domain-specific tokenizer retraining is rare and expensive; consider it only after measuring genuine fragmentation-driven cost or quality loss.</li>
+<li>Treat byte-level fallback as a safety net for representability, not as evidence that two different tokenizers agree on a split.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Why does merging (e, s) happen before merging (l, o) in the Section 06 trace?</summary>
+<div>Because (e, s) has a higher weighted frequency (9, from newest and widest) than (l, o) has at that same point (7, from low and lower) — BPE always merges the single most frequent pair first.</div>
+</details>
+<details class="quiz">
+<summary>What is the practical difference between BPE and WordPiece merge scoring?</summary>
+<div>BPE merges whichever pair is simply most frequent; WordPiece merges the pair that most increases likelihood relative to how often its two parts occur independently, so a raw-frequency winner can lose to a rarer pair under WordPiece.</div>
+</details>
+<details class="quiz">
+<summary>Why can “48213” and “482134” tokenize into different digit groupings?</summary>
+<div>Digit chunking was learned from whatever groupings recurred in the training corpus, not from place value or number length, so two similar numbers are not guaranteed comparable token boundaries.</div>
+</details>
+<details class="quiz">
+<summary>Does tokenizer training ever run during a normal RAG request?</summary>
+<div>No — training happened once, offline, before the tokenizer was shipped; a request only applies the already-learned merge list.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>Take the toy corpus <code>fast</code>:4, <code>faster</code>:3, <code>fastest</code>:5, <code>last</code>:2 (characters plus an end-of-word marker <code>·</code>, exactly as in Section 06). By hand, compute the first three BPE merges — the pair merged at each step and its weighted frequency — and state which single shared piece ends up spanning three of the four words. Separately, predict and justify, in one or two sentences, why a system asked to add the numbers 48213 and 6704 should not simply trust the LLM’s token-level arithmetic.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open the worked merge trace</summary>
+<div>Step 1: merge (s, t) → “st”, weighted frequency 4+3+10+2 = 19 (note “fastest” contains the pair (s, t) twice, contributing 5 twice). Step 2: merge (a, st) → “ast”, weighted frequency 4+3+5+2 = 14. Step 3: merge (f, ast) → “fast”, weighted frequency 4+3+5 = 12. The shared piece “ast” ends up inside <code>fast</code>, <code>faster</code>, <code>fastest</code>, and <code>last</code> alike — it is the single most reused fragment in this corpus, well before any word becomes a whole token.</div>
+</details>
+<p>Teach-back: in your own words, explain why “ast” gets merged into one symbol before either “fast” or “last” becomes a whole token, and why an LLM reading “48213” has no guarantee it is reasoning about five separate place-value digits.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Training vs. use</h3>
+<p>Training: offline, once, learns merges from frequency counts. Use: online, every request, applies the fixed merge list. BPE/WordPiece/SentencePiece-unigram differ only in the merge-scoring rule.</p>
+</div>
+<div>
+<h3>Core rule and use</h3>
+<ul>
+<li><code>score_BPE(a,b) = freq(a,b)</code></li>
+<li>Use: reading and predicting how a term or number will fragment</li>
+<li>Warning sign: trusting an LLM’s token-level digit math</li>
+<li>Memorable example: “low/lower/newest/widest” → es, est, est·, lo, low</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Conceptual: What is the difference between tokenizer training and tokenizer use?</summary>
+<div>Training is an offline, one-time process that learns a merge list from corpus frequency counts; use is applying that fixed list to new text at every request, with no new learning involved.</div>
+</details>
+<details class="quiz">
+<summary>Mathematical: How would you score a candidate BPE merge versus a candidate WordPiece merge?</summary>
+<div>BPE scores a candidate purely by its raw weighted pair frequency; WordPiece scores it by roughly how much more often the pair co-occurs than its two parts occur independently, which can favor a rarer pair over a more frequent one.</div>
+</details>
+<details class="quiz">
+<summary>Coding: How would you implement the core loop of a BPE trainer?</summary>
+<div>Represent each word as a symbol sequence with a frequency; repeatedly count all adjacent pairs weighted by frequency, pick the maximum, replace every occurrence of that pair with a new merged symbol, and repeat until a target vocabulary size or merge count is reached.</div>
+</details>
+<details class="quiz">
+<summary>Debugging: Users report a fine-tuned model suddenly producing garbled output. What tokenizer-related cause would you check first?</summary>
+<div>Whether the tokenizer or vocabulary version shipped with the fine-tune matches the one the base model was originally trained with — mismatched token IDs are silently meaningless to the model.</div>
+</details>
+<details class="quiz">
+<summary>System design: A RAG assistant needs to report exact totals from Oracle metadata. Where does that calculation belong?</summary>
+<div>In an Oracle SQL query or a deterministic calculation step, not in the LLM’s generated text — digit tokenization is not aligned to place value, so token-level arithmetic is not reliable.</div>
+</details>
+<details class="quiz">
+<summary>Production scenario: Your team wants to train a domain-specific tokenizer for heavily jargon-laden documents. What would you weigh first?</summary>
+<div>Whether general-vocabulary fragmentation is actually measurably hurting retrieval quality or token cost, since a new vocabulary requires retraining or careful re-alignment of any embedding or generation model that depends on it.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1508.07909">
+<b>Sennrich, Haddow &amp; Birch — Neural Machine Translation of Rare Words with Subword Units</b>
+<br>
+<span>The byte-pair-encoding merge algorithm traced by hand in Sections 06 and 10, and implemented from scratch in Section 12.</span>
+</a>
+<a href="https://arxiv.org/abs/1609.08144">
+<b>Wu et al. — Google’s Neural Machine Translation System</b>
+<br>
+<span>Introduces the WordPiece subword scheme whose likelihood-based merge criterion is contrasted with BPE in Section 05.</span>
+</a>
+<a href="https://arxiv.org/abs/1804.10959">
+<b>Kudo — Subword Regularization: Improving Neural Network Translation Models with Multiple Subword Candidates</b>
+<br>
+<span>The unigram-language-model segmentation algorithm behind SentencePiece’s unigram mode, contrasted with merge-upward algorithms in Section 07.</span>
+</a>
+<a href="https://arxiv.org/abs/2402.14903">
+<b>Singh &amp; Strouse — Tokenization Counts: The Impact of Tokenization on Arithmetic in Frontier LLMs</b>
+<br>
+<span>Evidence for the digit-tokenization and arithmetic risk described in Sections 11 and 16.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 02 is complete. Its full merge trace, WordPiece scoring, real vocabulary-size data, from-scratch code, and the merge-trainer lab remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-03.html">Start Concept 03 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Transformer architecture overview.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 02 · Concept 02 · Active</p>
+<a href="module-02-concept-01.html">← Concept 01</a>
+</footer>
+</body>
+</html>

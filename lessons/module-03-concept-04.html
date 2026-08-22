@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Introduces grounding (conditioning generation on retrieved evidence physically present in the prompt) and provenance (a citation tag pointing a claim back to the passage that backed it) together, and states plainly: grounding reduces hallucination, it does not eliminate it.">
+<title>Hallucination reduction, grounding and provenance — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 04</p>
+<h1>Hallucination reduction, grounding,<br>and <em>provenance</em></h1>
+<p class="lesson-lead">Concepts 01-03 proved WHAT RAG is and WHY external knowledge is structurally required — a plain LLM has zero training terms for anything past its cutoff, anything private, or anything that's since drifted. This concept answers the next question: once you actually wire retrieval in, what does it buy you, mechanically? Two new terms, introduced together because they're two sides of the same payoff. <b>Grounding</b> means constraining generation to condition on retrieved evidence text placed literally in the prompt. <b>Provenance</b> means surfacing which specific retrieved passage backed a given claim — a <code>[DocN]</code> tag, say — so a human can check it. State the correction in the same breath as the definitions: grounding reduces hallucination, it does <b>not</b> eliminate it. The model can still misread or ignore the evidence sitting right in front of it.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's zero-terms argument, Concept 03's three named categories, and Module 02 Concept 11's citation-tag mask (cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>State grounding and provenance precisely, and defend "reduces, not eliminates" with a concrete reason</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You learned to define grounding and provenance precisely, defend "reduces, not eliminates" with a concrete reason, and separate citation presence from citation correctness.</p>
+<b>CONCEPT 04 COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">What wiring retrieval in actually buys you</h2>
+</div>
+<p>Concepts 01-03 argued what RAG is and why it's structurally necessary. This concept names the mechanical payoff once you actually build it: evidence in the prompt (grounding) and a checkable pointer back to that evidence (provenance) — plus the honest limit on both.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Grounding and provenance, defined together — and the same correction, immediately</h3>
+<p>Two new terms this concept needs, best introduced side by side rather than one at a time:</p>
+<div class="mental-compare">
+<div><span>GROUNDING</span><p>Constraining generation to condition on retrieved evidence text placed literally in the prompt. The model isn't just recalling from frozen weights anymore — it has real evidence sitting in its input.</p></div>
+<div><span>PROVENANCE</span><p>Surfacing which specific retrieved passage backed a given claim — a tag like <code>[Doc2]</code> pointing to the exact chunk used — so a human can check the claim against the source.</p></div>
+</div>
+<p>State the correction in the same breath, because it's the part beginners skip: grounding <b>reduces</b> hallucination. It does not eliminate it. The evidence can be sitting right there in the prompt and the model can still misread it, skim past the relevant line, or override it with whatever it "remembers" instead.</p>
+<div class="beginner-memory"><b>First memory:</b> grounding = evidence physically in the prompt; provenance = a pointer from claim to source; both help, neither is a guarantee.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concepts 01-03 said WHY. This section says "so what does it buy you?"</h3>
+<p>Concepts 01-03 proved WHAT RAG is and WHY external knowledge is structurally required — parametric memory has zero training terms for anything past cutoff, anything private, or anything frequently-changing. That's necessity. This section is the payoff: once you actually wire retrieval in, what changes mechanically? Two things:</p>
+<div class="mental-compare">
+<div><span>PAYOFF 1 · GROUNDING</span><p>The model now has real evidence text in context to condition on, instead of relying only on frozen weights that may never have held the fact, or held a stale version of it.</p></div>
+<div><span>PAYOFF 2 · PROVENANCE</span><p>A reviewer can check a specific claim against a specific passage instead of trusting the model's unaided say-so — the citation is a handle for verification, not just a decoration.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The Oracle RAG password-reset query, two ways</h3>
+<p>Same question, asked of the same Oracle RAG assistant, with retrieval switched off and then on:</p>
+<div class="context-demo">
+<div><span>(A) · UNGROUNDED</span><p>"What's our password-reset policy?" The model answers fluently from parametric memory — possibly confidently wrong, possibly just outdated — and there's no way to check it. It's a claim with no handle to pull on.</p></div>
+<div><span>(B) · GROUNDED + CITED</span><p>Same question. The retriever surfaces the actual policy chunk ("passwords must be reset every 90 days"), it gets injected into the prompt, and the model's answer is conditioned on that text: "Every 90 days. <code>[Doc2]</code>." A human can click through <code>[Doc2]</code> and verify the answer against the real policy document.</p></div>
+</div>
+<p>Same surface shape — a short factual answer — but only one of them comes with something to check.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Evidence as literal tokens, a citation as a forced tag</h3>
+<p>Grounding, precisely: the retrieved passage's text becomes literal tokens inside the transformer's input context, alongside the question. Generation is now conditioned on <code>P(answer | question, retrieved_evidence)</code> instead of just <code>P(answer | question)</code>. That shifts probability mass toward evidence-consistent tokens — but "shifts toward" is a bias, not a hard guarantee. Module 02 Concept 10's attention dilution and lost-in-the-middle effect is one reason that shift can fail even with the right evidence sitting in context (name-checked here, not re-taught).</p>
+<p>Provenance's mechanism is different: it's a separate structured-generation step — Module 02 Concept 11's mask, cited here, not re-derived — that forces a citation tag like <code>[DocN]</code> into the output, tied to which retrieved chunk was actually used.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Two payoffs, two exact places they attach</h3>
+<p>Reuse Concept 02's Documents-to-Answer skeleton and slot both payoffs into it:</p>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunks</span><i>↓</i>
+<span>Embedding</span><i>↓</i>
+<span>Vectors</span><i>↓</i>
+<span>Retrieval</span><i>↓</i>
+<span class="hot">Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span class="hot">Answer</span>
+</div>
+<p>Retrieved evidence lands in the <b>Context</b> stage — that's grounding. The citation-tag mask applies during the <b>LLM</b> stage's decode step — that's provenance. The <b>Answer</b> now carries an attached source pointer. This shows <i>where</i> grounding and provenance sit in the pipeline — not the full offline/online mechanics of <i>how</i> the evidence was retrieved in the first place (Concept 06's job), and not the failure chain for when retrieval itself misses (Module 03 Concept 11's job).</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0304-beginner-visual-title">
+  <strong class="concept-visual-title" id="c0304-beginner-visual-title">VISUAL · ONE PROMPT, TWO ADDITIONS</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram contrasting an ungrounded answer, a grounded answer, and a grounded and cited answer built from the same question">
+    <div class="diagram-family-grid">
+      <div class="diagram-node"><b>Ungrounded — question only</b><small>the model answers from frozen weights alone: fluent, and nothing to check it against.</small></div>
+      <div class="diagram-node"><b>Grounded — question + evidence</b><small>the retrieved policy chunk is now literal text in the prompt, alongside the question.</small></div>
+      <div class="diagram-node active"><b>Grounded + cited — a [DocN] tag attached</b><small>the answer is conditioned on the evidence, and a citation tag points back to the exact chunk used.</small></div>
+    </div>
+  </div>
+  <figcaption>Each step adds one thing on top of the last: first the evidence itself, then a checkable pointer to it. Neither step guarantees correctness — see b06 and b07.</figcaption>
+  <ol class="diagram-key"><li><b>Grounding is an addition to the prompt, not a rewrite of the model:</b> the weights don't change, the input does.</li><li><b>Provenance is an addition to the output, not proof about the input:</b> the tag says what was used, not that it was used correctly.</li><li><b>Both stack on the same closed LLM loop from Concept 02:</b> nothing here changes what a forward pass fundamentally is.</li></ol>
+</figure>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four pairs that look alike and aren't</h3>
+<div class="distinction-table" role="table" aria-label="Distinctions between grounding, parametric recall, hallucination elimination, citation correctness, and Module 02 Concept 11's mask">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Grounding</span><span role="cell">Parametric recall</span><span role="cell">Grounding means evidence is physically present in the prompt as tokens; parametric recall means the fact is only ever baked into frozen weights, with no read channel back to it</span></div>
+<div role="row"><span role="cell">Grounding reduces hallucination</span><span role="cell">Grounding eliminates hallucination</span><span role="cell">Reduces means the likelihood goes down; the model can still misread, skim, or override retrieved text — the possibility never drops to zero</span></div>
+<div role="row"><span role="cell">Citation presence</span><span role="cell">Citation correctness</span><span role="cell">A tag can be present and point to a real, retrieved passage while that passage still doesn't actually support the specific claim made (full failure detail is Module 03 Concept 11's job — previewed only here)</span></div>
+<div role="row"><span role="cell">This concept — WHY you'd want a citation tag</span><span role="cell">Module 02 Concept 11 — HOW the tag's exact shape gets forced at decode time</span><span role="cell">Cited, not re-explained: this concept covers the motivation and payoff, Module 02 Concept 11 already covered the masking mechanism</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"RAG eliminates hallucination."</b><p>False. Grounding lowers the rate — it does not zero it out. The model can still misread or ignore evidence that's sitting right in the prompt.</p></div>
+<div><b>"If there's a citation, the claim must be true."</b><p>False. A citation shows what the model used, not that it used it correctly. A tag can point to a real, retrieved passage that doesn't actually back the specific number or claim in the answer.</p></div>
+<div><b>"A retrieval miss and a generation misread are the same failure."</b><p>No — they're mechanically distinct. This is only named here as future material; telling them apart in practice is Module 03 Concept 11's job, not this concept's.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Password-reset policy, carried through concretely</h3>
+<div class="project-map">
+<div><span>GROUNDING</span><b>The retrieved policy chunk gets injected into the prompt</b><p>Before the model generates anything, the actual "reset every 90 days" chunk is sitting in its context — the answer is conditioned on that text, not just on whatever the model happened to memorize during training.</p></div>
+<div><span>PROVENANCE</span><b>A <code>[Doc2]</code> tag cites that exact chunk</b><p>A support engineer reading the assistant's answer can follow <code>[Doc2]</code> straight to the actual policy document and verify it — rather than trusting an ungrounded guess with nothing behind it.</p></div>
+</div>
+<p>State this plainly: grounding and provenance are what turn "the assistant said so" into "the assistant said so, and here's exactly where to check."</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Grounding, stated precisely</b><p>Conditioning generation on retrieved evidence that is physically present in the prompt as literal tokens.</p></div>
+<div><b>Provenance, stated precisely</b><p>Surfacing which passage backed a claim — e.g. a citation tag — so a human can check it.</p></div>
+<div><b>"Reduces, not eliminates," defended</b><p>Can give the concrete reason why: misreading or ignoring evidence that's physically present remains possible.</p></div>
+<div><b>The citation tag traced back, not re-derived</b><p>Can name the citation tag as a concrete provenance mechanism, and trace it to Module 02 Concept 11's mask without re-deriving that mask.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Define grounding precisely, in one sentence.</li>
+<li>Define provenance precisely, in one sentence.</li>
+<li>State "reduces, does not eliminate" and defend it with a concrete reason.</li>
+<li>Name one citation tag mechanism and say which earlier concept its exact mechanics belong to.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Parametric and non-parametric memory</h3>
+<p>Today named what retrieval buys back once wired in: grounding and provenance, with an honest limit on both. Concept 05 names the two memory types formally — parametric and non-parametric — that today's grounding argument already relied on informally, without yet covering the failure chain (Module 03 Concept 11) or the offline/online pipeline mechanics (Concept 06).</p>
+<div class="beginner-memory"><b>Concept 04 is complete.</b> Continue to Parametric and non-parametric memory.</div>
+<a class="button primary" href="module-03-concept-05.html">Start Concept 05 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Evidence in the prompt, a pointer in the output.</h2>
+<p>Master the core pair first: grounding puts evidence in the prompt, provenance puts a checkable pointer in the output, and neither is a guarantee. Open the probability math, the prompt-assembly code, and The Claim Checker lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>Grounding = evidence physically in the prompt. Provenance = a claim-to-source pointer, e.g. a citation tag.</small></a>
+<a href="#b04"><span>02</span><b>Mechanism</b><small>P(answer | question, evidence) versus P(answer | question) — a probability shift, not a hard guarantee.</small></a>
+<a href="#b06"><span>03</span><b>Distinguish</b><small>Grounding vs. elimination, and citation presence vs. citation correctness.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the probability math, the assemble_grounded_prompt code, and The Claim Checker lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> Grounding = evidence as literal tokens in the prompt. Provenance = a citation tag pointing a claim back to its source. Reduces hallucination, never eliminates it. A tag being present is not the same as the tag being correct.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the grounding / provenance deep dive</b><em>The soft-reweighting-versus-hard-mask math, an assemble_grounded_prompt / extract_citation code walkthrough, and "The Claim Checker" lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 03's fourth of twelve concepts</h2></div></header>
+<p>This concept sits fourth in Module 03. It cites Concept 02's closed-loop/zero-terms argument, Concept 03's three named categories, and Module 02 Concept 11's citation-tag/mask preview, and extends them into "what retrieval buys back." Explicitly deferred: the failure chain for retrieval-versus-generation misses (Module 03 Concept 11 — note the naming collision with Module 02 Concept 11, which is a different concept entirely), the offline/online retrieval pipeline (Concept 06), and formalizing parametric versus non-parametric memory (Concept 05).</p>
+<div class="flow">
+<div class="flow-node">Concept 03 complete</div>
+<div class="flow-node hot">Grounding</div>
+<div class="flow-node hot">Provenance</div>
+<div class="flow-node">Reduces, not eliminates</div>
+<div class="flow-node">Concept 05 next</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State grounding and provenance with precise boundaries</h3><p>Grounding as evidence physically present in the prompt; provenance as a claim-to-source pointer such as a citation tag.</p></article>
+<article class="info-card"><span>CHARACTERIZE</span><h3>Explain "reduces, not eliminates" mechanically</h3><p>Conditioning on evidence shifts probability mass, it doesn't hard-constrain it — state the reason the shift isn't a guarantee.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate citation presence from citation correctness</h3><p>A tag can be present, real, and still not actually support the claim it's attached to.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not yet cover</h3><p>The failure chain (Module 03 Concept 11), the retrieval pipeline mechanics (Concept 06), and formal memory types (Concept 05).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Frozen weights and the zero-training-terms argument (Module 03, Concept 02):</b> cited, not re-derived — grounding is what you add on top of that closed loop.</li>
+<li><b>The three independently-failable categories (Module 03, Concept 03):</b> cited, not re-derived — this concept answers what fixing them mechanically buys you.</li>
+<li><b>Hallucination and coverage-density (Module 02, Concept 09):</b> cited — this concept names one concrete lever against it.</li>
+<li><b>Attention dilution and lost-in-the-middle (Module 02, Concept 10):</b> cited, not re-taught — one mechanical reason grounding can still fail.</li>
+<li><b>The citation-tag / <code>[DocN]</code> mask mechanism (Module 02, Concept 11):</b> cited, not re-derived here — this concept covers why you'd want the tag, not how its exact shape is enforced.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>The same handcuffed exam-taker, now handed the textbook page</h2></div></header>
+<p>Extend Concept 02's handcuffed closed-book exam-taker analogy with two more details. The student is now handed the actual textbook page relevant to the question — that's grounding. And the student is asked to write down which page they used — that's provenance. This helps, plainly. But a student can still misread the page, skim past the one relevant line, or stubbornly write down what they remembered instead of what the page in front of them actually says. Handing over the right page doesn't force the student to read it correctly.</p>
+<div class="callout warning"><b>Analogy boundary</b>Unlike the student, the model has no self-awareness that it's ignoring the page in front of it. A student might eventually notice they're contradicting their own source and double-check. This is structural for the model, not a lapse in attention it could notice and correct on its own — Module 02 Concept 10's attention dilution is a mechanical account of exactly this kind of failure, not a metaphor for it.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Grounding</td><td>Generation conditioned on <code>P(answer | query, retrieved_evidence)</code> rather than <code>P(answer | query)</code> alone, with evidence text literally present as input tokens.</td><td>A property of what's in the prompt, not a property of the model's weights.</td></tr>
+<tr><td>Provenance</td><td>A mapping from a generated claim to the specific retrieved chunk(s) that back it, surfaced in a human-checkable form — e.g. a <code>[DocN]</code> tag.</td><td>Shows what was used to generate the claim. Does not, by itself, prove the claim is correct.</td></tr>
+<tr><td>Faithfulness / attribution</td><td>Forward-referenced formal term (Module 17) for whether a claim is actually supported by its cited evidence.</td><td>Named here, not derived — this concept only previews the intuition behind it.</td></tr>
+<tr><td>Hallucination-reduction</td><td>A directional, probabilistic claim about rate, not a hard constraint.</td><td>Contrast with Module 02 Concept 11's hard <code>z'_i = -∞</code> masking, which IS a hard constraint — but only on the citation tag's shape, not on the claim's content.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Seven steps from query to a checkable answer</h2></div></header>
+<ol>
+<li>A query arrives.</li>
+<li>The retriever returns the top-k passages. (Retrieval mechanics themselves are forward-referenced to Concept 06 — not detailed here.)</li>
+<li>The passages are inserted as literal, tagged tokens into the prompt's context region.</li>
+<li>A forward pass computes logits attending over both the query tokens and the evidence tokens.</li>
+<li>The decode loop generates the answer text.</li>
+<li>A citation-tag mask — Module 02 Concept 11, cited, not rederived — forces a <code>[DocN]</code> tag tied to the passage index actually used.</li>
+<li>The result is an answer plus a checkable pointer, not just an answer.</li>
+</ol>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two traces, side by side</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram comparing an ungrounded generation trace against a grounded and cited generation trace">
+  <div class="diagram-family-grid">
+    <div class="diagram-node"><b>Ungrounded trace</b><small>prompt → logits → decode → answer. No evidence injected, no tag forced. Concept 02's plain closed loop, unchanged.</small></div>
+    <div class="diagram-node active"><b>Grounded + cited trace</b><small>prompt + evidence → logits (attending over both) → decode → [DocN]-masked answer. Two components added on top of the plain loop.</small></div>
+  </div>
+</div>
+<ol class="diagram-key"><li><b>The evidence-injection point:</b> where retrieved text becomes part of the input tokens, before the forward pass ever runs — this is grounding.</li><li><b>The citation-mask point:</b> where Module 02 Concept 11's mask forces a tag during decode — this is provenance.</li><li><b>Everything else is identical:</b> both traces share Concept 02's same closed LLM loop underneath.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Same skeleton as Concept 02, two stages highlighted</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunks</span><i>↓</i>
+<span>Embedding</span><i>↓</i>
+<span>Vectors</span><i>↓</i>
+<span>Retrieval</span><i>↓</i>
+<span class="hot">Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span class="hot">Answer</span>
+</div>
+<p>Reuse the Documents-to-Answer skeleton from Concept 02's Section 08. <b>Context</b> is where grounding lands — retrieved evidence becomes literal input tokens there. <b>Answer</b> is where provenance attaches — the citation tag ships with the generated text. <b>Vectors</b> and <b>Retrieval</b> stay explicitly black-boxed here — how they actually work is Concept 06's job, and Modules 08-10's.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A soft shift, not a hard zero-out</h2></div></header>
+<p>Define the ungrounded and grounded distributions:</p>
+<div class="equation">P(a | q)          — ungrounded: conditioned on the query alone</div>
+<div class="equation">P(a | q, E)       — grounded: E = concatenated retrieved evidence text</div>
+<p>Grounding shifts probability mass toward tokens consistent with E — but this is a soft re-weighting via attention over the evidence tokens, not a hard zeroing-out of the alternatives. Contrast explicitly with Module 02 Concept 11's mask, which sets <code>z'_i = -∞</code> for disallowed tokens — a hard constraint on the citation tag's shape. Nothing analogous hard-constrains the claim's content.</p>
+<p>Introduce two informal hallucination-rate variables:</p>
+<div class="equation">H_grounded &lt; H_ungrounded,  but  H_grounded &gt; 0  always</div>
+<p>That inequality is the formal version of "reduces, not eliminates." Grounding moves the rate down. It never drives it to zero.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Three runs, one query, one underlying evidence variable</h2></div></header>
+<p>The same password-reset query, run three ways, holding the actual policy fixed at "reset every 90 days":</p>
+<div class="context-demo">
+<div><span>(1) · UNGROUNDED</span><p>No evidence in context. The model states an out-of-date policy detail — "every 30 days" — with no way for anyone to check it against anything.</p></div>
+<div><span>(2) · GROUNDED-CORRECT</span><p>The retrieved chunk says "reset every 90 days." The model's answer matches it exactly, and a citation tag <code>[Doc2]</code> points to that exact chunk. Grounding worked as intended.</p></div>
+<div><span>(3) · GROUNDED-MISREAD</span><p>The identical chunk is present in context — same "every 90 days" text, same retrieval outcome as run (2). The model's answer says "every 30 days" anyway. Grounding present, citation tag present, still wrong.</p></div>
+</div>
+<p>Walk through what changed between each run: only the model's behavior, never the underlying evidence. Runs (2) and (3) had access to the exact same passage. One used it correctly. One didn't — and still shipped a citation tag as if it had.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a good case, a boundary case, a counterexample, and the misread restated</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>GOOD CASE</span><h3>Grounded FAQ answer, correct citation</h3><p>Retrieved evidence matches the claim, the citation tag points to it, and a reviewer confirms it in seconds — grounding and provenance both doing their job.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Retrieved evidence only tangentially relevant</h3><p>Retrieval and grounding "work" mechanically — a passage is present, a tag gets attached — but the passage doesn't actually answer the question, producing a misleadingly-present citation.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A stable, public, dense fact — "2+2"</h3><p>Retrieval and grounding would be pure overhead here. Links back to Concept 01/02's "good fit" boundary: not every query needs this machinery.</p></article>
+<article class="info-card"><span>THE MISREAD, RESTATED</span><h3>s10's grounded-misread case</h3><p>Evidence present, citation present, claim still wrong — the clearest illustration in this concept that presence is not correctness.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Prompt assembly and citation extraction, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>import re
+
+
+def assemble_grounded_prompt(query, retrieved_chunks):
+    # retrieved_chunks: a list of chunk strings, already ranked by
+    # the retriever (retrieval mechanics themselves are Concept 06's
+    # job -- this function just assembles what it's handed).
+    #
+    # Each chunk gets a [DocN] marker so the model has something
+    # concrete to cite back to later. 1-indexed to match this
+    # course's [Doc1], [Doc2], ... convention throughout.
+    evidence_block = "\n".join(
+        f"[Doc{i + 1}] {chunk}"
+        for i, chunk in enumerate(retrieved_chunks)
+    )
+
+    return (
+        f"Evidence:\n{evidence_block}\n\n"
+        f"Question: {query}\n"
+        f"Answer using only the evidence above, and cite the "
+        f"[DocN] tag you relied on."
+    )
+
+
+def extract_citation(answer_text):
+    # Pulls a [DocN] tag out of generated text and returns which
+    # chunk index it points to -- or None when no tag is present.
+    # The ungrounded case (b03/s10 run 1) is exactly this None
+    # branch: no evidence was given, so nothing forced a tag, and
+    # there's nothing here to extract.
+    #
+    # Note: this is plumbing around the citation mechanism, not the
+    # mechanism itself. The mask that forces the tag's exact shape
+    # at decode time is Module 02 Concept 11's code -- cited, not
+    # reimplemented. This function only parses what that mask
+    # already produced.
+    match = re.search(r"\[Doc(\d+)\]", answer_text)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+# the three s10 runs, illustrated
+grounded_prompt = assemble_grounded_prompt(
+    "What's our password-reset policy?",
+    ["Onboarding checklist v2: new hires set up SSO on day one.",
+     "Company password policy (v4): passwords must be reset every 90 days."],
+)
+print(grounded_prompt)
+# Evidence:
+# [Doc1] Onboarding checklist v2: new hires set up SSO on day one.
+# [Doc2] Company password policy (v4): passwords must be reset every 90 days.
+# ...
+
+print(extract_citation("Our policy requires a password reset every 90 days. [Doc2]"))
+# 2 -- run (2), grounded-correct
+
+print(extract_citation("Our policy requires a password reset every 30 days. [Doc2]"))
+# 2 -- run (3), grounded-misread: note the tag extracts cleanly even
+# though the claim it's attached to is wrong. extract_citation can
+# only tell you a tag was present and which chunk it names -- never
+# whether the claim actually matches that chunk's content.
+
+print(extract_citation("Our policy requires a password reset every 30 days."))
+# None -- run (1), ungrounded: no tag was ever forced, so there's
+# nothing to extract.
+</code></pre>
+</div>
+<p>Notice what <code>extract_citation</code> deliberately can't do: tell you whether the cited chunk actually supports the claim. That check is a different function entirely, belonging to faithfulness evaluation (Module 17/18, forward-referenced) — not this concept's plumbing.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Three shapes of provenance, in production and in the literature</h2></div></header>
+<p>Concrete production mechanisms exist at different levels of rigor. LangChain's source-document return metadata — the pattern behind chains like <code>RetrievalQAWithSourcesChain</code> — is a plumbing-level provenance mechanism: it returns which documents were retrieved alongside the answer. Underneath any citation tag, a vector store's metadata fields — <code>doc_id</code>, <code>chunk_id</code> — are what the tag ultimately resolves to. Shuster, Poff, Chen, Kiela & Weston (2021) supply the empirical claim this whole concept leans on: retrieval augmentation measurably reduces hallucination in conversational models, though it does not remove it. Menick et al. (2022), GopherCite, goes further than this course's <code>[DocN]</code> tag — it produces verified quotes, a stronger provenance mechanism at real engineering cost. Gao et al. (2022), RARR, takes a different route entirely: retrieve-and-revise, an alternate post-hoc attribution approach that checks and edits a claim after generation rather than citing at generation time.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Claim Checker</h2></div></header>
+<div class="lab">
+<p>Pick a scenario, inspect the generated answer and its evidence pool, then take a deliberate "verify" action. Three scenarios, three qualitatively different verdicts — the same query every time: "What's our password-reset policy?"</p>
+<div class="lab-actions" role="group" aria-label="Choose a scenario">
+<button type="button" class="claim-scenario-button active" data-scenario="ungrounded" id="scenarioUngrounded0304">Ask with no evidence</button>
+<button type="button" class="claim-scenario-button" data-scenario="grounded-match" id="scenarioGroundedMatch0304">Ask grounded — evidence matches</button>
+<button type="button" class="claim-scenario-button" data-scenario="grounded-misread" id="scenarioGroundedMisread0304">Ask grounded — model misreads evidence</button>
+</div>
+<p class="sample-output" id="claimQueryLine0304" aria-live="polite">Choose a scenario to see the query.</p>
+<div class="context-demo" id="claimEvidencePool0304" aria-live="polite"></div>
+<div class="sample-output" id="claimAnswerOutput0304" aria-live="polite">Generated answer will appear here.</div>
+<div class="lab-actions" role="group" aria-label="Verify the claim">
+<button type="button" id="verifyClaimButton0304">Verify this claim →</button>
+</div>
+<div class="sample-output" id="claimVerdictOutput0304" aria-live="polite"></div>
+<div class="sample-output" id="claimCheckerLog0304" aria-live="polite"></div>
+<div class="lab-actions">
+<button type="button" class="secondary" id="resetClaimButton0304">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Four responses to the same hallucination problem</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Cost</th><th>Provenance</th><th>Hallucination risk</th></tr></thead>
+<tbody>
+<tr><td>Ungrounded generation</td><td>Cheapest, zero added latency</td><td>None</td><td>Highest of the four</td></tr>
+<tr><td>Grounded generation, no citations</td><td>Retrieval overhead only</td><td>None — evidence used, but not surfaced to the human</td><td>Lower than ungrounded, still no way to check it</td></tr>
+<tr><td>Grounded + cited (this course's <code>[DocN]</code> tag)</td><td>Retrieval plus Module 02 Concept 11's citation-mask machinery</td><td>Human-checkable pointer to a specific chunk</td><td>Lowest of the three cheaper options, plus verifiable provenance</td></tr>
+<tr><td>Grounded + verified-quote provenance (GopherCite-style, Menick et al.)</td><td>Highest engineering cost of the four</td><td>Verified quotes, not just a chunk pointer</td><td>Highest trust of the four, at the highest cost</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Four ways grounding and provenance can still go wrong</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT OVERRIDE</span><h3>The model ignores present evidence anyway</h3><p>The evidence is right there in context, but the model answers from parametric memory as if it weren't. Ties to Module 02 Concept 10's attention dilution — cited, not re-taught.</p></article>
+<article class="info-card"><span>CITATION-CONTENT MISMATCH</span><h3>Tag real, chunk real, claim still wrong</h3><p>The tag points to a real, retrieved chunk. That chunk just doesn't actually support the specific claim made — s10 and s11's grounded-misread case.</p></article>
+<article class="info-card"><span>ORPHAN CITATION</span><h3>A tag pointing to a doc index never actually retrieved</h3><p>A pure generation bug, not a retrieval bug — the citation names a passage that was never part of this query's evidence pool at all.</p></article>
+<article class="info-card"><span>FALSE CONFIDENCE FROM PRESENCE</span><h3>Reviewers stop checking once something looks cited</h3><p>A tag being present can quietly lower the amount of scrutiny a claim gets, even when the tag itself is wrong — the opposite of what provenance is supposed to buy.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"RAG eliminates hallucination"</td><td>Corrected by s09's inequality: H_grounded is always greater than zero. Grounding reduces the rate, it never zeroes it out.</td></tr>
+<tr><td>"A citation tag proves the claim is true"</td><td>Corrected by s16's citation-content mismatch: a tag proves what was used, not that it was used correctly.</td></tr>
+<tr><td>"More retrieved passages always means more grounding"</td><td>Forward-reference to Module 02 Concept 10's lost-in-the-middle effect: more passages can dilute attention rather than help. Not detailed further here.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Logging which citations were shown to users creates an audit trail — but not a correctness guarantee on its own.</li>
+<li>Citation UI (clickable source links) is a product-layer decision built on top of the raw <code>[DocN]</code> tag, not part of the tag mechanism itself.</li>
+<li>The cost of verifying citations — human review, or an automated faithfulness checker (forward-referenced to Module 17/18) — scales with how much you trust an unverified tag.</li>
+<li>Legal and compliance requirements (forward-referenced to Module 20) may mandate provenance regardless of whether it changes the underlying hallucination rate.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define grounding precisely.</summary><div>Generation conditioned on retrieved evidence text that is physically present in the prompt as literal input tokens — <code>P(answer | query, retrieved_evidence)</code> rather than <code>P(answer | query)</code> alone.</div></details>
+<details class="quiz"><summary>Define provenance precisely.</summary><div>A mapping from a generated claim back to the specific retrieved chunk(s) that back it, surfaced in a human-checkable form — for example, a <code>[DocN]</code> citation tag.</div></details>
+<details class="quiz"><summary>Using the grounded-misread scenario, explain why "reduces" is correct and "eliminates" is not.</summary><div>In s10's run (3), the correct evidence was present in context, and the model still generated the wrong number. Grounding lowered the odds of that happening, but the odds never hit zero — the model can still misread or override evidence it has direct access to.</div></details>
+<details class="quiz"><summary>Explain the difference between citation presence and citation correctness.</summary><div>Presence means a tag exists and points to a real, retrieved chunk. Correctness means that chunk actually supports the specific claim the tag is attached to. s10's grounded-misread run has presence without correctness.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Classify each scenario as <b>verified</b>, <b>unverifiable</b>, or <b>mismatched-citation</b>, and justify each answer using s05's formal definitions.</p>
+<ol>
+<li>An answer states a policy detail with no source attached at all.</li>
+<li>An answer cites <code>[Doc3]</code>, and <code>[Doc3]</code>'s actual text matches the claim exactly.</li>
+<li>An answer cites <code>[Doc1]</code>, but <code>[Doc1]</code>'s actual text is about an unrelated topic and never mentions the claim.</li>
+</ol>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open the worked solution</summary><div>(1) Unverifiable — no citation means no provenance at all; per s05, there is nothing to map the claim back to, so the claim can't be checked either way. (2) Verified — the citation is present and, per s05's provenance definition, the cited chunk actually supports the claim, which is exactly what "verified" requires. (3) Mismatched-citation — a tag is present and points to a real, retrieved passage, but that passage doesn't support the claim; presence without correctness, per s05 and s16. Teach-back: in your own words, explain why a citation tag is necessary but not sufficient for trustworthy output — name at least one concrete failure mode from s16 where a tag is present and the output is still wrong.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The two payoffs</h3><ul><li><b>Grounding:</b> P(a|q,E) — evidence physically in the prompt</li><li><b>Provenance:</b> a claim-to-chunk pointer, e.g. <code>[DocN]</code></li><li><b>Core rule:</b> reduces hallucination, does not eliminate it</li></ul></div>
+<div><h3>Warning sign and example</h3><p>Warning sign: a citation present but the content mismatched. Memorable example: the password-reset grounded-misread case — evidence present, tag present, claim still wrong.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: explain grounding to a stakeholder who believes RAG is a complete hallucination fix.</summary><div>Grounding means the model has the real evidence text in front of it when it answers, instead of relying only on what it memorized during training. That measurably lowers how often it makes things up. It doesn't remove the possibility entirely — the model can still misread or override the evidence it was given, so grounded answers still need spot-checking, especially for anything high-stakes.</div></details>
+<details class="quiz"><summary>Mathematical: why does conditioning on E shift probability mass without hard-constraining it?</summary><div>Conditioning on evidence works through attention over the evidence tokens during the forward pass — it's a soft re-weighting of which tokens look likely next, not a rule that forbids other tokens outright. Contrast with Module 02 Concept 11's citation-tag mask, which does hard-constrain: it sets disallowed tokens' logits to negative infinity. That hard constraint only shapes the citation tag's syntax, though — nothing analogous forces the claim's content to match the evidence.</div></details>
+<details class="quiz"><summary>Debugging: given a wrong grounded answer that still carries a citation, how do you determine whether it's a retrieval miss or a generation misread?</summary><div>Check whether the cited chunk actually contains information relevant to the claim. If it does and the model's claim still contradicts it, that's a generation misread. If the cited chunk (or the whole retrieved set) never contained the right information in the first place, that's a retrieval miss. Distinguishing these rigorously in practice is Module 03 Concept 11's fuller job — previewed only here.</div></details>
+<details class="quiz"><summary>System design: how would you build an automated check that a citation tag's passage actually supports its claim?</summary><div>At a sketch level: extract the cited chunk and the claim, then run a separate faithfulness-checking pass — comparing claim against source text — and flag mismatches for review rather than trusting the tag at face value. This is forward-referenced to faithfulness evaluation (Module 18), not built out here.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2104.07567"><b>Shuster, Poff, Chen, Kiela & Weston — Retrieval Augmentation Reduces Hallucination in Conversation</b><br><span>Primary empirical grounding for the core "reduces, does not eliminate" claim — behind Sections 09 and 17, and behind b01/b07.</span></a>
+<a href="https://arxiv.org/abs/2203.11147"><b>Menick, Trebacz, Mikulik et al. — Teaching Language Models to Support Answers with Verified Quotes (GopherCite)</b><br><span>A production-grade provenance mechanism using verified quotes, contrasted against this course's simpler [DocN] tag — behind Sections 13, 15, and 23.</span></a>
+<a href="https://arxiv.org/abs/2202.03629"><b>Ji, Lee, Frieske et al. — Survey of Hallucination in Natural Language Generation</b><br><span>Background taxonomy of hallucination in general NLG, supporting the correction of "RAG eliminates hallucination" with evidence beyond just the retrieval case — behind Sections 04 and 17.</span></a>
+<a href="https://arxiv.org/abs/2210.08726"><b>Gao, Dai, Pasupat et al. — RARR: Researching and Revising What Language Models Say, Using Language Models</b><br><span>An alternate post-hoc attribution mechanism — retrieve-and-revise rather than cite-at-generation-time — behind Sections 13 and 15.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 · COMPLETE</span>
+<h3>Advanced layer remains optional revision</h3>
+<p>You've proven both payoffs and the honest limit on each. Revisit Section 10's worked example or Section 14's lab any time — nothing further is required before continuing.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-05.html">Start Concept 05 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Parametric and non-parametric memory.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 04 · Active</p>
+<a href="module-03-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

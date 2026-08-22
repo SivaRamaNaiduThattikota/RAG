@@ -1,0 +1,1304 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A progressive and advanced lesson comparing the major generative model families and their roles in RAG systems.">
+  <title>Major generative model families — RAG Atlas</title>
+  <link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+  <script defer src="../shell.js">
+</script>
+<script defer src="lesson-03.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+  <a class="skip-link" href="#lesson">Skip to lesson</a>
+  <header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+  <main id="lesson">
+    <section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 03</p>
+<h1>Major generative<br>
+<em>model families</em>
+</h1>
+<p class="lesson-lead">Learn the different mechanisms models use to represent and generate data—and why no single family is best for every modality, latency target, or probability requirement.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Third Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Discriminative versus generative modelling</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Recognize each family by its mechanism</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+    <section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You mapped the major generative families by training signal, sampling mechanism, and trade-off.</p>
+<b>3 CONCEPTS COMPLETED</b>
+</section>
+
+    <section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+      <header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One goal, several generation strategies.</h2>
+</div>
+<p>Concept 2 defined the generative objective. This lesson compares the major mechanisms used to achieve it—without assuming that every generator is an LLM.</p>
+</header>
+      <div class="beginner-layout">
+        <aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+        <div class="beginner-content">
+          <article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>What is a generative model family?</h3>
+<p>A <b>generative model family</b> is a broad strategy for learning a data distribution and producing new samples. The families share the generative goal from Concept 2, but they reach it through different training signals and generation procedures.</p>
+<p>Think of several routes to the same destination. One model generates the next piece after the pieces already produced. Another compresses an example into a latent code and decodes a nearby code. Another learns through competition. Another starts with noise and repeatedly removes it.</p>
+<div class="beginner-memory">
+<b>First memory:</b> “generative” describes the goal; <em>autoregressive, VAE, GAN, diffusion, flow, and energy-based</em> describe different mechanisms.</div>
+</article>
+
+          <article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why are there several families?</h3>
+<p>Generative modelling asks a difficult question: how can a machine represent a complicated distribution containing language, images, audio, code, or other high-dimensional data? Different families make different parts of that problem easier.</p>
+<div class="mental-compare">
+<div>
+<span>ONE FAMILY MAY PRIORITIZE</span>
+<p>An explicit probability for every sample, stable likelihood-based training, or a useful compressed representation.</p>
+</div>
+<div>
+<span>ANOTHER MAY PRIORITIZE</span>
+<p>Sharp-looking samples, parallel generation, flexible conditioning, or a simpler sampling process.</p>
+</div>
+</div>
+<p>Those priorities conflict. Autoregressive generation is naturally sequential. GAN sampling can be fast, but training can be unstable. Diffusion training is comparatively stable, but sampling traditionally requires repeated steps. Normalizing flows give tractable densities, but invertibility constrains their design.</p>
+<div class="beginner-memory">
+<b>Selection principle:</b> choose by data type, likelihood requirement, sample quality, latency, controllability, training stability, and deployment cost—not popularity.</div>
+</article>
+
+          <article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Generate one employee-policy answer in different ways</h3>
+<div class="beginner-memory">
+<b>Continuity from Concepts 1 and 2:</b> retrieval supplies policy evidence, Oracle supplies exact balances, and generation expresses the verified result. This lesson asks which kind of generator could produce that expression.</div>
+<p>An autoregressive language model can produce the answer one token at a time: “Your” → “remaining” → “leave” → “balance” → …. Each next token depends on the question, retrieved policy, database result, and tokens already generated.</p>
+<p>Other families are useful for different jobs. A VAE may learn a compact latent representation of document layouts. A GAN may generate synthetic images or test data. A diffusion model may create or edit images. A flow may be used when exact density evaluation matters. None of these should invent an employee’s real balance.</p>
+<div class="context-demo">
+<div>
+<span>RAG ANSWER</span>
+<p>Usually autoregressive text generation conditioned on retrieved evidence.</p>
+</div>
+<div>
+<span>SYNTHETIC DATA</span>
+<p>May use VAE, GAN, diffusion, flow, or a hybrid depending on the modality.</p>
+</div>
+<div>
+<span>AUTHORITATIVE FACT</span>
+<p>Still comes from retrieval, Oracle, or a deterministic tool—not the family itself.</p>
+</div>
+</div>
+</article>
+
+          <article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The six major families in plain language</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>AUTOREGRESSIVE</span>
+<h3>Continue the sequence</h3>
+<p>Factor data into an ordered sequence and predict each next element from earlier elements.</p>
+</article>
+<article class="info-card">
+<span>LATENT VARIABLE · VAE</span>
+<h3>Encode, sample, decode</h3>
+<p>Learn a structured latent space and reconstruct or generate data from sampled latent codes.</p>
+</article>
+<article class="info-card">
+<span>ADVERSARIAL · GAN</span>
+<h3>Generator versus critic</h3>
+<p>Train a generator to produce samples that a discriminator cannot distinguish from real data.</p>
+</article>
+<article class="info-card">
+<span>DIFFUSION / SCORE</span>
+<h3>Noise, then denoise</h3>
+<p>Learn to reverse a gradual corruption process and turn noise into a structured sample.</p>
+</article>
+<article class="info-card">
+<span>NORMALIZING FLOW</span>
+<h3>Invertible transformation</h3>
+<p>Transform a simple distribution into a complex one through reversible mappings.</p>
+</article>
+<article class="info-card">
+<span>ENERGY-BASED</span>
+<h3>Score compatibility</h3>
+<p>Assign low energy to compatible configurations and high energy to unlikely ones; sampling finds low-energy regions.</p>
+</article>
+</div>
+<p>
+<b>Hybrids</b> combine mechanisms—for example, latent diffusion uses an encoder-decoder latent space with diffusion inside that space.</p>
+</article>
+
+<figure class="concept-visual" aria-labelledby="c03-visual-title">
+  <strong class="concept-visual-title" id="c03-visual-title">VISUAL · SIX FAMILIES, SIX GENERATION ROUTES</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable map of six generative model families"><div class="diagram-family-grid"><div class="diagram-node active"><b>Autoregressive</b><small>Earlier elements → next element</small></div><div class="diagram-node"><b>VAE</b><small>Latent sample → decoder</small></div><div class="diagram-node"><b>GAN</b><small>Generator ↔ discriminator</small></div><div class="diagram-node"><b>Diffusion</b><small>Noise → repeated denoising</small></div><div class="diagram-node"><b>Flow</b><small>Simple density ↔ invertible map</small></div><div class="diagram-node"><b>Energy-based</b><small>Low-energy samples are preferred</small></div></div></div>
+  <figcaption>A model family is defined by its learning objective and sampling mechanism—not by a product name or data modality. The highlighted autoregressive family commonly underlies token-by-token LLM generation.</figcaption>
+  <ol class="diagram-key"><li><b>Start state:</b> sequence history, latent code, noise, or an initial sample.</li><li><b>Transformation:</b> each family learns a different route through the data distribution.</li><li><b>End state:</b> a generated sample such as text, image, audio, or structured data.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>See how generation begins and ends</h3>
+<div class="scroll-flow" aria-label="Generative family mechanisms">
+<span>Previous elements</span>
+<i>→</i>
+<span>Next-element model</span>
+<i>→</i>
+<span>Autoregressive sample</span>
+<i>·</i>
+<span>Latent code</span>
+<i>→</i>
+<span>Decoder</span>
+<i>→</i>
+<span>VAE sample</span>
+<i>·</i>
+<span>Noise</span>
+<i>→</i>
+<span>Repeated denoising</span>
+<i>→</i>
+<span>Diffusion sample</span>
+</div>
+<div class="mental-compare">
+<div>
+<span>TRAINING QUESTION</span>
+<p>What signal teaches the model—likelihood, reconstruction plus regularization, adversarial feedback, denoising, change of variables, or energy contrast?</p>
+</div>
+<div>
+<span>SAMPLING QUESTION</span>
+<p>Does generation proceed sequentially, in one decoder pass, through repeated refinement, through an invertible mapping, or through an iterative sampler?</p>
+</div>
+</div>
+<details class="beginner-answer">
+<summary>Preview the complete family skeleton</summary>
+<div>
+<div class="pipeline-preview" aria-label="Generative family skeleton">
+<span>Training data</span>
+<i>↓</i>
+<span>Family-specific objective</span>
+<i>↓</i>
+<span>Learned parameters</span>
+<i>↓</i>
+<span>Condition + randomness</span>
+<i>↓</i>
+<span>Family-specific sampler</span>
+<i>↓</i>
+<span>Generated sample</span>
+<i>↓</i>
+<span>Evaluation</span>
+</div>
+</div>
+</details>
+</article>
+
+          <article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Do not confuse family, architecture, and modality</h3>
+<h4>Family versus neural-network architecture</h4>
+<p>“Diffusion” describes a generative process and objective. A U-Net or Transformer may implement its denoiser. “Autoregressive” describes a probability factorization; a Transformer, recurrent network, or convolutional network may implement it.</p>
+<h4>Family versus modality</h4>
+<p>Text does not automatically mean autoregressive, and image does not automatically mean diffusion. These are common pairings, not definitions. Autoregressive models have generated images and audio; diffusion models can operate on several modalities.</p>
+<h4>Autoencoder versus VAE</h4>
+<p>A plain autoencoder learns reconstruction. A VAE adds a probabilistic latent model and regularization that supports sampling from a meaningful latent distribution.</p>
+<h4>GAN discriminator versus discriminative model</h4>
+<p>The GAN discriminator performs a discriminative training job, but its feedback trains a generative system. This extends Concept 2 rather than contradicting it.</p>
+<div class="beginner-memory">
+<b>Preview boundary:</b> modern LLMs are commonly autoregressive Transformer models, but Transformers, foundation models, and LLMs belong to the next lesson.</div>
+</article>
+
+          <article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“An LLM is a separate seventh family.”</b>
+<p>Most decoder-style LLMs use autoregressive language modelling. “LLM” describes scale, domain, and capability; “autoregressive” describes the generation factorization.</p>
+</div>
+<div>
+<b>“GAN means any AI-generated image.”</b>
+<p>GAN is one adversarial training family. Many modern image generators use diffusion or hybrid approaches.</p>
+</div>
+<div>
+<b>“A VAE is just a compressed file format.”</b>
+<p>Its latent variables are learned probabilistically; the objective balances reconstruction with latent-distribution regularization.</p>
+</div>
+<div>
+<b>“Diffusion retrieves a cleaner training image.”</b>
+<p>It learns a denoising process and synthesizes a new sample; it is not document retrieval.</p>
+</div>
+<div>
+<b>“Exact likelihood guarantees realistic output.”</b>
+<p>Probability tractability, perceptual quality, diversity, and usefulness are different evaluation dimensions.</p>
+</div>
+<div>
+<b>“One family must replace all others.”</b>
+<p>Hybrids deliberately combine complementary mechanisms.</p>
+</div>
+</div>
+</article>
+
+          <article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where model families appear in Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>FINAL ANSWER · AUTOREGRESSIVE</span>
+<b>Generate grounded text</b>
+<p>The language model emits tokens conditioned on the question, retrieved passages, and exact Oracle values.</p>
+</div>
+<div>
+<span>EMBEDDINGS · NOT THIS JOB</span>
+<b>Represent for retrieval</b>
+<p>An embedding model maps text to vectors. Its role in the RAG runtime is representation and similarity, not free-form answer generation.</p>
+</div>
+<div>
+<span>ORACLE · DETERMINISTIC</span>
+<b>Return authoritative records</b>
+<p>The database executes validated SQL. No generative family should guess the balance.</p>
+</div>
+<div>
+<span>SYNTHETIC TESTING · OPTIONAL</span>
+<b>Create non-production examples</b>
+<p>A generative family may create privacy-safe-looking test documents, but generated data must never be presented as a real record.</p>
+</div>
+</div>
+<div class="scroll-flow" aria-label="RAG flow with generative family">
+<span>User question</span>
+<i>→</i>
+<span>Route + authorization</span>
+<i>→</i>
+<span>Oracle lookup + policy retrieval</span>
+<i>→</i>
+<span>Verified context</span>
+<i>→</i>
+<span>Autoregressive generator</span>
+<i>→</i>
+<span>Grounded answer</span>
+</div>
+<p>LangChain or LangGraph may orchestrate this flow later, but neither is a generative model family. They coordinate models, retrieval, tools, state, and control logic.</p>
+</article>
+
+          <article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Autoregressive</b>
+<p>Generate each element from the elements already present.</p>
+</div>
+<div>
+<b>VAE</b>
+<p>Learn a regularized latent distribution and decoder.</p>
+</div>
+<div>
+<b>GAN</b>
+<p>Learn through competition between generator and discriminator.</p>
+</div>
+<div>
+<b>Diffusion</b>
+<p>Learn to reverse progressive corruption.</p>
+</div>
+<div>
+<b>Flow</b>
+<p>Use invertible transforms and change of variables.</p>
+</div>
+<div>
+<b>Energy-based</b>
+<p>Learn a compatibility score; sampling searches low-energy regions.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why do multiple generative families exist?</li>
+<li>Explain each family without naming a product.</li>
+<li>Which family commonly underlies token-by-token LLM output?</li>
+<li>Why is a GAN discriminator part of a generative system?</li>
+<li>Which project component returns the authoritative leave balance?</li>
+<li>Give one reason to build a hybrid model.</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick family-matching exercise</summary>
+<div>
+<ol>
+<li>Generate a sentence one token at a time — <b>autoregressive</b>.</li>
+<li>Generate an image by reversing noise — <b>diffusion</b>.</li>
+<li>Sample from a regularized latent code — <b>VAE</b>.</li>
+<li>Train a generator against a real/fake judge — <b>GAN</b>.</li>
+<li>Require an invertible map and tractable density — <b>normalizing flow</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+
+          <article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Foundation models and large language models</h3>
+<p>Concept 3 gives you the broad map. Concept 4 zooms into foundation models and LLMs: what “foundation” means, how large language models fit the autoregressive family, what scale changes, and what scale does not guarantee.</p>
+<p>We will also separate an LLM from its tokenizer, model architecture, training objective, inference process, retriever, database, and surrounding application.</p>
+<div class="beginner-memory">
+<b>Concept 03 is complete.</b> Continue to the foundation-model and LLM system boundary.</div>
+<a class="button primary" href="module-01-concept-04.html">Start Concept 04 →</a>
+</article>
+        </div>
+      </div>
+    </section>
+
+    <section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required family map and optional depth.</h2>
+<p>Complete the beginner comparison first. The mathematical objectives, code, failure modes, production trade-offs, and interviews remain collapsed until wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Understand</b>
+<small>Separate the shared goal from each mechanism.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Recognize six families and hybrids.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Apply</b>
+<small>Place the right family in the Oracle RAG system.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open equations, code, evaluation, production, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 03 path:</b> Shared goal → family mechanism → trade-off → project role → teach-back.</div>
+</section>
+
+    <details class="advanced-lesson" id="advanced-lesson">
+      <summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the generative-family deep dive</b>
+<em>Factorizations, latent variables, adversarial games, diffusion, flows, energy models, code and production</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+      <div class="lesson-layout">
+        <aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Taxonomy</a>
+<a href="#s06">
+<i>06</i> Mechanisms</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> From-scratch code</a>
+<a href="#s13">
+<i>13</i> Library code</a>
+<a href="#s14">
+<i>14</i> Interactive lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Knowledge check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+        <div class="lesson-content">
+          <section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where this concept sits</h2>
+</div>
+</header>
+<p>Concept 01 separated generation from retrieval, lookup, and calculation. Concept 02 separated generative from discriminative objectives. Concept 03 now decomposes the generative side into mechanisms. Concept 04 will specialize this map to foundation models and LLMs.</p>
+<div class="flow">
+<div class="flow-node">Generative AI</div>
+<div class="flow-node">Model objective</div>
+<div class="flow-node hot">Model families</div>
+<div class="flow-node">Foundation models</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+
+          <section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>What you should be able to do</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>RECOGNIZE</span>
+<h3>Name the mechanism</h3>
+<p>Identify a family from its training objective and sampling path.</p>
+</article>
+<article class="info-card">
+<span>FORMALIZE</span>
+<h3>Read the core equations</h3>
+<p>Interpret autoregressive factorization, ELBO, minimax, denoising, and change of variables.</p>
+</article>
+<article class="info-card">
+<span>COMPARE</span>
+<h3>Explain trade-offs</h3>
+<p>Discuss likelihood, sample quality, speed, stability, and latent representation.</p>
+</article>
+<article class="info-card">
+<span>PLACE</span>
+<h3>Map it to RAG</h3>
+<p>Explain why the answer generator is usually autoregressive while retrieval and Oracle are separate.</p>
+</article>
+</div>
+</section>
+
+          <section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Distribution:</b> an assignment of probability across possible data.</li>
+<li>
+<b>Conditional probability:</b> probability after observing a condition.</li>
+<li>
+<b>Loss:</b> a quantity optimized during training.</li>
+<li>
+<b>Latent variable:</b> an unobserved representation used to explain observed data.</li>
+<li>
+<b>Sampling:</b> producing one possible output from a learned distribution.</li>
+</ul>
+<details class="quiz">
+<summary>What Concept 2 contributes</summary>
+<div>Every family here is generative because it models data or a procedure for producing data. A discriminator inside a GAN does not change the overall generative objective.</div>
+</details>
+</section>
+
+          <section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>Six ways to sculpt randomness</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>AUTOREGRESSIVE</span>
+<h3>Write left to right</h3>
+<p>Turn a joint distribution into a chain of conditional decisions.</p>
+</article>
+<article class="info-card">
+<span>VAE</span>
+<h3>Navigate a latent map</h3>
+<p>Encode examples into a smooth region and decode nearby points.</p>
+</article>
+<article class="info-card">
+<span>GAN</span>
+<h3>Learn from an adversary</h3>
+<p>Improve samples until a judge struggles to separate generated from real.</p>
+</article>
+<article class="info-card">
+<span>DIFFUSION</span>
+<h3>Restore structure</h3>
+<p>Learn small denoising steps whose composition turns noise into data.</p>
+</article>
+<article class="info-card">
+<span>FLOW</span>
+<h3>Warp space reversibly</h3>
+<p>Track probability while applying invertible transformations.</p>
+</article>
+<article class="info-card">
+<span>ENERGY</span>
+<h3>Shape a landscape</h3>
+<p>Make valid configurations low valleys and implausible ones high hills.</p>
+</article>
+</div>
+</section>
+
+          <section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>A taxonomy by density and sampling</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Family</th>
+<th>Density access</th>
+<th>Typical sampling</th>
+<th>Defining constraint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Autoregressive</td>
+<td>Explicit, tractable conditionals</td>
+<td>Sequential</td>
+<td>Ordered factorization</td>
+</tr>
+<tr>
+<td>VAE</td>
+<td>Approximate likelihood bound</td>
+<td>Latent sample + decode</td>
+<td>Approximate posterior</td>
+</tr>
+<tr>
+<td>GAN</td>
+<td>Usually implicit</td>
+<td>Noise through generator</td>
+<td>Adversarial game</td>
+</tr>
+<tr>
+<td>Diffusion / score</td>
+<td>Likelihood or bound varies by formulation</td>
+<td>Iterative refinement</td>
+<td>Reverse corruption or score field</td>
+</tr>
+<tr>
+<td>Normalizing flow</td>
+<td>Exact tractable density</td>
+<td>Invertible transform</td>
+<td>Bijective mappings</td>
+</tr>
+<tr>
+<td>Energy-based</td>
+<td>Unnormalized score</td>
+<td>MCMC or another optimizer/sampler</td>
+<td>Partition function often intractable</td>
+</tr>
+</tbody>
+</table>
+<p>These are useful categories, not sealed boxes. Modern systems frequently combine them.</p>
+</section>
+
+          <section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>Training and sampling are different phases</h2>
+</div>
+</header>
+<div class="two-lane">
+<article class="lane">
+<span>TRAINING</span>
+<div class="lane-flow">
+<div>Observe real data</div>
+<div>Apply family-specific corruption, encoding, ordering, or competition</div>
+<div>Compute the family objective</div>
+<div>Update parameters</div>
+<div>Validate quality and coverage</div>
+</div>
+</article>
+<article class="lane">
+<span>GENERATION</span>
+<div class="lane-flow">
+<div>Choose condition and randomness</div>
+<div>Run sequential, decoding, denoising, invertible, or energy-based sampler</div>
+<div>Produce candidate sample</div>
+<div>Apply task constraints</div>
+<div>Evaluate before use</div>
+</div>
+</article>
+</div>
+<div class="callout warning">
+<b>Inference is not retrieval</b>Sampling from learned parameters creates a candidate. Retrieval searches an external collection for existing evidence.</div>
+</section>
+
+          <section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>Six generation paths</h2>
+</div>
+</header>
+<div class="scroll-flow">
+<span>Prefix → next item → repeat</span>
+<i>·</i>
+<span>x → encoder → z → decoder → x̂</span>
+<i>·</i>
+<span>z → generator ↔ discriminator</span>
+<i>·</i>
+<span>noise → denoise → … → sample</span>
+<i>·</i>
+<span>base density ↔ invertible transforms ↔ data</span>
+<i>·</i>
+<span>random state → energy-guided steps → sample</span>
+</div>
+<p>The path is often a faster diagnostic than the product name. Ask what happens during sampling.</p>
+</section>
+
+          <section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Highlight the generator inside RAG</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Question</span>
+<i>↓</i>
+<span>Authorization</span>
+<i>↓</i>
+<span>Oracle + retrieval</span>
+<i>↓</i>
+<span>Context construction</span>
+<i>↓</i>
+<span>Autoregressive text generator</span>
+<i>↓</i>
+<span>Claim verification</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>Autoregressive generation is highlighted because it commonly powers text answers. The architecture could still contain diffusion or VAE components for another modality, but they do not replace retrieval, authorization, SQL execution, or evidence validation.</p>
+</section>
+
+          <section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>The signature equation of each family</h2>
+</div>
+</header>
+<p>Let <code>x=(x₁,…,xₙ)</code> be data, <code>z</code> latent noise, <code>c</code> a condition, <code>θ</code> model parameters, and <code>φ</code> inference parameters.</p>
+<div class="equation">Autoregressive: p(x) = ∏ᵢ p(xᵢ | x₁,…,xᵢ₋₁)</div>
+<div class="equation">VAE ELBO: log pθ(x) ≥ E<sub>qφ(z|x)</sub>[log pθ(x|z)] − KL(qφ(z|x) || p(z))</div>
+<div class="equation">GAN: min<sub>G</sub> max<sub>D</sub> E<sub>x~pdata</sub>[log D(x)] + E<sub>z~p(z)</sub>[log(1−D(G(z)))]</div>
+<div class="equation">Diffusion noise objective: E<sub>x₀,t,ε</sub>[ || ε − εθ(xₜ,t,c) ||² ]</div>
+<div class="equation">Flow: log pX(x) = log pZ(f⁻¹(x)) + log |det J<sub>f⁻¹</sub>(x)|</div>
+<div class="equation">Energy model: pθ(x) = exp(−Eθ(x)) / Zθ</div>
+<p>Each equation exposes what the family makes tractable and where approximation or difficult sampling enters.</p>
+</section>
+
+          <section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Autoregressive probability of a tiny answer</h2>
+</div>
+</header>
+<p>Suppose a toy model generates three tokens: “leave”, “balance”, “available”. It assigns:</p>
+<table class="worked-table">
+<thead>
+<tr>
+<th>Conditional event</th>
+<th>Probability</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>p(leave | start, context)</td>
+<td>0.50</td>
+</tr>
+<tr>
+<td>p(balance | leave, context)</td>
+<td>0.40</td>
+</tr>
+<tr>
+<td>p(available | leave balance, context)</td>
+<td>0.25</td>
+</tr>
+</tbody>
+</table>
+<div class="equation">p(sequence | context) = 0.50 × 0.40 × 0.25 = 0.05</div>
+<p>The 5% is the probability of that exact sequence under this toy model. Real language models compare vast token vocabularies at every position. This calculation explains factorization, not LLM architecture.</p>
+</section>
+
+          <section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Representative uses and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>AUTOREGRESSIVE</span>
+<h3>Text and code</h3>
+<p>Sequential conditional generation fits discrete ordered tokens.</p>
+</article>
+<article class="info-card">
+<span>VAE</span>
+<h3>Representation and controlled variation</h3>
+<p>A latent space supports interpolation and structured generation.</p>
+</article>
+<article class="info-card">
+<span>GAN</span>
+<h3>Fast one-pass sampling</h3>
+<p>Useful when adversarial training and coverage risks are acceptable.</p>
+</article>
+<article class="info-card">
+<span>DIFFUSION</span>
+<h3>High-fidelity generation and editing</h3>
+<p>Repeated refinement supports strong conditional control.</p>
+</article>
+<article class="info-card">
+<span>FLOW</span>
+<h3>Density estimation</h3>
+<p>Useful when exact likelihood and invertible sampling matter.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>Employee balance</h3>
+<p>Do not use any family to synthesize an authoritative database value.</p>
+</article>
+</div>
+</section>
+
+          <section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>From-scratch autoregressive sampler</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · TOY MECHANISM</span>
+<pre>
+<code>import random
+
+next_token = {
+    "&lt;start&gt;": {"Your": 0.7, "The": 0.3},
+    "Your": {"balance": 0.8, "policy": 0.2},
+    "balance": {"is": 1.0},
+    "is": {"available": 0.6, "verified": 0.4},
+}
+
+def sample(options):
+    words, weights = zip(*options.items())
+    return random.choices(words, weights=weights, k=1)[0]
+
+token = "&lt;start&gt;"
+result = []
+while token in next_token and len(result) &lt; 4:
+    token = sample(next_token[token])
+    result.append(token)
+
+print(" ".join(result))</code>
+</pre>
+</div>
+<p>This is a tiny Markov-style model, not an LLM. It makes the defining autoregressive loop visible: use the existing prefix, produce one next item, append it, and repeat.</p>
+</section>
+
+          <section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>One library-level categorical step</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · PYTORCH</span>
+<pre>
+<code>import torch
+from torch.distributions import Categorical
+
+logits = torch.tensor([2.0, 1.0, 0.2])
+distribution = Categorical(logits=logits)
+next_token_id = distribution.sample()
+log_probability = distribution.log_prob(next_token_id)
+
+print(next_token_id.item(), log_probability.item())</code>
+</pre>
+</div>
+<p>A real autoregressive model computes new logits from the full prefix and context at every step. VAEs, GANs, diffusion models, and flows use different training loops and samplers; hiding all of them behind one library call would obscure this lesson’s comparison.</p>
+</section>
+
+          <section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Family mechanism explorer</h2>
+</div>
+</header>
+<div class="lab">
+<p>Select a family to inspect its defining training signal, sampling path, strength, and risk.</p>
+<div class="lab-actions" role="group" aria-label="Choose a generative family">
+<button type="button" class="family-button active" data-family="autoregressive" aria-pressed="true">Autoregressive</button>
+<button type="button" class="family-button secondary" data-family="vae" aria-pressed="false">VAE</button>
+<button type="button" class="family-button secondary" data-family="gan" aria-pressed="false">GAN</button>
+<button type="button" class="family-button secondary" data-family="diffusion" aria-pressed="false">Diffusion</button>
+<button type="button" class="family-button secondary" data-family="flow" aria-pressed="false">Flow</button>
+<button type="button" class="family-button secondary" data-family="energy" aria-pressed="false">Energy-based</button>
+</div>
+<div class="sample-output" id="familyOutput" aria-live="polite">
+</div>
+<p class="fine-print">The explorer describes mechanisms; it does not rank families universally.</p>
+</div>
+</section>
+
+          <section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Trade-offs, not a leaderboard</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Family</th>
+<th>Training tendency</th>
+<th>Sampling tendency</th>
+<th>Frequent challenge</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Autoregressive</td>
+<td>Likelihood-based and stable</td>
+<td>Sequential</td>
+<td>Latency accumulates per element</td>
+</tr>
+<tr>
+<td>VAE</td>
+<td>Stable variational objective</td>
+<td>Fast decoder pass</td>
+<td>Blurry samples or posterior collapse</td>
+</tr>
+<tr>
+<td>GAN</td>
+<td>Adversarial and delicate</td>
+<td>Fast generator pass</td>
+<td>Mode collapse and instability</td>
+</tr>
+<tr>
+<td>Diffusion</td>
+<td>Stable denoising objective</td>
+<td>Iterative, though acceleration exists</td>
+<td>Compute and latency</td>
+</tr>
+<tr>
+<td>Flow</td>
+<td>Exact likelihood</td>
+<td>Fast invertible mapping</td>
+<td>Architectural restrictions</td>
+</tr>
+<tr>
+<td>Energy-based</td>
+<td>Contrastive or score learning</td>
+<td>Often iterative</td>
+<td>Partition function and mixing</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+          <section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Family-specific failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>AUTOREGRESSIVE</span>
+<h3>Exposure and compounding errors</h3>
+<p>An early bad choice becomes part of the later prefix.</p>
+</article>
+<article class="info-card">
+<span>VAE</span>
+<h3>Posterior collapse</h3>
+<p>A powerful decoder ignores the latent variable.</p>
+</article>
+<article class="info-card">
+<span>GAN</span>
+<h3>Mode collapse</h3>
+<p>The generator covers only a narrow part of the data distribution.</p>
+</article>
+<article class="info-card">
+<span>DIFFUSION</span>
+<h3>Slow or over-guided sampling</h3>
+<p>Too many steps cost time; excessive guidance can reduce diversity.</p>
+</article>
+<article class="info-card">
+<span>FLOW</span>
+<h3>Inflexible transforms</h3>
+<p>Invertibility and Jacobian constraints limit architecture choices.</p>
+</article>
+<article class="info-card">
+<span>ENERGY</span>
+<h3>Poor mixing</h3>
+<p>The sampler may not explore separated low-energy regions.</p>
+</article>
+</div>
+</section>
+
+          <section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transformer is a generative family</td>
+<td>Transformer is an architecture; it can implement autoregressive or other objectives.</td>
+</tr>
+<tr>
+<td>All autoencoders are VAEs</td>
+<td>A VAE adds probabilistic latent inference and an ELBO-style objective.</td>
+</tr>
+<tr>
+<td>GAN discriminators retrieve evidence</td>
+<td>They distinguish generated from real training samples; retrieval is a separate search process.</td>
+</tr>
+<tr>
+<td>Diffusion means adding noise at inference only</td>
+<td>Training defines a corruption/denoising problem; generation follows a learned reverse process.</td>
+</tr>
+<tr>
+<td>Hybrids are taxonomy mistakes</td>
+<td>They intentionally combine complementary mechanisms.</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+          <section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Profile end-to-end sampling latency, not only one network pass.</li>
+<li>Measure sample quality, diversity, factuality, likelihood, and task utility separately.</li>
+<li>Version the generator, sampler, guidance settings, random seed policy, and evaluation set.</li>
+<li>Treat generated synthetic data as synthetic and prevent it from contaminating authoritative records.</li>
+<li>Monitor mode collapse, repetition, drift, memorization, privacy leakage, and unsafe conditioning.</li>
+<li>For RAG, evaluate retrieval and generation separately before diagnosing the model family.</li>
+</ul>
+</section>
+
+          <section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Which family factorizes a joint distribution into ordered conditionals?</summary>
+<div>Autoregressive models.</div>
+</details>
+<details class="quiz">
+<summary>Why can a GAN sample without an explicit likelihood?</summary>
+<div>The generator defines an implicit distribution by transforming noise; the discriminator supplies the training signal.</div>
+</details>
+<details class="quiz">
+<summary>What makes a normalizing flow tractable?</summary>
+<div>Invertible transformations with computable Jacobian determinants support change-of-variables density evaluation.</div>
+</details>
+<details class="quiz">
+<summary>What is the VAE’s two-part objective?</summary>
+<div>Expected reconstruction log-likelihood plus a KL term that regularizes the approximate posterior toward the prior.</div>
+</details>
+<details class="quiz">
+<summary>Why can diffusion sampling be expensive?</summary>
+<div>Generation commonly applies many reverse or refinement steps.</div>
+</details>
+<details class="quiz">
+<summary>Does RAG require a diffusion model?</summary>
+<div>No. Text RAG commonly uses an autoregressive LLM, while retrieval remains a separate subsystem.</div>
+</details>
+</div>
+</section>
+
+          <section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>For each requirement below, choose a plausible family, justify the mechanism, name one trade-off, and state whether the output may be treated as authoritative:</p>
+<ol>
+<li>Generate a grounded HR-policy explanation token by token.</li>
+<li>Create diverse synthetic document-layout images for parser testing.</li>
+<li>Learn a smooth latent representation of form layouts.</li>
+<li>Estimate an exact tractable density for continuous sensor vectors.</li>
+<li>Generate high-fidelity policy-training illustrations through iterative refinement.</li>
+<li>Return an employee’s current leave balance.</li>
+</ol>
+</section>
+
+          <section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one defensible solution</summary>
+<div>
+<ol>
+<li>Autoregressive text model; sequential latency and hallucination risk; not authoritative without evidence.</li>
+<li>GAN or diffusion; compare one-pass sampling with coverage/stability versus iterative cost; always synthetic.</li>
+<li>VAE; useful latent structure but reconstruction/latent-collapse trade-offs; synthetic representation.</li>
+<li>Normalizing flow; invertibility restricts design; density is model-derived, not a business record.</li>
+<li>Diffusion; high compute and sampling latency; synthetic.</li>
+<li>No generative family. Use authorized Oracle lookup and deterministic calculation.</li>
+</ol>
+</div>
+</details>
+</section>
+
+          <section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Family signatures</h3>
+<p>AR: ordered conditionals<br>VAE: latent ELBO<br>GAN: adversarial game<br>Diffusion: reverse noise<br>Flow: invertible density<br>Energy: compatibility landscape</p>
+</div>
+<div>
+<h3>Selection questions</h3>
+<ul>
+<li>Do I need explicit likelihood?</li>
+<li>How fast must sampling be?</li>
+<li>Do I need a useful latent space?</li>
+<li>What failure can I monitor?</li>
+<li>Is this generation—or retrieval/lookup?</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+
+          <section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Compare autoregressive and diffusion sampling.</summary>
+<div>Autoregressive models extend an ordered prefix one element at a time; diffusion models iteratively refine a noisy state. Both may be sequential, but the state and objective differ.</div>
+</details>
+<details class="quiz">
+<summary>Why does a VAE use the reparameterization trick?</summary>
+<div>It expresses stochastic latent sampling as a differentiable transformation of noise, enabling gradient-based optimization of encoder parameters.</div>
+</details>
+<details class="quiz">
+<summary>Why can GANs suffer mode collapse?</summary>
+<div>The generator may find a limited set of outputs that successfully fools the discriminator instead of covering the full data distribution.</div>
+</details>
+<details class="quiz">
+<summary>What is the price of exact likelihood in flows?</summary>
+<div>Transforms must be invertible with tractable Jacobian determinants, which constrains architecture design.</div>
+</details>
+<details class="quiz">
+<summary>How do hybrids break simple labels?</summary>
+<div>A system may combine a VAE-style latent space, diffusion denoising, and Transformer components; classification should name each mechanism and role.</div>
+</details>
+<details class="quiz">
+<summary>Which family is the RAG retriever?</summary>
+<div>None by default. Retrieval is search over external knowledge; the answer generator is often autoregressive.</div>
+</details>
+</div>
+</section>
+
+          <section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and completion</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1601.06759">
+<b>van den Oord et al. — Pixel Recurrent Neural Networks</b>
+<br>
+<span>Explicit autoregressive modelling by sequential conditional prediction.</span>
+</a>
+<a href="https://arxiv.org/abs/1312.6114">
+<b>Kingma &amp; Welling — Auto-Encoding Variational Bayes</b>
+<br>
+<span>Reparameterized variational inference and the foundational VAE formulation.</span>
+</a>
+<a href="https://papers.nips.cc/paper_files/paper/2014/hash/f033ed80deb0234979a61f95710dbe25-Abstract.html">
+<b>Goodfellow et al. — Generative Adversarial Nets</b>
+<br>
+<span>The generator–discriminator minimax framework.</span>
+</a>
+<a href="https://arxiv.org/abs/2006.11239">
+<b>Ho, Jain &amp; Abbeel — Denoising Diffusion Probabilistic Models</b>
+<br>
+<span>Modern diffusion formulation and denoising objective.</span>
+</a>
+<a href="https://arxiv.org/abs/1912.02762">
+<b>Papamakarios et al. — Normalizing Flows for Probabilistic Modeling and Inference</b>
+<br>
+<span>Unified treatment of invertible transforms, density evaluation, and trade-offs.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 03 is complete. Its equations, explorer, failure modes, production trade-offs, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-04.html">Start Concept 04 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Foundation models and large language models.</p>
+</div>
+</section>
+        </div>
+      </div>
+    </details>
+  </main>
+  <footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 03 · Complete</p>
+<a href="module-01-concept-04.html">Concept 04 →</a>
+</footer>
+</body>
+</html>
+

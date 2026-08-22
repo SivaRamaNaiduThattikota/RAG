@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson explaining why no prompt, however carefully worded, can make a plain LLM answer from external knowledge -- frozen weights after training, corpus-bounded encoding, and a forward pass with no read channel to anything outside itself.">
+<title>Why we cannot simply ask the LLM: external knowledge — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 02</p>
+<h1>Why we cannot simply ask<br>the LLM: <em>external knowledge</em></h1>
+<p class="lesson-lead">Concept 01 named the fix: a retriever, wired to a generator. Before this course builds a single piece of that retriever, it owes you the argument for why the fix is necessary at all — not "nice to have," but architecturally required. Asking a plain LLM to supply external knowledge fails for three tied-together reasons: its weights are frozen the moment pretraining stops, so there's no write channel at inference time; those weights can only ever encode what was in the training corpus, so anything that was never there isn't in there at any density; and the forward pass itself has no read channel to any outside source while it runs. This is a <b>can't</b>, not a <b>won't</b> — the rest of this lesson is spent proving that distinction.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Module 02 Concept 09 (parametric memory, no verification step) and Concept 01's retriever/corpus/generator/grounding vocabulary</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain, architecturally, why no prompt can supply private or post-cutoff knowledge</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You held three architectural facts as one argument, not three separate trivia: parameters are frozen after training (no write channel), they can only encode what was in the training corpus (corpus-boundedness), and the forward pass has no read channel to anything external (a structural absence, not a switched-off feature). Together they explain why rewording a prompt can never recover a private document or a post-cutoff fact — and why Concept 01's retriever is the only kind of fix that can.</p>
+<b>2 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A closed loop, no matter how you word the question</h2>
+</div>
+<p>Concept 01 drew the fix: a retriever wired in front of the generator. This concept explains why that wiring is load-bearing rather than optional — why no amount of clever prompting inside the generator box alone could ever have done the retriever's job instead.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three reasons, all architectural, all pointing the same way</h3>
+<p>Why can't we just ask the LLM for the external knowledge we need? Because three architectural facts hold at once, and each one alone would already be enough to block it. Its weights are <b>frozen</b> the instant pretraining stops — there's no channel at inference time that writes anything new into them. Those weights can only ever encode whatever density of a fact was present in the training corpus — so knowledge that was never in that corpus, private or otherwise, cannot be in there at any density, thin or thick. And the forward pass that turns a prompt into an answer has no <b>read channel</b> to any outside source while it runs — this is Module 02 Concept 09's "no verification step" pushed one level further: not just no fact-checking of an answer already drawn from memory, but no retrieval step of any kind, ever, at any point in that computation.</p>
+<p>Say this precisely: it's a <b>can't</b>, not a <b>won't</b>. The model isn't being lazy, stubborn, or under-instructed. There is no lever inside a plain LLM's inference call that a better-worded prompt could pull to reach data it never had. The rest of this lesson exists to make that distinction stick.</p>
+<div class="beginner-memory"><b>First memory:</b> frozen weights, a corpus-bounded encoding, and no read channel at inference — three architectural facts, one closed loop, and no prompt reaches outside it.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>The fix that keeps almost working, and never does</h3>
+<p>Here's the failure pattern teams hit constantly: the model doesn't know something, so someone reaches for the system prompt. "Be accurate." "Double-check yourself before answering." "Only answer if you're sure, and cite a source." Each instruction sounds like it should help, and each one fails to reliably fix anything — because none of them address what's actually missing. This concept exists to explain, in depth, why that entire class of fix is structurally doomed, before Concept 03 catalogs the specific knowledge categories — cutoffs, private data, frequently-changing information — where this failure shows up hardest.</p>
+<div class="mental-compare">
+<div><span>WHAT THIS SECTION COVERS</span><p>The architectural reason prompting alone can never supply knowledge that was never in the training corpus.</p></div>
+<div><span>WHAT IT DOESN'T COVER YET</span><p>The named categories this shows up in — cutoffs, private company knowledge, fast-changing information — that's Concept 03's job, next.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three prompts, three confident numbers, all unverifiable</h3>
+<p>Someone asks a plain LLM with no retriever wired in — Oracle RAG's internal home-office equipment reimbursement cap doesn't exist in any public document — the same underlying question three times, each time with a more elaborate prompt.</p>
+<div class="context-demo">
+<div><span>ATTEMPT 1 · "JUST ASK"</span><p>"What is our internal home-office equipment reimbursement cap?" Answer: a fluent, specific-sounding number — say, "$350 per employee." No source, no hedge, no way to check it.</p></div>
+<div><span>ATTEMPT 2 · "DOUBLE-CHECK YOURSELF"</span><p>Same question, plus "please double-check yourself before answering." Answer: a similarly fluent number, possibly restated with more confidence, possibly a different guess entirely. Still no source, still unverifiable.</p></div>
+<div><span>ATTEMPT 3 · "ONLY ANSWER IF CERTAIN, CITE A SOURCE"</span><p>Same question, plus "only answer if you're certain, and cite a source." Answer: a fluent number, now attached to an invented-sounding citation, or a hedge that still resolves to a specific guess. Either way, the number can still be wrong.</p></div>
+</div>
+<p>All three can be wrong, every time — not because the phrasing was weak, but because none of the three prompt variants added anything to what was sitting in the weights. They only changed which already-frozen patterns got emphasized during decoding.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>No write channel back in, no read channel out</h3>
+<div class="mental-compare">
+<div><span>FACT 1 · FROZEN PARAMETERS</span><p>Module 02 Concept 09 already named the weight groups — the embedding table, each block's attention and feed-forward weights, the output head. All of them are the fixed output of a training run that already finished. Nothing at inference time writes back into any of them. Whatever was absent from those weights when training stopped stays absent forever, no matter what gets typed into the prompt afterward.</p></div>
+<div><span>FACT 2 · NO READ CHANNEL</span><p>The forward pass's only inputs are the prompt's tokens and those same frozen weights. There is no function call, no network request, no file read anywhere inside that computation. A private document that was never part of the training corpus literally cannot be consulted during a forward pass — not "is unlikely to be," cannot be, no matter what the prompt instructs it to do.</p></div>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The closed inference loop</h3>
+<div class="scroll-flow">
+<span>Prompt tokens</span><i>→</i>
+<span>Forward pass (frozen weights only)</span><i>→</i>
+<span>Logits</span><i>→</i>
+<span>Decode loop</span><i>→</i>
+<span>Output token, appended back into context</span><i>→</i>
+<span>loop continues</span>
+</div>
+<p>Trace every arrow in that loop. None of them ever leaves the box to touch a document, a database, or the internet — the output token gets appended back into the same context that's about to be fed through the same frozen weights again. It's a closed loop by construction, not by omission.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0302-visual-title">
+  <strong class="concept-visual-title" id="c0302-visual-title">VISUAL · THE CLOSED LOOP, AND THE ONE ARROW THAT BREAKS IT</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable split diagram forking one prompt into a faded closed-loop path with no external arrow and an active path carrying Concept 01's single new retriever arrow to a corpus">
+    <div class="diagram-split">
+      <div class="diagram-node"><b>Prompt tokens</b><small>one shared starting point</small></div>
+      <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+      <div class="diagram-node"><b>Closed loop — this concept</b><small>forward pass (frozen weights) → logits → decode loop → output. No arrow here ever leaves the box.</small></div>
+      <div class="diagram-node active"><b>Concept 01's fix — one new arrow</b><small>retriever → corpus, wired in front of this identical loop. That one new arrow is the entire fix, and no prompt can draw it.</small></div>
+    </div>
+  </div>
+  <figcaption>Same loop on both sides. The only difference is whether a wired arrow to a corpus exists before the loop starts — and that arrow is code, never a sentence in a prompt.</figcaption>
+  <ol class="diagram-key"><li><b>The closed loop is the whole story for a plain LLM:</b> nothing about wording the prompt differently adds an arrow to this diagram.</li><li><b>Concept 01's retriever is the only new arrow:</b> everything after it feeds into this exact same closed loop, unchanged.</li><li><b>A prompt is text read inside the loop, not a wire drawn outside it:</b> it can change what gets emphasized in decoding, never what's reachable.</li></ol>
+</figure>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three pairs that look alike and aren't</h3>
+<div class="distinction-table" role="table" aria-label="Distinctions between prompting, hallucination, and coverage gaps">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Prompting the LLM to "be careful"</span><span role="cell">Giving it retrieved evidence</span><span role="cell">One only reweights which frozen-weight patterns get emphasized in decoding; the other adds words to the context that weren't there before</span></div>
+<div role="row"><span role="cell">Hallucination (Module 02, Concept 09)</span><span role="cell">The absence of a read channel (this concept)</span><span role="cell">Hallucination is a behavior of a loop that could in principle be handed evidence; the missing read channel is a structural property that holds even before the loop runs</span></div>
+<div role="row"><span role="cell">Sparse coverage (Module 02, Concept 09)</span><span role="cell">Never-seen data (this concept)</span><span role="cell">Sparse means present in training data but thin; never-seen means absent at any density because it was never in the corpus at all — same wrong-answer symptom, two different causes</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"If I just phrase the prompt better, it'll get the private or current fact right."</b><p>No — nothing in the prompt's text can supply data that was never in the training corpus. Phrasing changes emphasis, not access.</p></div>
+<div><b>"Telling it to search its memory harder is like telling a person to try harder."</b><p>No — there is no memory to search beyond the frozen weights. "Trying harder" isn't a lever this architecture has; there's no effort dial to turn.</p></div>
+<div><b>"A system prompt saying you have access to our database actually grants that access."</b><p>No — a system prompt is still just tokens read by the same frozen-weight forward pass. Declaring access in English doesn't wire anything.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Two ways Oracle RAG hits this exact wall</h3>
+<div class="project-map">
+<div><span>PRIVATE DATA</span><b>Internal policy documents were never public</b><p>Oracle RAG's internal policy documents were never posted anywhere public, so they were never in any foundation model's training corpus. No prompt can retrieve what was never encoded in the first place.</p></div>
+<div><span>POST-CUTOFF DATA</span><b>Recent policy revisions add a second, distinct problem</b><p>Even a document that eventually becomes public is still past any model's training cutoff the moment it postdates that cutoff. Same wall, different route to it.</p></div>
+<div><span>WHAT THIS MEANS</span><b>Exactly the gap Module 03's retriever closes</b><p>Both are the architectural gap Concept 01's new box exists to close — no amount of prompt-engineering effort confined to Module 02's generator box could have closed it instead.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Frozen parameters</b><p>Weights are fixed the moment training stops — no write channel exists at inference time, ever.</p></div>
+<div><b>No read channel</b><p>The forward pass has no way to reach anything external — a structural absence, not a switched-off feature, and stronger than Concept 09's "no verification step."</p></div>
+<div><b>Can't, not won't</b><p>This is an architectural limitation, not an effort problem or a prompting problem.</p></div>
+<div><b>Two instances, one cause</b><p>Private/never-seen data and post-cutoff data are mechanically the same underlying cause: "this content was never part of the training corpus when the weights were fixed."</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>State, in one sentence, why no prompt can supply a fact the model never saw in training.</li>
+<li>Explain the difference between "can't" and "won't" using this concept's terms.</li>
+<li>Why does a system prompt claiming database access not actually grant that access?</li>
+<li>Why are post-cutoff facts and private facts the same underlying problem, even though they feel different day to day?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Knowledge cutoffs, private company knowledge and frequently changing information</h3>
+<p>Today's concept proved why no prompt can fix this. Concept 03 is ready to name and detail the specific categories this concept only gestured at — cutoffs, private data, frequently-changing information — now that the "why" underneath all three is settled.</p>
+<div class="beginner-memory"><b>Concept 02 is complete.</b> Continue to Knowledge cutoffs, private company knowledge and frequently changing information.</div>
+<a class="button primary" href="module-03-concept-03.html">Start Concept 03 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One argument, three architectural facts.</h2>
+<p>Master the closed-loop argument first: frozen weights, corpus-bounded encoding, no read channel. Open the zero-training-terms proof, the from-scratch code contrast, and the wiring lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Define</b><small>The closed inference loop — frozen weights, no read channel, can't not won't.</small></a>
+<a href="#b04"><span>02</span><b>Separate</b><small>No write channel back into the weights from no read channel out to anything external.</small></a>
+<a href="#b06"><span>03</span><b>Distinguish</b><small>Prompting from evidence, can't from won't, sparse coverage from never-seen.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the zero-terms proof, code, and the wiring-test lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> Prompt tokens → forward pass (frozen weights only) → logits → decode loop → output token, appended back into context, loop continues — no arrow in that loop ever leaves the box.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the frozen-weights / no-read-channel deep dive</b><em>The zero-training-terms proof, a from-scratch plain-vs-wired code contrast, and "The Wiring Test" lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 03's second of twelve concepts</h2></div></header>
+<p>Concept 01 drew the two-box definition and named all four vocabulary terms. This concept owns the architectural justification for why that wiring is necessary at all — frozen weights, corpus-boundedness, and the absence of a read channel at inference time. It explicitly defers: the specific failure categories (cutoffs, private data, frequently-changing information) to Concept 03; the full RAG-versus-prompting-versus-fine-tuning decision framework to Concepts 07 and 08; and the failure chain to Concept 11.</p>
+<div class="flow">
+<div class="flow-node">Concept 01 complete</div>
+<div class="flow-node">Frozen weights θ</div>
+<div class="flow-node hot">No write channel back in</div>
+<div class="flow-node hot">No read channel out</div>
+<div class="flow-node">Concept 03 next</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State the closed inference loop precisely</h3><p>Prompt tokens plus frozen weights only, with no external read anywhere in the forward pass.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Tell related-looking pairs apart</h3><p>Can't versus won't, and sparse-coverage versus never-seen — same surface symptom, different mechanisms.</p></article>
+<article class="info-card"><span>ARGUE</span><h3>Explain why no prompt substitutes for retrieval</h3><p>On private or post-cutoff knowledge specifically, using the zero-training-terms argument.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not cover</h3><p>The named failure categories (Concept 03), the full decision framework (Concepts 07-08), and the failure chain (Concept 11).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Parametric knowledge as lossy weight-group residue, no verification step (Module 02, Concept 09):</b> cited, not re-derived.</li>
+<li><b>The retriever/corpus/generator/grounding vocabulary and P(answer|query) versus P(answer|query,context) notation (Module 03, Concept 01):</b> cited, not re-derived.</li>
+<li>Both are assumed fully known going forward; this concept builds strictly on top of them.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Handcuffed to the desk, no phone, no library card</h2></div></header>
+<p>Extend Concept 01's open-book-exam analogy one step further. This exam-taker is also handcuffed to the desk, with no phone and no library card. No matter how cleverly the instructions printed on the exam paper are worded — "think carefully," "double-check your work," "only answer if you're sure" — nothing physically lets them consult a source they haven't already memorized.</p>
+<div class="callout warning"><b>Analogy boundary</b>Unlike a handcuffed student, the model feels no frustration and has no awareness of the wall it's up against. This is a structural fact about a computation graph, not a motivational obstacle. Lewis et al.'s framing of parametric-only models makes the paper-level version of this same point: such models can't precisely access or update the knowledge they'd need.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Frozen parameters</td><td>θ, fixed after the training run that produced Concept 09's weight groups; no update rule runs at inference</td><td>No write channel exists after training ends — nothing at inference time changes θ</td></tr>
+<tr><td>Training-time knowledge boundary</td><td>Only patterns present in the training corpus C can ever have shaped θ</td><td>Anything absent from C, at any density, cannot have influenced θ at any density</td></tr>
+<tr><td>Closed inference loop / runtime read boundary</td><td>The forward pass's only inputs are prompt tokens and θ; no function in the computation graph reads a file, database, or network resource</td><td>Distinct from, and stronger than, Concept 09's "no verification step" — this is a structural absence of any read channel, not the absence of one specific check</td></tr>
+<tr><td>"Can't" versus "won't"</td><td>A structural absence of a capability, versus a present-but-imperfect behavior such as hallucination</td><td>"Won't" implies the capability exists but is misapplied; "can't" means the capability was never wired in</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The same loop, traced with nothing added</h2></div></header>
+<div class="scroll-flow">
+<span>Prompt tokens arrive</span><i>→</i>
+<span>forward_pass(tokens, θ) runs — no other arguments exist</span><i>→</i>
+<span>Logits produced</span><i>→</i>
+<span>Decode loop samples a token</span><i>→</i>
+<span>Token appended back into context</span><i>→</i>
+<span>loop repeats from forward_pass(tokens, θ)</span>
+</div>
+<p>Every arrow above is annotated with the same fact: nothing here is a network call or a file read. Contrast this against Concept 01's Section 06 trace, which inserted <code>retriever(query, corpus)</code> before this identical loop ever begins. Same loop, unchanged — one box added in front of it is the entire difference.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Closed loop vs. wired loop</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable split diagram titled Closed loop vs. wired loop, forking a shared prompt-and-frozen-weights start into a faded closed path and an active wired-retriever path">
+  <div class="diagram-split">
+    <div class="diagram-node"><b>Prompt tokens</b><small>shared start</small></div>
+    <div class="diagram-node"><b>Frozen weights θ</b><small>fixed at training time — feeds both paths identically</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node"><b>No arrow leaves this box</b><small>closed inference loop → decode loop → output</small></div>
+    <div class="diagram-node active"><b>Concept 01's retriever wire, added</b><small>→ corpus (external, never inside θ) → evidence in context → decode loop → grounded output</small></div>
+  </div>
+</div>
+<ol class="diagram-key"><li><b>The only difference between the two paths is whether a wired arrow to a corpus exists at all:</b> nothing else in the diagram changes.</li><li><b>That arrow is a code path, never just English phrasing in a prompt:</b> it has to be built, it can't be requested into existence.</li><li><b>Neither path changes Concept 09's "no verification step inside decoding itself":</b> the wired path only changes what's available to decode from, not whether decoding checks itself.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Why the right-hand skeleton has to exist at all</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunking</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors / index</span><i>↓</i>
+<span class="hot">Retrieval</span><i>↓</i>
+<span>Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>This concept's entire argument concerns exactly why the LLM box, taken alone with no arrow arriving from the left-hand stages, cannot serve every knowledge need. That's why the rest of this skeleton — Documents through Retrieval — has to be built at all, across Modules 04 through 10. Not because it would be nice to have. Because the LLM box alone has no read channel, ever, to anything those left-hand stages produce.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Zero terms in the training sum</h2></div></header>
+<p>Recall Concept 09's cross-entropy training framing, restated over the fixed pretraining corpus C:</p>
+<div class="equation">θ* = argmin_θ Σ_{x∈C} loss(x; θ)</div>
+<p>If a fact f — a private document, or an event postdating C's collection — satisfies f∉C, it contributes zero terms to that sum:</p>
+<div class="equation">f ∉ C  ⇒  f contributes 0 terms to Σ_{x∈C} loss(x; θ)</div>
+<p>No gradient step ever pushed θ toward or away from f. Therefore P_θ(answer | q) for a query q about f is not systematically a function of f at all — whatever it outputs is incidental, not recall of f. This is Concept 01 Section 09's exact object, P(answer|query): this section derives why that object is structurally blind to any f∉C. Kasai et al.'s RealTime QA is the empirical confirmation — frozen-parameter accuracy degrades sharply past the training window, exactly as the zero-terms argument predicts.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two cases, one zero-terms argument</h2></div></header>
+<div class="context-demo">
+<div><span>PRIVATE CASE</span><p>Oracle RAG's internal "home-office equipment reimbursement cap" document D_priv was never posted publicly, so D_priv ∉ C for any general-purpose foundation model. The training sum has literally zero terms mentioning D_priv's contents — nothing pushed θ toward the real number, so the model produces some fluent number sourced from unrelated generic reimbursement-policy patterns instead.</p></div>
+<div><span>CUTOFF CASE</span><p>A policy revision R issued last week postdates C's collection date, regardless of how public R eventually becomes. R ∉ C by the exact same zero-terms argument, for a completely different reason than the private case — R could become fully public tomorrow and would still have contributed zero training terms today.</p></div>
+</div>
+<p>Flag the mechanical difference from Concept 09 Section 10's sparse-but-present carryover-cap example: that fact was public and rare inside C, still contributing a few terms. These two cases are either never-public or not-yet-existing when C was collected — zero terms, not few. Same failed-lookup symptom on the surface, two distinct causes, neither of them "thin coverage."</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>GOOD FIT</span><h3>A public, well-established fact</h3><p>A plain LLM is fine here — no retrieval needed. This matches the earlier Concept 09/Concept 01 boundary, not this concept's problem case.</p></article>
+<article class="info-card"><span>PRIVATE-DATA CASE</span><h3>Never in any public corpus</h3><p>Structurally impossible for a parametric-only model to get right by any density of luck. This concept's core case.</p></article>
+<article class="info-card"><span>POST-CUTOFF CASE</span><h3>Public, but postdates C</h3><p>Same zero-terms mechanism, different cause. Concept 03 names the full catalogue by exact title next — no further detail here.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"You now have live database access"</h3><p>A system prompt claiming this grants no capability the forward pass doesn't already structurally lack.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Two signatures make the argument literal</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>weights = {
+    # a tiny stand-in for frozen theta -- a real model's weights are
+    # billions of numbers; this dict only needs to demonstrate that
+    # nothing in it was ever about Oracle RAG's actual reimbursement
+    # policy, because that policy document was never public.
+    "generic_reimbursement_pattern":
+        "many companies cap home-office reimbursements somewhere "
+        "between $200 and $500",
+}
+
+def plain_llm_answer(prompt, weights):
+    # no corpus parameter exists here -- there is nothing this
+    # function could search even if the prompt text asks it to.
+    # the only things reachable are `prompt` itself and `weights`,
+    # no matter what the prompt's words say to do instead.
+    if "reimbursement" in prompt.lower():
+        pattern = weights["generic_reimbursement_pattern"]
+        return f"I'd estimate around $350 per employee. ({pattern})"
+    return "I don't have enough information to answer that."
+
+def rag_answer(prompt, weights, corpus):
+    # the one new argument, `corpus`, is the entire fix -- a place
+    # to look that isn't just the frozen weights above.
+    hits = [doc for doc in corpus if "reimbursement" in doc.lower()]
+    if hits:
+        return f"According to the policy document: {hits[0]}"
+    return plain_llm_answer(prompt, weights)
+
+corpus = [
+    "Home-office equipment reimbursement is capped at $750 per "
+    "employee per fiscal year, per HR Policy 4.2.",
+]
+
+plain_prompt = "What's our internal reimbursement cap for home-office equipment?"
+careful_prompt = (
+    plain_prompt
+    + " Please double-check yourself, and only answer if you're "
+      "certain, citing a source."
+)
+
+print(plain_llm_answer(plain_prompt, weights))
+print(plain_llm_answer(careful_prompt, weights))
+print(rag_answer(plain_prompt, weights, corpus))
+</code></pre>
+</div>
+<p>Changing only the prompt text passed into <code>plain_llm_answer</code> — never its arguments — never changes what data is reachable; both calls fall back to the same generic pattern in <code>weights</code>. The fix is an added argument and a wire, not cleverer phrasing.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Nobody fixes this with a better prompt template</h2></div></header>
+<p>No mainstream provider fixes this gap via prompting. "Tools," "function calling," "file search," and "web browsing" product features are exactly a wired-in read channel — a retriever, in Concept 01's vocabulary — bolted onto the closed loop this concept describes, not a smarter prompt template. Petroni et al.'s LAMA finding, that directly probing a language model's parameters as a knowledge base surfaces large, uneven gaps, is the empirical reason providers built retrieval and tool features instead of relying on prompt engineering. Kasai et al.'s RealTime QA is the empirical demonstration of frozen-parameter accuracy degrading past the training window. Modules 04 through 10, and 12 through 13, are where the actual wired fix gets built — not delivered here.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Wiring Test</h2></div></header>
+<div class="lab">
+<p>Pick a query, then try to fix a wrong answer using prompting alone — three different phrasings, as many times as you like. Then wire in an actual retriever and watch what changes, and what doesn't.</p>
+<div class="lab-actions" role="group" aria-label="Choose a query to test">
+<button type="button" class="wiring-query-chip active" data-query="private" aria-pressed="true">"What's our internal reimbursement cap for home-office equipment?"</button>
+<button type="button" class="wiring-query-chip" data-query="cutoff" aria-pressed="false">"What did the company announce in this morning's town hall?"</button>
+<button type="button" class="wiring-query-chip" data-query="public" aria-pressed="false">"How many days are in a standard calendar week?"</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Try to fix the answer by prompting alone">
+<button type="button" class="wiring-attempt-button" data-attempt="plain">Just ask it</button>
+<button type="button" class="wiring-attempt-button" data-attempt="polite">Ask it to "double-check itself"</button>
+<button type="button" class="wiring-attempt-button" data-attempt="cite">Instruct it to "only answer if certain, and cite a source"</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Wire in an actual retriever">
+<button type="button" class="wiring-fix-button" id="wireRetrieverButton0302">Wire in a retriever →</button>
+</div>
+<div class="lab-actions"><button type="button" class="secondary" id="wiringResetButton0302">Reset</button></div>
+<div class="sample-output" id="wiringStatus0302" aria-live="polite"></div>
+<div class="sample-output" id="wiringLog0302" aria-live="polite"></div>
+<div class="sample-output" id="wiringScore0302" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three responses to a knowledge gap</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it costs</th><th>What it actually gives you</th></tr></thead>
+<tbody>
+<tr><td>Reword the prompt / stack more careful-sounding instructions</td><td>Free</td><td>Nothing — it never adds an argument the forward pass can read from</td></tr>
+<tr><td>Fine-tune on the missing documents</td><td>A full training run, repeated every time the document changes</td><td>The fact baked into θ, only until the next change</td></tr>
+<tr><td>Wire in a retriever (Concept 01's box)</td><td>A retriever, an index, and a search step per query</td><td>A genuinely new, updatable argument to the forward pass, without retraining</td></tr>
+</tbody>
+</table>
+<p>This is a preview only. The full decision framework across all three is Concepts 07 and 08's job — this table only supports today's narrower claim, that rewording a prompt can never work for private or post-cutoff facts.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Three failure modes specific to prompting as the fix</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>INSTRUCTION INFLATION</span><h3>Stacking instructions with zero effect</h3><p>Ever more elaborate system-prompt language, with zero effect on what's actually reachable during the forward pass.</p></article>
+<article class="info-card"><span>FALSE CONFIDENCE FROM A COMPLIANCE-SOUNDING INSTRUCTION</span><h3>"Cite a source" invents one</h3><p>Telling it to cite a source produces invented citations, not real ones, because there is still no real source in reach. Fabricated citations become Concept 04's grounding and provenance material — forward-referenced, not detailed here.</p></article>
+<article class="info-card"><span>MISTAKING A TOOL-USE SYSTEM PROMPT FOR ACTUAL ACCESS</span><h3>Declaring it doesn't wire it</h3><p>Declaring "you have file search" in text, with no tool actually wired in, changes nothing about what's reachable.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>"A cleverer prompt can make the model try harder to recall private facts"</td><td>There is nothing behind the frozen weights to try harder against — no memory to search past what's already there.</td></tr>
+<tr><td>"If the model hedges or apologizes, it must be aware it's guessing"</td><td>Hedging is just another learned token pattern, per Concept 09's hedge-is-not-a-doubt-mechanism point, not re-derived here.</td></tr>
+<tr><td>"Declaring you have access to X in a system prompt grants that access"</td><td>Access requires an actual wired read channel — a retriever or tool — never a textual claim.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Never rely on prompt instructions alone to bound private or time-sensitive claims — they cannot, by construction.</li>
+<li>Audit any existing "answer accurately" or "always cite your sources" system-prompt language as a false sense of mitigation.</li>
+<li>Treat a vendor's "we added web browsing / file search" announcement as literally "we wired in a retriever," not a prompting improvement.</li>
+<li>Budget for an actual retrieval component wherever content is proprietary or changes faster than a retraining cycle can track — which Module 03 onward starts building.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does zero training-corpus terms for a fact mean zero gradient pressure on θ regarding it?</summary><div>The training objective is a sum over terms in the corpus C. If a fact f is never in C, it never appears in that sum, so no gradient step is ever computed with respect to it — nothing pushes θ toward or away from f.</div></details>
+<details class="quiz"><summary>Restate the can't-versus-won't distinction in your own words.</summary><div>"Won't" describes a present capability being misapplied, like hallucinating from real-but-lossy memory. "Can't" describes a capability that was never wired in at all — there is no read channel to reach external knowledge, no matter the instruction.</div></details>
+<details class="quiz"><summary>Why doesn't a system prompt claiming database access grant it?</summary><div>A system prompt is still just tokens fed into the same frozen-weight forward pass. Granting access requires an actual function call or network read wired into the computation graph — a sentence describing access isn't that wire.</div></details>
+<details class="quiz"><summary>Why are post-cutoff and never-public content mechanically the identical argument, even though they feel different day-to-day?</summary><div>Both satisfy f∉C — the fact was never part of the training corpus when θ was fixed — for different real-world reasons (one was never public, one didn't exist yet). The zero-terms argument doesn't care which reason applies.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A team proposes three fixes for a private-knowledge chatbot. Label each as (a) does not change what's reachable, (b) claims a capability that isn't actually wired, or (c) adds real capability at a specific recurring cost — justify each label using this concept's frozen-parameters/closed-loop argument.</p>
+<ol>
+<li>Add "always double-check your facts" to the system prompt.</li>
+<li>Add "you have access to our SharePoint" to the system prompt.</li>
+<li>Fine-tune the model weekly on the latest documents.</li>
+</ol>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open the worked solution</summary><div>Fix 1 is (a): "double-check your facts" is text read inside the same closed loop — it reweights decoding, it adds no argument the forward pass can read from, so nothing about what's reachable changes. Fix 2 is (b): claiming SharePoint access in a system prompt is still just tokens; without an actual wired function call or network read, no capability exists behind the claim. Fix 3 is (c): fine-tuning genuinely changes θ, so it does add real capability, but at the explicit recurring cost of a full training run every single week the documents change. Teach-back: in your own words, using the terms "frozen parameters" and "read channel," explain why only one of the three proposals actually works, and name its cost.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The argument</h3><p>Frozen θ after training, plus f∉C, means zero gradient terms for f. No read channel in the forward pass means no prompt can supply f either. Both facts together: no prompt can supply a fact that was never in the training corpus, no matter how it's worded.</p></div>
+<div><h3>Selection rule</h3><ul><li>Public, dense fact → a plain LLM is fine, no retrieval needed</li><li>Private or post-cutoff fact → no prompt fixes it, only a wired retriever does</li><li>Memorable example: the handcuffed exam-taker with no phone and no library card</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain to a non-technical stakeholder why "just tell it to check its facts" won't fix wrong answers about internal-only documents.</summary><div>The model can only answer from patterns it picked up during training, and it has no way to look anything up while it's answering. Telling it to "check its facts" doesn't give it anything new to check against — it's still working from the same fixed memory either way.</div></details>
+<details class="quiz"><summary>What's structurally different between hallucination and this concept's "no read channel" argument?</summary><div>Hallucination (Concept 09) is a behavior of the decode loop — a loop that could in principle be handed evidence and still fail to use it well. The missing read channel is a structural absence that holds even before the loop runs at all; there's nothing to hand it in the first place.</div></details>
+<details class="quiz"><summary>Why does adding "you have file search" to a system prompt do nothing without an actual tool wired in?</summary><div>The forward pass only ever reads prompt tokens and frozen weights. A sentence claiming a capability is still just tokens — it doesn't add a function call or network read to the computation graph, so nothing about what's reachable actually changes.</div></details>
+<details class="quiz"><summary>Contrast the cost and benefit of fine-tuning versus wiring in retrieval for a fact that changes weekly.</summary><div>Fine-tuning weekly means a full training run every single week, and the fact is only current until the next change. Wiring in retrieval costs a retriever, an index, and a search step per query, but the underlying document can be updated at any time with no retraining at all — the forward pass just reads the current version next time.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2005.11401"><b>Lewis, Perez, Piktus et al. — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</b><br><span>Reused from Concept 01, here for its motivating argument that parametric-only models can't precisely access, update, or attribute knowledge — behind Section 04.</span></a>
+<a href="https://arxiv.org/abs/1909.01066"><b>Petroni, Rocktäschel, Riedel et al. — Language Models as Knowledge Bases?</b><br><span>Grounds the claim that probing an LM's parameters directly as a knowledge base surfaces large, uneven gaps — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2207.13332"><b>Kasai, Sakaguchi, Le Bras et al. — RealTime QA: What's the Answer Right Now?</b><br><span>Empirical confirmation that frozen-parameter accuracy degrades sharply past the training window — behind Sections 09 and 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 · COMPLETE</span>
+<h3>The three-part argument is today's takeaway</h3>
+<p>Before moving on, be able to restate all three parts as one argument: frozen parameters (no write channel back in), corpus-boundedness (only what was in the training corpus could ever be encoded), and no read channel (nothing at inference time reaches outside the loop). Concept 03, "Knowledge cutoffs, private company knowledge and frequently changing information," is next — it names and details the specific categories this concept only gestured at.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-03.html">Start Concept 03 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Knowledge cutoffs, private company knowledge and frequently changing information.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 02 · Complete</p>
+<a href="module-03-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

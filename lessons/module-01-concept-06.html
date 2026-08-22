@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson explaining tokens, token IDs, tokenizer algorithms, and how text and non-text modalities become model input.">
+<title>Tokens and modalities — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-06.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 06</p>
+<h1>Tokens<br>
+<em>and modalities</em>
+</h1>
+<p class="lesson-lead">Learn the unit a model actually reads and writes—text broken into tokens, non-text broken into comparable pieces—so that characters, words, and tokens stop being interchangeable in your head.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Sixth Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Training, fine-tuning and inference</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Separate characters, words, and tokens</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You separated tokens, token IDs, and vocabulary from characters and words, and saw how non-text modalities get tokenized too.</p>
+<b>6 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A model never sees your sentence—it sees tokens</h2>
+</div>
+<p>Before a foundation model can process anything, text, code, an image, or audio must be converted into a sequence of discrete units it was trained to consume.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Tokens, token IDs, and modalities</h3>
+<p>
+<b>Tokenization</b> splits raw input into a sequence of smaller pieces called <b>tokens</b>. Each token is looked up in a fixed <b>vocabulary</b> and replaced with an integer <b>token ID</b>. A token can be a whole word, part of a word, a single character, or a punctuation mark—never assume it is a whole word.</p>
+<p>
+<b>Modality</b> describes the kind of input: text, image, audio, or video. Non-text modalities are also converted into discrete or near-discrete units—image patches, audio frames—before a model can process them the same way it processes text tokens.</p>
+<div class="beginner-memory">
+<b>First memory:</b> a token is a vocabulary entry, not a word.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why not feed the model raw characters or whole words?</h3>
+<p>A model needs a fixed, finite set of input symbols. Character-level vocabularies keep the set small but produce very long sequences and weak per-symbol meaning. Whole-word vocabularies produce short sequences but grow enormous and still fail on new or rare words. Subword tokenization is the practical middle point: a modest vocabulary that can represent almost any input by combining known pieces.</p>
+<div class="mental-compare">
+<div>
+<span>TOO FEW SYMBOLS</span>
+<p>Character-level: tiny vocabulary, very long sequences, little meaning per step.</p>
+</div>
+<div>
+<span>TOO MANY SYMBOLS</span>
+<p>Whole-word: short sequences, huge vocabulary, breaks on unseen words.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>“Oracle23ai retrieves the leave policy.”</h3>
+<p>A common word like <code>the</code> is almost always one token. A domain-specific term like <code>Oracle23ai</code> is rare in general training data, so a subword tokenizer usually breaks it into several pieces, for example <code>Oracle</code>, <code>23</code>, and <code>ai</code>. The sentence is not six words and six tokens—it can easily become nine or ten tokens once rare terms fragment.</p>
+<div class="context-demo">
+<div>
+<span>COMMON WORD</span>
+<p><code>the</code> → one token, already in the vocabulary.</p>
+</div>
+<div>
+<span>RARE / DOMAIN TERM</span>
+<p><code>Oracle23ai</code> → multiple tokens, assembled from known pieces.</p>
+</div>
+<div>
+<span>PUNCTUATION</span>
+<p><code>.</code> → its own token, separate from the preceding word.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>How tokenizers split input</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>CHARACTER-LEVEL</span>
+<h3>Every character is a token</h3>
+<p>Smallest possible vocabulary; sequences become very long.</p>
+</article>
+<article class="info-card">
+<span>WORD-LEVEL</span>
+<h3>Split on whitespace</h3>
+<p>Short sequences; huge vocabulary; unseen words fail outright.</p>
+</article>
+<article class="info-card">
+<span>BYTE-PAIR ENCODING</span>
+<h3>Merge frequent pairs</h3>
+<p>Learns a subword vocabulary by repeatedly merging the most frequent adjacent pair.</p>
+</article>
+<article class="info-card">
+<span>WORDPIECE / SENTENCEPIECE</span>
+<h3>Related subword schemes</h3>
+<p>Different merge or likelihood criteria; SentencePiece also works directly on raw Unicode or bytes for language independence.</p>
+</article>
+<article class="info-card">
+<span>SPECIAL TOKENS</span>
+<h3>Reserved vocabulary entries</h3>
+<p>Beginning/end-of-sequence, padding, and role markers such as system, user, and assistant.</p>
+</article>
+<article class="info-card">
+<span>NON-TEXT MODALITIES</span>
+<h3>Patches and frames</h3>
+<p>Images are split into fixed-size patches; audio is split into short time frames—then embedded like tokens.</p>
+</article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c06-visual-title">
+  <strong class="concept-visual-title" id="c06-visual-title">VISUAL · ONE SENTENCE, NINE TOKENS</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable token split diagram for a sample sentence"><div class="diagram-split"><div class="diagram-node"><b>Oracle</b><small>token</small></div><div class="diagram-node"><b>23</b><small>token</small></div><div class="diagram-node"><b>ai</b><small>token</small></div><div class="diagram-node active"><b>retriev</b><small>token</small></div><div class="diagram-node active"><b>es</b><small>token</small></div><div class="diagram-node"><b>the</b><small>token</small></div><div class="diagram-node"><b>leave</b><small>token</small></div><div class="diagram-node"><b>policy</b><small>token</small></div><div class="diagram-node"><b>.</b><small>token</small></div></div></div>
+  <figcaption>Nine tokens from six words. Rare or domain terms fragment into several pieces; common words and punctuation stay whole or become their own token.</figcaption>
+  <ol class="diagram-key"><li><b>Highlighted pair:</b> a single word, <code>retrieves</code>, split into two subword tokens.</li><li><b>Domain term:</b> <code>Oracle23ai</code> fragments into three tokens because it rarely appears whole in general training data.</li><li><b>Consequence:</b> token count, not word count, determines sequence length and context-window usage.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Two tokenizers, two vocabularies</h3>
+<div class="mental-compare">
+<div>
+<span>EMBEDDING-MODEL TOKENIZER</span>
+<p>Chunks are tokenized with the embedding model’s own vocabulary before being converted into vectors for the index.</p>
+</div>
+<div>
+<span>GENERATOR-MODEL TOKENIZER</span>
+<p>The prompt, retrieved context, and question are tokenized with the LLM’s own vocabulary before generation.</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>Text / image / audio</span>
+<i>→</i>
+<span>Tokenizer</span>
+<i>→</i>
+<span>Token IDs</span>
+<i>→</i>
+<span>Embedding lookup</span>
+<i>→</i>
+<span>Model input</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the two-tokenizer map</summary>
+<div>
+<div class="pipeline-preview">
+<span>Chunk text</span>
+<i>↓</i>
+<span>Embedding-model tokenizer</span>
+<i>↓</i>
+<span>Token IDs (embedding vocabulary)</span>
+<i>↓</i>
+<span>Embedding vector</span>
+<i>·</i>
+<span>Prompt + context</span>
+<i>↓</i>
+<span>LLM tokenizer</span>
+<i>↓</i>
+<span>Token IDs (LLM vocabulary)</span>
+<i>↓</i>
+<span>Generated tokens</span>
+<i>↓</i>
+<span>Detokenized answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that get collapsed into “token”</h3>
+<div class="distinction-table" role="table" aria-label="Token-related term distinctions">
+<div role="row">
+<b role="cell">Term</b>
+<b role="cell">What it actually is</b>
+<b role="cell">Common confusion</b>
+</div>
+<div role="row">
+<span role="cell">Character</span>
+<span role="cell">One letter, digit, or symbol</span>
+<span role="cell">Assumed identical to a token</span>
+</div>
+<div role="row">
+<span role="cell">Word</span>
+<span role="cell">A whitespace-separated unit in most written English</span>
+<span role="cell">Assumed to equal exactly one token</span>
+</div>
+<div role="row">
+<span role="cell">Token</span>
+<span role="cell">A vocabulary entry produced by a specific tokenizer</span>
+<span role="cell">Treated as universal across models</span>
+</div>
+<div role="row">
+<span role="cell">Token ID</span>
+<span role="cell">The integer index of a token inside one vocabulary</span>
+<span role="cell">Confused with the embedding itself</span>
+</div>
+<div role="row">
+<span role="cell">Embedding</span>
+<span role="cell">The dense vector a token ID is mapped to</span>
+<span role="cell">Confused with the token ID that produced it</span>
+</div>
+</div>
+<p>A tokenizer and its vocabulary belong to one model or model family. Token IDs from one tokenizer are meaningless to a model trained with a different vocabulary.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“One word equals one token.”</b>
+<p>Rare, long, or domain-specific words routinely split into several subword tokens.</p>
+</div>
+<div>
+<b>“Token count is close enough to character count.”</b>
+<p>The ratio varies by language, script, and content—code and non-English text often use more tokens per character.</p>
+</div>
+<div>
+<b>“Token IDs from one model work with another.”</b>
+<p>Token IDs are only meaningful with the exact vocabulary that produced them.</p>
+</div>
+<div>
+<b>“Images and audio are not tokenized.”</b>
+<p>Vision and audio models discretize patches or frames into token-like units before a transformer processes them.</p>
+</div>
+<div>
+<b>“A longer prompt always adds more information.”</b>
+<p>Padding and special tokens consume the token budget without adding content.</p>
+</div>
+<div>
+<b>“Tokenizers never change.”</b>
+<p>Vocabulary and tokenization can change between model versions and providers.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where tokens matter in Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>CHUNK SIZING</span>
+<b>Measure chunks in tokens, not characters</b>
+<p>Embedding models and the LLM both enforce token limits, not character limits.</p>
+</div>
+<div>
+<span>CONTEXT BUDGET</span>
+<b>Reserve tokens for prompt, evidence, and answer</b>
+<p>Instructions, retrieved passages, citations, and the question all share one finite context window.</p>
+</div>
+<div>
+<span>MULTIMODAL DOCUMENTS</span>
+<b>Plan tokenization before ingestion, not after</b>
+<p>Scanned PDFs, tables, and images must become tokenizable text—or a dedicated multimodal representation—before retrieval.</p>
+</div>
+<div>
+<span>COST AND LATENCY</span>
+<b>Track token usage per request</b>
+<p>Provider billing and response time both scale with sequence length, in tokens.</p>
+</div>
+</div>
+<p>LangChain and LangGraph expose token-aware text splitters and length functions, but the tokenizer and vocabulary they call still belong to the specific embedding or generation model, not to the framework.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Token</b>
+<p>Smallest unit a model consumes or produces.</p>
+</div>
+<div>
+<b>Vocabulary</b>
+<p>The fixed set of tokens one tokenizer can produce.</p>
+</div>
+<div>
+<b>Token ID</b>
+<p>Integer index of a token inside that vocabulary.</p>
+</div>
+<div>
+<b>Modality</b>
+<p>The kind of input being tokenized—text, image, or audio.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can one word become multiple tokens?</li>
+<li>Why can two different models disagree on the token count for the same sentence?</li>
+<li>What is the difference between a token ID and an embedding?</li>
+<li>Why do images and audio need tokenization too?</li>
+<li>Why does chunk size matter more in tokens than in characters?</li>
+<li>Why can special tokens change the input without changing the visible text?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick tokenization judgment exercise</summary>
+<div>
+<ol>
+<li>A rare technical term — <b>likely splits into multiple subword tokens</b>.</li>
+<li>A short common word like “the” — <b>usually one token</b>.</li>
+<li>A five-page scanned PDF — <b>needs parsing/OCR into text before tokenization</b>.</li>
+<li>A JSON payload with long field names — <b>keys and punctuation each consume tokens</b>.</li>
+<li>Doubling the context window size — <b>raises the token budget, cost, and latency; it does not change what one token means</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Prompts, sampling and generated output</h3>
+<p>Concept 7 explains how a tokenized prompt becomes model input, how sampling parameters shape the next-token probability distribution, and how generated token IDs are decoded back into readable text.</p>
+<div class="beginner-memory">
+<b>Concept 06 is complete.</b> Continue to prompts, decoding, and generated output.</div>
+<a class="button primary" href="module-01-concept-07.html">Start Concept 07 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required vocabulary and optional depth.</h2>
+<p>Master the token/word/character distinction and project consequences first. Open BPE mechanics, mathematics, code, production, and interviews only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>A token is a vocabulary entry, not a word.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Character, word, subword, and special tokens.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>Budget chunks and context in tokens, not characters.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open BPE mechanics, mathematics, code, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 06 path:</b> Raw input → tokenizer → token IDs → embedding lookup → model input.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the tokens and modalities deep dive</b>
+<em>BPE mechanics, vocabulary mathematics, from-scratch code, production token budgeting</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where tokenization sits</h2>
+</div>
+</header>
+<p>Concept 5 established the fixed, deployed model that inference calls. Concept 6 examines exactly what that model consumes and produces: a sequence of tokens, not raw text. Concept 7 will build on tokens to explain sampling and decoding.</p>
+<div class="flow">
+<div class="flow-node">Foundation model</div>
+<div class="flow-node">Training lifecycle</div>
+<div class="flow-node hot">Tokens</div>
+<div class="flow-node">Prompts</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>DEFINE</span>
+<h3>Name the units</h3>
+<p>State what a token, vocabulary, and token ID each are.</p>
+</article>
+<article class="info-card">
+<span>PREDICT</span>
+<h3>Anticipate fragmentation</h3>
+<p>Judge whether a term is likely to split into several tokens.</p>
+</article>
+<article class="info-card">
+<span>DISTINGUISH</span>
+<h3>Separate modalities</h3>
+<p>Explain how image and audio inputs become token-like units.</p>
+</article>
+<article class="info-card">
+<span>BUDGET</span>
+<h3>Plan context usage</h3>
+<p>Reason about chunk size and context limits in tokens, not characters.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Model:</b> a fixed function trained to map inputs to outputs (Concept 4).</li>
+<li>
+<b>Inference:</b> using fixed parameters to process a new input (Concept 5).</li>
+<li>
+<b>Context window:</b> the maximum sequence length a model can process at once—introduced here in units, defined fully in Module 02.</li>
+<li>
+<b>Embedding:</b> a dense vector representation—previewed here, formally covered in Module 08.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>A small kit of standard pieces</h2>
+</div>
+</header>
+<p>Think of a tokenizer as a fixed kit of standard pieces—like a limited set of printing-press type. Any input, however unusual, must be assembled from that same finite kit. Common words already exist as single pieces; unusual words are built by combining several smaller pieces.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>The pieces are chosen by frequency in training data, not by human ideas of syllables or meaning—so a subword split rarely lines up with how a person would break the word down.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Definitions by role</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Produced/consumed by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token</td>
+<td>One unit produced by splitting input with a specific tokenizer</td>
+<td>Tokenizer</td>
+</tr>
+<tr>
+<td>Vocabulary</td>
+<td>The complete fixed set of tokens a tokenizer can produce</td>
+<td>Trained once, reused at every call</td>
+</tr>
+<tr>
+<td>Token ID</td>
+<td>The integer index of a token inside the vocabulary</td>
+<td>Tokenizer output; model input</td>
+</tr>
+<tr>
+<td>Detokenization</td>
+<td>Converting a sequence of token IDs back into text</td>
+<td>Tokenizer, run in reverse</td>
+</tr>
+<tr>
+<td>Modality</td>
+<td>The category of raw input—text, image, audio, video</td>
+<td>Determines which tokenizer or encoder applies</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>How byte-pair encoding builds a vocabulary</h2>
+</div>
+</header>
+<div class="lane-flow">
+<div>Start from individual characters or bytes</div>
+<div>Count frequency of every adjacent symbol pair in training text</div>
+<div>Merge the single most frequent pair into a new symbol</div>
+<div>Repeat counting and merging for a fixed number of steps</div>
+<div>Save the final set of symbols as the vocabulary</div>
+<div>At use time, apply the same merges to new text, longest match first</div>
+</div>
+<p>The vocabulary is learned once, offline, from a large text corpus. Tokenizing new text at inference time only applies the already-learned merges—it does not learn anything new.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>From raw text to model input</h2>
+</div>
+</header>
+<div class="scroll-flow">
+<span>Raw text</span>
+<i>→</i>
+<span>Normalize</span>
+<i>→</i>
+<span>Pre-tokenize into words</span>
+<i>→</i>
+<span>Apply learned merges</span>
+<i>→</i>
+<span>Subword tokens</span>
+<i>→</i>
+<span>Token IDs</span>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Tokenization happens twice in RAG</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Documents</span>
+<i>↓</i>
+<span>Chunks</span>
+<i>↓</i>
+<span>Embedding-model tokenizer</span>
+<i>↓</i>
+<span>Embedding vectors</span>
+<i>↓</i>
+<span>Vector index</span>
+</div>
+<p>The generator sees an entirely separate tokenization pass: the assembled prompt, retrieved chunks, and question are tokenized by the LLM’s own tokenizer immediately before generation, using a vocabulary that has no required relationship to the embedding model’s vocabulary.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Vocabulary size and sequence length</h2>
+</div>
+</header>
+<div class="equation">Embedding lookup: e_t = E[t], where E ∈ R^(|V| × d) and t is a token ID</div>
+<p>
+<code>|V|</code> is the vocabulary size and <code>d</code> is the embedding dimension. Every token ID <code>t</code> selects one row of the lookup matrix <code>E</code>—this is the first step inside the model, immediately after tokenization.</p>
+<div class="equation">Trade-off: larger |V| → shorter sequences, larger lookup table; smaller |V| → longer sequences, smaller table</div>
+<p>Byte-pair encoding is a practical compromise on this trade-off: a vocabulary in the tens of thousands keeps both the lookup table and typical sequence lengths manageable.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Counting tokens by hand</h2>
+</div>
+</header>
+<p>Take the sentence <code>Oracle23ai retrieves the leave policy.</code> — 6 whitespace-separated words, 39 characters including the space count.</p>
+<div class="equation">Illustrative subword split: [Oracle][23][ai] [retriev][es] [the] [leave] [policy] [.]</div>
+<p>That split produces <b>9 tokens</b> from <b>6 words</b>—a ratio of 1.5 tokens per word driven entirely by one rare term and one common suffix. The same sentence would need 39 tokens under a character-level tokenizer, and could fail outright under a strict whole-word tokenizer if <code>Oracle23ai</code> is not in its fixed vocabulary.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>PLAIN TEXT</span>
+<h3>Everyday English</h3>
+<p>Mostly common words; token count stays close to word count.</p>
+</article>
+<article class="info-card">
+<span>SOURCE CODE</span>
+<h3>Identifiers and punctuation</h3>
+<p>camelCase and snake_case names, brackets, and operators each add tokens.</p>
+</article>
+<article class="info-card">
+<span>NON-ENGLISH TEXT</span>
+<h3>Different scripts</h3>
+<p>Some languages use noticeably more tokens per word than English.</p>
+</article>
+<article class="info-card">
+<span>IMAGE INPUT</span>
+<h3>Patch tokens</h3>
+<p>A vision transformer splits an image into fixed-size patches, each embedded like a token.</p>
+</article>
+<article class="info-card">
+<span>NUMBERS</span>
+<h3>Digit runs</h3>
+<p>Numeric sequences are tokenized by rules specific to each tokenizer, not by mathematical value.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“Every token is meaningful”</h3>
+<p>Padding and special tokens occupy sequence positions without adding content.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>A minimal whitespace tokenizer</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre>
+<code># A minimal tokenizer: whitespace + punctuation splitting only.
+# Real subword tokenizers additionally split rare words into
+# learned pieces; this version keeps the mechanism visible.
+
+vocab = {"the": 0, "leave": 1, "policy": 2, "retrieves": 3, ".": 4}
+UNK = len(vocab)
+
+def encode(text):
+    words = split_words_and_punctuation(text)
+    return [vocab.get(word, UNK) for word in words]
+
+def decode(ids, vocab):
+    id_to_token = {v: k for k, v in vocab.items()}
+    return " ".join(id_to_token.get(i, "<unk>") for i in ids)
+
+tokens = encode("the leave policy.")
+# tokens == [0, 1, 2, 4]
+</code>
+</pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>Production tokenizer libraries</h2>
+</div>
+</header>
+<p>Hugging Face <code>tokenizers</code> and <code>tiktoken</code>-style libraries ship trained BPE, WordPiece, or SentencePiece vocabularies matched to a specific model release, handle Unicode normalization and byte-level fallback for unknown symbols, and run fast enough for production request volume. LangChain’s token-aware text splitters call into these same libraries to estimate chunk length in tokens rather than characters—the splitter does not invent its own tokenizer.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Simplified tokenizer explorer</h2>
+</div>
+</header>
+<div class="lab">
+<p>Pick a sample passage to see it split by a simplified demonstration tokenizer—word, digit, and punctuation boundaries, with long unfamiliar words fragmented to illustrate subword behavior. This is not a trained vocabulary; a real tokenizer learns its merges from data, not from fixed-length chunks.</p>
+<div class="lab-actions" role="group" aria-label="Choose a sample passage">
+<button type="button" class="token-sample-button active" data-sample="english" aria-pressed="true">English sentence</button>
+<button type="button" class="token-sample-button secondary" data-sample="code" aria-pressed="false">Code snippet</button>
+<button type="button" class="token-sample-button secondary" data-sample="domain" aria-pressed="false">Domain terms</button>
+<button type="button" class="token-sample-button secondary" data-sample="numeric" aria-pressed="false">Numeric text</button>
+</div>
+<div class="sample-output" id="tokenOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choosing a tokenization granularity</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Granularity</th>
+<th>Vocabulary size</th>
+<th>Sequence length</th>
+<th>Unseen-word handling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Character-level</td>
+<td>Very small</td>
+<td>Very long</td>
+<td>Always representable</td>
+</tr>
+<tr>
+<td>Word-level</td>
+<td>Very large</td>
+<td>Short</td>
+<td>Fails on out-of-vocabulary words</td>
+</tr>
+<tr>
+<td>Subword (BPE / WordPiece)</td>
+<td>Moderate</td>
+<td>Moderate</td>
+<td>Falls back to smaller known pieces</td>
+</tr>
+<tr>
+<td>Byte-level</td>
+<td>Small, fixed</td>
+<td>Longer for rare scripts</td>
+<td>Every byte is representable</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>BUDGET</span>
+<h3>Silent truncation</h3>
+<p>A chunk sized in characters unexpectedly exceeds the model’s token limit and gets cut off.</p>
+</article>
+<article class="info-card">
+<span>COST</span>
+<h3>Unexpected token inflation</h3>
+<p>Code, tables, or certain languages consume far more tokens per character than assumed.</p>
+</article>
+<article class="info-card">
+<span>MISMATCH</span>
+<h3>Wrong tokenizer, wrong model</h3>
+<p>Token IDs computed with one vocabulary are meaningless to a model trained on another.</p>
+</article>
+<article class="info-card">
+<span>FORMATTING</span>
+<h3>Missing special tokens</h3>
+<p>Omitting role or boundary tokens can break chat-formatted prompts.</p>
+</article>
+<article class="info-card">
+<span>UNICODE</span>
+<h3>Byte-fallback edge cases</h3>
+<p>Emoji, rare scripts, or malformed encodings can tokenize unexpectedly.</p>
+</article>
+<article class="info-card">
+<span>CHUNKING</span>
+<h3>Character-based chunk boundaries</h3>
+<p>Chunking by characters produces inconsistent token counts across chunks.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One word equals one token</td>
+<td>Rare or long words routinely split into several subword tokens.</td>
+</tr>
+<tr>
+<td>Token count is close to character count</td>
+<td>The ratio varies widely by language, script, and content type.</td>
+</tr>
+<tr>
+<td>Tokenizers are interchangeable across models</td>
+<td>Vocabulary and token IDs are specific to the model that was trained with them.</td>
+</tr>
+<tr>
+<td>Only text needs tokenization</td>
+<td>Images and audio are discretized into patch or frame tokens before a transformer processes them.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Budget chunk size, prompt template, retrieved evidence, and answer length in tokens, not characters.</li>
+<li>Track token usage per request; most providers bill and rate-limit by token count.</li>
+<li>Pin the tokenizer version to the model version; do not assume a newer model shares the old vocabulary.</li>
+<li>Account for multimodal inputs—images and audio can consume a large token or patch budget.</li>
+<li>Monitor for silent truncation when chunking or prompt assembly is measured in characters.</li>
+<li>Test tokenization on real domain vocabulary, not only generic example sentences.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Why might “Oracle23ai” become three tokens instead of one?</summary>
+<div>It is rare in general training data, so a subword tokenizer represents it by combining smaller, more frequent pieces from its vocabulary.</div>
+</details>
+<details class="quiz">
+<summary>What does a token ID actually index into?</summary>
+<div>The fixed vocabulary of the specific tokenizer that produced it—not a universal table shared across models.</div>
+</details>
+<details class="quiz">
+<summary>How do vision transformers get token-like input from an image?</summary>
+<div>The image is split into fixed-size patches, each of which is embedded and processed similarly to a text token.</div>
+</details>
+<details class="quiz">
+<summary>Why is chunk size measured in tokens rather than characters?</summary>
+<div>Both the embedding model and the LLM enforce limits on sequence length in tokens, and the token-to-character ratio is not constant.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>Take a paragraph from your own domain material. Predict which words will likely fragment into multiple tokens, estimate a total token count using the simplified explorer above, and state how many such paragraphs would fit inside a hypothetical 4,000-token context budget alongside a 300-token prompt template and a 500-token reserved answer.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one worked reasoning pattern</summary>
+<div>Common words and short function words usually stay as single tokens; long, rare, technical, or compound terms are the ones likely to fragment. After estimating the paragraph’s token count, subtract the prompt template and reserved answer tokens from the total budget, then divide the remaining tokens by the paragraph’s estimated token count to get how many paragraphs fit.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Token identity</h3>
+<p>Token: a vocabulary entry.<br>Token ID: its integer index.<br>Vocabulary: the fixed set of possible tokens.<br>Modality: text, image, or audio, tokenized differently.</p>
+</div>
+<div>
+<h3>Selection rule</h3>
+<ul>
+<li>Never equate words, characters, and tokens</li>
+<li>Budget context and chunks in tokens</li>
+<li>Match tokenizer to model, always</li>
+<li>Expect rare/domain terms to fragment</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Why do subword tokenizers exist instead of word-level or character-level ones?</summary>
+<div>They balance vocabulary size against sequence length while still representing unseen words by combining known pieces, which neither pure word-level nor pure character-level tokenizers do well.</div>
+</details>
+<details class="quiz">
+<summary>How would you estimate token cost for a RAG pipeline before deployment?</summary>
+<div>Run representative documents and queries through the target tokenizer, measure tokens per chunk and per query, and multiply by expected request volume and retrieved-chunk count.</div>
+</details>
+<details class="quiz">
+<summary>What breaks if you swap an embedding model without checking its tokenizer?</summary>
+<div>Token IDs and resulting embeddings become inconsistent with the rest of the index, silently degrading retrieval quality.</div>
+</details>
+<details class="quiz">
+<summary>How do multimodal models extend the token idea?</summary>
+<div>They convert images or audio into patches or frames that are embedded and sequenced alongside or instead of text tokens, using the same transformer machinery.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1508.07909">
+<b>Sennrich, Haddow & Birch — Neural Machine Translation of Rare Words with Subword Units</b>
+<br>
+<span>Introduces byte-pair encoding as a subword tokenization method for open-vocabulary text.</span>
+</a>
+<a href="https://arxiv.org/abs/1808.06226">
+<b>Kudo & Richardson — SentencePiece</b>
+<br>
+<span>A language-independent subword tokenizer and detokenizer operating directly on raw text.</span>
+</a>
+<a href="https://arxiv.org/abs/1810.04805">
+<b>Devlin et al. — BERT</b>
+<br>
+<span>Describes WordPiece tokenization used to prepare input for bidirectional pretraining.</span>
+</a>
+<a href="https://arxiv.org/abs/2010.11929">
+<b>Dosovitskiy et al. — An Image is Worth 16x16 Words</b>
+<br>
+<span>Introduces splitting images into fixed-size patches as token-like input to a transformer.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 06 is complete. Its BPE mechanics, vocabulary mathematics, tokenizer explorer, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-07.html">Start Concept 07 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Prompts, sampling and generated output.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 06 · Active</p>
+<a href="module-01-concept-05.html">← Concept 05</a>
+</footer>
+</body>
+</html>

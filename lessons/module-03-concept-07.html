@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Contrasts Concept 06's offline/online RAG pipelines against the simplest alternative: skip retrieval and paste the corpus straight into a long context window. Applies Module 02's already-taught context-window ceiling, quadratic attention cost, and lost-in-the-middle effect to show why long-context prompting alone does not substitute for retrieval at real corpus scale.">
+<title>RAG versus prompting and long-context prompting — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 07</p>
+<h1>RAG versus prompting<br><em>and long-context prompting.</em></h1>
+<p class="lesson-lead">Concept 06 just named every stage of RAG's two pipelines — real engineering, built on purpose. This concept asks the question that machinery invites: is any of it actually necessary? It contrasts RAG against the cheapest possible alternative — skip retrieval entirely, and paste the corpus straight into the prompt instead — using three facts Module 02 already settled: how big a context window can get, what a longer prompt actually costs, and what a technically-fitting prompt still loses.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's offline/online pipelines; Module 02 Concept 07's context window and quadratic cost; Module 02 Concept 10's lost-in-the-middle effect (all cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>State why long-context prompting alone cannot replace retrieval at real corpus scale, without re-deriving any of the three cited facts</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You learned the three grounds — size, cost, and quality — that rule out long-context prompting as a substitute for RAG at real corpus scale, without re-deriving any of the three cited Module 02 facts.</p>
+<b>CONCEPT 07 COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The cheapest possible alternative to everything Concept 06 just built</h2>
+</div>
+<p>Concept 06 gave every stage of RAG's two pipelines a name. This concept takes the machinery seriously enough to ask if it's actually needed — and answers using three facts you already have, not new ones.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Retrieve the relevant slice, or paste the whole corpus</h3>
+<p><b>RAG</b> is Concept 06's two pipelines: retrieve a small, ranked set of chunks from an index built offline, then generate from that small set. <b>Long-context prompting</b> is the alternative that needs no index and no retriever at all: take as much of the corpus as a model's context window allows, paste it directly into the prompt, and let the model's own attention — not a retriever — decide what matters. Both strategies answer the same question — "how does external information reach the model?" — with opposite bets about how much of that decision to make in advance.</p>
+<div class="mental-compare">
+<div><span>RAG</span><p>Retrieve only the chunks likely to matter, assemble a small context, then generate — Concept 06's two pipelines, in one sentence.</p></div>
+<div><span>LONG-CONTEXT PROMPTING</span><p>Skip retrieval entirely. Paste as much of the corpus as the context window allows directly into the prompt, then generate — no retriever, no vector index, no ranking step anywhere.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> RAG selects, then generates. Long-context prompting skips selecting and generates over whatever fits — a different bet about how information reaches the model, not a bigger version of the same one.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why anyone considers skipping retrieval at all</h3>
+<p>Concept 06 just built real engineering: a parser, a chunker, an embedding model, a vector index, a retriever. Module 02 Concept 07 already told you context windows have grown into the hundreds of thousands, even low millions, of tokens for some model families. If a whole corpus can fit in a single prompt, why build any of Concept 06's machinery at all? This concept takes that question seriously — and then shows exactly where it breaks down.</p>
+<div class="mental-compare">
+<div><span>THE TEMPTATION</span><p>A big enough context window seems to make retrieval, ranking, and an entire indexing pipeline optional overhead.</p></div>
+<div><span>WHERE IT BREAKS</span><p>Three separate, already-settled facts — size, cost, and attention quality — each independently rule the shortcut out at real corpus scale.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Oracle's policy corpus, this year and in three years</h3>
+<p>Oracle RAG's corpus is every travel, expense, HR, IT, and legal policy document across the business — today, a few hundred documents. At today's size, if you had a large enough context window, you could imagine pasting every policy PDF's parsed text directly into one prompt and asking the question straight — no chunking, no embedding, no retrieval at all. That's long-context prompting, applied to Oracle RAG's own corpus. But the corpus does not stay this size: every quarter adds new hires, new business units, and revised policies.</p>
+<div class="context-demo">
+<div><span>TODAY, SMALL ENOUGH TO TEMPT</span><p>A few hundred policy documents might — barely — fit inside one generous context window, if every token were spent on nothing else.</p></div>
+<div><span>THREE YEARS FROM NOW</span><p>The same corpus, grown by every new policy and business unit since, eventually exceeds any fixed context window — however generous.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three settled facts, applied to one new comparison</h3>
+<div class="example-grid">
+<article class="info-card"><span>SIZE</span><h3>A corpus can outgrow any context window</h3><p>Module 02 Concept 07 fixed the context window's ceiling per model checkpoint. A corpus isn't bound by that ceiling — it keeps growing, so eventually it exceeds any fixed window, however generous.</p></article>
+<article class="info-card"><span>COST</span><h3>Even a corpus that still fits costs far more per query</h3><p>Module 02 Concept 07's own cost ratio — relative attention cost ≈ k² when length grows k-fold — makes pasting in everything dramatically more expensive per query than retrieving a small top-k, even before the window's ceiling is reached.</p></article>
+<article class="info-card"><span>QUALITY</span><h3>A technically-fitting context still degrades attention</h3><p>Module 02 Concept 10's lost-in-the-middle effect already showed real models attend less reliably to content buried mid-window. Pasting in far more content than a handful of retrieved chunks multiplies exactly that risk.</p></article>
+</div>
+<p>None of these three facts is new here — the window's ceiling and its k² cost ratio are Concept 07's; the uneven, positionally-biased attention loss is Concept 10's. What's new is applying all three, together, to one specific question: does long-context prompting substitute for Concept 06's retrieval pipeline? At real corpus scale, no single one of the three even has to do all the work alone — they stack.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0307-visual-title">
+<strong class="concept-visual-title" id="c0307-visual-title">VISUAL · A CONTEXT WINDOW'S CEILING, NEXT TO A GROWING CORPUS</strong>
+<div class="scale-stage">
+<div class="scale-item">
+<div class="scale-box window-box" aria-hidden="true">
+<span class="box-face face-top"></span>
+<span class="box-face face-right"></span>
+<span class="box-face face-front"></span>
+</div>
+<p class="scale-label"><b>Context window</b>Fixed per model checkpoint (Concept 07, Module 02) — this is as large as it gets for a given model.</p>
+</div>
+<div class="scale-item">
+<div class="scale-box corpus-box" aria-hidden="true">
+<span class="box-face face-top"></span>
+<span class="box-face face-right"></span>
+<span class="box-face face-front"></span>
+</div>
+<p class="scale-label"><b>A growing corpus</b>Not bound by any ceiling — it keeps getting taller every quarter, with no model-imposed limit of its own.</p>
+</div>
+</div>
+<figcaption>Drawn schematically, not to a literal token-count scale: the point is direction, not the exact ratio. One box is fixed the moment a model ships. The other keeps growing for as long as the organization keeps producing documents — and nothing about the first box's size stops the second one from eventually towering over it.</figcaption>
+<ol class="diagram-key"><li><b>Left box, fixed:</b> a context window's ceiling is set once per model checkpoint — Concept 07, Module 02.</li><li><b>Right box, unbounded:</b> a corpus has no model-imposed ceiling at all — it grows however large the source material does.</li><li><b>The consequence:</b> however large the left box gets, a sufficiently patient right box eventually outgrows it — Section 06 of the advanced layer traces exactly when.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Two skeletons: one with a retrieval stage, one without</h3>
+<p class="flow-instruction">RAG — retrieval stays in the loop</p>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i>
+<span class="hot">Parsing</span><i>↓</i>
+<span class="hot">Chunking</span><i>↓</i>
+<span class="hot">Embedding model</span><i>↓</i>
+<span class="hot">Vectors / index</span><i>↓</i>
+<span class="hot">Retrieval</span><i>↓</i>
+<span class="hot">Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span class="hot">Answer</span>
+</div>
+<p class="flow-instruction">LONG-CONTEXT PROMPTING — retrieval skipped entirely</p>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i>
+<span class="hot">Entire corpus, pasted into the prompt</span><i>↓</i>
+<span class="hot">LLM — one very long prompt</span><i>↓</i>
+<span class="hot">Answer</span>
+</div>
+<p>The top row keeps every one of Concept 06's nine boxes. The bottom row deletes five of them outright — no parsing into chunks, no embedding, no vector index, no retrieval, no ranking. It isn't a smaller version of RAG's pipeline; it's a different bet with far fewer moving parts, at the cost of everything Section 04 just named.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four terms that get flattened into "just use a bigger window"</h3>
+<div class="distinction-table" role="table" aria-label="Long-context prompting distinguished from RAG and from the Module 02 facts this concept cites">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Long-context prompting</span><span role="cell">Skipping retrieval and pasting as much of the corpus as the window allows directly into the prompt</span><span role="cell">Assumed to be "RAG with a bigger top-k"</span></div>
+<div role="row"><span role="cell">RAG</span><span role="cell">Retrieving a small, ranked subset of the corpus before generation (Concept 01, Concept 06)</span><span role="cell">Assumed to be made obsolete once context windows got large</span></div>
+<div role="row"><span role="cell">Context-window ceiling (Concept 07, Module 02)</span><span role="cell">The hard, per-checkpoint limit on how many tokens fit in one forward pass</span><span role="cell">Confused with how much of a corpus a system can practically and affordably use</span></div>
+<div role="row"><span role="cell">Lost-in-the-middle (Concept 10, Module 02)</span><span role="cell">An empirical attention-reliability problem inside a context that already fits</span><span role="cell">Confused with the window's size limit itself — a technically-fitting prompt can still fail this way</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"If the whole corpus fits in the window, RAG is unnecessary."</b><p>Fitting is only the first of three tests. Concept 07's cost ratio and Concept 10's lost-in-the-middle effect both still apply to a corpus that technically fits.</p></div>
+<div><b>"A bigger context window makes retrieval matter less."</b><p>It raises the ceiling in Section 04's size argument, but does nothing to Concept 07's k² cost ratio or Concept 10's uneven attention — those get worse, not better, as more content fills the window.</p></div>
+<div><b>"Long-context prompting and RAG are the same idea at different top-k values."</b><p>RAG always retrieves and ranks before generation. Long-context prompting has no retrieval or ranking step at all — it isn't a large top-k, it's zero retrieval.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Oracle RAG commits to retrieval, not lucky window sizing</h3>
+<div class="project-map">
+<div><span>CORPUS GROWTH</span><b>Oracle RAG's policy corpus won't stay small</b><p>Every new business unit, hire cohort, and policy revision adds to it — Section 03's growth story, playing out for real.</p></div>
+<div><span>PER-QUERY COST</span><b>Concept 06's retrieval keeps every query's cost roughly flat</b><p>Retrieving a small top-k keeps online-query cost nearly independent of corpus size; long-context prompting's cost instead grows with the corpus itself.</p></div>
+<div><span>ANSWER RELIABILITY</span><b>A buried policy clause is a real risk, not a hypothetical one</b><p>An expense-approval clause pasted into the middle of dozens of unrelated policies inherits exactly Concept 10's under-attention risk.</p></div>
+<div><span>THE DECISION</span><b>Retrieval isn't a stopgap "until windows get bigger"</b><p>Section 04's three facts hold regardless of how large context windows eventually get — this is why Concept 06's pipelines are built, not deferred.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>The two competing bets</b><p>RAG retrieves and ranks before generating; long-context prompting skips both and pastes as much as the window allows.</p></div>
+<div><b>Size argument</b><p>A corpus can outgrow any fixed context window — cited from Concept 07, Module 02.</p></div>
+<div><b>Cost argument</b><p>Relative attention cost ≈ k² as prompt length grows k-fold — cited from Concept 07, Module 02, applied to a corpus versus a small top-k.</p></div>
+<div><b>Quality argument</b><p>Lost-in-the-middle degrades attention over a technically-fitting, over-stuffed prompt — cited from Concept 10, Module 02.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Name the three facts this concept uses against long-context prompting at scale, and which earlier concept each one comes from.</li>
+<li>Why doesn't "the whole corpus fits in the window" settle the argument by itself?</li>
+<li>Why does RAG's per-query cost stay roughly flat as a corpus grows, while long-context prompting's does not?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 07 is complete.</b> Continue to RAG versus fine-tuning, search and tool use.</h3>
+<p>This concept ruled out one alternative to RAG on three specific grounds. Concept 08 evaluates three more — fine-tuning, plain search, and tool use — using the same discipline: compare RAG against one specific alternative at a time, rather than treating it as the only option on the table.</p>
+<div class="beginner-memory"><b>Concept 07 is complete.</b> Continue to RAG versus fine-tuning, search and tool use.</div>
+<a class="button primary" href="module-03-concept-08.html">Start Concept 08 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Built once. Skipped once, on purpose.</h2>
+<p>Master why "fits" isn't the same as "cheap," and "cheap" isn't the same as "reliably attended," first. Open the cost mathematics, the from-scratch contrast, and The Stuffing Ledger lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Compare</b><small>RAG retrieves and ranks first. Long-context prompting skips both.</small></a>
+<a href="#b04"><span>02</span><b>Cite</b><small>Size, cost (k²), and lost-in-the-middle — three settled Module 02 facts, applied here.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Oracle RAG commits to retrieval regardless of how large windows get.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the cost mathematics, code contrast, and The Stuffing Ledger lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Concept 06's two pipelines → the cheapest alternative: skip both, paste the corpus → Concept 07 (Module 02)'s window ceiling and k² cost, plus Concept 10 (Module 02)'s lost-in-the-middle, applied together → long-context prompting fails at real corpus scale on all three counts.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the RAG-versus-long-context deep dive</b><em>The k² cost mathematics, a from-scratch retrieve-then-generate versus paste-everything contrast, and The Stuffing Ledger lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where this sits between Concept 06 and Concept 08</h2></div></header>
+<p>Concept 06 named every stage of RAG's two pipelines. This concept asks whether that machinery is even necessary, compared against the simplest possible alternative: skip retrieval, and let a large enough context window hold the whole corpus instead. It does not re-derive Module 02 Concept 07's context-window ceiling or its quadratic attention-cost ratio, and it does not re-derive Module 02 Concept 10's lost-in-the-middle effect — all three are cited exactly as those lessons left them, applied here to a comparison neither of those lessons made. Concept 08 continues the same discipline against three more alternatives: fine-tuning, search, and tool use.</p>
+<div class="flow">
+<div class="flow-node">Concept 06 — offline/online pipelines</div>
+<div class="flow-node hot">RAG vs. long-context prompting</div>
+<div class="flow-node">Concept 08 — RAG vs. fine-tuning, search, tool use</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>STATE</span><h3>Name the three arguments against long-context prompting at scale</h3><p>Size, cost, and quality — each traced to a specific, already-taught Module 02 result.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Compute a relative-cost estimate for a corpus-versus-RAG comparison</h3><p>Reuse Concept 07's k² ratio (Module 02) on new numbers, without re-deriving the formula itself.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate "fits in the window" from "cheap" and from "reliably attended"</h3><p>Three independent tests, each of which can fail on its own.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not decide</h3><p>Whether RAG and long-context can be combined productively is left to later modules — named, not resolved, here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06's offline/online pipelines:</b> cited, not re-taught — this concept treats that whole machine as one side of a comparison, not something to re-explain stage by stage.</li>
+<li><b>Context windows and in-context learning (Module 02, Concept 07):</b> its per-checkpoint token ceiling and its k² relative attention-cost ratio are cited directly and applied to new numbers, not re-derived.</li>
+<li><b>Attention dilution and lost-in-the-middle effects (Module 02, Concept 10):</b> its empirical, positionally-uneven attention loss is cited directly, not re-derived.</li>
+<li>Chunking, embedding, and vector-index mechanics remain explicitly out of scope, exactly as Concept 06 left them — this concept only needs that a retrieval pipeline exists, not how its internals work.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A librarian's three relevant books, or the entire library on your desk</h2></div></header>
+<p>RAG is asking a librarian for the books most relevant to your question, and reading exactly those. Long-context prompting is asking for the entire library to be carried to your desk, book by book, so you can read through all of it yourself before answering. If the library is small, carrying it all might be barely possible. As the library keeps growing, at some point it stops fitting on any desk at all — and long before that point, reading the whole thing every single time is a far slower way to answer any one question than being handed the few relevant books.</p>
+<div class="callout warning"><b>Analogy boundary</b>A library's shelf space and a desk's surface area are physical, linear constraints — twice as many books need roughly twice the desk. A transformer's cost does not grow linearly with how much text you hand it. Section 09 makes that specific gap concrete, citing Module 02 Concept 07's own cost ratio rather than inventing a new one for this analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Retrieval-augmented generation (RAG)</td><td>Retrieving a small, ranked subset of a corpus and conditioning generation on it (Concept 01), via Concept 06's offline/online pipelines</td><td>Retrieval and ranking are load-bearing steps, not optional ones</td></tr>
+<tr><td>Long-context prompting</td><td>Conditioning generation on as much of a corpus as a model's context window allows, with no retrieval or ranking step</td><td>Not a form of RAG — no retriever, no ranking, no vector index anywhere in the path</td></tr>
+<tr><td>Context-window ceiling</td><td>The hard, per-checkpoint token limit Module 02 Concept 07 already defined</td><td>A property of the model checkpoint, unrelated to how large any specific corpus is</td></tr>
+<tr><td>Corpus</td><td>The full set of source documents a system might ever need to answer from</td><td>Not bounded by any model's context window — can grow independently, without limit</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Five moments, one growing corpus, two strategies</h2></div></header>
+<div class="lane-flow">
+<div><b>M0 —</b> The corpus is small: a few dozen short documents. Pasting all of it into one prompt technically fits inside even a modest context window.</div>
+<div><b>M1 —</b> The corpus grows: a few hundred documents. It still fits inside a generous window — but Concept 07's k² cost ratio (Module 02) already makes every such query dramatically more expensive per request than RAG's fixed top-k would be.</div>
+<div><b>M2 —</b> At M1's exact size, Concept 10's lost-in-the-middle effect (Module 02) means a correct answer sitting mid-corpus is measurably less reliable to surface than the same answer near the start or end.</div>
+<div><b>M3 —</b> The corpus keeps growing: thousands of documents. It now exceeds even the most generous context window available — the size argument stops being theoretical.</div>
+<div><b>M4 —</b> RAG's online query pipeline, unchanged since M0, still retrieves a small top-k and answers at roughly the same per-query cost it always has — corpus growth is Concept 06's offline indexing's problem to absorb, not online query's.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Same corpus, same question, two forks</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable split diagram showing the same corpus and question forking into a RAG path that retrieves a small top-k before generating and a long-context path that pastes as much of the corpus as fits before generating">
+<div class="diagram-split">
+<div class="diagram-node active"><b>Same corpus, same question</b><small>the only thing held constant across both paths</small></div>
+<div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+<div class="diagram-node active"><b>RAG: retrieve top-k, then generate</b><small>per-query cost and attention load stay small regardless of corpus size</small></div>
+<div class="diagram-node"><b>Long-context: paste whatever fits, then generate</b><small>per-query cost and attention load grow with the corpus itself</small></div>
+</div>
+</div>
+<ol class="diagram-key"><li><b>One shared starting point:</b> both paths answer the identical question against the identical corpus — nothing about the corpus itself differs between them.</li><li><b>RAG's cost stays flat:</b> Concept 06's retrieval step keeps the prompt small no matter how large the underlying corpus grows.</li><li><b>Long-context's cost tracks the corpus:</b> every additional document is more tokens in the prompt, more of Concept 07's k² cost, and more of Concept 10's lost-in-the-middle risk.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The nine-box skeleton, and the five boxes long-context prompting deletes</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i><span class="hot">Parsing</span><i>↓</i><span class="hot">Chunking</span><i>↓</i><span class="hot">Embedding model</span><i>↓</i><span class="hot">Vectors / index</span><i>↓</i><span class="hot">Retrieval</span><i>↓</i><span class="hot">Context</span><i>↓</i><span class="hot">LLM</span><i>↓</i><span class="hot">Answer</span>
+</div>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i><span class="hot">Entire corpus, pasted into the prompt</span><i>↓</i><span class="hot">LLM</span><i>↓</i><span class="hot">Answer</span>
+</div>
+<p>Every earlier Module 03 concept added detail inside this nine-box chain without removing any of it. This is the first concept to draw a competing chain that deletes boxes outright — chunking, embedding, the vector index, retrieval, and ranking all disappear. What replaces them isn't a new stage; it's the LLM's own forward pass, attending over whatever got pasted in, with all of Section 06 and Section 09's consequences.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Applying Concept 07's k² ratio to a corpus, not just a growing prompt</h2></div></header>
+<p>Module 02 Concept 07 already derived this ratio and is cited here, not re-derived: <code>relative attention cost when length changes from n to k·n = (k·n)² / n² = k²</code>. This concept applies that identical ratio to a new pair of lengths — a long-context prompt holding the whole corpus, against RAG's small, fixed top-k context.</p>
+<div class="equation">k = N_corpus / N_rag — how many times longer the long-context prompt is than RAG's assembled context</div>
+<div class="equation">relative attention cost ≈ k²</div>
+<p>Because <code>N_rag</code> stays roughly fixed as a corpus grows — Concept 06's retrieval always returns the same top-k — <code>k</code> grows in direct proportion to the corpus itself. A corpus twice as large after k² is applied to it costs roughly four times as much attention compute per long-context query; a corpus ten times as large costs roughly a hundred times as much. RAG's own per-query cost does not move.</p>
+<figure class="concept-visual" aria-labelledby="c0307-cost-visual-title">
+<strong class="concept-visual-title" id="c0307-cost-visual-title">VISUAL · WHY k² OUTRUNS k</strong>
+<div class="prob-bars">
+<div class="prob-row"><span>k = 2×</span><div class="bar-track"><div class="bar-fill" style="width:1%"></div></div><span>4× cost</span></div>
+<div class="prob-row"><span>k = 5×</span><div class="bar-track"><div class="bar-fill" style="width:6%"></div></div><span>25× cost</span></div>
+<div class="prob-row"><span>k = 10×</span><div class="bar-track"><div class="bar-fill" style="width:25%"></div></div><span>100× cost</span></div>
+<div class="prob-row"><span>k = 20×</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>400× cost</span></div>
+</div>
+<figcaption>Each row's left label is how many times longer the long-context prompt is than RAG's baseline; the right number is how many times more attention compute it costs, from the same k² ratio Section 09 states above. Bars are scaled to a fixed maximum for readability, not to imply growth stops at k = 20 — a corpus 40 times larger than RAG's context would cost roughly 1,600 times as much, off this chart entirely.</figcaption>
+<ol class="diagram-key"><li><b>Read the two columns together:</b> the left value is how much longer the prompt got; the right value is how much more it costs.</li><li><b>The gap widens, not narrows:</b> going from k=10 to k=20 only doubles the length, but quadruples the cost again, from 100× to 400×.</li></ol>
+</figure>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>100 policy documents, one exact-fit context window</h2></div></header>
+<p>Oracle RAG's corpus grows to 100 documents, each averaging 2,000 tokens after parsing — 200,000 tokens total, landing exactly at a generous 200,000-token context window's ceiling. RAG's online query pipeline, unchanged, still assembles a top-8 result set at roughly 750 tokens each — 6,000 tokens total.</p>
+<div class="equation">N_corpus = 100 × 2,000 = 200,000 tokens</div>
+<div class="equation">N_rag = 8 × 750 = 6,000 tokens</div>
+<div class="equation">k = 200,000 / 6,000 ≈ 33.3</div>
+<div class="equation">relative attention cost ≈ k² ≈ 33.3² ≈ 1,111×</div>
+<p>This corpus technically fits — zero tokens over the ceiling. It is still roughly 1,100 times more attention compute per query than RAG's top-8 baseline, before Concept 10's lost-in-the-middle effect is even factored in. "Fits" and "affordable" are two different tests, and this example passes only the first.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT FOR RAG</span><h3>A corpus in the thousands of documents, growing every week</h3><p>Exactly the case Concept 06's two pipelines were built for — retrieval keeps per-query cost flat no matter how large this gets.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A tiny, static corpus — a dozen short FAQ entries</h3><p>Small enough that long-context prompting may genuinely be simpler and cheap enough not to matter — the three arguments still hold in principle, they just cost little at this scale.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Our model has a huge context window, so we don't need retrieval"</h3><p>Section 10's own numbers show a corpus that fits can still cost roughly 1,100× more per query — a large window changes the size argument, not the cost or quality ones.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Testing only whether the corpus fits, and stopping there</h3><p>Fitting is necessary but not sufficient — Section 09's cost ratio and Concept 10's lost-in-the-middle effect are separate, additional tests a fitting corpus can still fail.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Two strategies, one shared question and corpus</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · RAG VS. LONG-CONTEXT, SILHOUETTE ONLY</span>
+<pre><code># Both functions answer the same query against the same underlying corpus --
+# only the strategy for getting information in front of the model differs.
+# retrieve(), assemble_context(), parse(), and generate() are named calls only,
+# exactly Concept 06's boundary -- their internals stay out of scope here.
+
+def rag_answer(query, corpus_index, top_k=8):
+    hits = retrieve(query, corpus_index, top_k)   # Concept 06's online query, Module 09/16
+    context = assemble_context(hits)               # Module 17
+    return generate(query, context)                 # Module 02's mechanism, cited
+
+
+def long_context_answer(query, documents, window_ceiling):
+    full_text = "\n\n".join(parse(doc) for doc in documents)   # every document, unfiltered
+    n_corpus = count_tokens(full_text)
+    if n_corpus > window_ceiling:
+        raise ValueError(f"corpus is {n_corpus} tokens; window only holds {window_ceiling}")
+    return generate(query, full_text)               # same generation step, radically different context
+
+
+def relative_cost(n_corpus, n_rag_tokens):
+    # Module 02 Concept 07's own ratio -- (k*n)^2 / n^2 = k^2 -- applied here,
+    # not re-derived, to a corpus versus RAG's fixed top-k baseline.
+    k = n_corpus / n_rag_tokens
+    return k ** 2
+
+
+# Same corpus, same query, two different strategies:
+rag_result = rag_answer("What's the pre-approval rule?", policy_index)
+long_context_result = long_context_answer(
+    "What's the pre-approval rule?", policy_documents, window_ceiling=200_000)
+
+# The strategy long_context_answer cannot express at all: retrieval keeps
+# rag_answer's prompt size constant even as policy_documents keeps growing.
+assert relative_cost(200_000, 6_000) > 1000
+</code></pre>
+</div>
+<p>Notice what <code>rag_answer</code> never does: read every document. Notice what <code>long_context_answer</code> never does: rank anything. Neither function is a variant of the other — they diverge at the very first line.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where the comparison has actually been tested</h2></div></header>
+<p>Xu, Ping, Wu et al. (2023) benchmark retrieval-augmented generation directly against feeding entire documents into long-context models and find retrieval still wins on both cost and accuracy at realistic corpus sizes, even as context windows grow. Li, Li, Zhang et al. (2024) run a broader comparison across long-context LLMs and RAG pipelines and land on a hybrid recommendation rather than picking one outright — evidence that this is a genuinely contested trade-off in current practice, not a settled dismissal of long-context prompting. Neither study changes this concept's three arguments; they confirm that practitioners run into exactly them.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Stuffing Ledger</h2></div></header>
+<div class="lab">
+<p>Drag the corpus size, pick a context-window ceiling, and watch three numbers update together: whether the corpus fits, how many times more attention compute a long-context query would cost against RAG's fixed top-8 baseline (≈6,000 tokens), and how severe Concept 10's lost-in-the-middle risk gets at that many sources. Nothing here is hypothetical arithmetic — it's Section 09's own k² ratio, computed live.</p>
+<div class="lab-controls">
+<div class="control">
+<label for="corpusDocsRange0307">Corpus size (documents, ~2,000 tokens each)</label>
+<input id="corpusDocsRange0307" type="range" min="1" max="500" step="1" value="40">
+<output id="corpusDocsValue0307">40</output>
+</div>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose a context-window ceiling">
+<button type="button" class="window-select-button secondary" data-window="8000" aria-pressed="false">Modest window — 8,000 tokens</button>
+<button type="button" class="window-select-button active" data-window="200000" aria-pressed="true">Generous window — 200,000 tokens</button>
+</div>
+<div class="budget-bar" id="ledgerBar0307" role="img" aria-label="Bar showing how much of the chosen context window the pasted corpus would fill"></div>
+<div class="budget-meta" id="ledgerMeta0307" aria-live="polite"></div>
+<div class="sample-output" id="ledgerOutput0307" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>What each approach actually solves, and at what price</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>What it costs</th><th>What it actually solves</th></tr></thead>
+<tbody>
+<tr><td>Long-context prompting</td><td>Attention compute that grows with the whole corpus (Section 09); the corpus must fit the window at all</td><td>Works only while a corpus stays smaller than the window and cheap enough to pay for on every query</td></tr>
+<tr><td>RAG (Concept 06's two pipelines)</td><td>Extra offline-indexing infrastructure and the online query pipeline's own retrieval and ranking work</td><td>Keeps per-query cost roughly flat regardless of corpus size, at any real scale</td></tr>
+<tr><td>Hybrid combinations of the two</td><td>Named, not designed here — Section 13's cited studies show the trade-off isn't fully settled either way</td><td>Deferred to later modules; not this concept's job to resolve</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT COST BLOWUP</span><h3>A corpus that fits, quietly costing 100× more per query</h3><p>Nobody checked Section 09's cost ratio because the request didn't error out — it just got expensive.</p></article>
+<article class="info-card"><span>HARD CEILING HIT</span><h3>A corpus that has simply outgrown the window</h3><p>The request fails outright once the corpus exceeds even a generous ceiling — Section 06's M3 moment, arrived at.</p></article>
+<article class="info-card"><span>MID-CORPUS ANSWER LOST</span><h3>A correct clause buried far from the start or end of a giant pasted prompt</h3><p>Concept 10's lost-in-the-middle effect, at a scale its own beginner examples never demonstrated directly.</p></article>
+<article class="info-card"><span>WINDOW SIZE MISTAKEN FOR A FIX</span><h3>Upgrading to a bigger context window instead of adding retrieval</h3><p>Delays the size argument; does nothing to the cost or quality arguments, which get worse as more content gets pasted in.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A big enough context window makes RAG optional</td><td>It only addresses the size argument. Concept 07's cost ratio and Concept 10's lost-in-the-middle effect apply to any corpus stuffed into a prompt, fitting or not.</td></tr>
+<tr><td>Long-context prompting is a form of RAG with a very high top-k</td><td>RAG always retrieves and ranks before generation; long-context prompting has no retrieval or ranking step anywhere in its path.</td></tr>
+<tr><td>If a corpus fits today, it will always fit</td><td>Corpora grow; context-window ceilings are fixed per checkpoint — Section 06's M0-M3 trace shows the size argument is a matter of when, not if, for a growing corpus.</td></tr>
+<tr><td>Cost and quality problems only matter at extreme scale</td><td>Section 10's worked example shows a roughly 1,100× cost gap at a corpus that exactly fits a generous window — nowhere near an extreme case.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Track corpus size against the context-window ceiling of every model version in use — Concept 07's ceiling is per checkpoint, not universal.</li>
+<li>Treat a "fits in the window" check as necessary, not sufficient — budget for Section 09's cost ratio before approving long-context prompting for any real corpus.</li>
+<li>A long-context prompt that succeeds today can silently start failing the size test the day the corpus crosses the ceiling — monitor corpus growth, not just request success rates.</li>
+<li>Concept 10's lost-in-the-middle risk compounds with corpus size — evaluation should test answer accuracy by where the correct evidence would sit in a long-context prompt, not only whether retrieval found it.</li>
+<li>None of this rules out combining long context with retrieval — Section 13's cited studies leave that door open; this concept only settles that long-context prompting alone does not substitute for Concept 06's pipelines at real scale.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why doesn't a corpus fitting inside the context window settle whether long-context prompting is a good choice?</summary><div>Because cost (Concept 07's k² ratio) and attention quality (Concept 10's lost-in-the-middle effect) both still apply once the tokens are actually in the window — fitting is only the first of three independent tests.</div></details>
+<details class="quiz"><summary>What happens to RAG's per-query cost as the underlying corpus grows, and why?</summary><div>It stays roughly flat, because retrieval and ranking (Concept 06) keep the assembled context small regardless of how large the corpus itself gets.</div></details>
+<details class="quiz"><summary>Which Module 02 concept supplies the k² cost ratio this concept applies, and which supplies the lost-in-the-middle effect?</summary><div>Concept 07 supplies the context window and its k² cost ratio; Concept 10 supplies the lost-in-the-middle effect — both cited here, neither re-derived.</div></details>
+<details class="quiz"><summary>Is long-context prompting a form of RAG?</summary><div>No — RAG always retrieves and ranks before generation; long-context prompting has zero retrieval step anywhere in its path.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Pick a corpus size (in documents) and a context-window ceiling of your own choosing, using Section 10's per-document token estimate. Determine whether it fits, then compute the relative cost ratio against RAG's fixed 6,000-token baseline using Section 09's formula. State, in one sentence, which of this concept's three arguments — size, cost, or quality — would be the first to make long-context prompting a bad choice for your scenario.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>Take a corpus of 250 documents at 2,000 tokens each — 500,000 tokens — against a generous 200,000-token window. It does not fit at all: the size argument alone already rules out long-context prompting here, before cost or quality even enter the conversation. Only after shrinking the corpus, or splitting it across multiple calls, would the question of cost (k² against RAG's 6,000-token baseline) or Concept 10's lost-in-the-middle risk become the deciding factor instead.</div>
+</details>
+<p>Teach-back: explain, in your own words, why "it fits" and "it's affordable" and "it's reliably attended" are three separate questions rather than one.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The three arguments</h3><ul><li><b>Size:</b> a corpus can outgrow any fixed context window (Concept 07, Module 02)</li><li><b>Cost:</b> relative attention cost ≈ k² as prompt length grows k-fold (Concept 07, Module 02)</li><li><b>Quality:</b> lost-in-the-middle degrades attention even inside a fitting context (Concept 10, Module 02)</li></ul></div>
+<div><h3>Memorable example</h3><p>A 100-document corpus that exactly fits a 200,000-token window still costs roughly 1,100× more per query than RAG's top-8 baseline — "fits" and "affordable" are different tests.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A stakeholder says your model's huge context window makes the RAG pipeline unnecessary. How do you respond?</summary><div>Ask which of three separate tests they mean: does the corpus fit (a size question), is it affordable to run that way (Concept 07's k² cost ratio), and will the model reliably attend to the right part of it (Concept 10's lost-in-the-middle effect). A large window only answers the first.</div></details>
+<details class="quiz"><summary>Why does RAG's per-query cost stay flat as a corpus grows, while long-context prompting's does not?</summary><div>RAG's retrieval step always returns a fixed-size top-k regardless of corpus size, so the assembled context length — and its attention cost — doesn't grow with the corpus. Long-context prompting's context length is the corpus itself, so its cost grows with it directly.</div></details>
+<details class="quiz"><summary>Coding: what check would you add to a long-context pipeline to catch the cost problem before it ships, not after?</summary><div>A guard that computes Section 09's relative-cost ratio against a fixed RAG baseline before sending the request, and flags or blocks calls above a cost threshold — the same idea as <code>relative_cost()</code> in Section 12's code, run proactively rather than discovered in a bill.</div></details>
+<details class="quiz"><summary>Debugging: a long-context-only pipeline gives worse answers as more documents get added, even though nothing else changed. What do you check first?</summary><div>Whether the answer-bearing content is landing in the middle of the growing prompt — Concept 10's lost-in-the-middle effect gets worse, not better, as more content is pasted in, independent of whether the request still technically fits.</div></details>
+<details class="quiz"><summary>System design: describe one setup where long-context prompting alone is still the right call.</summary><div>A small, largely static corpus — Section 11's boundary case — where the whole thing comfortably fits well under the window ceiling and the resulting cost is negligible; all three arguments still apply in principle, they just don't bite yet at this scale.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2310.03025"><b>Xu, Ping, Wu et al. — Retrieval meets Long Context Large Language Models</b><br><span>Directly benchmarks RAG against long-context prompting on cost and accuracy — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2407.16833"><b>Li, Li, Zhang et al. — Retrieval Augmented Generation or Long-Context LLMs? A Comprehensive Study and Hybrid Approach</b><br><span>A broader comparison landing on a hybrid recommendation — behind Section 13's evidence that the trade-off isn't fully settled.</span></a>
+<a href="https://arxiv.org/abs/2307.03172"><b>Liu, Lin, Hewitt et al. — Lost in the Middle: How Language Models Use Long Contexts</b><br><span>Already cited in Module 02 Concept 10; applied here as the empirical source behind this concept's quality argument.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 · COMPLETE</span>
+<h3>Advanced layer remains optional revision</h3>
+<p>You've tested the ledger against your own numbers. Revisit Section 09's cost math or Section 14's lab any time — nothing further is required before continuing.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-08.html">Start Concept 08 →</a>
+</div>
+<p class="fine-print">Next after completion: RAG versus fine-tuning, search and tool use.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 07 · Active</p>
+<a href="module-03-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

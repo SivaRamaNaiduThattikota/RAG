@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Draws the boundary lines between RAG and three adjacent techniques it is often confused with: fine-tuning (bakes knowledge into weights), search alone (returns documents, no generation), and tool use (takes a real external action).">
+<title>RAG versus fine-tuning, search and tool use — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 08 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 08</p>
+<h1>RAG versus fine-tuning,<br><em>search and tool use.</em></h1>
+<p class="lesson-lead">Concept 07 ruled out one alternative to RAG — long-context prompting — on size, cost, and quality grounds. This concept draws boundary lines against three completely different techniques RAG gets confused with for a different reason: each one solves a genuinely different problem, not a worse version of the same one. Fine-tuning bakes a skill into weights. Search alone hands back documents with no generation step. Tool use takes a real external action. RAG does none of those three things — it retrieves, then generates.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's two-box RAG definition; Concept 05's parametric/non-parametric memory (cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Given a request, decide whether RAG, fine-tuning, search alone, or tool use is the right fit, and say why</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status">
+<p><b>Current checkpoint:</b> Concept 07 ruled out long-context prompting on size, cost, and quality grounds. This concept rules in — or out — three completely different techniques by asking what each one is actually for: fine-tuning trains a stable skill or style into weights once; search alone returns ranked documents with no generation step; tool use takes a real external action instead of just answering. RAG is none of the three — it retrieves current, specific evidence, then generates from it.</p>
+<b>CONCEPT 07 COMPLETE · CONCEPT 08 ACTIVE</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Three different jobs, not three worse versions of one job</h2>
+</div>
+<p>Concept 07 ruled out one alternative on size, cost, and quality. This concept draws three more boundary lines — not because fine-tuning, search, and tool use are inferior to RAG, but because each one answers a genuinely different question.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three techniques, three different jobs</h3>
+<div class="mental-compare">
+<div><span>FINE-TUNING</span><p>Trains a stable skill, style, or format into the model's own weights — Concept 05's parametric memory — once, up front. Right for something the model should always do a certain way, not a fact to look up per query.</p></div>
+<div><span>SEARCH / IR ALONE</span><p>Returns a ranked list of documents for a human to read themselves. No generation step at all — Concept 01's two-box definition requires generation; search alone stops one box short.</p></div>
+</div>
+<div class="mental-compare">
+<div><span>TOOL USE / AGENTIC</span><p>Takes a real external action — sends an email, books something, executes code — rather than producing an answer. Concept 01's b06 named this boundary; the mechanics of deciding to act are Module 23's job.</p></div>
+<div><span>RAG, FOR CONTRAST</span><p>Retrieves current, specific, non-parametric evidence at query time, then generates an answer conditioned on it — Concept 01's two boxes, unchanged.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> ask what the request actually needs — a trained habit, raw documents, a real action, or a generated answer grounded in fresh evidence — before reaching for RAG by default.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>RAG is not the only tool on the bench</h3>
+<p>Concept 01 through 07 built a strong case for RAG. That case can quietly turn into treating RAG as the default answer to every problem — which is exactly backwards. Each of these three techniques solves a problem RAG solves badly or not at all: fine-tuning for a skill that should always apply, search alone for someone who wants the raw sources rather than a synthesized answer, tool use for a request that needs a real effect in the world, not text.</p>
+<div class="mental-compare">
+<div><span>RAG AS DEFAULT</span><p>Treats every information need the same way — retrieve, then generate — even when nothing needs retrieving or nothing needs generating.</p></div>
+<div><span>RAG AS ONE OF FOUR</span><p>Asks what the request actually needs first, then picks fine-tuning, search, tool use, or RAG accordingly — this concept's actual job.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Four Oracle RAG requests, four different right tools</h3>
+<p>"Always reply in Oracle's formal internal voice, in every response" — a stable style, not a fact. Fine-tuning. "List every policy PDF that mentions 'expense report' so I can read them myself" — no answer wanted, just documents. Search alone. "Email my manager my current PTO balance, and cc me on it" — a real action, not text back. Tool use. "How many employees currently work in the Vienna office?" — current, specific, and would go stale in the weights. RAG.</p>
+<div class="context-demo">
+<div><span>STYLE, NOT A FACT</span><p>Fine-tuning bakes the formal-voice habit in once — no retrieval needed on every reply.</p></div>
+<div><span>WANTS RAW DOCUMENTS</span><p>Search alone hands back the PDF list — generating a summary would be answering a question nobody asked.</p></div>
+<div><span>NEEDS A REAL ACTION</span><p>Tool use actually sends the email — no answer text substitutes for the action itself.</p></div>
+<div><span>CURRENT AND SPECIFIC</span><p>RAG retrieves the live headcount figure and generates the answer from it.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What each technique actually changes</h3>
+<div class="example-grid">
+<article class="info-card"><span>FINE-TUNING</span><h3>Changes the weights</h3><p>A training run updates parametric memory (Concept 05) once — no retrieval or ranking step exists in its path at all.</p></article>
+<article class="info-card"><span>SEARCH ALONE</span><h3>Stops before generation</h3><p>Ranks and returns documents — the exact same retrieval step RAG uses, minus the generation step that would make it RAG.</p></article>
+<article class="info-card"><span>TOOL USE</span><h3>Executes, doesn't answer</h3><p>Invokes an external action and returns its result or confirmation — not a generated answer grounded in retrieved text.</p></article>
+<article class="info-card"><span>RAG</span><h3>Retrieves, then generates</h3><p>Both boxes from Concept 01, every time — the one combination none of the other three techniques perform.</p></article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0308-visual-title">
+<strong class="concept-visual-title" id="c0308-visual-title">VISUAL · FOUR TECHNIQUES, FOUR DIFFERENT SHAPES</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable grid diagram comparing fine-tuning, search alone, tool use, and RAG by which steps each one performs">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Fine-tuning</b><small>training run → updated weights. No retrieval, no generation-at-query-time step distinct from training.</small></div>
+<div class="diagram-node"><b>Search alone</b><small>query → retrieval → ranked documents. Stops before generation.</small></div>
+<div class="diagram-node"><b>Tool use</b><small>query → decide to act → external action executed. No generated answer grounding step.</small></div>
+<div class="diagram-node active"><b>RAG</b><small>query → retrieval → generation. The one path using both of Concept 01's boxes.</small></div>
+</div>
+</div>
+<figcaption>Each technique has its own distinct shape. None of the first three is "RAG with a step removed" in a way that makes them worse RAG — they are answering different questions entirely.</figcaption>
+<ol class="diagram-key"><li><b>Fine-tuning:</b> the only technique here that changes model weights at all.</li><li><b>Search alone:</b> shares RAG's retrieval step, stops one box short of generation.</li><li><b>Tool use:</b> produces a real-world effect, not an answer.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where each technique sits relative to the request pipeline</h3>
+<div class="pipeline-preview">
+<span>Request arrives</span><i>↓</i>
+<span class="hot">Beyond base ability?</span><i>↓</i>
+<span class="hot">Needs a real action?</span><i>↓</i>
+<span class="hot">Wants raw documents?</span><i>↓</i>
+<span class="hot">Needs current/specific lookup?</span><i>↓</i>
+<span>Route: base model, tool use, search alone, RAG, or fine-tuning</span>
+</div>
+<p>This is a decision cascade, not a pipeline stage diagram like earlier concepts' nine-box skeleton — each question either routes the request immediately or passes it to the next question. Section 14's lab runs exactly this cascade live against six example requests.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Where beginners flatten four techniques into one</h3>
+<div class="distinction-table" role="table" aria-label="RAG distinguished from fine-tuning, search alone, and tool use">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Fine-tuning</span><span role="cell">RAG with the facts memorized instead of retrieved</span><span role="cell">Fine-tuning has no retrieval step at all — the knowledge lives in weights, Concept 05's parametric memory, not in a searchable corpus</span></div>
+<div role="row"><span role="cell">Search alone</span><span role="cell">RAG without the "smart" part</span><span role="cell">Search alone is what a requester actually wanted when they want raw sources, not a synthesized answer — it isn't an inferior RAG, it's the correct tool for that request</span></div>
+<div role="row"><span role="cell">Tool use</span><span role="cell">A more advanced form of RAG</span><span role="cell">Tool use produces a real external effect; RAG only ever produces a generated answer, however well-grounded</span></div>
+<div role="row"><span role="cell">RAG</span><span role="cell">The universal default for any information need</span><span role="cell">It specifically fits current, specific, non-parametric information needing an answer — the other three techniques exist because that isn't every request</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"RAG can replace fine-tuning for anything."</b><p>A stable style or skill that should always apply doesn't need looking up per query — that's fine-tuning's job, not RAG's.</p></div>
+<div><b>"If retrieval already happened, might as well generate an answer too."</b><p>Not if the requester explicitly wanted the raw documents — generating unasked-for prose isn't a free upgrade, it's answering the wrong request.</p></div>
+<div><b>"An agent that retrieves and then acts is just RAG with extra steps."</b><p>The action is the point, not the generated text around it — that makes it tool use, with RAG possibly feeding it evidence, not RAG itself.</p></div>
+<div><b>"Fine-tuning and RAG are mutually exclusive choices."</b><p>Not addressed by this concept — they can combine in practice; this concept only draws the boundary between what each one is for.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>All four techniques, inside one Oracle RAG assistant</h3>
+<div class="project-map">
+<div><span>FINE-TUNING</span><b>The assistant's formal internal voice</b><p>A stable style requirement, trained in once — not something to retrieve fresh on every reply.</p></div>
+<div><span>SEARCH ALONE</span><b>"Show me every policy mentioning X"</b><p>The requester wants the source list itself — RAG's generation step would be unwanted synthesis here.</p></div>
+<div><span>TOOL USE</span><b>"Email my manager my PTO balance"</b><p>A real action the assistant must actually perform, not describe.</p></div>
+<div><span>RAG</span><b>"What's our current pre-approval threshold?"</b><p>Current, specific, non-parametric — exactly the case Concepts 01-07 built RAG for.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Fine-tuning</b><p>Trains a stable skill or style into weights once — no retrieval step.</p></div>
+<div><b>Search alone</b><p>Returns ranked documents — retrieval without generation.</p></div>
+<div><b>Tool use</b><p>Executes a real external action — no generated answer grounding step.</p></div>
+<div><b>RAG</b><p>Retrieves current, specific evidence, then generates — the one combination of both.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why isn't fine-tuning just "RAG with memorized facts instead of retrieved ones"?</li>
+<li>Give a request where search alone is the correct tool, and explain why generating an answer would be wrong.</li>
+<li>What makes tool use different from RAG, even if both start with the same retrieval step?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 08 is complete.</b> Continue to Naive, advanced and modular RAG taxonomy.</h3>
+<p>Concepts 01-08 established what RAG is, why it's needed, its pipelines, and its boundaries against four alternatives. Concept 09 turns inward: RAG itself comes in more than one shape, and the naive/advanced/modular taxonomy names the differences.</p>
+<div class="beginner-memory"><b>Concept 08 is complete.</b> Continue to Naive, advanced and modular RAG taxonomy.</div>
+<a class="button primary" href="module-03-concept-09.html">Start Concept 09 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Four techniques, four different jobs.</h2>
+<p>Master what each technique actually does first. Open the formal boundary definitions, the routing code, and The Request Router lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Fine-tuning trains weights. Search alone stops before generation. Tool use acts instead of answering.</small></a>
+<a href="#b04"><span>02</span><b>Trace</b><small>What each technique actually changes — weights, a document list, the world, or a generated answer.</small></a>
+<a href="#b08"><span>03</span><b>Apply</b><small>All four techniques, inside one Oracle RAG assistant, each for a different real request.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the boundary definitions, routing code, and The Request Router lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> A request arrives → ask what it actually needs (a trained habit, raw documents, a real action, or a grounded answer) → route to fine-tuning, search alone, tool use, or RAG accordingly → RAG is the right tool only for the fourth case.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the RAG-versus-alternatives deep dive</b><em>Formal boundary definitions, a from-scratch request-routing contrast, and The Request Router lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The last of Module 03's four RAG-versus-alternative concepts</h2></div></header>
+<p>Concept 07 ruled out long-context prompting on size, cost, and quality. This concept rules three more techniques in or out on a different basis entirely: what each one is actually for. It does not re-derive Concept 05's parametric memory or Concept 01's two-box RAG definition — both are cited directly. Concept 09 turns inward next, distinguishing shapes of RAG itself rather than alternatives to it.</p>
+<div class="flow">
+<div class="flow-node">Concept 07 — vs. long-context</div>
+<div class="flow-node hot">RAG vs. fine-tuning, search, tool use</div>
+<div class="flow-node">Concept 09 — RAG's own taxonomy</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate RAG from three adjacent techniques</h3><p>State precisely what fine-tuning, search alone, and tool use each do that RAG does not, and vice versa.</p></article>
+<article class="info-card"><span>ROUTE</span><h3>Apply a four-question decision cascade</h3><p>Given a request, decide which of the four techniques actually fits.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not resolve</h3><p>Whether techniques can combine (e.g. fine-tuned models used inside a RAG pipeline) is named, not designed, here.</p></article>
+<article class="info-card"><span>MAP</span><h3>Ground it in Oracle RAG</h3><p>Identify which of the four techniques fits each of four real Oracle RAG requests.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's two-box RAG definition:</b> cited directly — retrieval plus generation is the shape every comparison here measures against.</li>
+<li><b>Concept 05's parametric/non-parametric memory:</b> cited directly — fine-tuning's "bakes into weights" claim is exactly Concept 05's parametric-memory update path.</li>
+<li>Search/IR mechanics themselves (Module 05) and agentic tool-use mechanics (Module 23) stay explicitly out of scope — this concept only draws the boundary line, not how either technique works internally.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Four different requests to four different specialists</h2></div></header>
+<p>A stable habit gets trained through repeated practice, not looked up each time — that's fine-tuning. Wanting the raw source material yourself means asking a librarian for the shelf, not a summary — that's search alone. Needing something actually done means hiring someone to do it, not describing how it could be done — that's tool use. Needing a specific, current answer grounded in real evidence means asking someone to check a source and then tell you — that's RAG.</p>
+<div class="callout warning"><b>Analogy boundary</b>These four "specialists" don't coordinate or negotiate the way people might. In a real system, a single request is routed programmatically by criteria like Section 06's cascade — there's no judgment call happening the way choosing between human specialists would involve one.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Technique</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Fine-tuning</td><td>A training run that updates a model's parametric memory (Concept 05) to reliably produce a target skill, style, or format</td><td>No retrieval step; the target behavior must be stable enough to be worth training in once</td></tr>
+<tr><td>Search / information retrieval alone</td><td>Ranking and returning documents relevant to a query, with no generation step</td><td>Distinguished from RAG solely by the absence of Concept 01's generation box — the retrieval mechanism itself can be identical</td></tr>
+<tr><td>Tool use / agentic action</td><td>Invoking a real external action (send, book, execute, modify) in response to a request</td><td>Produces an effect in the world, not a generated answer — the mechanics of the decision to act belong to Module 23</td></tr>
+<tr><td>RAG</td><td>Retrieval (Concept 01, Concept 06) followed by generation conditioned on the retrieved evidence</td><td>Requires both boxes; missing either one makes it a different technique, not a weaker RAG</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>A four-question decision cascade</h2></div></header>
+<div class="lane-flow">
+<div>Q1 — Does this go beyond a well-trained base model's own fluent ability? If no, stop: no technique here is needed at all (Concept 05's parametric memory already covers it).</div>
+<div>Q2 — Does fulfilling it require a real external action, not just an answer? If yes, stop: tool use.</div>
+<div>Q3 — Does the requester want raw source material to read themselves, with no generated answer at all? If yes, stop: search alone.</div>
+<div>Q4 — Does the needed knowledge change over time, or is it specific information better looked up than memorized? If yes: RAG. If no (a stable skill or style instead): fine-tuning.</div>
+</div>
+<p>Section 14's lab runs exactly this cascade, live, against six example requests — including one that never leaves Q1 at all.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The cascade, and where each example request stops</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the four-question cascade routing to one of five outcomes">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Already parametric</b><small>Q1 stops here</small></div>
+<div class="diagram-node"><b>Tool use</b><small>Q2 stops here</small></div>
+<div class="diagram-node hub-center"><b>Four-question cascade</b><small>Section 06</small></div>
+<div class="diagram-node"><b>Search alone</b><small>Q3 stops here</small></div>
+<div class="diagram-node"><b>RAG or fine-tuning</b><small>Q4 decides</small></div>
+</div>
+</div>
+<p>The hub above is the required flow. Section 14's lab makes it concrete: six real example requests, each tracing exactly which questions it passed through before stopping.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where each technique sits relative to the nine-box RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i><span class="hot">Parsing</span><i>↓</i><span class="hot">Chunking</span><i>↓</i><span class="hot">Embedding model</span><i>↓</i><span class="hot">Vectors / index</span><i>↓</i><span class="hot">Retrieval</span><i>↓</i><span class="hot">Context</span><i>↓</i><span class="hot">LLM</span><i>↓</i><span class="hot">Answer</span>
+</div>
+<p>Search alone keeps everything up through "Retrieval" and stops — no Context, LLM, or Answer box. Tool use replaces "Answer" with an external action, bypassing the question of retrieved evidence entirely for many requests. Fine-tuning touches none of these nine boxes at all — its training run happens completely outside this per-query skeleton. RAG is the only technique that uses every box exactly as drawn.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A light update-cost contrast, not a new derivation</h2></div></header>
+<p>This concept stays at the boundary-drawing level, but one comparison is worth making precise: how often does each technique's "update" happen? Fine-tuning's update cost is a full training run, paid once per skill change — Concept 05's parametric write cost, applied here to a skill rather than a single fact. RAG's "update" is a corpus edit — Concept 05's non-parametric write cost — paid per fact change, independent of how many queries follow. Neither number is re-derived; both are Concept 05's existing update-cost distinction, applied to a new comparison: a skill worth training in once, versus a fact worth looking up on demand.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Six requests, six routes</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Request</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Route</th></tr></thead>
+<tbody>
+<tr><td>"Write one grammatically correct sentence"</td><td>No — stop</td><td>—</td><td>—</td><td>—</td><td>Already parametric</td></tr>
+<tr><td>"Email my manager my PTO balance"</td><td>Yes</td><td>Yes — stop</td><td>—</td><td>—</td><td>Tool use</td></tr>
+<tr><td>"List every PDF mentioning 'expense report'"</td><td>Yes</td><td>No</td><td>Yes — stop</td><td>—</td><td>Search alone</td></tr>
+<tr><td>"Always reply in our formal internal voice"</td><td>Yes</td><td>No</td><td>No</td><td>No (a style, not a lookup)</td><td>Fine-tuning</td></tr>
+<tr><td>"Current pre-approval threshold?"</td><td>Yes</td><td>No</td><td>No</td><td>Yes (changes over time)</td><td>RAG</td></tr>
+<tr><td>"Vienna office headcount?"</td><td>Yes</td><td>No</td><td>No</td><td>Yes (changes over time)</td><td>RAG</td></tr>
+</tbody>
+</table>
+<p>Six requests, four distinct routes, using nothing but the same four yes/no questions in the same fixed order every time.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A support bot that must always speak in a fixed tone</h3><p>A stable style is exactly fine-tuning's job — retrieving "how to sound formal" on every reply would be the wrong tool entirely.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A request that could go either way — "summarize these three documents"</h3><p>If the documents are handed over directly, this may not even need retrieval — but generation is explicitly wanted, so it isn't search alone either; it resolves as a narrow RAG-like case with a pre-selected context.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Just fine-tune the model on our policy PDFs"</h3><p>Policies change; fine-tuning's update cost is a full retraining run per change — Section 09's contrast — making it the wrong tool for frequently-changing information regardless of how well it might work once.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Adding a generation step nobody asked for</h3><p>A user who explicitly wants source documents to read themselves is better served by search alone — generating a summary answers a question they didn't ask.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The four-question cascade, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · ROUTE A REQUEST TO ONE OF FOUR TECHNIQUES</span>
+<pre><code>def route_request(beyond_base, needs_action, wants_raw_docs, needs_fresh_lookup):
+    if not beyond_base:
+        return "already_parametric"   # Concept 05's parametric memory already covers this
+    if needs_action:
+        return "tool_use"             # Module 23 -- a real external effect, not an answer
+    if wants_raw_docs:
+        return "search_alone"         # retrieval without Concept 01's generation step
+    return "rag" if needs_fresh_lookup else "fine_tuning"
+
+
+# The six s10 requests, as boolean facts about each one
+requests = [
+    dict(beyond_base=False, needs_action=None, wants_raw_docs=None, needs_fresh_lookup=None),          # grammar
+    dict(beyond_base=True,  needs_action=True,  wants_raw_docs=None,  needs_fresh_lookup=None),         # email
+    dict(beyond_base=True,  needs_action=False, wants_raw_docs=True,  needs_fresh_lookup=None),         # pdfs
+    dict(beyond_base=True,  needs_action=False, wants_raw_docs=False, needs_fresh_lookup=False),        # tone
+    dict(beyond_base=True,  needs_action=False, wants_raw_docs=False, needs_fresh_lookup=True),         # threshold
+    dict(beyond_base=True,  needs_action=False, wants_raw_docs=False, needs_fresh_lookup=True),         # headcount
+]
+
+for req in requests:
+    print(route_request(**req))
+# already_parametric
+# tool_use
+# search_alone
+# fine_tuning
+# rag
+# rag
+
+assert route_request(True, False, False, True) == "rag"
+assert route_request(True, False, False, False) == "fine_tuning"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where this comparison has actually been studied</h2></div></header>
+<p>Ovadia, Menachem, Ariel & Nadler (2023) directly compare knowledge injection via fine-tuning against retrieval-augmented generation and find RAG more effective for injecting new or frequently-changing factual knowledge, while fine-tuning better suits stable behavioral adaptation — the exact split this concept draws. Balaguer, Benara, Cunha et al. (2024) run a real-world case study across an agricultural domain, comparing RAG and fine-tuning pipelines end to end on cost and accuracy trade-offs, reinforcing that the right choice depends on how often the underlying knowledge changes. Yao, Zhao, Yu et al. (2022), ReAct, is the founding reference for this concept's tool-use boundary: interleaving reasoning with real actions, the pattern this concept names but explicitly defers to Module 23.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Request Router</h2></div></header>
+<div class="lab">
+<p>Pick one of six real Oracle RAG requests and watch it run through the exact four-question cascade from Section 06, stopping at whichever question first decides its route.</p>
+<div class="lab-actions" role="group" aria-label="Choose a request to route" id="routerButtons0308">
+<button type="button" class="secondary" data-request="threshold">"What's our current international travel pre-approval threshold?"</button>
+<button type="button" class="secondary" data-request="tone">"Always reply in Oracle's formal internal voice, in every single response."</button>
+<button type="button" class="secondary" data-request="pdfs">"List every policy PDF that mentions 'expense report' so I can read them myself."</button>
+<button type="button" class="secondary" data-request="email">"Email my manager my current PTO balance, and cc me on it."</button>
+<button type="button" class="secondary" data-request="headcount">"How many employees currently work in the Vienna office?"</button>
+<button type="button" class="secondary" data-request="grammar">"Write one grammatically correct English sentence."</button>
+</div>
+<div class="sample-output" id="routerTrace0308" aria-live="polite"></div>
+<div class="sample-output" id="routerResult0308" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Four techniques, by update cadence and output shape</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Technique</th><th>Update cadence</th><th>Output shape</th></tr></thead>
+<tbody>
+<tr><td>Fine-tuning</td><td>A full training run per skill change</td><td>A changed model, not a per-query artifact</td></tr>
+<tr><td>Search alone</td><td>Live per query, same as RAG's retrieval step</td><td>Ranked documents, no generated text</td></tr>
+<tr><td>Tool use</td><td>Live per request</td><td>An external effect, not an answer</td></tr>
+<tr><td>RAG</td><td>A corpus edit per fact change (Concept 05)</td><td>A generated answer conditioned on retrieved evidence</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>RAG-BY-DEFAULT</span><h3>Reaching for retrieval-then-generate on every request</h3><p>Misses cases better served by a trained habit, raw documents, or a real action.</p></article>
+<article class="info-card"><span>FINE-TUNING A MOVING TARGET</span><h3>Training in a fact that changes frequently</h3><p>Pays a full retraining cost repeatedly for information Concept 05's non-parametric memory would update in one edit.</p></article>
+<article class="info-card"><span>UNWANTED SYNTHESIS</span><h3>Generating an answer when raw documents were requested</h3><p>Search alone was the correct tool; adding generation answers a question nobody asked.</p></article>
+<article class="info-card"><span>ANSWER INSTEAD OF ACTION</span><h3>Describing what should happen instead of doing it</h3><p>A tool-use request needs the action executed, not narrated.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Fine-tuning and RAG solve the same problem, fine-tuning just does it worse</td><td>Fine-tuning has no retrieval step at all — it's suited to stable skills, not lookups, per Section 09's update-cost contrast.</td></tr>
+<tr><td>Search alone is RAG missing its best feature</td><td>Search alone is the right tool when raw documents are what's actually wanted — generation would be unwanted synthesis, not a missing feature.</td></tr>
+<tr><td>Tool use is just RAG with an API call at the end</td><td>The action is the deliverable; RAG's deliverable is always a generated, evidence-grounded answer, never an external effect.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Route requests through something like Section 06's cascade before defaulting every information need to a RAG pipeline.</li>
+<li>Track how often a piece of knowledge changes before choosing fine-tuning over RAG for it — Section 09's update-cost contrast is the deciding factor.</li>
+<li>Log which technique handled each request type, so a misrouted request (e.g. RAG-by-default on a tool-use need) is discoverable, not silent.</li>
+<li>None of this rules out combining techniques (e.g. a fine-tuned model used as RAG's generator) — named, not designed, here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why isn't fine-tuning just "RAG with memorized facts"?</summary><div>Fine-tuning has no retrieval step at all — the information lives in parametric memory (Concept 05), updated only by a full training run, not by an edit to a searchable corpus.</div></details>
+<details class="quiz"><summary>What's the deciding factor between RAG and fine-tuning for a given piece of knowledge?</summary><div>How often it changes — Section 09's update-cost contrast: a stable skill favors fine-tuning's one-time training cost; frequently-changing information favors RAG's per-edit corpus update.</div></details>
+<details class="quiz"><summary>Why does search alone stop short of being RAG?</summary><div>It never performs Concept 01's generation step — it returns ranked documents and stops, by design, for requesters who want the sources themselves.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A request arrives: "Cancel my meeting with the vendor tomorrow and let them know via email." Walk it through Section 06's four-question cascade and name the correct technique.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>Q1: yes, this goes beyond base fluency (it requires real calendar and email systems). Q2: yes — canceling a meeting and sending an email are both real external actions, not just an answer. The cascade stops here: tool use. RAG could plausibly supply supporting details (e.g. the vendor's contact policy) as an input to the action, but the request itself is answered by doing something, not by generating text.</div>
+</details>
+<p>Teach-back: explain, in your own words, why "the cascade stopped at Q2" is a complete justification on its own, without needing to check Q3 or Q4 at all.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Four techniques, four jobs</h3><ul><li><b>Fine-tuning:</b> a stable skill, trained into weights once</li><li><b>Search alone:</b> retrieval without generation</li><li><b>Tool use:</b> a real action, not an answer</li><li><b>RAG:</b> retrieval plus generation, for current/specific needs</li></ul></div>
+<div><h3>The routing rule</h3><p>Ask what the request actually needs before defaulting to RAG — Section 06's four-question cascade, in fixed order.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A stakeholder wants to fine-tune a model on documents that change weekly. What do you recommend instead, and why?</summary><div>RAG — Section 09's update-cost contrast means weekly-changing knowledge would require a full retraining run every week under fine-tuning, versus a simple corpus edit under RAG's non-parametric memory (Concept 05).</div></details>
+<details class="quiz"><summary>How do you decide between search alone and RAG for a document-heavy feature request?</summary><div>Ask whether the user wants a synthesized answer or the source documents themselves — if it's the latter, search alone is correct and adding generation would be unwanted synthesis.</div></details>
+<details class="quiz"><summary>Design question: sketch a request router for a system that must support all four techniques.</summary><div>A four-question cascade like Section 06's: does it exceed base ability, does it need a real action, does it want raw documents, does the knowledge change over time — routing to already-parametric, tool use, search alone, or RAG/fine-tuning in that order.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2312.05934"><b>Ovadia, Menachem, Ariel & Nadler — Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs</b><br><span>Directly compares fine-tuning against RAG for knowledge injection — behind Sections 09 and 13.</span></a>
+<a href="https://arxiv.org/abs/2401.08406"><b>Balaguer, Benara, Cunha et al. — RAG vs Fine-tuning: Pipelines, Tradeoffs, and a Case Study on Agriculture</b><br><span>An end-to-end real-world comparison of both pipelines — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2210.03629"><b>Yao, Zhao, Yu et al. — ReAct: Synergizing Reasoning and Acting in Language Models</b><br><span>The founding reference for this concept's tool-use boundary, deferred to Module 23 — behind Sections 04 and 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 · ACTIVE</span>
+<h3>Route six requests before moving on</h3>
+<p>Before moving on, work through Section 20's exercise and state, in one sentence, why "the cascade stopped at Q2" is a complete answer on its own.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Request Router lab ↑</a>
+</div>
+<p class="fine-print">Next after completion: Naive, advanced and modular RAG taxonomy.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 08 · Active</p>
+<a href="module-03-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>

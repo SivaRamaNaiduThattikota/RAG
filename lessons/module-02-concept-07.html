@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on context windows and in-context learning: the maximum sequence length a transformer's block stack can process in one forward pass, why that limit costs more than it looks like it should, and how examples placed in the prompt change behavior with zero weight change.">
+<title>Context windows and in-context learning — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 07</p>
+<h1>Context windows<br><em>and in-context learning</em></h1>
+<p class="lesson-lead">Concept 06 traced what changes a model's weights. This concept steps back from training entirely and asks what a fixed, already-trained model can still do with only what you put in front of it: how much text its block stack can process in one pass, why that limit costs more than it looks like it should, and how examples placed in the prompt change its behavior without touching a single weight.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>LLM training versus inference: pretraining, tuning and alignment</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain the context-window limit and demonstrate in-context learning with zero weight change</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You stated what a context window bounds, connected its cost to Concept 04's quadratic attention, and explained why in-context learning is entirely an inference-time, forward-pass phenomenon — zero weight change, exactly the "inference" side of Concept 06's boundary.</p>
+<b>7 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The desk you're given, and what you can do with it before anyone changes it</h2>
+</div>
+<p>Concept 06 opened training: gradients, losses, updated matrices. This concept closes the door on all of that and asks a narrower question — with the weights already fixed, what can the model do with whatever text sits in front of it right now?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A context window is a token budget, not a memory</h3>
+<p>The <b>context window</b> is the maximum number of tokens — positions — that a given model's <b>block stack</b> (Concept 03) can accept and process in one forward pass. Every token you send in — system instructions, retrieved evidence, conversation history, few-shot examples, the user's question — competes for space inside that one fixed budget. <b>In-context learning</b> is what happens when some of those tokens are worked examples: the model conditions its next-token distribution on them, in that single forward pass, without any weight in the block stack or output head being touched.</p>
+<p>Both ideas share one root cause: the context window exists because Concept 04's self-attention lets every token look at every other token in the window, and that all-pairs comparison is what in-context learning exploits — and exactly what makes longer windows expensive.</p>
+<div class="beginner-memory"><b>First memory:</b> the context window is how much fits in one forward pass; in-context learning is what that one forward pass can still do with what fits, without updating anything.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A fixed architecture has to draw a line somewhere</h3>
+<p>Concept 04 showed every token attending to every other token inside a block. That mechanism does not stop working past some length — it keeps working, but its cost grows faster than the length itself does. A model is trained and shipped with one specific maximum length in mind; positions beyond it either were never trained on, or would demand attention compute and memory the serving hardware was never sized for. The context window is the practical and architectural line that gets drawn.</p>
+<div class="mental-compare">
+<div><span>WHAT CONCEPT 04 GAVE YOU</span><p>Attention scores every pair of positions inside a block, every block, every step.</p></div>
+<div><span>WHAT THIS CONCEPT ADDS</span><p>A hard ceiling on how many positions can exist at once — and a reason that ceiling isn't just "make it bigger."</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One Oracle RAG prompt, packed to the edge</h3>
+<p>Say a toy model's context window is 8,000 tokens. A support query about leave-policy carryover arrives with: a 300-token system instruction, three 900-token retrieved policy chunks, a 600-token slice of conversation history, two 250-token worked examples of the answer format you want followed, and the 60-token question itself. That totals 4,010 tokens — comfortably inside the 8,000-token window, with room left for the model's generated answer. Push it to five retrieved chunks instead of three, and the same prompt now needs 5,810 tokens before generation even starts — still fits, but the margin for a long answer has shrunk a lot.</p>
+<div class="context-demo">
+<div><span>WHAT FILLS THE WINDOW</span><p>System instruction, retrieved chunks, history, worked examples, and the question — all counted together.</p></div>
+<div><span>WHAT DOESN'T FILL IT</span><p>Nothing outside this one prompt — no memory of yesterday's session, no weight anywhere changed.</p></div>
+<div><span>WHAT THE TWO WORKED EXAMPLES DO</span><p>Nudge the answer's format toward what they demonstrate — in-context learning, covered next.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0207-visual-title">
+  <strong class="concept-visual-title" id="c0207-visual-title">VISUAL · ONE FIXED BUDGET, FIVE COMPETING USES</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing system instructions, retrieved chunks, history, worked examples and the question all competing for the same fixed context window before the model generates an answer">
+    <div class="diagram-hub">
+      <div class="diagram-node"><b>System instruction</b><small>fixed overhead</small></div>
+      <div class="diagram-node"><b>Retrieved chunks</b><small>grows with top-k</small></div>
+      <div class="diagram-node hub-center"><b>Context window</b><small>one fixed token budget</small></div>
+      <div class="diagram-node"><b>History + examples</b><small>grows with conversation, few-shot count</small></div>
+      <div class="diagram-node"><b>Question + answer room</b><small>must still fit</small></div>
+    </div>
+  </div>
+  <figcaption>The window doesn't care what filled it — a token spent on a fourth retrieved chunk is a token no longer available for the answer. This diagram is the same budgeting problem the lab in the advanced section lets you pack by hand.</figcaption>
+  <ol class="diagram-key"><li><b>Fixed ceiling:</b> the total across every category cannot exceed the model's context window.</li><li><b>Competing uses:</b> retrieval, history, and few-shot examples all draw from the same budget as the question.</li><li><b>Downstream cost:</b> Section 09's mathematics revisits why a bigger budget isn't free — it references, not re-derives, Concept 04's attention cost.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What actually enforces the limit, and what happens inside it</h3>
+<div class="example-grid">
+<article class="info-card"><span>TOKEN COUNT, NOT WORD COUNT</span><h3>Concept 02's tokenizer decides</h3><p>The window is measured in tokens; the exact same sentence can cost more or fewer tokens depending on the tokenizer.</p></article>
+<article class="info-card"><span>POSITION SCHEME LIMIT</span><h3>Concept 04's positional information</h3><p>A model's positional encoding — RoPE or otherwise — was set up assuming positions up to some maximum; going past it is unreliable or unsupported.</p></article>
+<article class="info-card"><span>ATTENTION OVER THE WHOLE WINDOW</span><h3>Every token can attend to every earlier token</h3><p>Concept 04's mechanism, applied across the full set of positions currently in the window — nothing new about the attention formula itself.</p></article>
+<article class="info-card"><span>IN-CONTEXT LEARNING</span><h3>Attention over the worked examples</h3><p>When examples sit inside the window, later positions' attention can weight those example tokens' key/value vectors heavily — shifting the next-token distribution toward what the examples demonstrate.</p></article>
+<article class="info-card"><span>ZERO WEIGHT CHANGE</span><h3>Concept 06's inference-only lane</h3><p>All of this happens in the forward-only path Concept 06 already named — no loss, no gradient, no backward pass, no updated matrix.</p></article>
+<article class="info-card"><span>WHAT'S NOT REMEMBERED</span><h3>The window resets between calls</h3><p>Nothing about this conditioning persists once the request ends — a new call with a different prompt starts from the same fixed weights, fresh.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where the budget sits, and where the effect fires</h3>
+<div class="mental-compare">
+<div><span>CONTEXT WINDOW</span><p>A ceiling on how many tokens can enter the block stack together — set before this request ever starts.</p></div>
+<div><span>IN-CONTEXT LEARNING</span><p>An effect of attention running over whatever tokens actually got in — decided fresh, every forward pass.</p></div>
+</div>
+<div class="scroll-flow">
+<span>Tokenize everything (Concept 02)</span><i>→</i>
+<span>Check against the context-window ceiling</span><i>→</i>
+<span>Positions fed through the block stack (Concepts 03–04)</span><i>→</i>
+<span>Attention conditions on example tokens, if present</span><i>→</i>
+<span>Output head → softmax (Concept 05)</span><i>→</i>
+<span>Decoding (Module 01, Concept 07)</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where this sits across the full RAG pipeline</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents → chunks (built later)</span><i>↓</i>
+<span>Retrieval → candidate chunks</span><i>↓</i>
+<span>Context construction: pick what fits the window</span><i>↓</i>
+<span>LLM forward pass — this concept's budget and effect</span><i>↓</i>
+<span>Answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Five terms that get flattened into "the prompt"</h3>
+<div class="distinction-table" role="table" aria-label="Context window and in-context learning distinctions">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Context window</span><span role="cell">Max input+output tokens one forward pass can hold</span><span role="cell">Confused with a memory that persists across calls</span></div>
+<div role="row"><span role="cell">Max output tokens</span><span role="cell">A separate, often smaller cap on how much the model may generate</span><span role="cell">Assumed to be the same number as the context window</span></div>
+<div role="row"><span role="cell">In-context learning</span><span role="cell">Behavior change from examples in the prompt, zero weight change</span><span role="cell">Assumed to be a small, permanent bit of fine-tuning</span></div>
+<div role="row"><span role="cell">Conversation memory</span><span role="cell">Whatever history a caller re-sends inside the window each turn</span><span role="cell">Assumed to be stored by the model itself between calls</span></div>
+<div role="row"><span role="cell">Training data cutoff</span><span role="cell">A separate, parametric-knowledge boundary — previewed in Concept 08</span><span role="cell">Confused with the context window, which is about this one prompt's length</span></div>
+</div>
+<p>That last row is a deliberate boundary: this lesson does not derive parametric knowledge limits or hallucination — Concept 08 owns that ground.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"In-context learning updates the model's weights a little."</b><p>It updates nothing — Concept 06's weight groups are exactly as frozen during this as during any other inference call.</p></div>
+<div><b>"The model remembers my few-shot examples for next time."</b><p>Nothing persists past the forward pass that used them; a new call without them gets no benefit from that conditioning.</p></div>
+<div><b>"A bigger context window means the model reasons better over long documents."</b><p>It means more tokens fit; whether the model uses everything in that window equally well is a separate question this course returns to later.</p></div>
+<div><b>"Context window and max output tokens are the same setting."</b><p>They're usually distinct limits — one bounds the total conversation, the other bounds just the generated reply.</p></div>
+<div><b>"Doubling the context window doubles the compute cost."</b><p>Concept 04's attention cost grows quadratically with sequence length, so doubling the window costs roughly four times the attention compute, not two.</p></div>
+<div><b>"In-context learning is basically instant fine-tuning."</b><p>Fine-tuning (Concept 06) changes stored weights permanently; in-context learning changes only this one forward pass's output.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>RETRIEVAL BUDGETING</span><b>Top-k competes with everything else</b><p>Every retrieved Oracle chunk you add to the prompt is a direct trade against room for history, examples, and the answer itself.</p></div>
+<div><span>FEW-SHOT ANSWER FORMATTING</span><b>In-context learning, used deliberately</b><p>Placing one or two worked Q&amp;A examples in the prompt template is exactly this concept's mechanism — no fine-tuning job required.</p></div>
+<div><span>LONG CONVERSATIONS</span><b>History must be re-sent, and re-paid for</b><p>Every turn's history tokens are re-processed and re-billed; nothing about a past turn is "remembered" for free.</p></div>
+<div><span>COST AND LATENCY PLANNING</span><b>Quadratic cost, previewed for Module 19</b><p>Concept 04's attention cost curve is exactly why context-length choices later become a real production cost lever, not just a quality knob.</p></div>
+</div>
+<p>LangChain and LangGraph expose token-counting and trimming utilities that manage this exact budget; they don't change what a context window is or what in-context learning does — they just help you stay inside the limit this concept defines.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Context window</b><p>The max token positions one forward pass through the block stack can hold.</p></div>
+<div><b>Cost driver</b><p>Concept 04's quadratic attention cost — referenced, not re-derived.</p></div>
+<div><b>In-context learning</b><p>A behavior change from prompt examples, computed entirely within one forward pass.</p></div>
+<div><b>Weight change</b><p>Zero — the exact inference-only side of Concept 06's training-versus-inference boundary.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What, precisely, does a context window put a ceiling on?</li>
+<li>Why does doubling the context length cost roughly four times the attention compute, not two?</li>
+<li>What happens to the model's weights during in-context learning?</li>
+<li>Why does conversation "memory" have to be re-sent every turn rather than stored by the model?</li>
+<li>How does max output tokens differ from the context window itself?</li>
+<li>What boundary does this lesson deliberately leave to Concept 08?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick context-versus-training judgment exercise</summary>
+<div>
+<ol>
+<li>What a context window limits — <b>the total number of token positions one forward pass can process</b>.</li>
+<li>What happens to the block stack's weights during in-context learning — <b>nothing; they stay exactly as Concept 06 left them</b>.</li>
+<li>Why cost roughly quadruples when context length doubles — <b>attention scores every pair of positions, so cost scales with length squared</b>.</li>
+<li>What persists after a request without that history being re-sent next time — <b>nothing; there is no model-side memory of it</b>.</li>
+<li>What this lesson does not derive — <b>parametric knowledge limits and hallucination, left to Concept 08</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Prompting principles and prompt roles</h3>
+<p>Concept 08 takes the same fixed budget this concept just described and asks how to fill it well — system, user, and assistant roles, instruction structure, and the practical craft of prompting a model that can learn in-context but cannot be retrained on the spot.</p>
+<div class="beginner-memory"><b>Concept 07 is complete.</b> Continue to Prompting principles and prompt roles.</div>
+<a class="button primary" href="module-02-concept-08.html">Start Concept 08 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required budget, optional depth.</h2>
+<p>Master what the window bounds and what in-context learning does first. Open the quadratic-cost mathematics, from-scratch code, and the budget-packing lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Context window: a token ceiling. In-context learning: an effect inside it.</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>Tokenizer, position scheme, attention, zero weight change.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Retrieval, history, and few-shot examples all draw from one budget.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the quadratic-cost mathematics, code, and the packing lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Tokenize → check against the window → block stack + attention (shared with Concept 04) → conditions on any examples present → output distribution → decoding.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the context-window deep dive</b><em>Quadratic-cost mathematics, a from-scratch in-context conditioning demo, and the budget-packing lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where this sits between Concept 06 and Concept 08</h2></div></header>
+<p>Concept 06 traced the two lanes a forward pass can sit inside: training (forward, loss, backward) and inference (forward only). This concept lives entirely inside that second lane. It assumes Concept 03's block stack, Concept 04's self-attention and its quadratic cost, and Concept 06's weight-change test are already known — none of that is re-derived here. Concept 08 picks up immediately after, asking how to structure what actually goes into this budget rather than what the budget or its in-context effect are.</p>
+<div class="flow">
+<div class="flow-node">Tokenizer (Concept 02)</div>
+<div class="flow-node hot">Context window</div>
+<div class="flow-node">Block stack (Concepts 03–04)</div>
+<div class="flow-node hot">In-context conditioning</div>
+<div class="flow-node">Output head (Concept 05)</div>
+<div class="flow-node">Decoding (built)</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State the context-window limit precisely</h3><p>Name exactly what it bounds and what determines its maximum.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Reason about quadratic cost by hand</h3><p>Estimate a relative attention-compute multiplier when context length changes, citing Concept 04's formula rather than re-deriving it.</p></article>
+<article class="info-card"><span>DEMONSTRATE</span><h3>Show in-context learning with zero weight change</h3><p>Trace, in a toy example, how added examples shift an output distribution while nothing in a "weights" object changes.</p></article>
+<article class="info-card"><span>BOUND</span><h3>Separate this from Concept 08's territory</h3><p>State which prompting-structure questions this lesson leaves open.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Block stack (Concept 03):</b> the exact structure this concept's token positions get fed through.</li>
+<li><b>Self-attention and its quadratic cost (Concept 04):</b> assumed known and cited by name in Section 09 — not re-derived.</li>
+<li><b>Tokens and tokenization (Concept 02):</b> what a "token" is, and why the window is measured in them rather than words or characters.</li>
+<li><b>The weight-change test and forward-only inference lane (Concept 06):</b> this concept's in-context learning is that exact lane, applied to a specific effect — examples in the prompt.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A desk of fixed size, and what you can still do on it</h2></div></header>
+<p>Picture a desk with a fixed amount of surface area — the context window. You can cover it with reference documents, sticky-note examples, your running notes, and the question you're actually trying to answer, but the desk itself never grows mid-task. In-context learning is what happens when some of those sticky notes are worked examples: you read them, and your next answer looks more like them — but you haven't learned anything permanently, and the desk is wiped clean before the next task begins.</p>
+<div class="callout warning"><b>Analogy boundary</b>The desk doesn't explain why reading more of it gets disproportionately slower. That part is not an analogy — it's Concept 04's attention mechanism scoring every pair of items on the desk against each other, which Section 09 quantifies directly.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Context window (n_max)</td><td>The maximum number of token positions a checkpoint's block stack and positional scheme support in one forward pass</td><td>A property of the checkpoint, not of any single request</td></tr>
+<tr><td>Max output tokens</td><td>A separate cap on how many tokens may be generated within the remaining window</td><td>Usually smaller than, and always bounded by, the context window</td></tr>
+<tr><td>In-context learning</td><td>A measurable change in the model's output distribution caused by examples present in the current input, with no parameter update</td><td>Exists only for the duration of the forward pass that used those examples</td></tr>
+<tr><td>Effective context</td><td>The portion of the window over which the model reliably uses information well</td><td>Can be smaller than the advertised window — Concept 10 covers this in full, only named here</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two things happening in the same forward pass</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>FILLING THE WINDOW</span>
+<div class="lane-flow">
+<div>Every input source gets tokenized (Concept 02)</div>
+<div>Total token count is checked against n_max before the call proceeds</div>
+<div>If it fits, every position enters the block stack together</div>
+<div>If it doesn't, something must be cut before the call can run at all</div>
+</div>
+</article>
+<article class="lane"><span>IN-CONTEXT LEARNING, INSIDE THAT SAME PASS</span>
+<div class="lane-flow">
+<div>Worked examples occupy some of those positions</div>
+<div>Concept 04's attention lets later positions read those examples' key/value vectors</div>
+<div>The output head's logits (Concept 05) shift toward what the examples demonstrate</div>
+<div>No loss, no gradient, no backward pass — Concept 06's inference lane, unchanged</div>
+</div>
+</article>
+</div>
+<p>Both lanes are one forward pass. The window decides whether the examples even get in; attention decides what happens to the output once they do.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The window as a hub, with in-context conditioning as one spoke</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the context window at the center connected to the tokenizer, the position-scheme ceiling, attention over every position, in-context conditioning on worked examples, and the resulting output distribution">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>Tokenizer output</b><small>what gets counted</small></div>
+    <div class="diagram-node"><b>Position-scheme ceiling</b><small>n_max, fixed per checkpoint</small></div>
+    <div class="diagram-node hub-center"><b>Context window</b><small>the forward pass's token budget</small></div>
+    <div class="diagram-node"><b>Attention over all positions</b><small>Concept 04, unchanged</small></div>
+    <div class="diagram-node"><b>In-context conditioning</b><small>examples bias the output, zero weight change</small></div>
+  </div>
+</div>
+<p>The center is fixed once per checkpoint; the spokes are what a specific request does with the budget it's given — this concept's two threads, side by side.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where the budget sits relative to the RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing → Chunks</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors → Retrieval</span><i>↓</i>
+<span>Context (built later)</span><i>↓</i>
+<span>LLM — this concept's budget and effect</span><i>↓</i>
+<span>Answer</span>
+</div>
+<p>Every earlier step in the skeleton produces candidate tokens; this concept is the checkpoint they all pass through before the model can use any of them — and the reason retrieval eventually has to stop at some top-k rather than handing over an entire corpus.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why the ceiling isn't just "raise it"</h2></div></header>
+<p>Concept 04 already derived self-attention's per-layer cost as <code>O(n²·d)</code>, where <code>n</code> is sequence length and <code>d</code> is the hidden dimension — that formula is cited here, not re-derived.</p>
+<div class="equation">relative attention cost when length changes from n to k·n: (k·n)² / n² = k²</div>
+<p>Doubling the context length (<code>k=2</code>) costs roughly <code>2²=4</code> times the attention compute of the original length; quadrupling it (<code>k=4</code>) costs roughly <code>16</code> times as much. This is exactly the curve that makes "just support a much longer window" a real engineering decision, not a free configuration flag.</p>
+<div class="equation">KV-cache memory during generation grows as O(n) per generated token, on top of the O(n²) attention cost already paid to build it</div>
+<p>The KV cache — the stored key/value vectors for every position already processed — is what lets each new generated token avoid recomputing attention over the whole window from scratch; it still grows linearly with how much of the window is already filled, adding a second, separate cost dimension.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Estimating the compute multiplier for a real prompt-size jump</h2></div></header>
+<p>Take Section 03's Oracle RAG prompt: 4,010 tokens with three retrieved chunks. Adding two more chunks — the second scenario from the beginner core — pushes it to roughly 5,810 tokens.</p>
+<div class="equation">k = 5810 / 4010 ≈ 1.45</div>
+<div class="equation">relative attention cost ≈ k² ≈ 1.45² ≈ 2.1</div>
+<p>Two extra retrieved chunks, only a 45% increase in token count, cost roughly twice the attention compute of the shorter prompt — not 45% more. That gap between "how much longer the prompt got" and "how much more it costs" is the practical consequence of Concept 04's quadratic term, made concrete on this lesson's own running example.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>FEW-SHOT PROMPTING</span><h3>Worked Q&amp;A pairs before the real question</h3><p>The clearest deliberate use of in-context learning — no training job, just placement in the prompt.</p></article>
+<article class="info-card"><span>LONG CONVERSATION</span><h3>Re-sent history, every turn</h3><p>Each turn re-pays the attention cost for everything already said, because none of it is stored by the model itself.</p></article>
+<article class="info-card"><span>RETRIEVAL-HEAVY PROMPT</span><h3>Many chunks, same window</h3><p>Every additional retrieved chunk is a direct trade against room left for history, examples, and the answer.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A prompt exactly at n_max</h3><p>Zero room left for generation — some serving stacks reject the call outright rather than truncate silently.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"In-context learning is free once the tokens are in"</h3><p>The examples still had to be tokenized and attended over — the effect is real, but not costless.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"A model at its context limit is out of ideas"</h3><p>It has simply run out of room in this one request — a fresh call with a trimmed prompt works exactly as well.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A toy forward pass that "learns" only in-context</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NUMPY-STYLE PSEUDOCODE</span>
+<pre><code>import numpy as np
+
+# Fixed, frozen "model" — nothing here is ever mutated below.
+FROZEN_WEIGHTS = {"bias_toward_number_words": 0.0}   # never assigned to again
+
+def count_examples_favoring(pattern, context_examples):
+    # a toy stand-in for "attention conditions on whatever examples are present"
+    return sum(1 for ex in context_examples if ex["label"] == pattern)
+
+def toy_forward_pass(context_examples, candidate_labels):
+    # NOTE: this function only ever reads FROZEN_WEIGHTS, never writes it —
+    # the same weight-change test from Concept 06, applied to this toy model.
+    base_logit = FROZEN_WEIGHTS["bias_toward_number_words"]
+    logits = []
+    for label in candidate_labels:
+        support = count_examples_favoring(label, context_examples)
+        logits.append(base_logit + support)          # more matching examples -> higher logit
+    logits = np.array(logits, dtype=float)
+    probs = np.exp(logits - logits.max())
+    return probs / probs.sum()
+
+candidates = ["numeral_format", "spelled_out_format"]
+
+# Zero examples: no in-context signal, close to a flat distribution
+p0 = toy_forward_pass([], candidates)
+
+# Three worked examples, all demonstrating "numeral_format"
+examples = [{"label": "numeral_format"}] * 3
+p3 = toy_forward_pass(examples, candidates)
+
+# FROZEN_WEIGHTS is identical before and after both calls —
+# only the input (the examples) changed, exactly Concept 06's inference-only lane.
+assert FROZEN_WEIGHTS["bias_toward_number_words"] == 0.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>What production tooling actually calls this</h2></div></header>
+<p>Token-counting libraries such as OpenAI's <code>tiktoken</code> compute the exact figure a context-window check is measured against, ahead of any API call. LangChain's message-trimming utilities (for example <code>trim_messages</code>) and LlamaIndex's context-window-aware node parsers exist specifically to keep a prompt's token count under a target checkpoint's window before it ever reaches the model. None of these tools change what in-context learning is — they manage the same budget this concept defines so that the examples and retrieved evidence you actually want in the window survive the trim.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Context-window packing and in-context learning lab</h2></div></header>
+<div class="lab">
+<p>Pick how many few-shot examples and retrieved chunks go into a toy 8,000-token window, then watch two things update live: how much of the fixed budget gets used (and whether it overflows), and how a toy next-token distribution sharpens toward the examples' format — with zero weight change, every time.</p>
+<div class="lab-actions" role="group" aria-label="Choose the number of few-shot examples">
+<button type="button" class="example-select-button active" data-examples="0" aria-pressed="true">0 examples</button>
+<button type="button" class="example-select-button secondary" data-examples="1" aria-pressed="false">1 example</button>
+<button type="button" class="example-select-button secondary" data-examples="2" aria-pressed="false">2 examples</button>
+<button type="button" class="example-select-button secondary" data-examples="3" aria-pressed="false">3 examples</button>
+<button type="button" class="example-select-button secondary" data-examples="4" aria-pressed="false">4 examples</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose what else fills the context window">
+<button type="button" class="budget-toggle-button secondary" data-item="chunk1" aria-pressed="false">+1 retrieved chunk (~900 tok)</button>
+<button type="button" class="budget-toggle-button secondary" data-item="chunk2" aria-pressed="false">+1 more retrieved chunk (~900 tok)</button>
+<button type="button" class="budget-toggle-button secondary" data-item="history" aria-pressed="false">Conversation history (~600 tok)</button>
+</div>
+<div class="budget-bar" id="budgetBar" role="img" aria-label="Stacked bar showing how the toy 8,000-token context window is currently filled"></div>
+<div class="budget-meta" id="budgetMeta" aria-live="polite"></div>
+<div class="sample-output" id="iclLabOutput" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Filling the window versus retrieving less into it</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram comparing stuffing a long context window with everything available against retrieving a smaller, curated set of chunks into a smaller budget">
+  <div class="diagram-split">
+    <div class="diagram-node active"><b>Available evidence</b><small>everything retrieval could return</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node active"><b>Long-context stuffing</b><small>push as much in as the window allows</small></div>
+    <div class="diagram-node"><b>Curated retrieval (Module 03)</b><small>rank and select before the window, not after</small></div>
+  </div>
+</div>
+<table class="compare-table">
+<thead><tr><th>Choice</th><th>What it costs</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Stuff the whole window</td><td>Quadratic attention cost scales with everything you included</td><td>Simple, but pays for — and risks diluting attention across — evidence that may not matter</td></tr>
+<tr><td>Retrieve a smaller, ranked set</td><td>Extra work upstream to rank and select before the window fills</td><td>Cheaper per call, and the subject of ranking, fusion, and relevance — all later modules, not this one</td></tr>
+</tbody>
+</table>
+<p>This concept only establishes that the trade-off exists and why it costs what it costs; deciding how to select what fills the window is Module 03 and Module 16's job, previewed here only by name.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT TRUNCATION</span><h3>Oldest or lowest-priority content dropped</h3><p>Some client libraries silently cut history or chunks to fit the window rather than raising an error — verify the trimming behavior in use.</p></article>
+<article class="info-card"><span>EXAMPLE ORDER SENSITIVITY</span><h3>In-context learning is not order-invariant</h3><p>Reordering or reformatting the same worked examples can shift the resulting distribution noticeably.</p></article>
+<article class="info-card"><span>COST BLOWUP</span><h3>Underestimating the quadratic term</h3><p>Treating a 2x longer prompt as roughly 2x the cost, when Section 09 shows it is closer to 4x.</p></article>
+<article class="info-card"><span>OVER-TRUSTING A LARGE WINDOW</span><h3>Assuming uniform use of the full budget</h3><p>A model can hold a token in-window without weighting it usefully — Concept 10 covers this failure mode in depth; only named as a boundary here.</p></article>
+<article class="info-card"><span>SENSITIVE DATA IN EXAMPLES</span><h3>Few-shot examples are still just tokens</h3><p>Worked examples placed in-context are visible to the model and any logging exactly like any other prompt content.</p></article>
+<article class="info-card"><span>CONFUSING TWO CAPS</span><h3>Hitting the output cap, not the window cap</h3><p>A reply that stops early may have hit max output tokens, not the context window itself — check which limit actually fired.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>In-context learning is a lightweight form of training</td><td>No gradient, no loss, no backward pass — it is entirely the forward-only lane Concept 06 already named.</td></tr>
+<tr><td>A bigger context window is strictly better with no downside</td><td>Cost scales quadratically with length, and a larger window doesn't guarantee even attention across it.</td></tr>
+<tr><td>The model remembers earlier conversation turns on its own</td><td>Every turn's history must be re-sent inside the window; nothing is stored between calls.</td></tr>
+<tr><td>Context window and max output tokens are interchangeable numbers</td><td>They are typically separate limits, and hitting one is diagnosed differently from hitting the other.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Attention cost and KV-cache memory both grow with context length, so a longer window is a direct latency and infrastructure cost, not just a quality lever.</li>
+<li>Silent truncation of history, retrieved chunks, or examples is a common, hard-to-notice source of degraded answers — log and alert on prompts that approach the window limit.</li>
+<li>Few-shot examples baked into a shared prompt template are visible to every request that reuses it — treat them with the same care as any other prompt content, including logs.</li>
+<li>Token-counting utilities should run before a request is sent, not discovered as an error after the call fails.</li>
+<li>Context-window size varies by checkpoint and by provider configuration — verify the actual limit for the exact model version deployed, not the model family's marketing figure.</li>
+<li>None of this changes anything about training cost — this concept's budget and effect are entirely inference-time, exactly Concept 06's forward-only lane.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What exactly does a context window put a ceiling on?</summary><div>The total number of token positions — input plus generated output — that a specific checkpoint's block stack can process together in one forward pass.</div></details>
+<details class="quiz"><summary>Why does doubling the context length cost roughly four times the attention compute?</summary><div>Because Concept 04's self-attention cost scales as O(n²·d); doubling n multiplies the attention term by 2² = 4, not by 2.</div></details>
+<details class="quiz"><summary>Does in-context learning change any stored weight?</summary><div>No — it is a change in the model's output distribution caused entirely by the current input, computed within one forward pass, with zero parameter update.</div></details>
+<details class="quiz"><summary>Why must conversation history be re-sent every turn instead of remembered?</summary><div>Because nothing about a prior forward pass is retained by the model; any continuity a caller wants has to be re-included as tokens inside the next request's context window.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Section 10's format, pick a toy context window size and a starting prompt length of your own choosing. Compute the relative attention-compute multiplier for two scenarios: growing the prompt by 50%, and growing it by 200%. Then, using Section 12's toy forward-pass code as a model, describe in your own words what would have to be true for a real model's in-context learning to instead count as fine-tuning — and explain why that description would violate Concept 06's weight-change test.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open one worked reasoning pattern</summary><div>For a 50% length increase, k = 1.5 and the relative attention cost is 1.5² = 2.25 — more than double, for a prompt only half again as long. For a 200% increase, the new length is three times the original (k = 3), giving a relative cost of 3² = 9 — nine times the attention compute for a prompt three times as long. For in-context learning to count as fine-tuning instead, some function would have to write a new value into a persisted weight matrix as a result of processing the prompt — exactly the backward-pass, gradient-driven update Concept 06 traced. Because the toy forward pass (and every real one) only reads FROZEN_WEIGHTS and never assigns to it, no such write occurs; the effect lives entirely in what gets computed from the input, not in anything stored afterward.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>Context window: max token positions one forward pass holds. Attention cost ∝ n². In-context learning: output shifts from examples in the prompt, zero weight change — Concept 06's inference lane, applied to few-shot conditioning.</p></div>
+<div><h3>Selection rule</h3><ul><li>Everything in the prompt shares one fixed token budget</li><li>Doubling length ≈ quadrupling attention compute</li><li>In-context learning never touches a stored weight</li><li>History and examples must be re-sent — nothing persists between calls</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain what a context window is and what determines its size.</summary><div>It is the maximum number of token positions a specific checkpoint's block stack and positional encoding scheme can process in one forward pass — fixed by the model's architecture and training, not adjustable per request beyond that ceiling.</div></details>
+<details class="quiz"><summary>Why is context length a bigger cost lever than it first appears?</summary><div>Self-attention's per-layer cost scales as O(n²·d), so cost grows quadratically with sequence length — a prompt that gets modestly longer can cost substantially more compute, and KV-cache memory grows linearly with length on top of that.</div></details>
+<details class="quiz"><summary>A colleague says few-shot prompting is a lightweight form of fine-tuning. How do you respond?</summary><div>Fine-tuning writes a gradient-driven update into stored weights; few-shot prompting changes only the current forward pass's output by conditioning attention on examples already in the input — no weight in the model is read differently or written to afterward.</div></details>
+<details class="quiz"><summary>Where would you look first if a long-running chat session started giving worse answers?</summary><div>Whether history, retrieved chunks, or examples are being silently truncated to fit the context window, and whether the growing prompt length is quietly increasing latency and cost per the quadratic attention term.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2111.02080"><b>Xie et al. — An Explanation of In-Context Learning as Implicit Bayesian Inference</b><br><span>A concrete account of the mechanism this lesson describes: conditioning on in-context examples without any parameter update.</span></a>
+<a href="https://arxiv.org/abs/2208.01066"><b>Garg et al. — What Can Transformers Learn In-Context? A Case Study of Simple Function Classes</b><br><span>Empirically studies exactly how much a fixed model can adapt from context alone — the boundary this lesson only demonstrates in toy form.</span></a>
+<a href="https://arxiv.org/abs/2306.15595"><b>Chen et al. — Extending Context Window of Large Language Models via Positional Interpolation</b><br><span>Grounds this lesson's context-window ceiling in the same positional-scheme limits Concept 04 introduced, and what it takes to move that ceiling.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 07 is complete. Its quadratic-cost mathematics, packing lab, failure modes, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-08.html">Start Concept 08 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Prompting principles and prompt roles.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 07 · Active</p>
+<a href="module-02-concept-06.html">← Concept 06</a>
+</footer>
+</body>
+</html>

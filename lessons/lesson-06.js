@@ -1,0 +1,8 @@
+const advancedLesson06=document.querySelector('#advanced-lesson');
+function syncAdvancedTarget06(){if(advancedLesson06)advancedLesson06.open=location.hash==='#advanced-lesson'||/^#s(?:0[1-9]|1[0-9]|2[0-4])$/.test(location.hash)}
+addEventListener('hashchange',syncAdvancedTarget06);syncAdvancedTarget06();
+const tokenSamples={english:'Oracle RAG retrieves the leave policy before the model answers.',code:'def get_leave_balance(employee_id): return db.query(employee_id)',domain:'Oracle23ai VECTOR_DISTANCE HNSW COSINE unbelievably',numeric:'The 2024 policy allows 12.5 days and applies to 401 employees.'};
+function demoTokenize(text){const pieces=text.match(/[A-Za-z]+|[0-9]+|[^\sA-Za-z0-9]/g)||[];const tokens=[];pieces.forEach(piece=>{if(/^[A-Za-z]+$/.test(piece)&&piece.length>7){for(let i=0;i<piece.length;i+=4)tokens.push(piece.slice(i,i+4))}else{tokens.push(piece)}});return tokens}
+const tokenButtons=[...document.querySelectorAll('.token-sample-button')];const tokenOutput=document.querySelector('#tokenOutput');
+function selectTokenSample(button){tokenButtons.forEach(item=>{const active=item===button;item.classList.toggle('active',active);item.classList.toggle('secondary',!active);item.setAttribute('aria-pressed',String(active))});const text=tokenSamples[button.dataset.sample];if(!tokenOutput||!text)return;const tokens=demoTokenize(text);const words=text.split(/\s+/).filter(Boolean).length;const chips=tokens.map(token=>`<code>${token}</code>`).join(' ');tokenOutput.innerHTML=`<p>${chips}</p><p class="fine-print">${text.length} characters · ${words} words · ${tokens.length} demo tokens</p>`}
+tokenButtons.forEach(button=>button.addEventListener('click',()=>selectTokenSample(button)));if(tokenButtons[0])selectTokenSample(tokenButtons[0]);

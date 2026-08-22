@@ -1,0 +1,1127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson defining exactly what a large language model is: the transformer-based autoregressive architecture family and the parameter, data, and compute scale that earns the word large.">
+<title>What is a large language model? — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-02-01.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 01</p>
+<h1>What is a large<br>
+<em>language model?</em>
+</h1>
+<p class="lesson-lead">Module 02 opens by naming exactly what an LLM is—the transformer-based, autoregressive architecture family and the parameter, training-data, and compute scale that earns the word “large”—before this course goes inside it.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>First LLM &amp; transformer foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Capabilities, limitations and responsible use</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Define what actually makes a model an LLM</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You defined an LLM by its architecture family and its scale, and correctly separated it from any language model, any foundation model, and any chatbot product.</p>
+<b>1 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two words, one precise definition</h2>
+</div>
+<p>Module 01 already separated foundation models from adaptation, retrieval, and the database. This lesson narrows the lens to one specific member of that family—the large language model—and says exactly what makes it large and what makes it a language model.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Language model, then large language model</h3>
+<p>A <b>language model</b> is any system that predicts the probability of the next linguistic unit given what came before, or scores how likely a whole sequence is. That definition covers a 1990s word-count table just as much as it covers a modern chatbot.</p>
+<p>A <b>large language model (LLM)</b> is a language model built as a <b>transformer-based, autoregressive network</b>—usually a decoder-style stack—and trained at a scale that is genuinely large along three axes at once: <b>parameters</b> (typically billions or more), <b>training data</b> (hundreds of billions to trillions of tokens), and <b>compute</b> (large, expensive training runs). “Large” is not one fixed number; it is a relative description that has shifted as the field has scaled up.</p>
+<div class="beginner-memory">
+<b>First memory:</b> language model = predicts the next word; large = scaled way up in parameters, data, and compute; LLM = both together, almost always transformer-based.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why this needs its own definition, not a repeat of Module 01</h3>
+<p>Concepts 4 and 5 of Module 01 already separated the foundation model from adaptation, and separated training from inference. Neither concept said which architecture family a foundation model actually uses, or what “large” means in numbers. This concept fills exactly that gap—without re-explaining pretraining, fine-tuning, or inference, which you already have.</p>
+<div class="mental-compare">
+<div>
+<span>WHAT MODULE 01 ALREADY ESTABLISHED</span>
+<p>A foundation model is broadly pretrained and reusable; training, fine-tuning, and inference are the lifecycle stages that shape and run it.</p>
+</div>
+<div>
+<span>WHAT THIS CONCEPT ADDS</span>
+<p>Which architecture family counts as an LLM, and exactly what “large” means across parameters, training data, and compute.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three systems, only one is an LLM</h3>
+<p>Imagine three systems asked to help with “explain the leave policy in plain language.” A keyword search index can find the paragraph but has no model of language at all. A small statistical model trained on a few thousand policy sentences can predict likely next words, but it is a genuine language model at a tiny scale. A modern assistant model—transformer decoder, billions of parameters, trained on a huge web-and-book-and-code corpus—is the only one of the three that is actually an LLM.</p>
+<div class="context-demo">
+<div>
+<span>KEYWORD SEARCH</span>
+<p>Not a language model at all—no probability over sequences, only matching.</p>
+</div>
+<div>
+<span>SMALL STATISTICAL LM</span>
+<p>A real language model, but no transformer and nowhere near LLM-scale data or parameters.</p>
+</div>
+<div>
+<span>MODERN LLM</span>
+<p>Transformer decoder, billions of parameters, web-scale training data—an LLM by both criteria.</p>
+</div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0201-visual-title">
+  <strong class="concept-visual-title" id="c0201-visual-title">VISUAL · SCALING UP THE SAME MECHANISM</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing a shared language-model mechanism branching into small-scale and large-scale versions"><div class="diagram-split"><div class="diagram-node active"><b>Language model mechanism</b><small>predict the next linguistic unit from context</small></div><div class="diagram-fork" aria-hidden="true">↗<br>↘</div><div class="diagram-node"><b>Small-scale language model</b><small>counts or a small network; narrow, limited generalization</small></div><div class="diagram-node"><b>Large language model</b><small>transformer decoder stack, billions+ parameters, web-scale training</small></div></div></div>
+  <figcaption>Every language model shares one mechanism: predicting the next linguistic unit. The right-hand branch is what this lesson defines precisely—the specific architecture and the specific scale that earn the word “large.”</figcaption>
+  <ol class="diagram-key"><li><b>Left node:</b> the mechanism every language model shares, regardless of size.</li><li><b>Right branches:</b> the same mechanism at two very different scales and, on the right, a different architecture family.</li><li><b>Consequence:</b> “language model” and “large language model” are not interchangeable terms.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What actually makes a model large, and a language model</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>ARCHITECTURE FAMILY</span>
+<h3>Transformer decoder</h3>
+<p>Stacked self-attention and feed-forward blocks that weigh relevant earlier tokens when predicting the next one.</p>
+</article>
+<article class="info-card">
+<span>GENERATION OBJECTIVE</span>
+<h3>Autoregressive next-token prediction</h3>
+<p>Each token is generated conditioned on everything generated so far, one step at a time.</p>
+</article>
+<article class="info-card">
+<span>PARAMETER SCALE</span>
+<h3>Billions or more learned weights</h3>
+<p>The trained numbers that were adjusted during the pretraining you met in Concept 5 of Module 01.</p>
+</article>
+<article class="info-card">
+<span>TRAINING-DATA SCALE</span>
+<h3>Hundreds of billions to trillions of tokens</h3>
+<p>Text (and often code) at a scale far beyond any single curated dataset.</p>
+</article>
+<article class="info-card">
+<span>COMPUTE SCALE</span>
+<h3>Large, expensive training runs</h3>
+<p>The training itself, not just the resulting model, is resource-intensive.</p>
+</article>
+<article class="info-card">
+<span>GENERALITY</span>
+<h3>One model, many tasks</h3>
+<p>The same trained weights handle summarizing, drafting, and answering without task-specific retraining.</p>
+</article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where the LLM sits, and what is inside its boundary</h3>
+<div class="mental-compare">
+<div>
+<span>INSIDE THE LLM BOUNDARY</span>
+<p>Tokenizer, embeddings, transformer decoder stack, and the decoding loop that picks each next token.</p>
+</div>
+<div>
+<span>OUTSIDE THE LLM BOUNDARY</span>
+<p>Retrieval, the Oracle database, orchestration, and the RAG application that calls the model.</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>Documents → Chunks → Embeddings → Vectors</span>
+<i>→</i>
+<span>Retrieval → Context</span>
+<i>→</i>
+<span>LLM</span>
+<i>→</i>
+<span>Answer</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the request lifecycle inside the LLM box</summary>
+<div>
+<div class="pipeline-preview">
+<span>Prompt text</span>
+<i>↓</i>
+<span>Tokenizer (Concept 02)</span>
+<i>↓</i>
+<span>Token embeddings</span>
+<i>↓</i>
+<span>Transformer decoder stack (Concepts 03–04)</span>
+<i>↓</i>
+<span>Next-token distribution</span>
+<i>↓</i>
+<span>Decoding step (Concept 05)</span>
+<i>↓</i>
+<span>Detokenized answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that get flattened into “AI model”</h3>
+<div class="distinction-table" role="table" aria-label="LLM-adjacent term distinctions">
+<div role="row">
+<b role="cell">Term</b>
+<b role="cell">What it actually is</b>
+<b role="cell">Common confusion</b>
+</div>
+<div role="row">
+<span role="cell">Language model</span>
+<span role="cell">Any system predicting the next linguistic unit, any scale</span>
+<span role="cell">Treated as automatically “large”</span>
+</div>
+<div role="row">
+<span role="cell">Foundation model</span>
+<span role="cell">Broadly pretrained and reusable, any modality (Module 01, Concept 4)</span>
+<span role="cell">Treated as a synonym for LLM</span>
+</div>
+<div role="row">
+<span role="cell">Large language model</span>
+<span role="cell">Transformer-based, autoregressive, large across parameters/data/compute</span>
+<span role="cell">Assumed to be the only architecture family that exists</span>
+</div>
+<div role="row">
+<span role="cell">Chatbot / assistant product</span>
+<span role="cell">An application built on top of one or more LLM calls plus orchestration</span>
+<span role="cell">Treated as identical to the LLM itself</span>
+</div>
+</div>
+<p>Every LLM is a language model; not every language model is large. Most foundation models used for chat are LLMs, but foundation models also exist for images, audio, and other modalities. A chatbot is a product; the LLM is one component inside it.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Any AI model is an LLM.”</b>
+<p>Image classifiers, recommendation models, and rules engines are not language models at all.</p>
+</div>
+<div>
+<b>“There is an exact parameter count that makes a model ‘large.’”</b>
+<p>The threshold is relative and has moved as the field has scaled; there is no fixed universal number.</p>
+</div>
+<div>
+<b>“Bigger always means better answers.”</b>
+<p>Scale improves average next-token prediction quality, not correctness on every specific task.</p>
+</div>
+<div>
+<b>“An LLM already knows how to look up facts on its own.”</b>
+<p>It predicts fluent tokens from learned patterns; it has no built-in database lookup (Module 01, Concept 8).</p>
+</div>
+<div>
+<b>“LLM and chatbot mean the same thing.”</b>
+<p>A chatbot is a product; the LLM is a component the product calls.</p>
+</div>
+<div>
+<b>“Every LLM generates text the exact same way.”</b>
+<p>Decoder-only autoregressive generation is the most common family for chat, but not the only transformer family.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this definition lands in the Oracle RAG assistant</h3>
+<div class="project-map">
+<div>
+<span>THE LLM BOX</span>
+<b>One node in the skeleton, not the whole system</b>
+<p>In Documents → Chunks → Embeddings → Vectors → Retrieval → Context → LLM → Answer, the LLM box is exactly what this lesson defines.</p>
+</div>
+<div>
+<span>SCALE CHOICE</span>
+<b>“Large” trades cost and latency for generality</b>
+<p>A smaller model can be enough for a narrow, well-grounded task; a larger model buys broader language ability at higher cost.</p>
+</div>
+<div>
+<span>ARCHITECTURE ASSUMPTION</span>
+<b>The pipeline assumes a decoder-only autoregressive LLM</b>
+<p>Swapping in a different architecture family would change how generation happens, even if the surrounding pipeline stays the same.</p>
+</div>
+<div>
+<span>BOUNDARY REMINDER</span>
+<b>The LLM still cannot query Oracle by itself</b>
+<p>Retrieval and orchestration remain outside the LLM box, exactly as Module 01 established.</p>
+</div>
+</div>
+<p>Every concept from here through the end of Module 02 goes deeper inside this one box: how text becomes tokens, how the transformer stack works, and how a next token gets chosen.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Language model</b>
+<p>Any system predicting the next linguistic unit, at any scale.</p>
+</div>
+<div>
+<b>Large language model</b>
+<p>A transformer-based, autoregressive language model at large parameter/data/compute scale.</p>
+</div>
+<div>
+<b>Autoregressive</b>
+<p>Generating one token at a time, each conditioned on everything generated so far.</p>
+</div>
+<div>
+<b>Scale axes</b>
+<p>Parameters, training tokens, and compute—three separate quantities, not one number.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What two things, together, turn “a language model” into “a large language model”?</li>
+<li>Why is a 1990s statistical model still a language model even though it is not an LLM?</li>
+<li>Why isn’t “large” a single fixed parameter count?</li>
+<li>What is the difference between a foundation model and an LLM?</li>
+<li>Why is a chatbot not the same thing as the LLM it calls?</li>
+<li>Where does the LLM sit in the Documents → Answer skeleton, and what stays outside it?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick classification exercise</summary>
+<div>
+<ol>
+<li>A rules-based chatbot with no learned language model — <b>not a language model at all</b>.</li>
+<li>A 1990s word-count model of a small corpus — <b>a language model, not large</b>.</li>
+<li>A 7-billion-parameter transformer decoder trained on a huge web corpus — <b>a large language model</b>.</li>
+<li>A broadly pretrained image-generation model — <b>a foundation model, not a language model</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Tokens and tokenization in depth</h3>
+<p>This lesson treated “text becomes tokens” as a given input to the LLM box. Concept 02 opens that exact step: how raw text is actually split into the units a transformer decoder consumes, and why that splitting choice matters.</p>
+<div class="beginner-memory">
+<b>Concept 01 is complete.</b> Continue to Tokens and tokenization in depth.</div>
+<a class="button primary" href="module-02-concept-02.html">Start Concept 02 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required definition, optional depth.</h2>
+<p>Master the architecture-plus-scale definition first. Open scaling mathematics, code, production reality, and interviews only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Define</b>
+<small>Transformer-based, autoregressive, and large.</small>
+</a>
+<a href="#b06">
+<span>02</span>
+<b>Separate</b>
+<small>LLM versus language model, foundation model, chatbot.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Locate</b>
+<small>One box in the Documents → Answer skeleton.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open scaling math, code, and the classifier lab.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 01 path:</b> Text → tokens (preview) → transformer decoder stack → next-token distribution → decoded answer, produced by whichever model sits in the LLM box.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the LLM definition deep dive</b>
+<em>Scaling mathematics, from-scratch code, a classifier lab, and the bridge into tokenization</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where this opens Module 02</h2>
+</div>
+</header>
+<p>Module 01 built the foundation-model and training-lifecycle vocabulary. Concept 01 spends that vocabulary on one precise question: which architecture family and which scale earn the word “large.” Everything after this concept—tokenization, the transformer stack, self-attention, decoding, context windows, prompting, and knowledge limitations—goes inside the box this concept just named.</p>
+<div class="flow">
+<div class="flow-node">Foundation model</div>
+<div class="flow-node">Training lifecycle</div>
+<div class="flow-node hot">LLM defined</div>
+<div class="flow-node">Tokenization</div>
+<div class="flow-node">Transformer stack</div>
+<div class="flow-node">Decoding</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>DEFINE</span>
+<h3>State the LLM definition precisely</h3>
+<p>Name the architecture family and the three scale axes together.</p>
+</article>
+<article class="info-card">
+<span>CLASSIFY</span>
+<h3>Sort a system correctly</h3>
+<p>Tell a language model, a foundation model, and an LLM apart on sight.</p>
+</article>
+<article class="info-card">
+<span>LOCATE</span>
+<h3>Place the LLM in the skeleton</h3>
+<p>Identify what sits inside the LLM box and what stays outside it.</p>
+</article>
+<article class="info-card">
+<span>ANTICIPATE</span>
+<h3>Preview what comes next</h3>
+<p>Recognize tokenization, attention, and decoding as the next layers in, not this lesson’s job.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Foundation model:</b> broad pretraining and reuse across downstream tasks (Module 01, Concept 4).</li>
+<li>
+<b>Training lifecycle:</b> pretraining, fine-tuning, and inference as separate stages (Module 01, Concept 5).</li>
+<li>
+<b>Tokens:</b> the general idea that models consume discrete units of text, introduced at a survey level (Module 01, Concept 6).</li>
+<li>
+<b>Capability boundary:</b> fluency is not evidence of correctness (Module 01, Concept 8).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>A pattern-matcher that read almost everything</h2>
+</div>
+</header>
+<p>Picture a very well-read pattern-matcher: it has not memorized facts like a librarian, but it has seen so much text that it has a strong sense of what word plausibly comes next in almost any sentence. “Large” describes exactly how much it read and how much internal structure it built while reading; “language model” describes the one job it does—predicting what comes next.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>The pattern-matcher has no shelf of facts to check against. Reading more text made its predictions more fluent and more general, not automatically more verifiable—that gap is exactly what Module 01, Concept 8 already named.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal definitions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Language model</td>
+<td>A model of <code>p(x₁,…,x_T)</code>, usually factored as a product of next-unit conditionals</td>
+<td>No constraint on architecture or scale</td>
+</tr>
+<tr>
+<td>Transformer</td>
+<td>A neural architecture built from self-attention and feed-forward blocks</td>
+<td>Used by encoder-only, decoder-only, and encoder-decoder models alike</td>
+</tr>
+<tr>
+<td>Autoregressive decoder</td>
+<td>A transformer variant that generates one token at a time, conditioned only on prior tokens</td>
+<td>The dominant family for open-ended generative LLMs</td>
+</tr>
+<tr>
+<td>Large language model</td>
+<td>An autoregressive transformer language model trained at large parameter, data, and compute scale</td>
+<td>“Large” is relative and has shifted historically—no fixed universal threshold</td>
+</tr>
+</tbody>
+</table>
+<div class="equation">p(x₁,…,x_T) = Π₍t₍ p(x_t | x_&lt;t)</div>
+<p>Any system implementing this factorization is a language model. An LLM is the specific case where that implementation is an autoregressive transformer decoder with billions or more parameters, trained on hundreds of billions to trillions of tokens.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>A conceptual trace through the LLM box</h2>
+</div>
+</header>
+<div class="lane-flow">
+<div>Raw text is split into subword tokens (mechanism arrives in Concept 02)</div>
+<div>Each token id is mapped to a learned embedding vector, plus positional information</div>
+<div>Stacked transformer decoder blocks let each position weigh relevant earlier tokens (Concepts 03–04)</div>
+<div>The final layer produces logits, one score per vocabulary token</div>
+<div>Logits become a probability distribution over the next token</div>
+<div>A decoding rule selects one token; it is appended and the loop repeats (Concept 05)</div>
+</div>
+<p>This is a conceptual trace, not the mechanism itself—attention’s internals, positional encoding, and decoding strategies each get their own concept later in this module. What matters here is that every step in that trace is exactly what the word “LLM” names: a transformer decoder run autoregressively.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>The five things that must be true together</h2>
+</div>
+</header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the four properties that combine into the definition of a large language model"><div class="diagram-hub"><div class="diagram-node"><b>Transformer decoder architecture</b><small>self-attention plus feed-forward blocks</small></div><div class="diagram-node hub-center"><b>Large language model</b><small>all four properties at once</small></div><div class="diagram-node"><b>Autoregressive next-token objective</b><small>one token at a time, conditioned on prior tokens</small></div><div class="diagram-node"><b>Billions+ parameters, huge token corpora, large compute</b><small>the three scale axes together</small></div><div class="diagram-node"><b>General-purpose across many language tasks</b><small>one trained model, many downstream uses</small></div></div></div>
+<p>Drop any one satellite and the label changes: without scale, it is a small language model; without the transformer decoder, it is a different architecture family; without autoregressive generation, it behaves like an encoder built for understanding rather than open-ended generation.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Where the LLM box sits in the full RAG skeleton</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Documents</span>
+<i>↓</i>
+<span>Chunks</span>
+<i>↓</i>
+<span>Embeddings</span>
+<i>↓</i>
+<span>Vectors</span>
+<i>↓</i>
+<span>Retrieval</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>LLM</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>Everything to the left of “LLM” assembles the context this concept’s box consumes; everything this concept defines—tokenizer, transformer decoder stack, decoding loop—lives entirely inside that one box. Swapping which LLM sits in that box changes scale, cost, and latency; it does not change anything to its left.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Scaling laws: what “large” buys, and how it is measured</h2>
+</div>
+</header>
+<table class="notation">
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>N</code></td>
+<td>Number of trainable parameters</td>
+</tr>
+<tr>
+<td><code>D</code></td>
+<td>Number of training tokens</td>
+</tr>
+<tr>
+<td><code>C</code></td>
+<td>Training compute, roughly proportional to <code>N·D</code></td>
+</tr>
+<tr>
+<td><code>L</code></td>
+<td>Test loss on next-token prediction (lower is better)</td>
+</tr>
+</tbody>
+</table>
+<div class="equation">L(N) ≈ (N꜀ / N)^α, holding data and compute adequate</div>
+<p>Empirically, next-token prediction loss falls as a smooth power law in parameter count, and similarly in data and compute, across many orders of magnitude—there is no cliff at any specific parameter count, which is exactly why “large” has no fixed threshold. A compute-optimal training run balances parameters and training tokens together rather than scaling one while starving the other; spending an entire compute budget on parameters alone, with too little data, wastes it.</p>
+<div class="equation">Roughly: compute-optimal training grows N and D together, not N alone</div>
+<p>Connecting the symbols back to this lesson: lower <code>L</code> means more fluent, more broadly capable next-token prediction—the property that makes an LLM generally useful as the box in the RAG skeleton. It says nothing about whether a specific generated claim is grounded in a real source, which remains the Module 01, Concept 8 boundary regardless of scale.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Counting the parameters in a tiny transformer decoder</h2>
+</div>
+</header>
+<p>Take a toy decoder with vocabulary <code>V=1000</code>, model width <code>d=64</code>, feed-forward width <code>d_ff=256</code>, and <code>L=2</code> layers, ignoring layer-norm and bias terms and position encodings for simplicity.</p>
+<div class="equation">Token embedding: V·d = 1000·64 = 64,000</div>
+<div class="equation">Per layer (Q,K,V,O projections + feed-forward): 4d² + 2·d·d_ff = 4(64²) + 2(64)(256) = 16,384 + 32,768 = 49,152</div>
+<div class="equation">2 layers: 2 × 49,152 = 98,304</div>
+<div class="equation">Output head (untied from embedding): V·d = 64,000</div>
+<div class="equation">Total ≈ 64,000 + 98,304 + 64,000 = 226,304 parameters</div>
+<p>That is roughly a quarter-million parameters—a genuine transformer decoder, correctly autoregressive, but four to five orders of magnitude below the billions-of-parameters scale most models called “LLMs” actually sit at. Architecture family alone does not make something large; the scale axes from Section 09 have to be satisfied too.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>CLEAR LLM</span>
+<h3>GPT/Llama-class assistant model</h3>
+<p>Transformer decoder, billions+ parameters, trained on a huge diverse corpus.</p>
+</article>
+<article class="info-card">
+<span>BOUNDARY CASE</span>
+<h3>A “small language model” (SLM)</h3>
+<p>Same architecture family, hundreds of millions to low billions of parameters—the field genuinely disputes where the SLM/LLM line falls.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>An image-classification CNN</h3>
+<p>Not a language model at all—no probability over linguistic sequences is being modeled.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>A 1990s n-gram model</h3>
+<p>A genuine language model; not transformer-based and nowhere near LLM-scale data.</p>
+</article>
+<article class="info-card">
+<span>MISTAKE TO AVOID</span>
+<h3>Calling a scripted chatbot an LLM</h3>
+<p>If it only matches rules to canned replies, no probability distribution over language is being modeled anywhere.</p>
+</article>
+<article class="info-card">
+<span>MISTAKE TO AVOID</span>
+<h3>Calling an encoder-only classifier an LLM</h3>
+<p>A transformer-based masked-language model can be large, but without autoregressive generation it is not what this course means by “LLM.”</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>The shared mechanism, without any of the scale</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH BIGRAM LANGUAGE MODEL</span>
+<pre>
+<code>from collections import defaultdict, Counter
+import random
+
+def train_bigram_lm(corpus_sentences):
+    counts = defaultdict(Counter)
+    for sentence in corpus_sentences:
+        words = ["&lt;s&gt;"] + sentence.split() + ["&lt;/s&gt;"]
+        for prev, nxt in zip(words, words[1:]):
+            counts[prev][nxt] += 1
+    return counts
+
+def next_token_distribution(counts, prev_word):
+    row = counts.get(prev_word)
+    if not row:
+        return {}  # unseen context: no counts, no distribution
+    total = sum(row.values())
+    return {word: c / total for word, c in row.items()}
+
+corpus = ["the leave policy allows ten days", "the leave policy is generous"]
+model = train_bigram_lm(corpus)
+
+print(next_token_distribution(model, "the"))
+# -&gt; {'leave': 1.0}   (only one thing ever followed "the" in this tiny corpus)
+print(next_token_distribution(model, "policy"))
+# -&gt; {'allows': 0.5, 'is': 0.5}
+print(next_token_distribution(model, "vacation"))
+# -&gt; {}  (never seen: no learned representation to fall back on)
+</code>
+</pre>
+</div>
+<p>This is a real language model: it predicts a probability distribution over the next word from context, exactly like Section 05’s equation. It has no transformer, no billions of parameters, and no web-scale corpus—so by this lesson’s definition it is a language model, not a large language model. Notice the last line: an unseen context returns nothing, because sparse counts cannot generalize. An LLM’s billions of learned, dense parameters exist precisely to generalize past exact contexts it never saw verbatim—that generalization is what the scale axes in Section 09 are paying for.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>The same next-token interface, backed by a real transformer</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · HUGGING FACE TRANSFORMERS</span>
+<pre>
+<code>from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+
+inputs = tokenizer("The leave policy allows", return_tensors="pt")
+with torch.no_grad():
+    logits = model(**inputs).logits[0, -1]      # scores for the next token
+probs = torch.softmax(logits, dim=-1)
+top_token_id = int(torch.argmax(probs))
+print(tokenizer.decode(top_token_id))            # most likely next token
+</code>
+</pre>
+</div>
+<p><code>AutoModelForCausalLM</code> is the library’s name for exactly the family this lesson defines: an autoregressive (“causal”) transformer decoder. Even a smaller checkpoint such as <code>gpt2</code> exposes the identical interface—context tokens in, next-token logits out—that a much larger production model uses; only the parameter count, training corpus, and compute behind those weights differ. Composing this call with a retriever and a prompt template is the job of LangChain and LangGraph, covered from Module 12 onward—this concept only needs the model call itself.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>LLM classifier lab</h2>
+</div>
+</header>
+<div class="lab">
+<p>Load a preset system, or toggle the five criteria yourself, to see how this lesson’s definition classifies it—and why dropping any one property changes the verdict.</p>
+<div class="lab-actions" role="group" aria-label="Load a preset system">
+<button type="button" class="llm-preset-button active" data-preset="gpt" aria-pressed="true">GPT/Llama-class assistant</button>
+<button type="button" class="llm-preset-button secondary" data-preset="slm" aria-pressed="false">Small transformer chatbot</button>
+<button type="button" class="llm-preset-button secondary" data-preset="bert" aria-pressed="false">BERT-style encoder</button>
+<button type="button" class="llm-preset-button secondary" data-preset="ngram" aria-pressed="false">1990s n-gram model</button>
+<button type="button" class="llm-preset-button secondary" data-preset="rules" aria-pressed="false">Scripted rules chatbot</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Toggle individual criteria">
+<button type="button" class="llm-trait-button" data-criterion="lm" aria-pressed="false">Predicts next linguistic unit</button>
+<button type="button" class="llm-trait-button" data-criterion="transformer" aria-pressed="false">Transformer-based</button>
+<button type="button" class="llm-trait-button" data-criterion="autoregressive" aria-pressed="false">Autoregressive / decoder-style</button>
+<button type="button" class="llm-trait-button" data-criterion="scale" aria-pressed="false">Billions+ params, huge corpus</button>
+<button type="button" class="llm-trait-button" data-criterion="general" aria-pressed="false">General-purpose across tasks</button>
+</div>
+<div class="sample-output" id="llmVerdictOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choosing a point on the scale</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Approach</th>
+<th>Wins when</th>
+<th>Operational cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small statistical / neural LM</td>
+<td>A narrow, fixed vocabulary and pattern set is genuinely enough</td>
+<td>Very cheap, but brittle outside its trained patterns</td>
+</tr>
+<tr>
+<td>Small or mid-size transformer LM (SLM)</td>
+<td>Latency and hosting cost matter more than broad generality</td>
+<td>Runs on modest hardware; narrower capability than frontier LLMs</td>
+</tr>
+<tr>
+<td>Frontier-scale LLM</td>
+<td>The task needs broad language and reasoning generality</td>
+<td>Highest inference cost and latency; usually a managed API or a large cluster</td>
+</tr>
+</tbody>
+</table>
+<p>None of these rows change whether grounding is required—that decision, from Module 01, Concept 8, is made by the task’s stakes and currency, not by which point on this scale you pick.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes around the definition</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>SCALE WITHOUT GROUNDING</span>
+<h3>“A bigger model will fix the hallucination”</h3>
+<p>Scale improves fluency and generality, not verification against a real source.</p>
+</article>
+<article class="info-card">
+<span>MISLABELLED SYSTEM</span>
+<h3>Marketing calls anything “AI” an LLM</h3>
+<p>Leads to wrong expectations about cost, latency, and behavior when the underlying system is not one.</p>
+</article>
+<article class="info-card">
+<span>ARCHITECTURE MISMATCH</span>
+<h3>Assuming every LLM is decoder-only</h3>
+<p>Picking a generative-only model for a task that actually needs an encoder-style representation.</p>
+</article>
+<article class="info-card">
+<span>WRONG SCALE FOR THE JOB</span>
+<h3>A frontier model for a narrow lookup task</h3>
+<p>Pays frontier-scale latency and cost for a task a small model would have handled.</p>
+</article>
+<article class="info-card">
+<span>SIZE-EQUALS-ACCURACY ASSUMPTION</span>
+<h3>Blaming model size for a grounding failure</h3>
+<p>The real fix is retrieval or a database lookup, not a larger model.</p>
+</article>
+<article class="info-card">
+<span>BOUNDARY CONFUSION</span>
+<h3>Forgetting the LLM never queries Oracle itself</h3>
+<p>Only the orchestration layer around the LLM box can call the database.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>“LLM” names one company’s specific product</td>
+<td>It is a category defined by architecture and scale, used across many providers and open-weight models</td>
+</tr>
+<tr>
+<td>A model becomes “large” at one fixed parameter count</td>
+<td>Scale is relative and has shifted historically; scaling laws describe a smooth trend, not a threshold</td>
+</tr>
+<tr>
+<td>More parameters always means a better model for my use case</td>
+<td>Scaling laws describe average loss trends across broad training, not a guarantee on every downstream task</td>
+</tr>
+<tr>
+<td>An LLM understands language the way a person does</td>
+<td>This lesson’s definition is mechanistic—predicting token sequences—not a claim about understanding</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Inference cost and latency scale with parameter count and sequence length, not with training data size directly.</li>
+<li>Frontier-scale models typically require managed APIs or dedicated accelerator clusters; smaller models can run on far more modest hardware.</li>
+<li>Choosing a smaller model for a narrow, well-grounded RAG task can cut cost and latency without losing accuracy on that task.</li>
+<li>Model and provider choice affects reproducibility of retrieval-augmented answers over time, independent of the retrieval layer.</li>
+<li>Licensing and training-data provenance for a given LLM matter for compliance, separate from its technical scale.</li>
+<li>Swapping the LLM in the RAG skeleton changes cost, latency, and generality; it should not require rebuilding retrieval or the database layer.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Why is “large” a relative, multi-axis description rather than a fixed number?</summary>
+<div>Because next-token prediction loss falls as a smooth power law across parameters, data, and compute, with no cliff at any specific value—the field’s sense of “large” has shifted as typical scales have grown.</div>
+</details>
+<details class="quiz">
+<summary>What two properties, together, turn a language model into an LLM?</summary>
+<div>A transformer-based, autoregressive architecture, and a genuinely large scale across parameters, training data, and compute—both are required.</div>
+</details>
+<details class="quiz">
+<summary>Why doesn’t a bigger model automatically fix the hallucination problem from Module 01, Concept 8?</summary>
+<div>Scale improves fluency and generalization in next-token prediction; it adds no built-in step that checks a claim against a current, authoritative source.</div>
+</details>
+<details class="quiz">
+<summary>Is every transformer an LLM? Why or why not?</summary>
+<div>No—encoder-only and encoder-decoder transformers exist and can even be large, but this course’s definition of “LLM” specifically names the autoregressive decoder family used for open-ended generation.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>Classify each of the following as “a language model but not large,” “a large language model,” or “not a language model at all,” and justify each with the architecture-plus-scale criteria from this lesson: (1) a scripted if/else customer-service bot, (2) a word-count model trained on one small document collection, (3) a 350-million-parameter transformer chatbot trained on a curated dataset, (4) a 70-billion-parameter transformer trained on a huge web-and-code corpus, (5) an image-only diffusion model.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open the worked classification</summary>
+<div>(1) Not a language model—no probability over linguistic units is modeled. (2) A language model, not large—right mechanism, tiny scale. (3) A language model in the transformer family, but below LLM-scale on parameters and data—arguably a small language model. (4) A large language model—transformer decoder, autoregressive, large on all three scale axes. (5) Not a language model—it models images, not linguistic sequences.</div>
+</details>
+<p>Teach-back: in your own words, explain why the architecture family (transformer, autoregressive) and the scale axes (parameters, data, compute) are both required, and why satisfying only one of the two is not enough to call something an LLM.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>The definition</h3>
+<p>LLM = autoregressive transformer decoder + large scale across parameters, training tokens, and compute. Skeleton position: the “LLM” box between Context and Answer.</p>
+</div>
+<div>
+<h3>Core equation and use</h3>
+<ul>
+<li><code>p(x₁,…,x_T) = Π p(x_t | x_&lt;t)</code></li>
+<li>Use: general-purpose language tasks at acceptable cost/latency</li>
+<li>Warning sign: “large” claimed with no architecture or scale specified</li>
+<li>Memorable example: GPT-2 vs. a bigram model—same interface, wildly different scale</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>How would you define an LLM to a non-technical stakeholder?</summary>
+<div>It is a system trained on enormous amounts of text to predict, one word at a time, what plausibly comes next—“large” describes how much it was trained on and how many internal parameters it has, not a guarantee that everything it says is checked against a fact.</div>
+</details>
+<details class="quiz">
+<summary>What is the difference between a language model and a large language model?</summary>
+<div>Every LLM is a language model, but the reverse is not true—“large” additionally requires a transformer-based autoregressive architecture and scale across parameters, training data, and compute; a small statistical or neural model is a language model without being large.</div>
+</details>
+<details class="quiz">
+<summary>A colleague says “let’s just use the biggest model available for our RAG assistant.” How do you respond?</summary>
+<div>Scale buys generality, not grounding—for a narrow, well-grounded task a smaller model may match quality at lower cost and latency, while the actual accuracy risk is usually solved by retrieval, not model size.</div>
+</details>
+<details class="quiz">
+<summary>How would you decide whether a given model qualifies as “large” for your use case?</summary>
+<div>Check whether it is genuinely a transformer-based autoregressive model, then compare its parameter count, training-token count, and training compute against current typical scales—remembering that the line is relative and moves over time, not fixed.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/2001.08361">
+<b>Kaplan et al. — Scaling Laws for Neural Language Models</b>
+<br>
+<span>The power-law relationship between model scale and next-token prediction loss underlying Section 09.</span>
+</a>
+<a href="https://arxiv.org/abs/2203.15556">
+<b>Hoffmann et al. — Training Compute-Optimal Large Language Models</b>
+<br>
+<span>The Chinchilla result that a fixed compute budget should scale parameters and training tokens together.</span>
+</a>
+<a href="https://arxiv.org/abs/2206.07682">
+<b>Wei et al. — Emergent Abilities of Large Language Models</b>
+<br>
+<span>Evidence that some capabilities appear only past a scale threshold rather than improving smoothly.</span>
+</a>
+<a href="https://arxiv.org/abs/2303.18223">
+<b>Zhao et al. — A Survey of Large Language Models</b>
+<br>
+<span>A comprehensive definition and survey of the architecture, training, and evaluation of modern LLMs.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 01 is complete. Its scaling mathematics, from-scratch code, classifier lab, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-02.html">Start Concept 02 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Tokens and tokenization in depth.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 02 · Concept 01 · Active</p>
+<a href="module-01-concept-08.html">← Concept 08</a>
+</footer>
+</body>
+</html>

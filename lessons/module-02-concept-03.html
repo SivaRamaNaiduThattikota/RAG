@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on the transformer's block architecture — self-attention and feed-forward sublayers, residual connections, and layer normalization — before self-attention's own mechanics get their own concept.">
+<title>Transformer architecture overview — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-02-03.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 03</p>
+<h1>Transformer<br>
+<em>architecture overview</em>
+</h1>
+<p class="lesson-lead">Concept 02 stopped at the token ID. This lesson opens the stack that consumes it: identical blocks, each mixing context across positions and then transforming each position on its own — before self-attention's exact mechanics get their own concept right after this.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Third LLM &amp; transformer foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Tokens and tokenization in depth</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Map the block stack, end to end</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You mapped the block stack's two sublayers, residual connections, and layer normalization, and separated encoder-style from decoder-style blocks.</p>
+<b>3 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The same block, repeated N times</h2>
+</div>
+<p>A transformer is not one large calculation — it is a small, identical block of two sublayers, stacked and repeated, with every position updated a little more at each repetition.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A block has exactly two sublayers</h3>
+<p>Token embeddings enter a stack of identical <b>blocks</b>. Each block runs two sublayers in order: <b>self-attention</b>, which lets every position gather information from every other position, and a <b>feed-forward network</b>, which transforms each position on its own, independently of every other position. Both sublayers are wrapped in a <b>residual connection</b> and a <b>layer normalization</b> step.</p>
+<p>After the last block, an <b>output head</b> turns the final representations into the next-token distribution that Concept 07's decoding loop already knows how to consume.</p>
+<div class="beginner-memory">
+<b>First memory:</b> attention mixes across positions; the feed-forward sublayer never does.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why not process tokens one at a time, in order?</h3>
+<p>Earlier sequence models read a sentence one token at a time, carrying a running summary forward — slow to train, and prone to losing context from far earlier in a long sequence. The transformer's core move: let every position look at every other position directly, in one step, computed in parallel across the whole sequence, rather than passing information through a long chain.</p>
+<div class="mental-compare">
+<div>
+<span>OLDER SEQUENCE MODELS</span>
+<p>Process one position at a time; long-range context has to survive a long relay chain.</p>
+</div>
+<div>
+<span>TRANSFORMER BLOCKS</span>
+<p>Every position can attend directly to every other position, computed in parallel.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Resolving “it” across a stack of blocks</h3>
+<p>In “The trophy didn’t fit in the suitcase because it was too big,” the word <code>it</code> is ambiguous on its own. Self-attention lets the position holding <code>it</code> pull in information from <code>trophy</code> and <code>suitcase</code> directly. Across several blocks, that position’s representation keeps refining, layer by layer, until it carries enough context for the output head to eventually favor the correct reading. Exactly how attention decides how much to pull from each position is Concept 04’s job, not this one’s.</p>
+<div class="context-demo">
+<div>
+<span>BLOCK 1</span>
+<p><code>it</code>’s representation starts gathering signal from nearby nouns.</p>
+</div>
+<div>
+<span>BLOCK 2–3</span>
+<p>Feed-forward sublayers further transform that gathered signal, position by position.</p>
+</div>
+<div>
+<span>FINAL BLOCK</span>
+<p><code>it</code>’s representation is contextually rich enough for the output head to use.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>What sits inside the stack</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>EMBEDDING LAYER</span>
+<h3>Token ID → vector</h3>
+<p>Every token ID is looked up in an embedding table, exactly as Module 01 described.</p>
+</article>
+<article class="info-card">
+<span>POSITIONAL INFO</span>
+<h3>Previewed, not taught here</h3>
+<p>Attention alone cannot tell position order apart — Concept 04 covers how position gets added back in.</p>
+</article>
+<article class="info-card">
+<span>SELF-ATTENTION SUBLAYER</span>
+<h3>Mixes across positions</h3>
+<p>Lets each position gather context from every other position. Mechanics are Concept 04’s subject.</p>
+</article>
+<article class="info-card">
+<span>FEED-FORWARD SUBLAYER</span>
+<h3>Transforms one position at a time</h3>
+<p>The same small network applied independently to every position — no mixing across positions here.</p>
+</article>
+<article class="info-card">
+<span>RESIDUAL CONNECTIONS</span>
+<h3>Add the sublayer’s output back</h3>
+<p>Each sublayer’s output is added to its own input, rather than replacing it outright.</p>
+</article>
+<article class="info-card">
+<span>LAYER NORMALIZATION</span>
+<h3>Keeps activations well-scaled</h3>
+<p>Rescales values at each step so a deep stack of blocks trains stably.</p>
+</article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0203-visual-title">
+  <strong class="concept-visual-title" id="c0203-visual-title">VISUAL · ONE TOKEN’S PATH THROUGH THE STACK</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing a token embedding passing through a stack of transformer blocks to an output head">
+    <div class="diagram-split">
+      <div class="diagram-node"><b>Token embedding</b><small>+ positional info, Concept 04</small></div>
+      <div class="diagram-node active"><b>Block 1…N</b><small>self-attention → feed-forward, each with residual + norm</small></div>
+      <div class="diagram-node"><b>Final representation</b><small>context-rich, per position</small></div>
+      <div class="diagram-node"><b>Output head</b><small>next-token distribution, Concept 07</small></div>
+    </div>
+  </div>
+  <figcaption>Every block runs the same two sublayers on every position; only the learned parameters differ from block to block, not the architecture.</figcaption>
+  <ol class="diagram-key"><li><b>Highlighted stage:</b> the repeated block — this lesson’s subject.</li><li><b>Left of it:</b> where the input comes from (Module 01, Concept 6; Concept 04, next).</li><li><b>Right of it:</b> where the output goes (Concept 07’s decoding loop).</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Decoder-only is this course’s path</h3>
+<div class="mental-compare">
+<div>
+<span>ENCODER-STYLE (BIDIRECTIONAL)</span>
+<p>Every position can attend to every other position, including ones later in the sequence — common in embedding models.</p>
+</div>
+<div>
+<span>DECODER-STYLE (CAUSAL)</span>
+<p>A position can only attend to itself and earlier positions — required for the autoregressive generation loop from Concept 07.</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>Token IDs</span>
+<i>→</i>
+<span>Embedding lookup</span>
+<i>→</i>
+<span>+ positional info</span>
+<i>→</i>
+<span>Block ×N</span>
+<i>→</i>
+<span>Output head</span>
+<i>→</i>
+<span>Next-token distribution</span>
+</div>
+<details class="beginner-answer">
+<summary>Open what happens inside one block</summary>
+<div>
+<div class="pipeline-preview">
+<span>Input to block</span>
+<i>↓</i>
+<span>Self-attention sublayer</span>
+<i>↓</i>
+<span>Residual add + normalize</span>
+<i>↓</i>
+<span>Feed-forward sublayer</span>
+<i>↓</i>
+<span>Residual add + normalize</span>
+<i>↓</i>
+<span>Output to next block</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that get flattened into “the transformer”</h3>
+<div class="distinction-table" role="table" aria-label="Transformer architecture distinctions">
+<div role="row">
+<b role="cell">Term</b>
+<b role="cell">What it actually is</b>
+<b role="cell">Common confusion</b>
+</div>
+<div role="row">
+<span role="cell">Block</span>
+<span role="cell">One repeated unit containing both sublayers</span>
+<span role="cell">Confused with a single sublayer</span>
+</div>
+<div role="row">
+<span role="cell">Self-attention sublayer</span>
+<span role="cell">Mixes information across positions</span>
+<span role="cell">Assumed to be the model’s only real work</span>
+</div>
+<div role="row">
+<span role="cell">Feed-forward sublayer</span>
+<span role="cell">Transforms each position independently</span>
+<span role="cell">Overlooked despite often holding most parameters</span>
+</div>
+<div role="row">
+<span role="cell">Encoder vs. decoder</span>
+<span role="cell">Bidirectional context vs. causal, left-to-right-only context</span>
+<span role="cell">Assumed to be two names for the same thing</span>
+</div>
+</div>
+<p>Two blocks in the same stack share an identical architecture, but never share learned parameters — each block’s attention and feed-forward weights are trained separately.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Attention is the whole block.”</b>
+<p>The feed-forward sublayer runs every time too, and often holds the majority of a block’s parameters.</p>
+</div>
+<div>
+<b>“Every block in the stack is architecturally different.”</b>
+<p>Every block runs the identical two-sublayer pattern; only the learned weights differ.</p>
+</div>
+<div>
+<b>“Residual connections are a minor optimization detail.”</b>
+<p>Deep stacks reliably fail to train well without them — they are structural, not cosmetic.</p>
+</div>
+<div>
+<b>“More blocks is always better.”</b>
+<p>Depth trades directly against latency, memory, and training cost.</p>
+</div>
+<div>
+<b>“Encoder and decoder transformers are interchangeable.”</b>
+<p>A decoder’s causal masking is required for the generation loop; an encoder’s bidirectional context is not compatible with it.</p>
+</div>
+<div>
+<b>“Positional information is part of attention itself.”</b>
+<p>Self-attention alone is permutation-invariant — position has to be added separately, which Concept 04 covers.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where the block stack lands in Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>ONE STACK, ONE PASS</span>
+<b>System + context + question share the same blocks</b>
+<p>There is no special-cased path for retrieved evidence — every part of the assembled prompt passes through the identical stack.</p>
+</div>
+<div>
+<span>EMBEDDING MODEL VS. GENERATOR</span>
+<b>Often different architecture families</b>
+<p>Embedding models commonly use encoder-style bidirectional blocks; the generator uses decoder-style causal blocks — two separate stacks, not one shared one.</p>
+</div>
+<div>
+<span>STACK DEPTH AND COST</span>
+<b>More blocks means more latency and compute per request</b>
+<p>Model size (block count and width) is a direct lever on response time and inference cost.</p>
+</div>
+<div>
+<span>WHY DECODING NEEDS CAUSAL BLOCKS</span>
+<b>Generation must not see future tokens</b>
+<p>Concept 07’s one-token-at-a-time loop only works because decoder blocks never attend to positions that don’t exist yet.</p>
+</div>
+</div>
+<p>Nothing about retrieval, Oracle, or orchestration changes how the block stack itself runs — they only change what tokens arrive at its input.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Block</b>
+<p>The repeated unit: self-attention sublayer, then feed-forward sublayer.</p>
+</div>
+<div>
+<b>Residual connection</b>
+<p>Adds a sublayer’s output back to its input.</p>
+</div>
+<div>
+<b>Layer normalization</b>
+<p>Rescales activations for stable training.</p>
+</div>
+<div>
+<b>Decoder-only</b>
+<p>Causal blocks that only attend to earlier positions — this course’s generator family.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What are the two sublayers inside every block, and which one mixes across positions?</li>
+<li>Why does a residual connection matter more as a stack gets deeper?</li>
+<li>Why can’t two blocks in the same stack share learned parameters, even though their architecture is identical?</li>
+<li>Why must a generator’s blocks be causal rather than bidirectional?</li>
+<li>Where does positional information enter the picture, if not inside self-attention itself?</li>
+<li>Why does stack depth show up directly as a cost and latency decision?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick block-structure exercise</summary>
+<div>
+<ol>
+<li>A sublayer that mixes context across positions — <b>self-attention</b>.</li>
+<li>A sublayer that transforms each position independently — <b>feed-forward network</b>.</li>
+<li>What stops a 40-block stack from failing to train — <b>residual connections, paired with layer normalization</b>.</li>
+<li>Why an embedding model can be bidirectional while the generator cannot — <b>the generator’s causal decoding loop requires it; the embedding model has no such constraint</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Self-attention — conceptual understanding and positional information</h3>
+<p>This lesson named self-attention as “the sublayer that mixes across positions” without showing how. Concept 04 opens exactly that mechanism — queries, keys, and values — and explains why positional encoding has to be added separately, since attention itself cannot tell position order apart on its own.</p>
+<div class="beginner-memory">
+<b>Concept 03 is complete.</b> Continue to self-attention's mechanics and positional information.</div>
+<a class="button primary" href="module-02-concept-04.html">Start Concept 04 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required map, optional depth.</h2>
+<p>Master the block’s two sublayers and why residuals matter first. Open the mathematics, from-scratch code, and the stack-stepper lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>Self-attention mixes positions; feed-forward does not.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Block, sublayer, residual, and layer norm.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>One stack serves the whole assembled prompt.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open the mathematics, code, and the stack-stepper lab.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 03 path:</b> Token embeddings → N × [self-attention + residual/norm → feed-forward + residual/norm] → output head → next-token distribution.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the transformer architecture deep dive</b>
+<em>Residual mathematics, from-scratch block code, failure modes, and the stack-stepper lab</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where the block stack sits</h2>
+</div>
+</header>
+<p>Concept 02 stopped at the token ID — the exact input the stack consumes. This concept names the stack’s two sublayers and the scaffolding around them, without yet showing how self-attention computes its mixing. Concept 04 opens that mechanism and adds positional information.</p>
+<div class="flow">
+<div class="flow-node">Token IDs</div>
+<div class="flow-node">Embedding lookup</div>
+<div class="flow-node hot">Block stack</div>
+<div class="flow-node">Self-attention detail</div>
+<div class="flow-node">Output head</div>
+<div class="flow-node">Decoding</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>IDENTIFY</span>
+<h3>Name the block structure</h3>
+<p>State both sublayers, in order, and what wraps each one.</p>
+</article>
+<article class="info-card">
+<span>DISTINGUISH</span>
+<h3>Separate the two sublayers’ jobs</h3>
+<p>Explain what mixes across positions and what does not.</p>
+</article>
+<article class="info-card">
+<span>TRACE</span>
+<h3>Follow one token through N blocks</h3>
+<p>Describe what happens to a representation at each step.</p>
+</article>
+<article class="info-card">
+<span>ANTICIPATE</span>
+<h3>Preview attention’s own mechanics</h3>
+<p>Recognize that queries, keys, values, and position belong to Concept 04.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Token ID, embedding lookup:</b> a token ID indexes a row of a learned embedding table (Module 01, Concept 6; Module 02, Concept 1).</li>
+<li>
+<b>Tokenizer training vs. use:</b> irrelevant to this concept’s internals, but the vocabulary size from Concept 02 sets the embedding table’s row count.</li>
+<li>
+<b>Next-token distribution and decoding:</b> what the output head’s result feeds into (Concept 07).</li>
+<li>
+<b>Comfort with vectors and simple functions:</b> this lesson’s mathematics is addition and a two-layer function, nothing beyond that.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>An assembly line of identical stations</h2>
+</div>
+</header>
+<p>Picture an assembly line with N identical stations. At every station, each worker first huddles briefly with every other worker on the line to gather relevant context, then returns to their own desk to update their notes independently. The huddle is self-attention; the desk work is the feed-forward sublayer. Every station runs the same two-step routine, but each station’s workers have learned their own way of huddling and their own way of updating notes.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>The “huddle” is not a conversation — it is a weighted combination computed from learned projections of every position’s representation. Concept 04 replaces this analogy with the actual computation.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Formal definitions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Block</td>
+<td>One repetition containing a self-attention sublayer followed by a feed-forward sublayer</td>
+<td>Architecture is identical across blocks; learned parameters are not</td>
+</tr>
+<tr>
+<td>Residual connection</td>
+<td>Adding a sublayer’s output back to the input that was fed into it</td>
+<td>Applied once per sublayer, twice per block</td>
+</tr>
+<tr>
+<td>Layer normalization</td>
+<td>Rescaling a representation’s values to a stable range at a given point in the block</td>
+<td>Placement (before or after a sublayer) varies by implementation</td>
+</tr>
+<tr>
+<td>Decoder-only / causal</td>
+<td>A block variant where each position may only attend to itself and earlier positions</td>
+<td>Required for the autoregressive loop in Concept 07; not a property of feed-forward sublayers</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>One block, two sublayers, traced in order</h2>
+</div>
+</header>
+<div class="lane-flow">
+<div>Representations enter the block from the previous block (or from the embedding layer, for block 1)</div>
+<div>Self-attention sublayer mixes information across every position</div>
+<div>That sublayer’s output is added back to its input, then normalized</div>
+<div>Feed-forward sublayer transforms each position independently</div>
+<div>That sublayer’s output is added back to its input, then normalized</div>
+<div>The result becomes the input to the next block, or to the output head if this was the last block</div>
+</div>
+<p>Nothing in this trace depends on knowing exactly how self-attention decides its mixing weights — that computation is a black box here on purpose, opened fully in Concept 04.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>Inside one block, as a hub</h2>
+</div>
+</header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the sublayers and scaffolding inside one transformer block">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>Self-attention sublayer</b><small>mixes across positions</small></div>
+    <div class="diagram-node hub-center"><b>One block</b><small>repeated N times, own weights each time</small></div>
+    <div class="diagram-node"><b>Feed-forward sublayer</b><small>transforms each position alone</small></div>
+    <div class="diagram-node"><b>Residual + norm</b><small>wraps both sublayers</small></div>
+    <div class="diagram-node"><b>Causal mask (decoder)</b><small>blocks future positions from being attended to</small></div>
+  </div>
+</div>
+<p>The center never changes shape from block to block — only its five satellites’ learned parameters differ, and the causal mask satellite only applies to decoder-style stacks like the one this course generates from.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>The whole assembled prompt shares one stack</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>System + retrieved context + question</span>
+<i>↓</i>
+<span>Tokenized (Concept 02)</span>
+<i>↓</i>
+<span>Embedding lookup</span>
+<i>↓</i>
+<span>Block ×N (this concept)</span>
+<i>↓</i>
+<span>Output head</span>
+<i>↓</i>
+<span>Decoding loop (Concept 07)</span>
+</div>
+<p>Retrieval, Oracle, and orchestration all finish their work before this diagram starts — by the time tokens reach the first block, the stack has no idea which of them came from a system instruction, a retrieved passage, or the user’s question. Anything that needs to shape how the model treats different parts of the prompt has to happen through the tokens and structure fed in, not through a special path inside the stack.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Residual addition and the feed-forward sublayer</h2>
+</div>
+</header>
+<div class="equation">Block, pre-norm form: x' = x + Attention(Norm(x)); y = x' + FFN(Norm(x'))</div>
+<p>
+<code>x</code> is the block’s input representation for one position; <code>Attention(·)</code> and <code>FFN(·)</code> are the two sublayers. Each is added back to the value it started from, rather than replacing it — this is the residual connection.</p>
+<div class="equation">FFN(x) = W₂ · activation(W₁x + b₁) + b₂</div>
+<p>The feed-forward sublayer is a small two-layer network applied with the <b>same weights</b> at every position — it has no mechanism to look at any other position, which is exactly what separates it from the attention sublayer above it.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Residual addition on one toy number</h2>
+</div>
+</header>
+<p>Let one position’s representation, simplified to a single number, be <code>x = 2.0</code>. Suppose a toy feed-forward sublayer computes <code>FFN(x) = 0.5x + 1</code> (standing in for the real two-layer network).</p>
+<div class="equation">FFN(2.0) = 0.5(2.0) + 1 = 2.0</div>
+<div class="equation">With residual: y = x + FFN(x) = 2.0 + 2.0 = 4.0</div>
+<div class="equation">Without residual: y = FFN(x) = 2.0 (the original 2.0 is gone entirely)</div>
+<p>This toy example only illustrates residual addition on the feed-forward sublayer — the same addition happens around the attention sublayer too, using its real output in place of this toy <code>FFN(x)</code>.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Architecture families and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>DECODER-ONLY</span>
+<h3>GPT-style, causal</h3>
+<p>This course’s generator family — required for the token-by-token decoding loop.</p>
+</article>
+<article class="info-card">
+<span>ENCODER-ONLY</span>
+<h3>BERT-style, bidirectional</h3>
+<p>Common in embedding models, which never need to generate token by token.</p>
+</article>
+<article class="info-card">
+<span>ENCODER-DECODER</span>
+<h3>T5-style, seq2seq</h3>
+<p>Pairs a bidirectional encoder with a causal decoder — previewed, not taught here.</p>
+</article>
+<article class="info-card">
+<span>DEEP STACK</span>
+<h3>Dozens of blocks</h3>
+<p>Larger frontier models simply repeat the same block many more times.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“The feed-forward sublayer is optional”</h3>
+<p>Removing it removes a large share of the model’s learned capacity, not a minor extra.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“Blocks share weights across the stack”</h3>
+<p>Identical architecture, independently learned parameters, every single block.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>A block’s shape, attention left as a black box</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre>
+<code>def transformer_block(x, self_attention, feed_forward, norm):
+    # self_attention and feed_forward are functions supplied from outside;
+    # their internals are Concept 04's subject, not this one's.
+    x = x + self_attention(norm(x))   # attention sublayer + residual
+    x = x + feed_forward(norm(x))     # feed-forward sublayer + residual
+    return x
+
+def transformer_stack(token_embeddings, blocks):
+    x = token_embeddings
+    for block in blocks:              # each block: its own learned weights
+        x = block(x)
+    return x                          # final representations -> output head
+</code>
+</pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>The same shape in production libraries</h2>
+</div>
+</header>
+<p>Hugging Face model classes such as a GPT-style decoder layer or a Llama-style decoder layer implement exactly this residual-wrapped, two-sublayer pattern, with a real self-attention implementation and a real feed-forward implementation in place of this lesson’s black boxes. Production implementations also add causal masking for decoder-style models and, at generation time, a key/value cache across decoding steps — previewed here, not covered until it is directly relevant to the decoding loop.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Block-stack stepper</h2>
+</div>
+</header>
+<div class="lab">
+<p>Step a representation forward one block at a time through a 4-block toy stack, and toggle residual connections off to see what the block-structure description says happens without them.</p>
+<div class="lab-actions" role="group" aria-label="Step through the block stack">
+<button type="button" class="stack-step-button" id="stackStepButton">Step forward →</button>
+<button type="button" class="stack-reset-button secondary" id="stackResetButton">Reset</button>
+</div>
+<label style="display:flex;align-items:center;gap:8px;margin:14px 0;font-size:13px">
+<input type="checkbox" id="residualToggle" checked>
+Residual connections enabled
+</label>
+<div class="sample-output" id="stackLabOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choosing an architecture family</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Family</th>
+<th>Wins when</th>
+<th>Operational cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Decoder-only (causal)</td>
+<td>Open-ended generation, one token at a time</td>
+<td>Cannot use future context even when available</td>
+</tr>
+<tr>
+<td>Encoder-only (bidirectional)</td>
+<td>Producing one representation per input, e.g. an embedding</td>
+<td>Cannot generate a variable-length sequence token by token</td>
+</tr>
+<tr>
+<td>Encoder-decoder</td>
+<td>A fixed input transformed into a different output sequence</td>
+<td>Two stacks to train and serve instead of one</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>TRAINING INSTABILITY</span>
+<h3>Missing or misplaced residuals</h3>
+<p>Deep stacks trained without residual connections routinely fail to converge.</p>
+</article>
+<article class="info-card">
+<span>NORM PLACEMENT</span>
+<h3>Pre-norm vs. post-norm sensitivity</h3>
+<p>Where normalization sits relative to a sublayer measurably affects training stability at scale.</p>
+</article>
+<article class="info-card">
+<span>ARCHITECTURE MISMATCH</span>
+<h3>Bidirectional model used for generation</h3>
+<p>An encoder-only model has no causal masking and cannot safely drive a decoding loop.</p>
+</article>
+<article class="info-card">
+<span>CAPACITY BLIND SPOT</span>
+<h3>Undersized feed-forward sublayer</h3>
+<p>Shrinking it to save parameters can remove more model capacity than expected.</p>
+</article>
+<article class="info-card">
+<span>DEPTH VS. COST</span>
+<h3>Over-deep stacks</h3>
+<p>Latency and memory scale with block count long before quality gains flatten out.</p>
+</article>
+<article class="info-card">
+<span>CAUSAL LEAK</span>
+<h3>Missing or incorrect masking</h3>
+<p>A decoder block that can attend to future positions breaks the entire generation guarantee.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Self-attention is the only meaningful computation in a block</td>
+<td>The feed-forward sublayer runs every time too and often holds most of a block’s parameters</td>
+</tr>
+<tr>
+<td>Blocks in a stack share learned weights</td>
+<td>Every block has its own independently learned attention and feed-forward parameters</td>
+</tr>
+<tr>
+<td>Residual connections are a minor training trick</td>
+<td>They are structural — very deep stacks reliably fail to train well without them</td>
+</tr>
+<tr>
+<td>Encoder and decoder blocks are the same thing used differently</td>
+<td>They share the two-sublayer pattern, but a decoder adds causal masking an encoder does not have</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Block count and width are direct, measurable levers on latency, memory, and serving cost.</li>
+<li>Confirm causal masking is correctly applied whenever a decoder-style model drives a generation loop.</li>
+<li>Track normalization placement (pre-norm vs. post-norm) as an architecture decision, not an implementation detail.</li>
+<li>Budget feed-forward sublayer width deliberately — it is not a safe place to cut parameters casually.</li>
+<li>Key/value caching across decoding steps (previewed here) is what makes long generations tractable in production.</li>
+<li>Match architecture family to task: bidirectional for one-shot representations, causal for open-ended generation.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>What are the two sublayers inside every transformer block, in order?</summary>
+<div>Self-attention first, then a feed-forward network — each wrapped in a residual connection and a normalization step.</div>
+</details>
+<details class="quiz">
+<summary>Why does the feed-forward sublayer not mix information across positions?</summary>
+<div>It applies the same small network independently to each position’s representation, with no mechanism to reference any other position.</div>
+</details>
+<details class="quiz">
+<summary>What would likely happen to a 40-block stack trained without residual connections?</summary>
+<div>It would very likely fail to train well — residual connections are what let gradient signal and information survive being passed through that many layers.</div>
+</details>
+<details class="quiz">
+<summary>Why must a decoding model’s blocks be causal?</summary>
+<div>Because the autoregressive generation loop produces tokens one at a time and must never attend to positions that don’t exist yet.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>Sketch a 3-block toy stack processing a 4-token prompt. For each block, list which sublayer runs first and second, what gets added back via the residual connection at each step, and where positional information would need to already be present by the time attention runs — without computing any actual attention weights. Then explain, in one or two sentences, why an encoder-only model could not be dropped in to replace this course’s decoder-only generator.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one worked structural trace</summary>
+<div>Each of the 3 blocks runs self-attention first (with the block’s input added back via a residual connection and normalized), then the feed-forward sublayer second (with that sublayer’s output likewise added back and normalized) — identically in structure across all 3 blocks, differing only in learned weights. Positional information has to already be present in the representation before the very first block’s attention sublayer runs, since attention itself has no way to recover position afterward. An encoder-only model cannot replace the generator here because it lacks causal masking — every position could attend to every other position including ones later in the sequence, which is incompatible with generating tokens one at a time.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>The block</h3>
+<p>Self-attention (mixes positions) → residual + norm → feed-forward (per-position) → residual + norm. Repeated N times, own weights each time.</p>
+</div>
+<div>
+<h3>Selection rule</h3>
+<ul>
+<li>Generation needs causal (decoder) blocks</li>
+<li>One-shot representation needs bidirectional (encoder) blocks</li>
+<li>Never drop residual connections in a deep stack</li>
+<li>Attention’s own mechanics: Concept 04</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Walk through what happens inside one transformer block, in order.</summary>
+<div>Self-attention mixes context across positions, its output is added back to the block’s input and normalized; then the feed-forward sublayer transforms each position independently, and its output is likewise added back and normalized.</div>
+</details>
+<details class="quiz">
+<summary>Why are residual connections considered essential rather than optional in deep transformer stacks?</summary>
+<div>They let each sublayer learn a refinement added to its input rather than a full replacement, which keeps gradients and information flowing through very deep stacks that would otherwise be difficult to train.</div>
+</details>
+<details class="quiz">
+<summary>What distinguishes an encoder-style block from a decoder-style block?</summary>
+<div>A decoder-style block adds causal masking so a position can only attend to itself and earlier positions; an encoder-style block allows full bidirectional attention.</div>
+</details>
+<details class="quiz">
+<summary>Where does most of a transformer block’s parameter count typically live?</summary>
+<div>Often in the feed-forward sublayer’s weight matrices, not solely in the attention sublayer — a commonly underestimated point.</div>
+</details>
+<details class="quiz">
+<summary>System design: you need a single model to both embed documents and generate answers. What architecture consideration follows?</summary>
+<div>These are usually two separate models with different block families — an encoder-style model for embeddings and a decoder-style model for generation — rather than one shared stack.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1706.03762">
+<b>Vaswani et al. — Attention Is All You Need</b>
+<br>
+<span>Introduces the transformer block: self-attention and feed-forward sublayers, residual connections, and layer normalization.</span>
+</a>
+<a href="https://arxiv.org/abs/1512.03385">
+<b>He et al. — Deep Residual Learning for Image Recognition</b>
+<br>
+<span>Introduces residual connections, the mechanism the transformer block wraps around each sublayer.</span>
+</a>
+<a href="https://arxiv.org/abs/1607.06450">
+<b>Ba, Kiros &amp; Hinton — Layer Normalization</b>
+<br>
+<span>Introduces the normalization step paired with residual connections inside every block.</span>
+</a>
+<a href="https://arxiv.org/abs/2002.04745">
+<b>Xiong et al. — On Layer Normalization in the Transformer Architecture</b>
+<br>
+<span>Analyzes pre-norm versus post-norm placement, the training-stability distinction raised in Section 16.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 03 is complete. Its residual mathematics, from-scratch block code, failure modes, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-04.html">Start Concept 04 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Self-attention — conceptual understanding and positional information.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 02 · Concept 03 · Active</p>
+<a href="module-02-concept-02.html">← Concept 02</a>
+</footer>
+</body>
+</html>

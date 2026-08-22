@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Opens Concept 01's explicit deferral: RAG is actually two separate pipelines, not one. Offline indexing turns documents into a searchable vector index, once, before any query exists. Online query reads that index, fresh, for every single request.">
+<title>The offline indexing and online query pipelines — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-03-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 03 · CONCEPT 06</p>
+<h1>The offline indexing<br><em>and online query pipelines.</em></h1>
+<p class="lesson-lead">Concept 01 drew RAG's silhouette and said outright that parsing, chunking, embedding, and indexing were "offline work this concept doesn't touch," and that "the full online-query breakdown is Concept 06's job." Concept 05 then named non-parametric memory but still left it as one unopened box. This concept opens both boxes: <b>offline indexing</b> — documents → parsing → chunking → embedding → storing vectors in an index, done once, before any query exists — and <b>online query</b> — a query → retrieval against that already-built index → context assembly → generation, done fresh, every single request.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth of twelve concepts opening Module 03</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's retriever/corpus/generator/grounding vocabulary; Concept 05's parametric/non-parametric memory naming (both cited, not re-taught)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name both pipelines' stages in order, and explain why a document must pass through the first before the second can ever find it</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You named offline indexing's four stages and online query's three, explained why the split exists — indexing can't wait for a query, and querying can't happen before an index exists — and traced the timing-gap consequence when a document is uploaded but not yet indexed. Concept 07 now asks whether any of this machinery is even necessary, against the simplest alternative: skip retrieval and paste the corpus into a long context window instead.</p>
+<b>6 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Opening the box Concept 01 deferred</h2>
+</div>
+<p>Concept 01 promised this concept would break RAG's silhouette into two real pipelines. This is that promise, paid off: what happens before a query exists, and what happens because one just arrived.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two pipelines, not one</h3>
+<div class="mental-compare">
+<div><span>OFFLINE INDEXING</span><p>Documents → parsing → chunking → embedding → storing vectors in an index. Runs once, or periodically, before any user has asked a single question.</p></div>
+<div><span>ONLINE QUERY</span><p>A user's query → retrieval against the already-built index → context assembly → generation. Runs fresh, every single request.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> offline indexing happens before any query exists; online query happens because one just arrived — two different pipelines, two different triggers.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 01's promise, finally paid</h3>
+<p>Concept 01 said retrieval "searches the corpus" and left it there — true, but it hides that the corpus had to become searchable somehow, at some earlier point in time. This concept supplies that missing earlier point: offline indexing makes the corpus searchable, once. Online query does the searching, every time a question arrives — never the reverse.</p>
+<div class="mental-compare">
+<div><span>WITHOUT THE SPLIT</span><p>"Retrieval searches the corpus" — usable, but silent about how the corpus got ready to be searched at all.</p></div>
+<div><span>WITH THE SPLIT</span><p>Offline indexing builds the index. Online query reads it. Different inputs, different triggers, and usually a completely different frequency.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A policy PDF, before and after anyone asks about it</h3>
+<p>Before any employee ever asks a question, an ingestion job takes Oracle's travel-policy PDF, parses it into text, splits that text into chunks, turns each chunk into an embedding, and stores the resulting vectors in an index. Nobody asked anything yet — this happens on a schedule, or whenever documents change. Only later, when an employee actually types "what's the pre-approval rule for international travel?", does the online query pipeline wake up: it searches the index offline indexing already built, assembles the relevant chunks into context, and generation writes the answer.</p>
+<div class="context-demo">
+<div><span>OFFLINE, EARLIER</span><p>Parse → chunk → embed → store — done once, before the question existed, with no query in sight.</p></div>
+<div><span>ONLINE, JUST NOW</span><p>Retrieve → assemble context → generate — done fresh, because this specific question just arrived.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Naming the stages — silhouettes only</h3>
+<div class="example-grid">
+<article class="info-card"><span>OFFLINE · STAGE 1</span><h3>Parsing</h3><p>Turn a raw document into usable text. How parsing handles tables, layout, or scanned pages is Module 06's job.</p></article>
+<article class="info-card"><span>OFFLINE · STAGE 2</span><h3>Chunking</h3><p>Split that text into smaller retrievable units. Why chunking exists and every strategy for doing it is Module 07's job — this concept only names it as a stage.</p></article>
+<article class="info-card"><span>OFFLINE · STAGE 3</span><h3>Embedding</h3><p>Turn each chunk into a vector capturing its meaning. What an embedding is, and the mathematics behind it, is Module 08's job.</p></article>
+<article class="info-card"><span>OFFLINE · STAGE 4</span><h3>Storing in a vector index</h3><p>Persist those vectors somewhere searchable. How a vector index actually works — HNSW, IVF, exact search — is Module 09 and Module 10's job.</p></article>
+</div>
+<p>Three more stages exist on the online side, covered in the next step: retrieval, context assembly, and generation. Every "how" behind these seven words is deliberately out of reach until its owning module — this concept's only job is the order, and the boundary between "before any query" and "because a query arrived."</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0306-visual-title">
+<strong class="concept-visual-title" id="c0306-visual-title">VISUAL · TWO PIPELINES, TWO TRIGGERS</strong>
+<p class="flow-instruction">OFFLINE INDEXING — runs once, before any query exists</p>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunking</span><i>→</i>
+<span>Embedding</span><i>→</i>
+<span class="hot">Vector index — stored</span>
+</div>
+<p class="flow-instruction">ONLINE QUERY — runs fresh, once per request</p>
+<div class="scroll-flow">
+<span>User query</span><i>→</i>
+<span class="hot">Retrieval — searches the index above</span><i>→</i>
+<span>Context assembly</span><i>→</i>
+<span>Generation</span><i>→</i>
+<span>Answer</span>
+</div>
+<figcaption>Two separate sequences, not one. The top row runs before any question exists. The bottom row runs fresh for every question — and can only ever find what the top row already stored.</figcaption>
+<ol class="diagram-key"><li><b>Offline indexing (top):</b> documents become a searchable vector index — no query is involved anywhere in this row.</li><li><b>Online query (bottom):</b> a query searches that already-built index, assembles context, and triggers generation — nothing here builds or changes the index.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The one skeleton, redrawn as two rows</h3>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i>
+<span class="hot">Parsing</span><i>↓</i>
+<span class="hot">Chunking</span><i>↓</i>
+<span class="hot">Embedding model</span><i>↓</i>
+<span class="hot">Vectors / index</span>
+</div>
+<div class="pipeline-preview">
+<span class="hot">Retrieval</span><i>↓</i>
+<span class="hot">Context</span><i>↓</i>
+<span class="hot">LLM</span><i>↓</i>
+<span class="hot">Answer</span>
+</div>
+<p>Every earlier Module 03 concept drew this exact nine-box chain with only one or two boxes highlighted at a time. This is the first to highlight every box, because naming the two pipelines those boxes belong to is the entire point. The top row is offline indexing's five boxes; the bottom row is online query's four. Nothing crosses from bottom to top — a query only ever reads the index, it never writes to it.</p>
+<details class="beginner-answer">
+<summary>Open the single unbroken chain, for comparison</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i>
+<span>Parsing</span><i>↓</i>
+<span>Chunking</span><i>↓</i>
+<span>Embedding model</span><i>↓</i>
+<span>Vectors / index</span><i>↓</i>
+<span>Retrieval</span><i>↓</i>
+<span>Context</span><i>↓</i>
+<span>LLM</span><i>↓</i>
+<span>Answer</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What each pipeline is not</h3>
+<div class="distinction-table" role="table" aria-label="Offline indexing and online query pipelines distinguished from related but different ideas">
+<div role="row"><b role="cell">This</b><b role="cell">Is not</b><b role="cell">Because</b></div>
+<div role="row"><span role="cell">Offline indexing</span><span role="cell">Something that happens per query</span><span role="cell">It runs once, or on its own schedule, entirely independent of any specific question ever being asked</span></div>
+<div role="row"><span role="cell">Online query</span><span role="cell">Indexing or re-indexing</span><span role="cell">It only reads an index that already exists — it never parses, chunks, embeds, or stores anything new</span></div>
+<div role="row"><span role="cell">The vector index</span><span role="cell">Non-parametric memory itself</span><span role="cell">The index is one concrete storage form non-parametric memory takes — Concept 05's term, now given its first internal structure</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Indexing happens at query time, live."</b><p>No — that would force every single question to pay the full parse-chunk-embed-store cost. Indexing is precomputed, before the query exists.</p></div>
+<div><b>"A newly uploaded document is instantly searchable."</b><p>No — it's invisible to the online query pipeline until offline indexing actually processes it. Uploading is not indexing.</p></div>
+<div><b>"Offline and online are the same pipeline, just run twice."</b><p>No — different inputs (documents vs. a query), different triggers (a schedule or event vs. a request), and usually a completely different frequency.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Oracle RAG's two pipelines, named concretely</h3>
+<div class="project-map">
+<div><span>OFFLINE</span><b>The policy-corpus ingestion job</b><p>Parses each policy PDF, chunks it, embeds the chunks, and stores the vectors — Module 10's job to build for real, on Oracle AI Database, on its own schedule.</p></div>
+<div><span>ONLINE</span><b>The employee's question, answered right now</b><p>Retrieves from whatever the ingestion job has already stored, assembles context, and triggers generation — every single time someone asks something.</p></div>
+<div><span>THE CONSEQUENCE</span><b>A policy uploaded five minutes ago may not be searchable yet</b><p>Not a bug in retrieval — a timing gap between the two pipelines that Module 19 covers how to shrink.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Offline indexing's stages</b><p>Documents → parsing → chunking → embedding → storing vectors in an index — done once, before any query exists.</p></div>
+<div><b>Online query's stages</b><p>Query → retrieval against the index → context assembly → generation — done fresh, every request.</p></div>
+<div><b>Why the split exists</b><p>Indexing can't wait for a query — too slow per request. Querying can't happen before the index exists — nothing to search yet.</p></div>
+<div><b>The consequence of the split</b><p>A document not yet indexed is invisible to every online query, no matter how good retrieval is.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Name all four offline stages and all three online stages, in order.</li>
+<li>Why can't a single pipeline do both jobs at query time?</li>
+<li>A user asks about a document uploaded one minute ago and gets no results. What's the most likely explanation?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3><b>Concept 06 is complete.</b> Continue to RAG versus prompting and long-context prompting.</h3>
+<p>Today opened both pipelines' boxes for the first time — parsing, chunking, embedding, and the vector index on the offline side; retrieval, context assembly, and generation on the online side. Concept 07 steps back to a different comparison entirely: whether RAG is even the right tool, set against simply prompting a model with a longer context window instead.</p>
+<div class="beginner-memory"><b>Concept 06 is complete.</b> Continue to RAG versus prompting and long-context prompting.</div>
+<a class="button primary" href="module-03-concept-07.html">Start Concept 07 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Built once. Read every time.</h2>
+<p>Master the two pipelines and their stage order first. Open the formal definitions, the amortization math, the from-scratch code, and The Index Traffic Control lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Split</b><small>Offline indexing builds the index, once. Online query reads it, every request.</small></a>
+<a href="#b04"><span>02</span><b>Name</b><small>Parsing, chunking, embedding, vector index — offline. Retrieval, context assembly, generation — online.</small></a>
+<a href="#b08"><span>03</span><b>Map</b><small>Oracle's ingestion job (offline) versus an employee's live question (online).</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the amortization math, from-scratch code, and The Index Traffic Control lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 01's deferred promise and Concept 05's non-parametric memory → opened into offline indexing's four stages and online query's three → the vector index is what connects them, built by one, read only by the other.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the two-pipeline deep dive</b><em>Formal definitions, the amortization math, a from-scratch build_index/answer_query contrast, and The Index Traffic Control lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Paying off Concept 01's explicit deferral</h2></div></header>
+<p>Concept 01 named the full nine-box skeleton and said outright that "parsing, chunking, embedding, indexing" were offline work it wouldn't touch, and that "the full online-query breakdown is Concept 06's job." Concept 05 then named non-parametric memory but still treated it as a single, unopened box. This concept opens both halves of that box: the pipeline that builds it, and the pipeline that reads it.</p>
+<div class="flow">
+<div class="flow-node">Concept 05 — parametric vs. non-parametric memory</div>
+<div class="flow-node hot">Offline indexing vs. online query pipelines</div>
+<div class="flow-node">Concept 07 — RAG vs. prompting and long-context</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>List both pipelines' stages, in order</h3><p>Offline: parsing, chunking, embedding, storing vectors. Online: retrieval, context assembly, generation.</p></article>
+<article class="info-card"><span>SEPARATE</span><h3>State each pipeline's trigger and frequency</h3><p>Offline: a schedule or a document change, run once or periodically. Online: a user request, run every single time.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>State why the split is necessary at all</h3><p>Query-time cost would be unworkable if indexing ran per request; nothing exists to search until indexing runs at least once.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not cover</h3><p>How chunking, embedding, or vector search actually work internally is Modules 07 through 10's job — named here only as stages.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's retriever/corpus/generator/grounding vocabulary:</b> cited, not re-taught — this concept only opens up what sits behind "corpus" and "retriever."</li>
+<li><b>Concept 05's parametric/non-parametric memory naming:</b> cited, not re-derived — this concept gives non-parametric memory its first internal structure.</li>
+<li>Embeddings, chunking strategy, and vector-index mechanics are explicitly not prerequisites — they're named as stages here and taught for real starting Module 07.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A library's catalog, and a visitor's question</h2></div></header>
+<p>A librarian catalogs new books continuously, in the background — assigning them a place on the shelf and an entry in the card catalog — whether or not anyone happens to be browsing that day. A visitor who walks in and asks a question gets an answer by searching whatever the catalog already contains, right now. Cataloging is offline indexing; the visitor's question is the online query. If a book arrived ten minutes ago and hasn't been cataloged yet, the visitor's question about it comes up empty — not because the librarian searched badly, but because cataloging hasn't caught up.</p>
+<div class="callout warning"><b>Analogy boundary</b>A library's catalog updates in a steady trickle, one book at a time. A real offline indexing pipeline more often runs in batches — nightly, hourly, or triggered by a change — so the "ten minutes ago" gap in the analogy is frequently hours or days in a real system. Module 19 covers the actual scheduling trade-offs; this concept only supplies the two-pipeline shape.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Offline indexing pipeline</td><td>The sequence — parsing, chunking, embedding, storing — that turns raw documents into a searchable vector index, run independent of any specific query.</td><td>Never reads a user query; its only input is the document set.</td></tr>
+<tr><td>Online query pipeline</td><td>The sequence — retrieval, context assembly, generation — that turns one user query into one answer, using an index that already exists.</td><td>Never writes to the index; its only output is an answer.</td></tr>
+<tr><td>Vector index</td><td>The stored, searchable structure holding every chunk's embedding — the artifact offline indexing produces and online query consumes.</td><td>What makes an index fast or exact (HNSW, IVF, brute force) is Module 09's job, not this concept's.</td></tr>
+<tr><td>Stage</td><td>One discrete transformation within a pipeline, with a defined input and output.</td><td>A stage's name is in scope here; its internal mechanism belongs to the module that owns it.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Seven moments, two pipelines, one shared index</h2></div></header>
+<div class="lane-flow">
+<div><b>T0 —</b> Documents exist in the source system. The index is empty. No query has happened yet.</div>
+<div><b>T1 —</b> Offline indexing runs: parses, chunks, embeds, and stores vectors for the current document set. The index now holds every chunk that existed at T0.</div>
+<div><b>T2 —</b> An employee asks a question. Online query runs: retrieves from the T1 index, assembles context, generates an answer. The index itself is untouched.</div>
+<div><b>T3 —</b> A different employee asks a different question. Online query runs again, against the exact same T1 index — no re-indexing happened between T2 and T3.</div>
+<div><b>T4 —</b> A new policy document is uploaded. The index does not change yet — offline indexing has not run again.</div>
+<div><b>T5 —</b> A third employee asks about that brand-new policy. Online query runs, searches the still-T1 index, and finds nothing about it — a timing gap, not a retrieval failure.</div>
+<div><b>T6 —</b> Offline indexing runs again on its next scheduled pass. The new document is now parsed, chunked, embedded, and stored. From this point on, online queries about it succeed.</div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two rows, one arrow between them</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing the offline indexing pipeline feeding a vector index that the online query pipeline searches">
+<div class="diagram-family-grid">
+<div class="diagram-node"><b>Offline indexing</b><small>documents → parsing → chunking → embedding → vector index. Runs once, or on a schedule.</small></div>
+<div class="diagram-node active"><b>Online query</b><small>query → retrieval → context assembly → generation. Runs fresh, every request — reading the index built on the left.</small></div>
+</div>
+</div>
+<ol class="diagram-key"><li><b>Left node:</b> everything that has to happen before a query can be answered at all.</li><li><b>Right node:</b> everything that happens because one specific query just arrived — reading, never writing, the index.</li></ol>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The nine-box skeleton, now drawn as two pipelines</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Documents</span><i>↓</i><span class="hot">Parsing</span><i>↓</i><span class="hot">Chunking</span><i>↓</i><span class="hot">Embedding model</span><i>↓</i><span class="hot">Vectors / index</span>
+</div>
+<div class="pipeline-preview">
+<span class="hot">Retrieval</span><i>↓</i><span class="hot">Context</span><i>↓</i><span class="hot">LLM</span><i>↓</i><span class="hot">Answer</span>
+</div>
+<p>Every prior Module 03 concept highlighted one or two boxes in this chain and left the rest as scenery. This concept highlights all nine, split at exactly the point where "before any query" ends and "because a query arrived" begins — between the vector index and retrieval. Nothing in the bottom row can run before the top row has produced at least one entry in the index.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why splitting the cost in two is not just tidy — it's cheaper</h2></div></header>
+<p>Let <code>C_index</code> be the total cost of running offline indexing once over the document set, and <code>C_query</code> be the cost of one online query. If <code>Q</code> queries get served before the index needs rebuilding, the total cost of serving them is:</p>
+<div class="equation">Total cost = C_index + Q × C_query</div>
+<div class="equation">Average cost per query = C_index / Q + C_query</div>
+<p>As <code>Q</code> grows, <code>C_index / Q</code> — the amortized share of indexing cost each query actually pays — shrinks toward zero. Indexing's cost gets paid once and spread across every query that follows; running it fresh inside every single query instead would mean every query pays the full <code>C_index</code> on top of <code>C_query</code> — the arithmetic behind why the two pipelines are split at all, not just a design preference.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>500 documents, 10,000 questions</h2></div></header>
+<p>Indexing 500 policy documents takes roughly 2 seconds each to parse, chunk, embed, and store — <code>C_index</code> ≈ 1,000 seconds, paid once. Each online query — retrieval, context assembly, generation — costs roughly 0.3 seconds: <code>C_query</code> = 0.3.</p>
+<table class="worked-table">
+<thead><tr><th>Scenario</th><th>Total cost for 10,000 queries</th><th>Average cost per query</th></tr></thead>
+<tbody>
+<tr><td>Split pipelines (indexing once, query many times)</td><td>1,000 + 10,000 × 0.3 = 4,000 seconds</td><td>0.4 seconds</td></tr>
+<tr><td>Hypothetical: re-index inside every query</td><td>10,000 × (1,000 + 0.3) = 10,003,000 seconds</td><td>1,000.3 seconds</td></tr>
+</tbody>
+</table>
+<p>The split isn't a minor optimization — re-indexing per query would be roughly 2,500 times slower on average in this example, for the identical set of documents and questions.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Four cards: a clean fit, a boundary case, a counterexample, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A stable policy corpus, indexed nightly</h3><p>Thousands of queries per day against a document set that changes rarely — the amortization argument wins decisively.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A corpus that changes every few minutes</h3><p>Offline indexing has to run far more often, shrinking the amortization benefit — but the two pipelines stay conceptually separate regardless of how tight the schedule gets.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>A live lookup against a database or API, per query</h3><p>No index is built in advance at all — Module 21's structured-data RAG covers this pattern; naming it only as a boundary here, not exploring it.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming both pipelines must run on the same server</h3><p>They're separate pipelines by responsibility, not by deployment — Module 19 covers how they're actually deployed, often on entirely different infrastructure.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Two functions, one shared index</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · OFFLINE INDEXING VS. ONLINE QUERY, SILHOUETTE ONLY</span>
+<pre><code># Offline: runs once (or on a schedule), before any query exists.
+# Every internal step is a stub -- HOW parsing, chunking, embedding,
+# and storage actually work is Modules 06-10's job, not this one.
+def build_index(documents):
+    index = []
+    for doc in documents:
+        text = parse(doc)               # Module 06
+        chunks = chunk(text)             # Module 07
+        for piece in chunks:
+            vector = embed(piece)        # Module 08
+            index.append({"chunk": piece, "vector": vector, "source": doc["id"]})
+    return index                         # Module 09/10 owns the real storage structure
+
+
+# Online: runs once per user request, reading an index that must
+# already exist. It never calls build_index -- that would defeat
+# the entire point of separating the two pipelines.
+def answer_query(query, index):
+    if not index:
+        return "No documents indexed yet -- nothing to retrieve."
+    hits = retrieve(query, index)                # Module 09/16
+    context = assemble_context(hits)             # Module 17
+    return generate(query, context)               # Module 02's mechanism, cited
+
+
+# The shape that matters: build_index runs ONCE, up front.
+# answer_query runs MANY times, against whatever build_index
+# already produced -- including zero times, if no query ever arrives.
+corpus_index = build_index(policy_documents)
+answer_1 = answer_query("What's the pre-approval rule?", corpus_index)
+answer_2 = answer_query("How many vacation days carry over?", corpus_index)
+</code></pre>
+</div>
+<p>Notice what's missing on purpose: <code>parse</code>, <code>chunk</code>, <code>embed</code>, <code>retrieve</code>, <code>assemble_context</code>, and <code>generate</code> are named but not implemented. Their internals are exactly the stages Modules 06 through 10 and 17 build out for real — this code exposes only the order and the one-build/many-read shape.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where the split shows up in the literature</h2></div></header>
+<p>Chen, Fisch, Weston and Bordes (2017), DrQA, is an early, clean instance of exactly this shape: a document retriever builds a TF-IDF index over Wikipedia once, and a separate reader model answers each question against whatever the index already contains. Karpukhin et al. (2020), Dense Passage Retrieval, modernizes the same split with dense embeddings — the passage encoder runs offline to build the index, and only the much smaller question encoder runs at query time. Johnson, Douze and Jégou (2017), FAISS, is the systems-level counterpart: a library purpose-built for storing and searching the large vector indexes offline indexing produces, at a scale no per-query computation could match.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Index Traffic Control</h2></div></header>
+<div class="lab">
+<p>Three documents wait to be indexed. Run the offline pipeline on them one at a time, and run the online query at any moment you choose — before any document is indexed, in the middle, or after all three are in. The query never changes; only what the index currently holds does.</p>
+<div class="lab-actions" role="group" aria-label="Offline indexing">
+<button type="button" id="indexNextButton0306">Run offline indexing on the next document →</button>
+</div>
+<div class="sample-output" id="indexStatus0306" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Online query">
+<button type="button" class="secondary" id="runQueryButton0306">Ask: "What's the refund window?"</button>
+</div>
+<div class="sample-output" id="queryLog0306" aria-live="polite"></div>
+<div class="lab-actions"><button type="button" class="secondary" id="resetIndexButton0306">Reset</button></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Cadence choices for offline indexing</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>When it wins</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Batch, scheduled (e.g. nightly)</td><td>A corpus that changes slowly and predictably</td><td>Simple to operate; freshness gap can be as large as the schedule interval</td></tr>
+<tr><td>Event-driven / incremental</td><td>A corpus that changes often or unpredictably</td><td>Smaller freshness gap; more moving parts to keep reliable — Module 19's territory</td></tr>
+<tr><td>No index at all, live lookup per query</td><td>Data that must always be current and is cheap to fetch directly</td><td>Only works when there's something to call live — Module 21's structured-data RAG, not this pipeline</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>STALE INDEX</span><h3>Documents changed, but reindexing hasn't run</h3><p>Online queries answer confidently against an index that no longer matches reality — Section 06's T4-T5 moments made concrete.</p></article>
+<article class="info-card"><span>QUERY-TIME INDEXING ATTEMPT</span><h3>Trying to embed and search live, with no prebuilt index</h3><p>Every query now pays the full indexing cost Section 09 showed gets amortized away — devastatingly slow at any real scale.</p></article>
+<article class="info-card"><span>INDEX-QUERY MISMATCH</span><h3>The index and the query assume different embedding models</h3><p>Retrieval returns nonsense because the two sides of the pipeline were never speaking the same vector space — Module 08's embedding-model-selection concept, forward-referenced, not solved here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Retrieval finding nothing means retrieval is broken</td><td>Usually means offline indexing hasn't processed that document yet — a timing gap, not a retrieval defect.</td></tr>
+<tr><td>The two pipelines must run at the same cadence</td><td>They're independent by design — indexing can run hourly while queries arrive continuously, or the reverse.</td></tr>
+<tr><td>An online query can trigger its own reindexing</td><td>Not by default — reindexing is offline's responsibility, triggered by schedules or document changes, not by the act of asking a question.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications, at introductory depth</h2></div></header>
+<ul>
+<li>Offline indexing needs its own trigger — a cron schedule, a document-change event, or both — separate from anything a user does.</li>
+<li>A stale index is a measurable risk, not a hypothetical one — tracking last-indexed time per document is how staleness gets caught before a user does.</li>
+<li>The two pipelines have very different latency budgets: online query latency is user-facing and must stay tight; offline indexing latency mostly isn't, and can trade time for thoroughness.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>List offline indexing's four stages, in order.</summary><div>Parsing, chunking, embedding, and storing vectors in an index.</div></details>
+<details class="quiz"><summary>List online query's three stages, in order.</summary><div>Retrieval, context assembly, and generation.</div></details>
+<details class="quiz"><summary>Why can't online query ever run before offline indexing has produced at least one entry?</summary><div>Retrieval has nothing to search — the vector index is empty until offline indexing has stored something in it.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A product catalog gets a new item added every few minutes. Decide roughly how often offline indexing should run for this corpus, and explain what goes wrong for users if the schedule is chosen too infrequently.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one defensible reasoning pattern</summary>
+<div>A catalog changing every few minutes needs offline indexing on a similarly tight cadence — every few minutes, or event-driven on each new item, rather than nightly. Chosen too infrequently, newly added items stay invisible to every online query for the entire gap between indexing runs, exactly like Section 06's T4-T5 moments: not a retrieval failure, but a schedule mismatched to how fast the corpus actually changes.</div>
+</details>
+<p>Teach-back: explain, in your own words, why making the schedule tighter always costs something, even though it also always shrinks the freshness gap.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The two pipelines</h3><ul><li><b>Offline indexing:</b> documents → parsing → chunking → embedding → vector index, once or periodically</li><li><b>Online query:</b> query → retrieval → context assembly → generation, every request</li><li><b>Core rule:</b> online only reads what offline already built — never the reverse</li></ul></div>
+<div><h3>Memorable example</h3><p>A policy uploaded five minutes ago that no query can find yet — not because retrieval is broken, but because offline indexing hasn't caught up.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain the offline/online split to a non-technical stakeholder.</summary><div>Think of it like a library: cataloging new books happens in the background, on its own schedule. A visitor's question gets answered by searching whatever's already cataloged, right then. The two never swap jobs.</div></details>
+<details class="quiz"><summary>Why does amortizing indexing cost across many queries matter more as query volume grows?</summary><div>Average cost per query is C_index/Q + C_query — as Q grows, the indexing share shrinks toward zero, while re-indexing per query would keep paying the full C_index on every single request regardless of volume.</div></details>
+<details class="quiz"><summary>Coding: what would you add to build_index and answer_query to make the "index must exist before it's useful" rule observable, not just implied?</summary><div>A guard in answer_query that checks whether the index is empty and returns an explicit "nothing indexed yet" result, plus a last-indexed timestamp stored alongside the index so staleness is measurable rather than assumed.</div></details>
+<details class="quiz"><summary>Debugging: a user reports a document they uploaded an hour ago doesn't show up in any answer. Where do you look first?</summary><div>Whether offline indexing has run since the upload — check the last-indexed timestamp against the upload timestamp before suspecting retrieval logic at all.</div></details>
+<details class="quiz"><summary>System design: sketch the two pipelines and name one component each would need in a real deployment.</summary><div>Offline: a scheduler or event trigger plus a parsing/chunking/embedding job that writes to a vector store. Online: an API endpoint that runs retrieval against that same vector store, assembles context, and calls a generation model — deployed and scaled independently of the offline job.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/1704.00051"><b>Chen, Fisch, Weston, Bordes — Reading Wikipedia to Answer Open-Domain Questions</b><br><span>An early, clean instance of the offline-index/online-query split — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/2004.04906"><b>Karpukhin, Oğuz, Min et al. — Dense Passage Retrieval for Open-Domain Question Answering</b><br><span>Builds the passage index offline; only the question encoder runs at query time — behind Section 13.</span></a>
+<a href="https://arxiv.org/abs/1702.08734"><b>Johnson, Douze, Jégou — Billion-scale similarity search with GPUs (FAISS)</b><br><span>The systems layer for storing and searching the vector indexes offline indexing produces — behind Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 06 is complete. Its amortization mathematics, the build_index/answer_query contrast, and The Index Traffic Control lab remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-03-concept-07.html">Start Concept 07 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: RAG versus prompting and long-context prompting.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 03 · Concept 06 · Complete</p>
+<a href="module-03-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

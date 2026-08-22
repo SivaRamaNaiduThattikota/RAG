@@ -1,0 +1,1103 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson explaining pretraining, continued pretraining, fine-tuning, alignment, parameter-efficient tuning, prompting, RAG, and inference.">
+<title>Training, fine-tuning and inference — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-05.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 05</p>
+<h1>Training, fine-tuning<br>
+<em>and inference</em>
+</h1>
+<p class="lesson-lead">Track when model parameters are created, updated, partially adapted, or left unchanged—and use that distinction to choose between tuning, prompting, tools, and RAG.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Fifth Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Foundation models and LLMs</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Know whether weights change</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You separated training and fine-tuning, which change parameters, from prompting, RAG, and inference, which do not.</p>
+<b>5 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Ask one question first: did the weights change?</h2>
+</div>
+<p>This single diagnostic separates training and fine-tuning from prompting, ordinary RAG, tool calls, and inference.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Training versus inference</h3>
+<p>
+<b>Training</b> uses data and an objective to update learnable parameters. <b>Pretraining</b> is the broad initial training that creates a reusable base model. <b>Fine-tuning</b> starts from pretrained parameters and updates all or some trainable parameters for a narrower behavior, domain, or task.</p>
+<p>
+<b>Inference</b> uses fixed trained parameters to process a new input and produce an output. Prompting, retrieving documents, querying Oracle, and adding context can change the input and output while leaving the model’s weights unchanged.</p>
+<div class="beginner-memory">
+<b>First memory:</b> training learns or changes parameters; inference uses current parameters.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why not use one stage for everything?</h3>
+<p>Broad pretraining learns reusable patterns from enormous datasets. Fine-tuning can specialize behavior more persistently. Inference must answer individual requests quickly without retraining the model each time. RAG and tools inject current or private information at inference because repeatedly retraining for every document update would be slow, costly, and difficult to govern.</p>
+<div class="mental-compare">
+<div>
+<span>CHANGE BEHAVIOR OR CAPABILITY</span>
+<p>Consider supervised tuning, preference optimization, continued pretraining, or adapters—with evaluation and versioning.</p>
+</div>
+<div>
+<span>SUPPLY CURRENT FACTS</span>
+<p>Prefer retrieval, databases, APIs, or other tools at inference time.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The leave policy changes on Monday</h3>
+<p>If the carry-forward policy changes, ordinary RAG re-indexes the approved document. The next query retrieves the new passage and gives it to the same model. No LLM weight update is required.</p>
+<p>If the assistant consistently ignores a required output schema, you might improve the prompt, constrain decoding, or fine-tune on high-quality schema examples. If the model lacks the organization’s terminology across many tasks, carefully evaluated domain-adaptive continued pretraining might be considered.</p>
+<div class="context-demo">
+<div>
+<span>POLICY UPDATE</span>
+<p>Update document and index. Model weights stay fixed.</p>
+</div>
+<div>
+<span>EXACT BALANCE</span>
+<p>Query Oracle during inference. Model weights stay fixed.</p>
+</div>
+<div>
+<span>PERSISTENT RESPONSE STYLE</span>
+<p>Prompt first; fine-tune only when justified. Weights may change.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The lifecycle stages</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>PRETRAINING</span>
+<h3>Create the base</h3>
+<p>Update many parameters on broad data using a self-supervised objective.</p>
+</article>
+<article class="info-card">
+<span>CONTINUED PRETRAINING</span>
+<h3>Shift domain exposure</h3>
+<p>Resume the pretraining objective on additional domain or language data.</p>
+</article>
+<article class="info-card">
+<span>SUPERVISED FINE-TUNING</span>
+<h3>Teach input-output behavior</h3>
+<p>Update parameters from curated instruction-response or labelled examples.</p>
+</article>
+<article class="info-card">
+<span>PREFERENCE / ALIGNMENT</span>
+<h3>Prefer desired outputs</h3>
+<p>Use comparisons, rewards, or preference objectives to shape behavior.</p>
+</article>
+<article class="info-card">
+<span>PEFT · LoRA</span>
+<h3>Train small additions</h3>
+<p>Freeze base weights and learn small adapter parameters.</p>
+</article>
+<article class="info-card">
+<span>INFERENCE</span>
+<h3>Use the artifact</h3>
+<p>Keep parameters fixed while processing prompts, context, and tool results.</p>
+</article>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c05-visual-title">
+  <strong class="concept-visual-title" id="c05-visual-title">VISUAL · THE WEIGHT-CHANGE TEST</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable model weight change decision diagram"><div class="diagram-split"><div class="diagram-node"><b>New requirement</b><small>Policy, behavior, style, or exact live fact?</small></div><div class="diagram-fork" aria-hidden="true">↗<br>↘</div><div class="diagram-node active"><b>Weights change</b><small>Pretraining, continued pretraining, fine-tuning, adapters</small></div><div class="diagram-node"><b>Weights stay fixed</b><small>Prompting, RAG, Oracle lookup, ordinary inference</small></div></div></div>
+  <figcaption>Use this as the first diagnostic. Learning methods save changed parameters or adapters; runtime methods supply instructions, evidence, or exact records to an already deployed model.</figcaption>
+  <ol class="diagram-key"><li><b>Behavior or capability:</b> tuning may be appropriate after evaluation.</li><li><b>Changing knowledge:</b> retrieve current documents instead of encoding every update in weights.</li><li><b>Exact personal fact:</b> query the authorized Oracle record; do not ask model weights to remember it.</li></ol>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Offline learning and online use</h3>
+<div class="mental-compare">
+<div>
+<span>OFFLINE · PARAMETER LEARNING</span>
+<p>Dataset → objective → forward pass → loss → gradients → optimizer → updated checkpoint</p>
+</div>
+<div>
+<span>ONLINE · REQUEST INFERENCE</span>
+<p>Identity + question → retrieval/tools → prompt/context → fixed model → validated answer</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>Broad pretraining</span>
+<i>→</i>
+<span>Base checkpoint</span>
+<i>→</i>
+<span>Optional tuning / adapters</span>
+<i>→</i>
+<span>Deployed artifact</span>
+<i>→</i>
+<span>RAG inference</span>
+<i>→</i>
+<span>Answer</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the weight-change map</summary>
+<div>
+<div class="pipeline-preview">
+<span>Pretraining: weights change</span>
+<i>↓</i>
+<span>Fine-tuning: weights or adapters change</span>
+<i>↓</i>
+<span>Prompting: no weight change</span>
+<i>↓</i>
+<span>RAG: no weight change</span>
+<i>↓</i>
+<span>Oracle lookup: no model weight change</span>
+<i>↓</i>
+<span>Inference: no weight change</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Methods that are often confused</h3>
+<div class="distinction-table" role="table" aria-label="Training and inference distinctions">
+<div role="row">
+<b role="cell">Method</b>
+<b role="cell">Weights?</b>
+<b role="cell">Primary purpose</b>
+</div>
+<div role="row">
+<span role="cell">Pretraining</span>
+<span role="cell">Many updated</span>
+<span role="cell">Learn broad reusable representations/capabilities</span>
+</div>
+<div role="row">
+<span role="cell">Full fine-tuning</span>
+<span role="cell">Most/all updated</span>
+<span role="cell">Specialize model behavior</span>
+</div>
+<div role="row">
+<span role="cell">LoRA / adapters</span>
+<span role="cell">Base frozen; small parameters trained</span>
+<span role="cell">Efficient specialization</span>
+</div>
+<div role="row">
+<span role="cell">Prompting</span>
+<span role="cell">Unchanged</span>
+<span role="cell">Condition one inference request</span>
+</div>
+<div role="row">
+<span role="cell">RAG</span>
+<span role="cell">Unchanged in ordinary RAG</span>
+<span role="cell">Supply external evidence</span>
+</div>
+<div role="row">
+<span role="cell">In-context learning</span>
+<span role="cell">Unchanged</span>
+<span role="cell">Demonstrate a task inside the context</span>
+</div>
+</div>
+<p>Quantization changes numerical representation for efficiency; it is not automatically fine-tuning. QLoRA combines a frozen quantized base with trainable low-rank adapters.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“Every prompt trains the model.”</b>
+<p>No. Standard inference does not update model parameters.</p>
+</div>
+<div>
+<b>“RAG fine-tunes on retrieved documents.”</b>
+<p>Ordinary RAG places retrieved content in runtime context.</p>
+</div>
+<div>
+<b>“Fine-tuning is the best way to add changing facts.”</b>
+<p>Frequently changing authoritative knowledge generally belongs in retrieval or tools.</p>
+</div>
+<div>
+<b>“LoRA changes nothing in the model.”</b>
+<p>It trains additional low-rank parameters while freezing the base weights.</p>
+</div>
+<div>
+<b>“Inference means deterministic output.”</b>
+<p>Inference can include stochastic sampling; token sampling belongs to Concept 7.</p>
+</div>
+<div>
+<b>“Training loss proves production quality.”</b>
+<p>Held-out evaluation and system-level testing are still required.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Choose the right lever for Oracle RAG</h3>
+<div class="project-map">
+<div>
+<span>NEW POLICY VERSION</span>
+<b>Re-index retrieval</b>
+<p>Do not tune the model merely to memorize the new text.</p>
+</div>
+<div>
+<span>EMPLOYEE BALANCE</span>
+<b>Oracle inference-time lookup</b>
+<p>Current personal data remains in the governed database.</p>
+</div>
+<div>
+<span>COMPANY TERMINOLOGY</span>
+<b>Prompt, glossary retrieval, then evaluate tuning</b>
+<p>Start with the least invasive reliable method.</p>
+</div>
+<div>
+<span>STRICT ROUTING FORMAT</span>
+<b>Schema, validation, classifier, or tuning</b>
+<p>Choose using measured failure rates and risk.</p>
+</div>
+</div>
+<p>LangChain or LangGraph can orchestrate both fixed-model inference and calls to separately trained adapters. They do not decide whether tuning is necessary.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Pretraining</b>
+<p>Creates broad base parameters.</p>
+</div>
+<div>
+<b>Fine-tuning</b>
+<p>Specializes all or some trainable parameters.</p>
+</div>
+<div>
+<b>PEFT</b>
+<p>Trains small parameter sets around a frozen base.</p>
+</div>
+<div>
+<b>Inference</b>
+<p>Uses fixed deployed parameters.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Which lifecycle stages change parameters?</li>
+<li>How does continued pretraining differ from supervised fine-tuning?</li>
+<li>Why does ordinary RAG not count as fine-tuning?</li>
+<li>When might LoRA be preferred to full fine-tuning?</li>
+<li>Where should a current leave balance live?</li>
+<li>Why evaluate before and after every tuning stage?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick method-selection exercise</summary>
+<div>
+<ol>
+<li>New policy PDF — <b>update and re-index retrieval</b>.</li>
+<li>Teach consistent JSON replies — <b>constrained output/prompt first, then SFT if needed</b>.</li>
+<li>Adapt a large frozen base cheaply — <b>LoRA/PEFT</b>.</li>
+<li>Answer one employee request — <b>inference with retrieval and Oracle</b>.</li>
+<li>Learn broad language patterns from scratch — <b>pretraining</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Tokens and modalities</h3>
+<p>Concept 6 explains what enters the model: tokenization, token IDs, embeddings versus tokens, text and non-text modalities, special tokens, sequence length, and why characters, words, and tokens are not identical.</p>
+<div class="beginner-memory">
+<b>Concept 05 is complete.</b> Continue to tokens, token IDs, and modalities.</div>
+<a class="button primary" href="module-01-concept-06.html">Start Concept 06 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required lifecycle and optional depth.</h2>
+<p>Master the weight-change test and project decisions first. Open gradient mathematics, PEFT, alignment, code, production, and interviews only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>Training updates parameters; inference uses them.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Map pretraining, tuning, alignment, and PEFT.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>Choose tuning, RAG, Oracle, or prompting.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open optimization, adapters, evaluation, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 05 path:</b> Data + objective → parameter update → checkpoint → fixed-weight inference.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the training and inference deep dive</b>
+<em>Gradients, checkpoints, SFT, preference alignment, LoRA, RAG boundaries, code and production</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where the lifecycle sits</h2>
+</div>
+</header>
+<p>Concept 4 established the reusable foundation. Concept 5 traces how that foundation is produced, adapted, and used. Concept 6 will inspect the tokenized and multimodal inputs flowing through these stages.</p>
+<div class="flow">
+<div class="flow-node">Foundation model</div>
+<div class="flow-node hot">Training lifecycle</div>
+<div class="flow-node">Tokens</div>
+<div class="flow-node">Prompts</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>CLASSIFY</span>
+<h3>Identify the stage</h3>
+<p>Determine whether a workflow trains, adapts, or only infers.</p>
+</article>
+<article class="info-card">
+<span>TRACE</span>
+<h3>Track parameters</h3>
+<p>State which parameters receive gradients and what artifact is saved.</p>
+</article>
+<article class="info-card">
+<span>SELECT</span>
+<h3>Choose the lever</h3>
+<p>Defend prompting, RAG, full tuning, or PEFT.</p>
+</article>
+<article class="info-card">
+<span>OPERATE</span>
+<h3>Plan evaluation</h3>
+<p>Version data, objectives, checkpoints, adapters, and runtime settings.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Parameter:</b> a learned numerical value.</li>
+<li>
+<b>Loss:</b> scalar training objective to minimize.</li>
+<li>
+<b>Gradient:</b> local sensitivity of loss to a parameter.</li>
+<li>
+<b>Checkpoint:</b> saved parameter and training state.</li>
+<li>
+<b>Inference context:</b> runtime inputs that do not become persistent parameter updates.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>Study, coaching, and an open-book exam</h2>
+</div>
+</header>
+<p>Pretraining resembles broad study; fine-tuning resembles focused coaching; inference resembles taking a new exam using the learned state. RAG is an open-book mechanism that supplies selected references during the exam.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>Neural parameters are not human memories, and in-context examples can alter runtime behavior without durable learning.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Definitions by optimization state</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Stage</th>
+<th>Starting point</th>
+<th>Trainable state</th>
+<th>Output artifact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pretraining</td>
+<td>Initialization or earlier base</td>
+<td>Typically broad parameter set</td>
+<td>Base checkpoint</td>
+</tr>
+<tr>
+<td>Continued pretraining</td>
+<td>Base checkpoint</td>
+<td>Broad parameter set</td>
+<td>Domain-adapted base</td>
+</tr>
+<tr>
+<td>Full fine-tuning</td>
+<td>Pretrained checkpoint</td>
+<td>Most/all parameters</td>
+<td>Specialized checkpoint</td>
+</tr>
+<tr>
+<td>PEFT</td>
+<td>Frozen base</td>
+<td>Adapters/prompts/subset</td>
+<td>Small adaptation artifact</td>
+</tr>
+<tr>
+<td>Inference</td>
+<td>Deployed artifact</td>
+<td>None</td>
+<td>Output/trace, not a learned checkpoint</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>One optimization step</h2>
+</div>
+</header>
+<div class="lane-flow">
+<div>Batch examples</div>
+<div>Forward pass produces predictions</div>
+<div>Loss compares predictions with objective</div>
+<div>Backpropagation computes gradients</div>
+<div>Optimizer updates trainable parameters</div>
+<div>Evaluation decides whether to save checkpoint</div>
+</div>
+<p>Inference usually stops after the forward pass and decoding/tool workflow. It does not run backpropagation or an optimizer update.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>Weight-changing and weight-preserving paths</h2>
+</div>
+</header>
+<div class="scroll-flow">
+<span>Training data</span>
+<i>→</i>
+<span>Loss</span>
+<i>→</i>
+<span>Gradients</span>
+<i>→</i>
+<span>Optimizer</span>
+<i>→</i>
+<span>New checkpoint</span>
+<i>·</i>
+<span>Runtime input + evidence</span>
+<i>→</i>
+<span>Fixed checkpoint</span>
+<i>→</i>
+<span>Output</span>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>RAG lives on the inference path</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Deployed fixed model</span>
+<i>↓</i>
+<span>User + authorization</span>
+<i>↓</i>
+<span>Oracle + retrieval</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>Inference</span>
+<i>↓</i>
+<span>Validation</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>Index construction may involve embedding-model inference, but it still does not ordinarily update the generator’s weights.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Gradient descent and low-rank adaptation</h2>
+</div>
+</header>
+<div class="equation">Full update: θ<sub>t+1</sub> = θ<sub>t</sub> − η ∇<sub>θ</sub>L(θ<sub>t</sub>; B)</div>
+<p>
+<code>η</code> is the learning rate, <code>B</code> is a batch, and the gradient points toward locally increasing loss, so subtraction aims to reduce it.</p>
+<div class="equation">LoRA: W′ = W₀ + ΔW, where ΔW = BA and rank(BA) ≤ r</div>
+<p>The base matrix <code>W₀</code> stays frozen while smaller matrices <code>A</code> and <code>B</code> are trained. Inference uses the base plus learned update.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>A one-parameter training step</h2>
+</div>
+</header>
+<p>For prediction <code>ŷ = wx</code>, let <code>x=2</code>, target <code>y=10</code>, initial <code>w=3</code>, and loss <code>L=(ŷ−y)²</code>.</p>
+<div class="equation">ŷ=6; L=(6−10)²=16; dL/dw=2(wx−y)x=2(6−10)2=−16</div>
+<div class="equation">With η=0.1: w′=3−0.1(−16)=4.6</div>
+<p>The weight changed because training applied a gradient update. During inference with <code>w=4.6</code>, computing <code>ŷ</code> alone does not alter <code>w</code>.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>PRETRAIN</span>
+<h3>Broad corpus</h3>
+<p>Learn general language patterns through self-supervision.</p>
+</article>
+<article class="info-card">
+<span>CONTINUE</span>
+<h3>Domain corpus</h3>
+<p>Resume a pretraining objective on specialized unlabelled text.</p>
+</article>
+<article class="info-card">
+<span>SFT</span>
+<h3>Instruction pairs</h3>
+<p>Teach desired input-output behavior from curated demonstrations.</p>
+</article>
+<article class="info-card">
+<span>PEFT</span>
+<h3>Task adapter</h3>
+<p>Train a small low-rank update while freezing the base.</p>
+</article>
+<article class="info-card">
+<span>INFERENCE</span>
+<h3>Employee request</h3>
+<p>Use context and tools with fixed parameters.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>Upload a PDF</h3>
+<p>Uploading alone neither trains nor retrieves until a pipeline processes it.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>See the update boundary in code</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · PYTORCH-LIKE PSEUDOCODE</span>
+<pre>
+<code># Training: parameters change
+model.train()
+for batch in loader:
+    optimizer.zero_grad()
+    loss = objective(model(batch.inputs), batch.targets)
+    loss.backward()
+    optimizer.step()
+
+# Inference: parameters stay fixed
+model.eval()
+with no_grad():
+    output = model(runtime_input)
+</code>
+</pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>Full tuning, LoRA, and QLoRA</h2>
+</div>
+</header>
+<p>Full tuning stores and optimizes a large trainable state. LoRA freezes pretrained weights and trains low-rank matrices. QLoRA keeps a quantized frozen base while backpropagating into LoRA adapters, reducing memory use. These efficiency methods do not remove the need for high-quality data and evaluation.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Weight-change classifier</h2>
+</div>
+</header>
+<div class="lab">
+<p>Choose a method to inspect persistent state, runtime inputs, and best-fit purpose.</p>
+<div class="lab-actions" role="group" aria-label="Choose a lifecycle method">
+<button type="button" class="lifecycle-button active" data-method="pretraining" aria-pressed="true">Pretraining</button>
+<button type="button" class="lifecycle-button secondary" data-method="sft" aria-pressed="false">SFT</button>
+<button type="button" class="lifecycle-button secondary" data-method="lora" aria-pressed="false">LoRA</button>
+<button type="button" class="lifecycle-button secondary" data-method="prompt" aria-pressed="false">Prompting</button>
+<button type="button" class="lifecycle-button secondary" data-method="rag" aria-pressed="false">RAG</button>
+<button type="button" class="lifecycle-button secondary" data-method="inference" aria-pressed="false">Inference</button>
+</div>
+<div class="sample-output" id="lifecycleOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Choose the smallest reliable intervention</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Need</th>
+<th>Start with</th>
+<th>Escalate when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current private facts</td>
+<td>RAG / database / API</td>
+<td>Do not tune merely for freshness</td>
+</tr>
+<tr>
+<td>Task instructions</td>
+<td>Prompt + examples + schema</td>
+<td>Measured behavior remains inconsistent</td>
+</tr>
+<tr>
+<td>Persistent narrow behavior</td>
+<td>PEFT or SFT</td>
+<td>Data and evaluation justify weight changes</td>
+</tr>
+<tr>
+<td>Broad domain language</td>
+<td>Glossary retrieval / prompting</td>
+<td>Continued pretraining has clear measured benefit</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>DATA</span>
+<h3>Contamination or leakage</h3>
+<p>Evaluation examples or private data enter training improperly.</p>
+</article>
+<article class="info-card">
+<span>OPTIMIZATION</span>
+<h3>Overfitting</h3>
+<p>Training improves while held-out performance degrades.</p>
+</article>
+<article class="info-card">
+<span>TRANSFER</span>
+<h3>Catastrophic forgetting</h3>
+<p>Specialization damages previously useful behavior.</p>
+</article>
+<article class="info-card">
+<span>ALIGNMENT</span>
+<h3>Reward mismatch</h3>
+<p>Optimization targets proxy preferences that miss the real goal.</p>
+</article>
+<article class="info-card">
+<span>PEFT</span>
+<h3>Adapter interference</h3>
+<p>Adapter choice, composition, or activation produces conflicts.</p>
+</article>
+<article class="info-card">
+<span>INFERENCE</span>
+<h3>Train-serving mismatch</h3>
+<p>Runtime prompts, precision, or preprocessing differ from evaluation.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prompt history updates weights</td>
+<td>It changes context, unless a separate training pipeline later uses the data.</td>
+</tr>
+<tr>
+<td>Fine-tuning guarantees factual accuracy</td>
+<td>It can alter behavior but does not guarantee current evidence or provenance.</td>
+</tr>
+<tr>
+<td>LoRA is inference-only</td>
+<td>Adapter parameters are trained and persist.</td>
+</tr>
+<tr>
+<td>Evaluation loss equals user value</td>
+<td>Production tasks require multiple behavioral and operational metrics.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Version datasets, code, objectives, seeds, base checkpoints, adapters, and evaluation suites.</li>
+<li>Separate training compute/security environments from serving.</li>
+<li>Record lineage from base model to deployed artifact.</li>
+<li>Run capability, safety, privacy, bias, and regression evaluations after every update.</li>
+<li>Monitor cost and latency separately for training and inference.</li>
+<li>Preserve rollback paths for checkpoints and adapters.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Does RAG update model weights?</summary>
+<div>Ordinary RAG does not. It changes inference context using retrieved evidence.</div>
+</details>
+<details class="quiz">
+<summary>What does LoRA train?</summary>
+<div>Small low-rank parameter matrices while the pretrained base weights remain frozen.</div>
+</details>
+<details class="quiz">
+<summary>Continued pretraining versus SFT?</summary>
+<div>Continued pretraining generally reuses a self-supervised objective on domain data; SFT learns from labelled or instruction-response examples.</div>
+</details>
+<details class="quiz">
+<summary>What distinguishes inference?</summary>
+<div>The deployed parameters are treated as fixed; the system computes outputs without optimizer updates.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>For policy updates, new employee records, company vocabulary, response tone, strict JSON, unsafe-answer refusal, and new language support, propose a first intervention. Record data needed, whether weights change, artifact produced, rollback plan, and evaluation metrics.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one defensible decision pattern</summary>
+<div>Policies and employee records stay external through retrieval/Oracle. Vocabulary starts with glossary retrieval and prompting. Tone and JSON start with prompting and constraints, then SFT/PEFT only after measured failures. Refusal behavior may need rules plus alignment/tuning and red-team evaluation. Broad new-language capability may justify continued pretraining or a better base model.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>Weight test</h3>
+<p>Pretraining: change.<br>Full tuning: change.<br>LoRA: adapters change.<br>Prompt/RAG/inference: no model-weight change.</p>
+</div>
+<div>
+<h3>Selection rule</h3>
+<ul>
+<li>Facts → external tools</li>
+<li>Instructions → prompt first</li>
+<li>Persistent behavior → evaluate tuning</li>
+<li>Every change → version and test</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>When would you choose RAG over fine-tuning?</summary>
+<div>For current, private, attributable, frequently changing knowledge that should remain externally governed.</div>
+</details>
+<details class="quiz">
+<summary>Full fine-tuning versus LoRA?</summary>
+<div>Full tuning updates broad model state and costs more; LoRA freezes the base and trains low-rank updates, improving storage and training efficiency with different capacity trade-offs.</div>
+</details>
+<details class="quiz">
+<summary>What is train-serving skew?</summary>
+<div>Training/evaluation inputs or processing differ from production, producing unexpected behavior.</div>
+</details>
+<details class="quiz">
+<summary>How would you prove tuning helped?</summary>
+<div>Use held-out task and safety suites, compare against prompt/RAG baselines, measure regressions and operations, and keep a rollback candidate.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/1910.10683">
+<b>Raffel et al. — T5</b>
+<br>
+<span>Systematic study of pretraining and transfer learning in a unified text-to-text framework.</span>
+</a>
+<a href="https://arxiv.org/abs/2106.09685">
+<b>Hu et al. — LoRA</b>
+<br>
+<span>Frozen pretrained weights with trainable low-rank adaptation matrices.</span>
+</a>
+<a href="https://arxiv.org/abs/2305.14314">
+<b>Dettmers et al. — QLoRA</b>
+<br>
+<span>Low-rank adaptation through a frozen quantized base model.</span>
+</a>
+<a href="https://arxiv.org/abs/2203.02155">
+<b>Ouyang et al. — InstructGPT</b>
+<br>
+<span>Supervised demonstrations followed by preference-based reinforcement learning.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 05 is complete. Its formal definitions, lifecycle explorer, LoRA mathematics, production implications, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-01-concept-06.html">Start Concept 06 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Tokens and modalities.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 05 · Active</p>
+<a href="module-01-concept-04.html">← Concept 04</a>
+</footer>
+</body>
+</html>
+

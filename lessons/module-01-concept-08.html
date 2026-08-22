@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on what generative models can reliably do, where they reliably fail, and how to use them responsibly before building a RAG system on top of them.">
+<title>Capabilities, limitations and responsible use — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js">
+</script>
+<script defer src="lesson-08.js">
+</script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip">
+<i>
+</i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 01 · CONCEPT 08</p>
+<h1>Capabilities, limitations<br>
+<em>and responsible use</em>
+</h1>
+<p class="lesson-lead">Close Module 01 by drawing the line between what a generative model reliably does well, what it reliably gets wrong, and which tasks should never rely on raw generation alone.</p>
+</div>
+<div class="lesson-meta">
+<div>
+<span>POSITION</span>
+<b>Eighth Generative AI foundation</b>
+</div>
+<div>
+<span>PREREQUISITE</span>
+<b>Prompts, sampling and generated output</b>
+</div>
+<div>
+<span>BEGINNER GOAL</span>
+<b>Sort tasks by what they actually need</b>
+</div>
+<div>
+<span>ADVANCED MATERIAL</span>
+<b>24 sections · optional</b>
+</div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p>
+<b>Completed:</b> You separated capability from limitation, named the specific failure types fluency alone cannot rule out, and learned to route a task to generation, retrieval, or human review by its stakes and currency.</p>
+<b>8 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Fluent is not the same as correct</h2>
+</div>
+<p>Everything from Concepts 1–7 explains how a model produces fluent, plausible token sequences. Fluency says nothing about whether a sequence is current, exact, or safe to act on.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01">
+<i>01</i> Concept first</a>
+<a href="#b02">
+<i>02</i> Why it exists</a>
+<a href="#b03">
+<i>03</i> Concrete example</a>
+<a href="#b04">
+<i>04</i> Technical mechanism</a>
+<a href="#b05">
+<i>05</i> Architecture / flow</a>
+<a href="#b06">
+<i>06</i> Important distinctions</a>
+<a href="#b07">
+<i>07</i> Common mistakes</a>
+<a href="#b08">
+<i>08</i> Project mapping</a>
+<a href="#b09">
+<i>09</i> Readiness check</a>
+<a href="#b10">
+<i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Capability, limitation, and responsible use</h3>
+<p>A <b>capability</b> is something a model does reliably well across many inputs—for example, producing fluent, well-formed language and adapting style to instructions. A <b>limitation</b> is a way it reliably falls short—for example, stating outdated or invented facts with the same fluent confidence as true ones.</p>
+<p>
+<b>Responsible use</b> means matching each task to a method that respects that boundary: raw generation where fluency is the goal, retrieval or tools where exactness and currency matter, and human review where the cost of being wrong is high.</p>
+<div class="beginner-memory">
+<b>First memory:</b> a fluent answer and a correct answer are not the same claim.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Why capability limits matter now, before Module 02</h3>
+<p>Concepts 4–7 explained a model that predicts plausible next tokens from learned patterns and a fixed set of parameters. Nothing in that mechanism checks a generated claim against a current, authoritative source. Naming these limits precisely is what motivates retrieval-augmented generation, which the rest of this course builds—RAG is not a decoration on top of a generative model, it is a direct response to this boundary.</p>
+<div class="mental-compare">
+<div>
+<span>WHAT GENERATION ALONE DOES WELL</span>
+<p>Fluent language, style adaptation, broad general knowledge patterns, drafting and summarizing.</p>
+</div>
+<div>
+<span>WHAT IT DOES NOT GUARANTEE</span>
+<p>Current facts, exact private records, verifiable citations, or safe high-stakes decisions.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three requests, three very different risks</h3>
+<p>“Draft a friendly reminder about the leave policy” is low-stakes and stylistic—raw generation is appropriate. “What is my current leave balance?” is an exact, private, frequently changing fact—raw generation can produce a fluent, wrong number with no warning sign. “Should I approve this leave request given labor law?” carries real consequences—it needs sourced evidence and human judgment, not a confident-sounding paragraph.</p>
+<div class="context-demo">
+<div>
+<span>STYLE / DRAFTING</span>
+<p>Safe for direct generation.</p>
+</div>
+<div>
+<span>EXACT / CURRENT FACT</span>
+<p>Needs retrieval or a database lookup, not memory.</p>
+</div>
+<div>
+<span>HIGH-STAKES DECISION</span>
+<p>Needs sourced evidence plus human review.</p>
+</div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c08-visual-title">
+  <strong class="concept-visual-title" id="c08-visual-title">VISUAL · THE TRUST BOUNDARY</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing where raw generation is trustworthy versus where it needs support"><div class="diagram-split"><div class="diagram-node active"><b>Fluent language generation</b><small>style, drafting, summarizing—reliable</small></div><div class="diagram-fork" aria-hidden="true">↗<br>↘</div><div class="diagram-node"><b>Exact / current facts</b><small>needs retrieval or a database, not memory</small></div><div class="diagram-node"><b>High-stakes decisions</b><small>needs sourced evidence and human review</small></div></div></div>
+  <figcaption>The model’s fluency is reliable across almost every task; its factual currency and safety are not. The right-hand branches are exactly what later modules add—retrieval, grounding, and evaluation—not something raw generation gains on its own.</figcaption>
+  <ol class="diagram-key"><li><b>Left branch:</b> the capability this module has been building toward.</li><li><b>Right branches:</b> the limitations that motivate everything from Module 02 onward.</li><li><b>Consequence:</b> task type, not model confidence, should decide which branch applies.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Where the limitations actually come from</h3>
+<div class="example-grid">
+<article class="info-card">
+<span>HALLUCINATION</span>
+<h3>Fluent but unsupported</h3>
+<p>The decoding loop always produces a plausible-sounding token sequence, whether or not it is true.</p>
+</article>
+<article class="info-card">
+<span>KNOWLEDGE CUTOFF</span>
+<h3>Frozen at training time</h3>
+<p>Parametric knowledge cannot reflect events or records created after training data was collected.</p>
+</article>
+<article class="info-card">
+<span>NO BUILT-IN VERIFICATION</span>
+<h3>No source-checking step</h3>
+<p>The model does not consult an external source unless a system explicitly retrieves and provides one.</p>
+</article>
+<article class="info-card">
+<span>DISTRIBUTIONAL BIAS</span>
+<h3>Reflects training data patterns</h3>
+<p>Skewed or unbalanced patterns in training data can surface as skewed outputs.</p>
+</article>
+<article class="info-card">
+<span>REASONING LIMITS</span>
+<h3>Pattern completion, not proof</h3>
+<p>Multi-step reasoning can fail silently, producing a confident but invalid chain.</p>
+</article>
+<article class="info-card">
+<span>PRIVACY EXPOSURE</span>
+<h3>Provider and logging boundaries</h3>
+<p>Sending private data to a model or provider carries its own governance requirements.</p>
+</article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Route the task before you trust the output</h3>
+<div class="mental-compare">
+<div>
+<span>LOW-STAKES / STYLE TASK</span>
+<p>Prompt → generation → light human skim → use.</p>
+</div>
+<div>
+<span>FACTUAL / HIGH-STAKES TASK</span>
+<p>Prompt → retrieval or tool call → grounded context → generation → citation check → use.</p>
+</div>
+</div>
+<div class="scroll-flow">
+<span>New task</span>
+<i>→</i>
+<span>Stakes and currency?</span>
+<i>→</i>
+<span>Low: generate directly</span>
+<i>·</i>
+<span>High: ground it first</span>
+<i>→</i>
+<span>Verify before acting</span>
+</div>
+<details class="beginner-answer">
+<summary>Open the routing decision map</summary>
+<div>
+<div class="pipeline-preview">
+<span>Is the fact exact and current?</span>
+<i>↓</i>
+<span>Yes → retrieval / database / tool</span>
+<i>↓</i>
+<span>No → generation may be sufficient</span>
+<i>↓</i>
+<span>Is the cost of being wrong high?</span>
+<i>↓</i>
+<span>Yes → add human review</span>
+<i>↓</i>
+<span>No → light review is enough</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Failure types that get lumped together</h3>
+<div class="distinction-table" role="table" aria-label="Limitation type distinctions">
+<div role="row">
+<b role="cell">Failure</b>
+<b role="cell">What actually happens</b>
+<b role="cell">Fixed by</b>
+</div>
+<div role="row">
+<span role="cell">Hallucination</span>
+<span role="cell">Fluent claim with no supporting evidence</span>
+<span role="cell">Grounding, retrieval, citation checking</span>
+</div>
+<div role="row">
+<span role="cell">Knowledge cutoff</span>
+<span role="cell">Correct as of training time, now stale</span>
+<span role="cell">Retrieval over current sources</span>
+</div>
+<div role="row">
+<span role="cell">Bias</span>
+<span role="cell">Skewed patterns from training data</span>
+<span role="cell">Evaluation, data review, guardrails</span>
+</div>
+<div role="row">
+<span role="cell">Non-determinism</span>
+<span role="cell">Different answers under sampling (Concept 7)</span>
+<span role="cell">Decoding-parameter control, not grounding</span>
+</div>
+</div>
+<p>Only one of these—non-determinism—is a decoding choice from Concept 7. The rest are limits of what the model’s parameters and training data can guarantee, and no decoding setting fixes them.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div>
+<b>“A confident tone means a correct answer.”</b>
+<p>Fluency and confidence are properties of generation, not evidence of truth.</p>
+</div>
+<div>
+<b>“Greedy decoding removes hallucination.”</b>
+<p>It removes randomness, not the lack of a verification step.</p>
+</div>
+<div>
+<b>“A bigger model has no knowledge cutoff.”</b>
+<p>Every model’s parametric knowledge is frozen at its training data’s collection date.</p>
+</div>
+<div>
+<b>“If it cites a source, the source is real.”</b>
+<p>A generated citation is still generated text unless it was actually retrieved and checked.</p>
+</div>
+<div>
+<b>“Responsible use is only a legal concern.”</b>
+<p>It also covers accuracy, privacy, and matching method to stakes—an engineering decision.</p>
+</div>
+<div>
+<b>“RAG alone guarantees correctness.”</b>
+<p>It reduces knowledge-cutoff and grounding risk; it does not eliminate every failure mode.</p>
+</div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Why Oracle RAG exists, stated precisely</h3>
+<div class="project-map">
+<div>
+<span>EMPLOYEE LEAVE BALANCE</span>
+<b>Exact, current, private → Oracle lookup</b>
+<p>Never trust parametric memory for this category of fact.</p>
+</div>
+<div>
+<span>POLICY EXPLANATION</span>
+<b>Stable, public-ish → retrieval + generation</b>
+<p>Ground the wording in the approved document, then generate the explanation.</p>
+</div>
+<div>
+<span>ROUTING / APPROVAL DECISIONS</span>
+<b>High-stakes → evidence + human review</b>
+<p>Generation drafts a recommendation; a person remains accountable for the decision.</p>
+</div>
+<div>
+<span>CASUAL DRAFTING</span>
+<b>Low-stakes → direct generation</b>
+<p>Reminders, summaries, and rephrasing rarely need retrieval.</p>
+</div>
+</div>
+<p>Every module after this one narrows this same judgment: which parts of an answer must be grounded, how grounding is measured, and how failures are caught before a user sees them.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div>
+<b>Capability</b>
+<p>What the model does reliably well.</p>
+</div>
+<div>
+<b>Limitation</b>
+<p>Where it reliably falls short, regardless of decoding settings.</p>
+</div>
+<div>
+<b>Hallucination</b>
+<p>A fluent claim with no supporting evidence.</p>
+</div>
+<div>
+<b>Responsible use</b>
+<p>Matching task stakes to method: generation, retrieval, or human review.</p>
+</div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is a fluent answer not proof of a correct answer?</li>
+<li>Why can’t a larger model remove its own knowledge cutoff?</li>
+<li>Why doesn’t greedy decoding solve hallucination?</li>
+<li>What two factors decide whether a task needs grounding, human review, or neither?</li>
+<li>Why is RAG a direct response to this module, not an unrelated add-on?</li>
+<li>Give one task from this module’s examples that needs human review even with perfect retrieval.</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick task-routing exercise</summary>
+<div>
+<ol>
+<li>Summarize a public news article — <b>direct generation, light review</b>.</li>
+<li>Report this month’s exact headcount — <b>retrieval/database, not memory</b>.</li>
+<li>Recommend approving a disputed leave request — <b>evidence plus human review</b>.</li>
+<li>Rephrase an email in a friendlier tone — <b>direct generation</b>.</li>
+<li>State a regulation that may have changed recently — <b>retrieval over a current source</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: What is a large language model?</h3>
+<p>Module 02 opens by defining large language models precisely and connecting the generative-model foundations from Module 01 to the transformer architecture, attention, and context windows that make retrieval-augmented generation possible.</p>
+<div class="beginner-memory">
+<b>Concept 08 is complete.</b> Continue to What is a large language model?.</div>
+<a class="button primary" href="module-02-concept-01.html">Start Concept 01 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required judgment, optional depth.</h2>
+<p>Master task routing—generation, retrieval, or human review—first. Open failure-mode detail, mathematics, code, production, and interviews only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01">
+<span>01</span>
+<b>Separate</b>
+<small>Fluency is not evidence of correctness.</small>
+</a>
+<a href="#b04">
+<span>02</span>
+<b>Compare</b>
+<small>Hallucination, cutoff, bias, and reasoning limits.</small>
+</a>
+<a href="#b08">
+<span>03</span>
+<b>Decide</b>
+<small>Route by stakes and currency, not confidence.</small>
+</a>
+<a href="#advanced-lesson" class="optional">
+<span>04</span>
+<b>Advanced · optional</b>
+<small>Open failure taxonomy, mitigation, and interviews.</small>
+</a>
+</div>
+<div class="bridge-rule">
+<b>Concept 08 path:</b> Task → stakes/currency check → generation, retrieval, or human review → verified answer.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span>
+<small>OPTIONAL · 24 SECTIONS</small>
+<b>Open the capabilities and responsible-use deep dive</b>
+<em>Failure taxonomy, mitigation patterns, evaluation framing, and the bridge into Module 02</em>
+</span>
+<i aria-hidden="true">
+</i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01">
+<i>01</i> Position</a>
+<a href="#s02">
+<i>02</i> Objectives</a>
+<a href="#s03">
+<i>03</i> Prerequisites</a>
+<a href="#s04">
+<i>04</i> Intuition</a>
+<a href="#s05">
+<i>05</i> Definitions</a>
+<a href="#s06">
+<i>06</i> Mechanism</a>
+<a href="#s07">
+<i>07</i> Visual flow</a>
+<a href="#s08">
+<i>08</i> RAG skeleton</a>
+<a href="#s09">
+<i>09</i> Mathematics</a>
+<a href="#s10">
+<i>10</i> Worked example</a>
+<a href="#s11">
+<i>11</i> Examples</a>
+<a href="#s12">
+<i>12</i> Code</a>
+<a href="#s13">
+<i>13</i> Ecosystem</a>
+<a href="#s14">
+<i>14</i> Lab</a>
+<a href="#s15">
+<i>15</i> Trade-offs</a>
+<a href="#s16">
+<i>16</i> Failures</a>
+<a href="#s17">
+<i>17</i> Misconceptions</a>
+<a href="#s18">
+<i>18</i> Production</a>
+<a href="#s19">
+<i>19</i> Check</a>
+<a href="#s20">
+<i>20</i> Exercise</a>
+<a href="#s21">
+<i>21</i> Solution</a>
+<a href="#s22">
+<i>22</i> Concept card</a>
+<a href="#s23">
+<i>23</i> Interview</a>
+<a href="#s24">
+<i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head">
+<span class="section-number">01</span>
+<div>
+<span class="section-kicker">ORIENTATION</span>
+<h2>Where this closes Module 01</h2>
+</div>
+</header>
+<p>Concepts 4–7 built a complete mental model of a generative model: a trained foundation, a lifecycle of adaptation, a tokenized input, and a decoding loop that produces fluent output. Concept 8 names exactly what that mechanism cannot guarantee, which is the reason Module 02 onward exists at all.</p>
+<div class="flow">
+<div class="flow-node">Foundation model</div>
+<div class="flow-node">Tokens</div>
+<div class="flow-node">Decoding loop</div>
+<div class="flow-node hot">Capability boundary</div>
+<div class="flow-node">Retrieval</div>
+<div class="flow-node">RAG</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head">
+<span class="section-number">02</span>
+<div>
+<span class="section-kicker">OUTCOMES</span>
+<h2>Operational objectives</h2>
+</div>
+</header>
+<div class="objective-grid">
+<article class="info-card">
+<span>CLASSIFY</span>
+<h3>Name the failure type</h3>
+<p>Tell hallucination, knowledge cutoff, bias, and reasoning failure apart.</p>
+</article>
+<article class="info-card">
+<span>ROUTE</span>
+<h3>Match method to stakes</h3>
+<p>Decide between direct generation, grounding, and human review.</p>
+</article>
+<article class="info-card">
+<span>ANTICIPATE</span>
+<h3>Predict failure before shipping</h3>
+<p>Identify which capability a new task actually depends on.</p>
+</article>
+<article class="info-card">
+<span>BRIDGE</span>
+<h3>Connect to RAG’s purpose</h3>
+<p>State why retrieval-augmented generation follows directly from this boundary.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head">
+<span class="section-number">03</span>
+<div>
+<span class="section-kicker">DEPENDENCIES</span>
+<h2>Prerequisite check</h2>
+</div>
+</header>
+<ul>
+<li>
+<b>Parametric knowledge:</b> what is encoded in trained weights (Concept 5).</li>
+<li>
+<b>Decoding:</b> how a distribution becomes a token, including non-determinism (Concept 7).</li>
+<li>
+<b>Inference:</b> using fixed parameters on new input, with no external verification by default (Concept 5).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head">
+<span class="section-number">04</span>
+<div>
+<span class="section-kicker">INTUITION</span>
+<h2>A fluent narrator, not a sworn witness</h2>
+</div>
+</header>
+<p>A model is like a fluent narrator retelling a story from memory: confident, well-phrased, and sometimes simply wrong about a detail it never actually verified. A sworn witness is expected to say “I don’t know” or check a record; a narrator, by default, keeps talking.</p>
+<div class="callout warning">
+<b>Analogy boundary</b>The model has no intent to mislead—its training objective never included a “verify against a source” step, so fluent and false outputs are produced by the exact same mechanism as fluent and true ones.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head">
+<span class="section-number">05</span>
+<div>
+<span class="section-kicker">PRECISION</span>
+<h2>Definitions by failure type</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Primary cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hallucination</td>
+<td>Fluent output not supported by any verifiable source</td>
+<td>No verification step in generation</td>
+</tr>
+<tr>
+<td>Knowledge cutoff</td>
+<td>Parametric knowledge frozen at training data collection time</td>
+<td>Static training corpus</td>
+</tr>
+<tr>
+<td>Bias</td>
+<td>Systematic skew in outputs reflecting training-data patterns</td>
+<td>Imbalanced or unrepresentative training data</td>
+</tr>
+<tr>
+<td>Reasoning failure</td>
+<td>An invalid multi-step chain produced with fluent confidence</td>
+<td>Pattern completion without guaranteed logical validity</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head">
+<span class="section-number">06</span>
+<div>
+<span class="section-kicker">MECHANISM</span>
+<h2>Why the same loop produces both true and false fluent text</h2>
+</div>
+</header>
+<div class="lane-flow">
+<div>Prompt tokenized into model input</div>
+<div>Model predicts a next-token distribution from learned patterns</div>
+<div>Decoding selects a token—true or false content scores no differently here</div>
+<div>Token appended; loop repeats until a stop condition</div>
+<div>Output is fluent by construction; correctness was never checked</div>
+</div>
+<p>Nothing in Concepts 4–7’s mechanism includes a step that consults an external, current, authoritative source. That step has to be added deliberately—it is what retrieval, tools, and evaluation exist to provide.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head">
+<span class="section-number">07</span>
+<div>
+<span class="section-kicker">VISUALIZATION</span>
+<h2>A capability–stakes matrix</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>&nbsp;</th>
+<th>Low stakes if wrong</th>
+<th>High stakes if wrong</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><b>Stable / general knowledge</b></td>
+<td>Direct generation is usually fine</td>
+<td>Add human review before acting</td>
+</tr>
+<tr>
+<td><b>Exact / current / private fact</b></td>
+<td>Prefer retrieval anyway, for accuracy</td>
+<td>Retrieval or database lookup is required</td>
+</tr>
+</tbody>
+</table>
+<p>Most real tasks are not identical to one of Concepts 1–7’s clean examples—they sit somewhere in this grid, and the grid, not model confidence, is what should decide the method.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head">
+<span class="section-number">08</span>
+<div>
+<span class="section-kicker">ARCHITECTURE</span>
+<h2>Where this boundary sits in the full RAG skeleton</h2>
+</div>
+</header>
+<div class="pipeline-preview">
+<span>Documents</span>
+<i>↓</i>
+<span>Chunks</span>
+<i>↓</i>
+<span>Embeddings</span>
+<i>↓</i>
+<span>Vectors</span>
+<i>↓</i>
+<span>Retrieval</span>
+<i>↓</i>
+<span>Context</span>
+<i>↓</i>
+<span>LLM</span>
+<i>↓</i>
+<span>Answer</span>
+</div>
+<p>Everything left of “LLM” in this skeleton—the entire rest of this course—exists to move exact, current, authoritative evidence into the model’s context before generation, precisely because generation alone cannot guarantee that on its own.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head">
+<span class="section-number">09</span>
+<div>
+<span class="section-kicker">MATHEMATICS</span>
+<h2>Confidence is not calibrated to correctness</h2>
+</div>
+</header>
+<p>A model’s token-level probability <code>P(token_i)</code> reflects how expected that token is given training patterns and context, not the probability that the resulting claim is factually true. Two sentences can receive similar decoding probability while one is verifiably correct and the other is invented—probability here is a fluency signal, not a truth signal.</p>
+<div class="equation">P(token sequence) ≠ P(claim is true)</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head">
+<span class="section-number">10</span>
+<div>
+<span class="section-kicker">WORKED EXAMPLE</span>
+<h2>Two equally fluent answers, one false</h2>
+</div>
+</header>
+<p>Asked “How many paid leave days does the policy allow?”, a model with stale or unclear parametric knowledge might generate “12 days” and “15 days” across two calls—both fluent, both grammatically identical in confidence, but the approved policy document states 10. Neither generated number carried any signal distinguishing it from the correct one; only checking against the actual document resolves this.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head">
+<span class="section-number">11</span>
+<div>
+<span class="section-kicker">CONCRETE USE</span>
+<h2>Examples and counterexamples</h2>
+</div>
+</header>
+<div class="example-grid">
+<article class="info-card">
+<span>SAFE</span>
+<h3>Meeting-notes summary</h3>
+<p>Low stakes, easily checked by the person who attended.</p>
+</article>
+<article class="info-card">
+<span>NEEDS GROUNDING</span>
+<h3>Current pricing or policy figure</h3>
+<p>Exact and subject to change; retrieval required.</p>
+</article>
+<article class="info-card">
+<span>NEEDS REVIEW</span>
+<h3>Disciplinary recommendation</h3>
+<p>High-stakes and consequential; human accountability required.</p>
+</article>
+<article class="info-card">
+<span>KNOWLEDGE CUTOFF RISK</span>
+<h3>“What changed this week?”</h3>
+<p>Parametric memory cannot reflect events after training.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“Model X never hallucinates”</h3>
+<p>No generative model is immune; only grounding and verification reduce the risk.</p>
+</article>
+<article class="info-card">
+<span>COUNTEREXAMPLE</span>
+<h3>“RAG removes the need for review”</h3>
+<p>Grounding reduces one failure mode; high-stakes tasks still need human accountability.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head">
+<span class="section-number">12</span>
+<div>
+<span class="section-kicker">CODE</span>
+<h2>A minimal task router</h2>
+</div>
+</header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre>
+<code>def route_task(is_exact_or_current, is_high_stakes):
+    if is_exact_or_current:
+        method = "retrieval_or_database"
+    else:
+        method = "direct_generation"
+    review = "human_review_required" if is_high_stakes else "light_review"
+    return method, review
+
+route_task(is_exact_or_current=True, is_high_stakes=True)
+# -> ("retrieval_or_database", "human_review_required")
+</code>
+</pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head">
+<span class="section-number">13</span>
+<div>
+<span class="section-kicker">ECOSYSTEM</span>
+<h2>How this boundary shows up in tooling</h2>
+</div>
+</header>
+<p>LangChain and LangGraph both offer retrievers, tools, and human-in-the-loop interrupt points as first-class building blocks—not because raw generation improves with more framework code, but because the same routing judgment from this lesson has to be implemented somewhere in the application, and these frameworks give it a concrete place to live.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head">
+<span class="section-number">14</span>
+<div>
+<span class="section-kicker">EXPERIMENT</span>
+<h2>Task-routing explorer</h2>
+</div>
+</header>
+<div class="lab">
+<p>Pick a task to see how it should be routed and why, using the stakes/currency judgment from this lesson.</p>
+<div class="lab-actions" role="group" aria-label="Choose a task to route">
+<button type="button" class="route-task-button active" data-task="summary" aria-pressed="true">Summarize an article</button>
+<button type="button" class="route-task-button secondary" data-task="balance" aria-pressed="false">Employee leave balance</button>
+<button type="button" class="route-task-button secondary" data-task="advice" aria-pressed="false">Legal/medical advice</button>
+<button type="button" class="route-task-button secondary" data-task="recent" aria-pressed="false">Very recent event</button>
+<button type="button" class="route-task-button secondary" data-task="tagline" aria-pressed="false">Marketing tagline</button>
+</div>
+<div class="sample-output" id="routeOutput" aria-live="polite">
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head">
+<span class="section-number">15</span>
+<div>
+<span class="section-kicker">CONTRAST</span>
+<h2>Mitigations and what they actually fix</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Mitigation</th>
+<th>Fixes</th>
+<th>Does not fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Retrieval / grounding</td>
+<td>Knowledge cutoff, missing evidence</td>
+<td>Reasoning failures, bias in phrasing</td>
+</tr>
+<tr>
+<td>Low temperature / greedy</td>
+<td>Run-to-run inconsistency</td>
+<td>Hallucination, stale knowledge</td>
+</tr>
+<tr>
+<td>Human review</td>
+<td>High-stakes consequences of any failure</td>
+<td>Speed and scale of raw generation</td>
+</tr>
+<tr>
+<td>Evaluation and monitoring</td>
+<td>Detecting failures over time</td>
+<td>Preventing every individual failure upfront</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head">
+<span class="section-number">16</span>
+<div>
+<span class="section-kicker">DIAGNOSIS</span>
+<h2>Failure modes</h2>
+</div>
+</header>
+<div class="failure-grid">
+<article class="info-card">
+<span>SILENT HALLUCINATION</span>
+<h3>No hedge, no warning</h3>
+<p>An invented detail delivered with the same fluency as a verified one.</p>
+</article>
+<article class="info-card">
+<span>OVER-TRUST</span>
+<h3>Treating fluency as proof</h3>
+<p>Users or systems act on generated text without checking it against a source.</p>
+</article>
+<article class="info-card">
+<span>STALE CONFIDENCE</span>
+<h3>Outdated fact stated plainly</h3>
+<p>A once-true answer stated as current without a currency check.</p>
+</article>
+<article class="info-card">
+<span>MISROUTED TASK</span>
+<h3>Wrong method for the stakes</h3>
+<p>A high-stakes task handled with plain generation and no review.</p>
+</article>
+<article class="info-card">
+<span>UNREVIEWED BIAS</span>
+<h3>Skew reaches production</h3>
+<p>No evaluation step catches a systematic pattern before users see it.</p>
+</article>
+<article class="info-card">
+<span>PRIVACY LEAK</span>
+<h3>Sensitive data sent upstream</h3>
+<p>Private records passed to a model or provider without governance review.</p>
+</article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head">
+<span class="section-number">17</span>
+<div>
+<span class="section-kicker">CORRECTION</span>
+<h2>Misconceptions</h2>
+</div>
+</header>
+<table class="compare-table">
+<thead>
+<tr>
+<th>Incorrect belief</th>
+<th>Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A more fluent answer is more likely correct</td>
+<td>Fluency is a property of decoding, unrelated to factual verification.</td>
+</tr>
+<tr>
+<td>Only small or old models hallucinate</td>
+<td>Every generative model can produce unsupported fluent claims without grounding.</td>
+</tr>
+<tr>
+<td>Responsible use is a one-time policy document</td>
+<td>It is an ongoing routing and review practice applied per task.</td>
+</tr>
+<tr>
+<td>Grounded answers never need review</td>
+<td>Retrieval reduces knowledge-cutoff risk; it does not remove the need for judgment on high-stakes tasks.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head">
+<span class="section-number">18</span>
+<div>
+<span class="section-kicker">REALITY</span>
+<h2>Production implications</h2>
+</div>
+</header>
+<ul>
+<li>Classify tasks by stakes and currency before choosing generation, retrieval, or both.</li>
+<li>Log generated claims that influenced a real decision, with enough context to audit later.</li>
+<li>Keep a human accountable for high-stakes actions even when evidence is well-grounded.</li>
+<li>Treat privacy and data-handling review as part of shipping, not an afterthought.</li>
+<li>Re-evaluate routing decisions as retrieval, tools, and evaluation capabilities mature in later modules.</li>
+<li>Disclose AI-generated content where your organization’s policy or regulation requires it.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head">
+<span class="section-number">19</span>
+<div>
+<span class="section-kicker">RECALL</span>
+<h2>Knowledge check</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>Why can two hallucinated numbers sound equally confident?</summary>
+<div>Decoding probability reflects fluency and pattern likelihood, not a check against a real source, so a false and a true continuation can appear equally natural.</div>
+</details>
+<details class="quiz">
+<summary>What does retrieval fix, and what does it not fix?</summary>
+<div>It fixes missing or outdated evidence by supplying current, authoritative context; it does not fix reasoning errors or remove the need for human review on high-stakes tasks.</div>
+</details>
+<details class="quiz">
+<summary>Why is “responsible use” an engineering decision, not only a policy one?</summary>
+<div>Because it requires actively routing tasks to generation, retrieval, or review based on stakes and currency—a design choice made in the system, not just a written guideline.</div>
+</details>
+<details class="quiz">
+<summary>How does this concept motivate the rest of the course?</summary>
+<div>It names the exact gap—no built-in verification against current, authoritative evidence—that retrieval-augmented generation is built to close.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head">
+<span class="section-number">20</span>
+<div>
+<span class="section-kicker">TRANSFER</span>
+<h2>Hands-on exercise</h2>
+</div>
+</header>
+<p>List five tasks a RAG assistant in your own domain might receive. For each, decide: does it need retrieval, human review, both, or neither—and name the specific failure mode you are protecting against with that choice.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head">
+<span class="section-number">21</span>
+<div>
+<span class="section-kicker">FEEDBACK</span>
+<h2>Solution and teach-back</h2>
+</div>
+</header>
+<details class="quiz">
+<summary>Open one worked reasoning pattern</summary>
+<div>For each task, first ask whether the answer depends on an exact, current, or private fact—if so, that alone requires retrieval or a database, regardless of stakes. Then ask what happens if the answer is wrong—if the consequence is significant, add human review on top of any grounding. Tasks that are neither exact/current nor high-stakes are the only ones safe for plain generation with light review.</div>
+</details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head">
+<span class="section-number">22</span>
+<div>
+<span class="section-kicker">PORTABLE MEMORY</span>
+<h2>Concept card</h2>
+</div>
+</header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div>
+<h3>The boundary</h3>
+<p>Fluent ≠ correct. Confidence is a decoding property, not a truth signal. No built-in verification exists.</p>
+</div>
+<div>
+<h3>Routing rule</h3>
+<ul>
+<li>Exact/current fact → retrieval, always</li>
+<li>High stakes → add human review</li>
+<li>Neither → direct generation is fine</li>
+<li>Grounded ≠ automatically safe</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head">
+<span class="section-number">23</span>
+<div>
+<span class="section-kicker">CAREER PRACTICE</span>
+<h2>Interview questions</h2>
+</div>
+</header>
+<div class="interview-grid">
+<details class="quiz">
+<summary>How would you explain hallucination to a non-technical stakeholder?</summary>
+<div>The model produces fluent, plausible text by pattern completion; nothing in that process checks the claim against a real source, so confident-sounding text can still be false.</div>
+</details>
+<details class="quiz">
+<summary>Design a simple policy for routing tasks to generation versus RAG versus human review.</summary>
+<div>Classify by whether the answer depends on an exact/current/private fact (route to retrieval) and by the cost of being wrong (route to human review above a stakes threshold), defaulting to direct generation only when neither applies.</div>
+</details>
+<details class="quiz">
+<summary>Does RAG eliminate hallucination?</summary>
+<div>No—it substantially reduces ungrounded claims by supplying evidence, but the model can still misstate or misinterpret that evidence, so evaluation and review remain necessary.</div>
+</details>
+<details class="quiz">
+<summary>What is one privacy consideration specific to generative systems?</summary>
+<div>Data sent into a prompt or retained in logs may leave your governance boundary depending on the model provider and logging configuration, independent of what the model generates.</div>
+</details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head">
+<span class="section-number">24</span>
+<div>
+<span class="section-kicker">EVIDENCE + CONTROL</span>
+<h2>References and checkpoint</h2>
+</div>
+</header>
+<div class="references">
+<a href="https://arxiv.org/abs/2202.03629">
+<b>Ji et al. — Survey of Hallucination in Natural Language Generation</b>
+<br>
+<span>Taxonomy and causes of hallucination across natural language generation tasks.</span>
+</a>
+<a href="https://arxiv.org/abs/2112.04359">
+<b>Weidinger et al. — Ethical and Social Risks of Harm from Language Models</b>
+<br>
+<span>A structured taxonomy of language-model risks, including misinformation, bias, and privacy.</span>
+</a>
+<a href="https://arxiv.org/abs/2108.07258">
+<b>Bommasani et al. — On the Opportunities and Risks of Foundation Models</b>
+<br>
+<span>Broad analysis of foundation-model capabilities and risks across applications and society.</span>
+</a>
+<a href="https://arxiv.org/abs/2307.10169">
+<b>Kaddour et al. — Challenges and Applications of Large Language Models</b>
+<br>
+<span>Survey of practical LLM limitations and open challenges relevant to deployed systems.</span>
+</a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>You already routed every example task in this lesson by stakes and currency. The 24-section deep dive above stays here for revisiting the failure taxonomy, mitigation table, and interview questions whenever you want them again.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-01.html">Start Concept 01 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: What is a large language model?.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand">
+<span class="brand-mark">R</span>
+<span>RAG <b>ATLAS</b>
+</span>
+</div>
+<p>Module 01 · Concept 08 · Complete</p>
+<a href="module-01-concept-07.html">← Concept 07</a>
+</footer>
+</body>
+</html>

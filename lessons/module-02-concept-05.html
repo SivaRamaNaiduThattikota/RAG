@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on the output head: how a transformer's final hidden vector is projected into logits over the whole vocabulary and turned into a probability distribution, upstream of decoding.">
+<title>Next-token probability and decoding — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 05</p>
+<h1>Next-token probability<br><em>and decoding</em></h1>
+<p class="lesson-lead">Module 01, Concept 07 already showed how a next-token distribution turns into one chosen token. This concept opens where that distribution comes from in the first place: the output head that projects the block stack's final hidden vector into a logit for every token in the vocabulary, then softmax.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>Self-attention and positional information</b></div>
+<div><span>BEGINNER GOAL</span><b>Project a final hidden vector into logits by hand</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You projected a toy final hidden vector into logits with an output-head matrix, applied softmax by hand, and explained why weight tying changes which numbers fill that matrix but not how many logits come out.</p>
+<b>5 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">From one hidden vector to a distribution over every possible next word</h2>
+</div>
+<p>Concept 04 opened self-attention. This concept opens what happens right after the last block finishes: one vector becomes a score for every token the model could possibly say next.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The output head: one last projection, over the whole vocabulary</h3>
+<p>After the last transformer block finishes, each position holds one <b>final hidden vector</b> — a few thousand numbers summarizing everything attention and the feed-forward layers decided mattered for predicting what comes next. The <b>output head</b> (also called the <b>unembedding</b> or <b>language-modeling head</b>) is one learned matrix that projects that single vector into exactly <b>one raw score per token in the vocabulary</b> — its <b>logits</b>. <b>Softmax</b> then turns those logits into a probability distribution that sums to one.</p>
+<p>Concept 01 already counted this matrix's parameters in passing, as one line in a parameter budget. This concept opens what that line actually does: turn geometry into a probability over a fixed, discrete set of tokens.</p>
+<div class="beginner-memory"><b>First memory:</b> one hidden vector in, one logit out per vocabulary token, then softmax.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A model thinks in vectors; a vocabulary is a fixed, discrete list</h3>
+<p>Everything inside the block stack — embeddings, attention outputs, feed-forward outputs — is a vector in some continuous space. But the model must commit to one discrete choice from a fixed vocabulary of tens of thousands of tokens. Something has to bridge "a point in a few-thousand-dimensional space" to "a score for each of those specific tokens." That bridge is the output head.</p>
+<div class="mental-compare">
+<div><span>WHAT THE BLOCK STACK PRODUCES</span><p>One continuous vector, the same size for every input position.</p></div>
+<div><span>WHAT THE OUTPUT HEAD PRODUCES</span><p>One score for every token the vocabulary contains, however large it is.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Reopening Concept 07's distribution</h3>
+<p>Module 01, Concept 07 showed a next-token distribution for the prompt "The leave policy allows…": <code>12</code> at 34%, <code>10</code> at 22%, <code>unlimited</code> at 20%, <code>several</code> at 15%, <code>many</code> at 9%. That lesson treated the distribution as a given, to focus on decoding. This lesson opens where those five numbers actually came from: the final hidden vector for the position after "allows," projected through the output head into logits, then normalized by softmax.</p>
+<div class="context-demo">
+<div><span>INPUT</span><p>The final hidden vector for the position after "…allows."</p></div>
+<div><span>PROJECTION</span><p>The output head's matrix, one row per vocabulary token, produces one logit per token.</p></div>
+<div><span>OUTPUT</span><p>Softmax turns those logits into the exact percentages Concept 07 already used.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0205-visual-title">
+  <strong class="concept-visual-title" id="c0205-visual-title">VISUAL · FROM HIDDEN VECTOR TO PROBABILITY</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram showing a final hidden vector projected through the output head into logits and then softmax">
+    <div class="diagram-split">
+      <div class="diagram-node active"><b>Final hidden vector</b><small>after the last block</small></div>
+      <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+      <div class="diagram-node active"><b>Output head matrix</b><small>one row per vocabulary token</small></div>
+      <div class="diagram-node"><b>Logits</b><small>one raw score per token</small></div>
+      <div class="diagram-node"><b>Softmax → distribution</b><small>Concept 07 takes it from here</small></div>
+    </div>
+  </div>
+  <figcaption>Every arrow here runs once per generated token, computing a score for the entire vocabulary — not just the handful of candidates shown in earlier examples.</figcaption>
+  <ol class="diagram-key"><li><b>Final hidden vector:</b> the block stack's last output for one position, from Concept 04's mechanism.</li><li><b>Output head:</b> a learned matrix, unrelated to attention's query/key/value projections.</li><li><b>Handoff:</b> softmax's output is exactly what Concept 07's decoding rules already consume.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The six moving pieces</h3>
+<div class="example-grid">
+<article class="info-card"><span>FINAL HIDDEN STATE</span><h3>One vector per position</h3><p>The block stack's last output — everything attention and feed-forward layers decided mattered.</p></article>
+<article class="info-card"><span>OUTPUT HEAD MATRIX</span><h3>One row per vocabulary token</h3><p>A learned linear projection from hidden-vector size to vocabulary size.</p></article>
+<article class="info-card"><span>LOGIT</span><h3>One raw score per token</h3><p>The dot product of the hidden vector with one row of the output head.</p></article>
+<article class="info-card"><span>WEIGHT TYING</span><h3>Optional shared matrix</h3><p>Reusing the input embedding table, transposed, instead of learning a second matrix.</p></article>
+<article class="info-card"><span>SOFTMAX</span><h3>Logits to probabilities</h3><p>Normalizes every logit into a positive weight that sums to one across the whole vocabulary.</p></article>
+<article class="info-card"><span>PROBABILITY DISTRIBUTION</span><h3>Handed to decoding</h3><p>Exactly what Concept 07's greedy, temperature, top-k, and top-p rules already consume.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One projection, once per position, every generation step</h3>
+<div class="mental-compare">
+<div><span>BLOCK STACK</span><p>Self-attention and feed-forward layers, repeated across every block (Concepts 03–04).</p></div>
+<div><span>OUTPUT HEAD</span><p>One projection, applied once to the final block's output, after the stack finishes.</p></div>
+</div>
+<div class="scroll-flow">
+<span>Final block output</span><i>→</i>
+<span>Output head projection</span><i>→</i>
+<span>Logits (|V| scores)</span><i>→</i>
+<span>Softmax</span><i>→</i>
+<span>Probability distribution</span><i>→</i>
+<span>Decoding (Concept 07)</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where this sits across the full model</summary>
+<div>
+<div class="pipeline-preview">
+<span>Token embedding</span><i>↓</i>
+<span>+ positional encoding</span><i>↓</i>
+<span>Transformer blocks (Concepts 03–04)</span><i>↓</i>
+<span>Final hidden state</span><i>↓</i>
+<span>Output head</span><i>↓</i>
+<span>Logits → softmax</span><i>↓</i>
+<span>Decoding loop (built)</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Terms that collapse into "the model's output"</h3>
+<div class="distinction-table" role="table" aria-label="Output head and next-token probability distinctions">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Logit</span><span role="cell">A raw, unnormalized score for one token</span><span role="cell">Confused with a probability</span></div>
+<div role="row"><span role="cell">Output head</span><span role="cell">A learned matrix, one row per vocabulary token</span><span role="cell">Confused with the embedding table when they are not tied</span></div>
+<div role="row"><span role="cell">Weight tying</span><span role="cell">Reusing the embedding matrix as the output head, transposed</span><span role="cell">Assumed to be required, or assumed to change the mechanism's shape</span></div>
+<div role="row"><span role="cell">This softmax</span><span role="cell">A single, final normalization over the entire vocabulary</span><span role="cell">Confused with attention's per-position softmax over keys (Concept 04)</span></div>
+</div>
+<p>That last row matters: Concept 04's softmax normalizes attention weights over a handful of positions; this softmax normalizes logits over the entire vocabulary, once per generated token — same function, completely different inputs and purpose.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"Logits are already probabilities."</b><p>They are raw scores; only softmax turns them into a distribution that sums to one.</p></div>
+<div><b>"The output head only scores plausible tokens."</b><p>It computes one logit for every token in the vocabulary, every single step, regardless of how implausible most turn out to be.</p></div>
+<div><b>"The output head is unrelated to the embedding table."</b><p>It can be tied to it directly — the same matrix, transposed — or learned separately; both are common.</p></div>
+<div><b>"A bigger vocabulary means a bigger hidden state."</b><p>Vocabulary size changes the output head and embedding table's size, not the hidden dimension moving through the blocks.</p></div>
+<div><b>"Decoding decides how many logits get computed."</b><p>All |vocabulary| logits already exist before any decoding rule — greedy, temperature, top-k, or top-p — even looks at them.</p></div>
+<div><b>"Softmax only happens inside attention."</b><p>Attention's softmax and this final vocabulary-wide softmax are separate uses of the same function.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>ONE PROJECTION, EVERY STEP</span><b>Cost previewed, not measured yet</b><p>Every generated token pays for one output-head projection over the full vocabulary, no matter how long the retrieved context was.</p></div>
+<div><span>SELF-HOSTING DETAIL</span><b>Weight tying affects memory footprint</b><p>A self-hosted open model's checkpoint size and RAM use depend partly on whether its output head is tied to its embedding table.</p></div>
+<div><span>STRUCTURED OUTPUT PREVIEW</span><b>Later concepts edit this exact vector</b><p>Structured and constrained generation, previewed later in this module, manipulates logits before softmax runs — this concept is what they operate on.</p></div>
+<div><span>DECODING STAYS DOWNSTREAM</span><b>Nothing here repeats Concept 07</b><p>Greedy, temperature, top-k, and top-p all receive the finished distribution this concept produces; none of that logic changes here.</p></div>
+</div>
+<p>LangChain and LangGraph never expose logits or the output head directly — they configure decoding parameters that apply after this projection has already run.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Final hidden state</b><p>The block stack's last output vector for one position.</p></div>
+<div><b>Output head / unembedding matrix</b><p>One row per vocabulary token, tied or untied.</p></div>
+<div><b>Logit vs. probability</b><p>A raw score versus a softmax-normalized weight.</p></div>
+<div><b>Weight tying</b><p>Reuses the embedding table; changes the numbers, not the shape.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What is the final hidden vector, and where does it come from?</li>
+<li>Why does the output head need exactly one row per vocabulary token?</li>
+<li>What is the difference between a logit and a probability?</li>
+<li>What does weight tying reuse, and what does it leave unchanged?</li>
+<li>Why is this lesson's softmax a different use of the same function from Concept 04's attention softmax?</li>
+<li>What, specifically, does Module 01 Concept 07 pick up from where this concept ends?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick output-head judgment exercise</summary>
+<div>
+<ol>
+<li>A raw, unnormalized score for one token — <b>logit</b>.</li>
+<li>A weight that sums to one across the whole vocabulary — <b>probability, after softmax</b>.</li>
+<li>What changes if the output head is tied instead of untied — <b>the numbers in the matrix, not how many logits come out</b>.</li>
+<li>What picks one token from the finished distribution — <b>decoding, covered already in Concept 07</b>.</li>
+<li>What determines the output head's size — <b>vocabulary size and hidden dimension, not prompt or context length</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: LLM training versus inference: pretraining, tuning and alignment</h3>
+<p>Concept 06 steps back from any single forward pass to ask how a model — including this output head — gets its numbers in the first place: pretraining, fine-tuning, and alignment, and how each differs from the inference-time pass this concept just traced.</p>
+<div class="beginner-memory"><b>Concept 05 is complete.</b> Continue to LLM training versus inference: pretraining, tuning and alignment.</div>
+<a class="button primary" href="module-02-concept-06.html">Start Concept 06 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required projection, optional depth.</h2>
+<p>Master the output head and the logit-to-probability handoff first. Open the mathematics, from-scratch code, and the projection lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>The output head produces logits; decoding is a separate, later step.</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>Final hidden state, output head, logit, tying, softmax, distribution.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>This is what structured generation and decoding both operate on.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the mathematics, code, and the output-head lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Final hidden state → output head → logits → softmax → probability distribution → decoding.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the next-token probability deep dive</b><em>Output-head mathematics, weight tying, from-scratch code, and the logit projection lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where the block stack hands off</h2></div></header>
+<p>Concept 04 opened self-attention's query/key/value mechanics and the order problem it creates. Concept 05 picks up exactly where that block stack finishes: one final hidden vector, per position, that must become a probability over the entire vocabulary. Module 01 Concept 07 already covers everything after that distribution exists — decoding, sampling, stopping — and is referenced here rather than repeated.</p>
+<div class="flow">
+<div class="flow-node">Attention + feed-forward</div>
+<div class="flow-node">Final hidden state</div>
+<div class="flow-node hot">Output head</div>
+<div class="flow-node hot">Logits → softmax</div>
+<div class="flow-node">Probability distribution</div>
+<div class="flow-node">Decoding (built)</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>PROJECT</span><h3>Compute logits by hand</h3><p>Turn a toy final hidden vector into logits with an output-head matrix.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Justify the vocabulary-wide shape</h3><p>State why the output head produces exactly one logit per vocabulary token.</p></article>
+<article class="info-card"><span>CONNECT</span><h3>Relate to the embedding table</h3><p>Describe what weight tying reuses and what it leaves unchanged.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate three outputs</h3><p>Tell a logit, a probability, and a decoded token apart.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Final hidden state / block stack output:</b> the vector this concept's projection consumes (Concept 04).</li>
+<li><b>Token embedding table:</b> the matrix this concept's output head can reuse (Module 01, Concept 6; Module 02, Concept 1).</li>
+<li><b>Softmax:</b> derived and used with temperature already in Module 01, Concept 07's mathematics — reused here, not re-derived.</li>
+<li><b>Decoding loop:</b> where this concept's output feeds next (Module 01, Concept 07) — covered there in full, only referenced here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A giant scorecard, filled out all at once</h2></div></header>
+<p>Picture the final hidden vector as a fully filled-out request form. The output head is a scorecard with one line for every word in the vocabulary — tens of thousands of lines — and it scores how well the form matches every single line, simultaneously, in one matrix multiplication.</p>
+<div class="callout warning"><b>Analogy boundary</b>This is a real matrix multiplication over every vocabulary row, not a search or a lookup. Nothing here narrows the candidate set the way a retrieval query would — every line gets scored, every single time, whether or not it ends up mattering.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Final hidden state (h)</td><td>The last transformer block's output vector for one position</td><td>Dimension d_model, fixed regardless of vocabulary size</td></tr>
+<tr><td>Output head / unembedding matrix (W_out)</td><td>A learned linear projection from d_model to vocabulary size |V|</td><td>Shape |V| × d_model, applied once per position</td></tr>
+<tr><td>Logit (z_i)</td><td>The raw, unnormalized score for vocabulary token i</td><td>Not yet a probability; can be negative</td></tr>
+<tr><td>Weight tying</td><td>Setting W_out equal to the input embedding matrix, transposed</td><td>Changes which numbers fill W_out, not its shape</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two paths to the same shape: tied and untied</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>TIED OUTPUT HEAD</span>
+<div class="lane-flow">
+<div>Take the input embedding matrix, already trained</div>
+<div>Use its transpose directly as the output head</div>
+<div>Multiply the final hidden vector by that transpose</div>
+<div>Get one logit per vocabulary token — no second matrix learned</div>
+</div>
+</article>
+<article class="lane"><span>UNTIED OUTPUT HEAD</span>
+<div class="lane-flow">
+<div>Initialize a second matrix, separate from the embedding table</div>
+<div>Train it independently during pretraining</div>
+<div>Multiply the final hidden vector by that separate matrix</div>
+<div>Get one logit per vocabulary token — using different learned numbers</div>
+</div>
+</article>
+</div>
+<p>Both paths produce a vector of exactly |V| logits. Tying only decides which numbers fill the matrix that produces them, not how many numbers come out or what happens to them next.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The output head as a hub</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing the output head surrounded by the hidden vector, the weight matrix, the logits, and an optional bias">
+  <div class="diagram-hub">
+    <div class="diagram-node"><b>Final hidden vector h</b><small>d_model numbers</small></div>
+    <div class="diagram-node hub-center"><b>Output head projection</b><small>h · W_outᵗ (+ bias)</small></div>
+    <div class="diagram-node"><b>Weight matrix W_out</b><small>one row per token</small></div>
+    <div class="diagram-node"><b>Logits z</b><small>|V| raw scores</small></div>
+    <div class="diagram-node"><b>Optional bias</b><small>one scalar per token</small></div>
+  </div>
+</div>
+<p>The center repeats once per position, every generation step — a fresh h arrives each time, but the same W_out is reused across every step and every position.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>One projection, sitting right before decoding</h2></div></header>
+<div class="pipeline-preview">
+<span>Prompt tokens</span><i>↓</i>
+<span>Embedding lookup</span><i>↓</i>
+<span>+ positional encoding</span><i>↓</i>
+<span>Transformer blocks</span><i>↓</i>
+<span>Final hidden state</span><i>↓</i>
+<span>Output head</span><i>↓</i>
+<span>Logits → softmax</span><i>↓</i>
+<span>Decoding (built)</span>
+</div>
+<p>Whether the tokens came from a system instruction, retrieved evidence, or the user's question, they all pass through this identical output-head-then-softmax step at every generation step — retrieval and context construction only change what enters the block stack, never how the output head sizes or runs.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The projection, softmax, and what tying saves</h2></div></header>
+<div class="equation">z = h · W_outᵗ + b</div>
+<p><code>h</code> is the final hidden vector (length d_model), <code>W_out</code> has shape |V| × d_model so each row produces one logit, and <code>b</code> is an optional per-token bias of length |V|.</p>
+<div class="equation">softmax(z)_i = exp(z_i) / Σ_j exp(z_j)</div>
+<p>This is the same softmax function Module 01 Concept 07 already derived with a temperature term for decoding; here it runs once, plain, to turn logits into the distribution decoding then samples from.</p>
+<div class="equation">Weight tying: W_out = W_embᵗ → saves |V| · d_model parameters</div>
+<p>Concept 01's toy parameter count used <code>V=1000</code>, <code>d=64</code> and treated the output head as untied, adding 64,000 parameters on top of the embedding table's own 64,000. Tying the two matrices would remove that second 64,000 entirely, at the cost of forcing the output head to use exactly the embedding table's geometry.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Reproducing Concept 07's exact distribution by hand</h2></div></header>
+<p>Toy 2-dimensional final hidden vector after "…allows": <code>h = [1, 1]</code>. Toy output-head rows for the five candidate tokens Concept 07 already used: <code>row(12)=[0.95,0.95]</code>, <code>row(10)=[0.75,0.75]</code>, <code>row(unlimited)=[0.70,0.70]</code>, <code>row(several)=[0.55,0.55]</code>, <code>row(many)=[0.30,0.30]</code>.</p>
+<div class="equation">logits: h·row = [1.90, 1.50, 1.40, 1.10, 0.60] (sum of each row's two entries, since h=[1,1])</div>
+<div class="equation">softmax: e^1.90≈6.69, e^1.50≈4.48, e^1.40≈4.06, e^1.10≈3.00, e^0.60≈1.82; sum≈20.05</div>
+<div class="equation">distribution ≈ [33.3%, 22.4%, 20.2%, 15.0%, 9.1%]</div>
+<p>Within rounding, that is the exact 34/22/20/15/9% distribution Concept 07 used when it first showed you this scenario's decoding step. Concept 07 started from the distribution; this concept just showed the matrix multiplication and softmax that actually produce it.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>TIED HEAD</span><h3>GPT-2-style models</h3><p>Reuse the input embedding matrix, transposed, as the output head by default.</p></article>
+<article class="info-card"><span>UNTIED HEAD</span><h3>Concept 01's toy count</h3><p>Explicitly assumed a second, separately-learned output-head matrix.</p></article>
+<article class="info-card"><span>FULL VOCAB, EVERY STEP</span><h3>No shortcuts by default</h3><p>All |V| logits are computed even for a one-word answer.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A one-token vocabulary</h3><p>Degenerate, but the output head would still be |V| × d_model — just |V|=1.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"Only likely tokens get scored"</h3><p>Every vocabulary row is scored; low scores just soften into small probabilities.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"A longer context enlarges the output head"</h3><p>Output-head size depends only on vocabulary size and d_model, never on prompt length.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The output head, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NUMPY-STYLE PSEUDOCODE</span>
+<pre><code>import numpy as np
+
+def softmax(x, axis=-1):
+    x = x - np.max(x, axis=axis, keepdims=True)
+    exp = np.exp(x)
+    return exp / np.sum(exp, axis=axis, keepdims=True)
+
+def output_head(hidden, W_out, bias=None):
+    # hidden: (d_model,)   W_out: (vocab_size, d_model)
+    logits = W_out @ hidden
+    if bias is not None:
+        logits = logits + bias
+    return logits                        # (vocab_size,)
+
+def next_token_distribution(hidden, W_out, bias=None):
+    logits = output_head(hidden, W_out, bias)
+    return softmax(logits)               # sums to 1 over the vocabulary
+
+# weight tying: reuse the embedding table as the output head
+def tie_weights(embedding_table):
+    return embedding_table                # same matrix, used as W_out
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>What production libraries actually call this</h2></div></header>
+<p>In Hugging Face <code>transformers</code>, this projection is typically a module named <code>lm_head</code> — an <code>nn.Linear</code> layer from the hidden size to the vocabulary size — with a config flag such as <code>tie_word_embeddings</code> deciding whether it shares parameters with the input embedding layer. Inference engines built for throughput, such as vLLM or TensorRT-LLM, fuse this final matrix multiply, the softmax, and the first decoding step into optimized kernels rather than running them as separate operations — the mathematics stays identical to the from-scratch version above, only the execution is different.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Output-head projection calculator</h2></div></header>
+<div class="lab">
+<p>Pick a final hidden vector, then toggle whether the output head is tied or untied. The logits and the softmax distribution below are computed live from the actual numbers — not read from a lookup table — so tying really does change the resulting scores.</p>
+<div class="lab-actions" role="group" aria-label="Choose a final hidden vector">
+<button type="button" class="hv-select-button active" data-vector="allows" aria-pressed="true">After "…allows"</button>
+<button type="button" class="hv-select-button secondary" data-vector="warranty" aria-pressed="false">After "…warranty is"</button>
+<button type="button" class="hv-select-button secondary" data-vector="capital" aria-pressed="false">"The capital of France is"</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose whether the output head is tied">
+<button type="button" class="tie-mode-button active" data-tied="true" aria-pressed="true">Tied output head</button>
+<button type="button" class="tie-mode-button secondary" data-tied="false" aria-pressed="false">Untied output head</button>
+</div>
+<div class="sample-output" id="headLabOutput" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Choosing tied or untied weights</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable diagram comparing a tied output head reusing the embedding table with an untied output head learning its own matrix">
+  <div class="diagram-split">
+    <div class="diagram-node active"><b>Embedding table</b><small>already trained</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node active"><b>Tied: reuse, transposed</b><small>no second matrix learned</small></div>
+    <div class="diagram-node"><b>Untied: separate matrix</b><small>learned independently</small></div>
+  </div>
+</div>
+<table class="compare-table">
+<thead><tr><th>Choice</th><th>Parameter cost</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td>Tied weights</td><td>No extra |V|·d_model parameters</td><td>Couples output-token geometry to input-token geometry</td></tr>
+<tr><td>Untied weights</td><td>An extra |V|·d_model parameters</td><td>Lets input and output token geometry diverge, at real memory cost</td></tr>
+</tbody>
+</table>
+<p>Different model families make different choices — check a specific checkpoint's configuration rather than assuming either one.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SKIPPED SOFTMAX</span><h3>Comparing raw logits</h3><p>Treating logits as probabilities skips the normalization step entirely.</p></article>
+<article class="info-card"><span>SHAPE MISMATCH</span><h3>Tying gone wrong</h3><p>Tying weights when the embedding and hidden dimensions differ requires an adapter, or it silently breaks.</p></article>
+<article class="info-card"><span>VOCAB DRIFT</span><h3>Resized tokenizer, stale head</h3><p>Adding special tokens without resizing the output head leaves new tokens with no learned row.</p></article>
+<article class="info-card"><span>NUMERIC OVERFLOW</span><h3>Naive exponentiation</h3><p>Computing softmax without subtracting the maximum logit first can overflow for large logit values.</p></article>
+<article class="info-card"><span>TOP-K CONFUSION</span><h3>Mixing up two stages</h3><p>Top-k truncation runs after all |V| logits exist — it never shrinks the output head itself.</p></article>
+<article class="info-card"><span>BIAS OMITTED SILENTLY</span><h3>Config mismatch</h3><p>Expecting a per-token bias term that a specific checkpoint's output head does not actually include.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The output head only scores likely tokens</td><td>It scores every vocabulary token, every step, before anything is discarded.</td></tr>
+<tr><td>Weight tying automatically makes the model reason better about tokens</td><td>It only shares the parameter matrix; any semantic benefit still has to come from training.</td></tr>
+<tr><td>A bigger vocabulary always means slower generation overall</td><td>It primarily affects the cost of this one final projection and softmax, not attention's cost.</td></tr>
+<tr><td>Logits and probabilities are interchangeable terms</td><td>A logit is a raw score; only softmax's output sums to one and behaves like a probability.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Large vocabularies (100k+ tokens) make the final projection and softmax a real share of per-token compute, distinct from attention cost.</li>
+<li>Untied output heads add real memory: |V|·d_model extra parameters that a tied model does not carry.</li>
+<li>Adding special or domain tokens requires resizing the embedding table and the output head together, or generation for those tokens breaks silently.</li>
+<li>Numerically stable softmax implementations subtract the maximum logit before exponentiating, to avoid overflow at realistic logit magnitudes.</li>
+<li>Logit-level interventions — temperature, penalties, logit bias, structured-output constraints — all modify this vector before Concept 07's decoding rules ever run.</li>
+<li>Verify a checkpoint's actual tying configuration rather than assuming it from the model family name alone.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>What two inputs does the output head projection combine to produce a logit?</summary><div>The final hidden vector for one position, and one row of the output head's weight matrix — their dot product, plus an optional bias, is the logit.</div></details>
+<details class="quiz"><summary>Why must the output head have exactly |vocabulary| rows?</summary><div>Because softmax needs exactly one logit per possible next token to produce a distribution over the whole vocabulary; any fewer rows and some tokens could never be predicted.</div></details>
+<details class="quiz"><summary>What does weight tying change, and what does it leave the same?</summary><div>It changes which numbers fill the output head's matrix, reusing the embedding table's numbers instead of learning new ones; it leaves the output shape — one logit per token — completely unchanged.</div></details>
+<details class="quiz"><summary>Why is this concept's softmax a different use of the same function as Concept 04's attention softmax?</summary><div>Concept 04's softmax normalizes attention scores over a handful of positions inside every block; this concept's softmax normalizes logits over the entire vocabulary, once, at the very end of the forward pass.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using the worked-example format from Section 10, choose your own toy 2-dimensional final hidden vector and three toy output-head rows for three candidate tokens. Compute the logits and the softmax distribution by hand. Then rewrite the same three rows as if the output head were tied to a toy embedding table instead, and explain in one or two sentences what changes in your numbers and what does not change in the shape of your result.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open one worked reasoning pattern</summary><div>Swapping in a tied output head only changes which numbers occupy each row — the rows now equal the embedding table's rows, transposed into the projection — so the logits you compute will generally come out different from an independently-learned untied matrix. What stays identical is the shape of the computation: one dot product per candidate token, still producing exactly one logit per token, still normalized by the same softmax afterward. Tying is a decision about where the numbers come from, not about what the mechanism computes or how many outputs it produces.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>z = h·W_outᵗ + b, softmax(z) sums to one over |V| tokens. Output head: one row per vocabulary token, tied or untied. Decoding starts only after this.</p></div>
+<div><h3>Selection rule</h3><ul><li>Logit ≠ probability — softmax is the bridge</li><li>Tying changes numbers, not shape</li><li>All |V| logits computed, every step</li><li>Decoding logic lives in Concept 07, not here</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Explain what the output head is and how it relates to the input embedding table.</summary><div>It is a learned matrix that projects the final hidden vector into one logit per vocabulary token; it can be tied to the input embedding table (used transposed, with no extra parameters) or learned as a separate, untied matrix.</div></details>
+<details class="quiz"><summary>Why does weight tying reduce parameter count, and by how much?</summary><div>It reuses the embedding table instead of learning a second matrix of the same shape, saving |V|·d_model parameters — the exact quantity Concept 01's toy parameter count added on top of the embedding table when it assumed an untied head.</div></details>
+<details class="quiz"><summary>Where does a logit-bias or structured-output constraint get applied, mechanically?</summary><div>Directly to the logit vector produced by the output head, before softmax runs — it reshapes the distribution decoding will later sample from, without changing the projection mechanism itself.</div></details>
+<details class="quiz"><summary>A colleague says a larger context window makes the output head bigger. How do you respond?</summary><div>The output head's size depends only on vocabulary size and hidden dimension; a longer context changes how much the block stack processes upstream, not the shape of this final projection.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/1608.05859"><b>Press &amp; Wolf — Using the Output Embedding to Improve Language Models</b><br><span>The weight-tying technique this lesson's tied/untied comparison is built around.</span></a>
+<a href="https://arxiv.org/abs/1609.04309"><b>Grave et al. — Efficient softmax approximation for GPUs</b><br><span>Adaptive softmax, addressing the compute cost of this concept's final vocabulary-wide projection at scale.</span></a>
+<a href="https://arxiv.org/abs/1711.03953"><b>Yang et al. — Breaking the Softmax Bottleneck: A High-Rank RNN Language Model</b><br><span>Analyzes expressiveness limits of exactly the softmax-over-logits output layer this lesson traces.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>Concept 05 is complete. Its formal definitions, output-head mathematics, weight-tying comparison, from-scratch code, and interviews remain available for revision.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#beginner-core">Return to beginner core ↑</a>
+<a class="button primary" href="module-02-concept-06.html">Start Concept 06 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: LLM training versus inference: pretraining, tuning and alignment.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 05 · Active</p>
+<a href="module-02-concept-04.html">← Concept 04</a>
+</footer>
+</body>
+</html>

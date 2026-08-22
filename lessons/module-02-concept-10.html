@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A progressive lesson on attention dilution and the lost-in-the-middle effect: why softmax normalizing over more keys mechanically shrinks any one position's share of attention as context grows, and why models empirically attend less reliably to evidence placed in the middle of a long context than at its start or end.">
+<title>Attention dilution and lost-in-the-middle effects — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-02-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 10 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 02 · CONCEPT 10</p>
+<h1>Attention dilution,<br><em>and the lost-in-the-middle effect</em></h1>
+<p class="lesson-lead">Concept 09 traced hallucination back to a gap that exists even with zero external evidence in the prompt. Module 03 is about to start closing part of that gap by handing the model real, retrieved documents to read. But putting evidence in the context window is not the same as the model reliably using all of it — Concept 07 already showed that a growing context has a real compute cost; this concept shows a growing context also spreads the model's attention thin, and spreads it unevenly, favoring the start and end of the window over whatever sits in the middle.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth LLM &amp; transformer foundation</b></div>
+<div><span>PREREQUISITE</span><b>LLM knowledge limitations, parametric knowledge and hallucination</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why correctly retrieved evidence can still be under-attended purely because of where it sits in the prompt</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="lesson-status complete-status">
+<p><b>Completed:</b> You tied Concept 04's softmax-over-keys mechanism to Concept 07's growing context window, and defined attention dilution as the mechanical shrinkage of per-position attention weight as the number of keys grows — then defined lost-in-the-middle as the separate, empirical fact that this shrinkage isn't even across the window, landing hardest in the middle.</p>
+<b>10 CONCEPTS COMPLETED</b>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">More evidence in the window, less attention on any one part of it</h2>
+</div>
+<p>Concept 07 already told you a longer context costs more compute. It did not tell you what a longer context does to the model's attention itself. This concept fills that gap: growing the number of keys Concept 04's softmax has to normalize over mechanically shrinks the average share any one of them can get, and real trained models make that shrinkage worse in the middle of the window than at either edge.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Attention dilution is arithmetic; lost-in-the-middle is where it lands hardest</h3>
+<p><b>Attention dilution</b> is the direct consequence of Concept 04's softmax always normalizing its output so every key's weight sums to one, no matter how many keys — N — are in the window. Growing N from, say, 8 to 16 doesn't just double Concept 07's compute cost; it also mechanically halves the "fair share" of attention weight any one key could get if every key were equally relevant.</p>
+<p><b>Lost-in-the-middle</b> is the empirically observed refinement of that arithmetic fact: real trained models don't spread the shrunken weight evenly across the window. They attend more reliably to content near the start and end of a context than to content buried near its middle. A correct answer sitting dead center among ten retrieved chunks can be under-attended relative to the identical chunk sitting first or last — even when both were retrieved and ranked with equal relevance.</p>
+<div class="beginner-memory"><b>First memory:</b> dilution is softmax normalizing over more keys as context grows — pure arithmetic, from Concept 04. Lost-in-the-middle is the extra, empirical fact that the resulting loss isn't spread evenly across the window — the middle loses out more than the edges do.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Two separate causes stack on top of each other</h3>
+<p>Concept 04 showed <code>softmax(QK<sup>T</sup>/√d<sub>k</sub>)</code> turning raw scores into weights that always sum to one, whatever N is. Concept 07 showed N growing as retrieved chunks, history, and instructions all compete for the same fixed budget. Neither section said anything about where inside the window attention lands best. Cause one — dilution — is pure arithmetic: normalizing more terms leaves less average weight per term. Cause two — lost-in-the-middle — is a separate, empirical fact about how real trained models behave, documented across many production models by Liu et al.: positions near the start of a window draw a disproportionate share through learned "attention sink" behavior (Xiao et al.), and positions near the end draw a disproportionate share through proximity to the generation step. Positions in between inherit neither advantage.</p>
+<div class="mental-compare">
+<div><span>DILUTION'S JOB — ARITHMETIC</span><p>Softmax must divide one unit of attention weight across however many keys exist. More keys, smaller average share, no exceptions, for any model.</p></div>
+<div><span>LOST-IN-THE-MIDDLE'S JOB — EMPIRICAL</span><p>Trained positional bias and attention-sink behavior make the split uneven on top of that. Start and end draw more than an even share; the middle draws less.</p></div>
+</div>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Same ten retrieved chunks, three different positions for the one that matters</h3>
+<p>Oracle RAG retrieves ten roughly equally relevant chunks about expense-report approval thresholds, and exactly one of them contains the actual answer. If that chunk happens to rank first or last after retrieval, the question tends to get answered correctly. If it happens to land fifth or sixth — dead center of the assembled context — the model still produces a fluent answer, but pulled from a less-attended chunk, and the odds of that answer being wrong climb noticeably.</p>
+<div class="context-demo">
+<div><span>CHUNK RANKED 1ST OF 10</span><p>Strong start-of-window advantage — the model attends to it reliably.</p></div>
+<div><span>CHUNK RANKED 5TH OF 10</span><p>Buried in the flattest part of the attention curve — correctness gets noticeably less reliable here.</p></div>
+<div><span>CHUNK RANKED 10TH OF 10</span><p>End-of-window position, closest to the generation step — attended to reliably again.</p></div>
+</div>
+</article>
+<figure class="concept-visual" aria-labelledby="c0210-visual-title">
+  <strong class="concept-visual-title" id="c0210-visual-title">VISUAL · WHERE ATTENTION ACTUALLY LANDS ACROSS A RETRIEVED CONTEXT</strong>
+  <div class="diagram-scroll" tabindex="0" aria-label="Scrollable hub diagram showing chunk one and chunk ten attended reliably, chunk five in the middle receiving the lowest attention share, all normalized by one softmax computation over a growing number of keys">
+    <div class="diagram-hub">
+      <div class="diagram-node"><b>Chunk 1 (start)</b><small>attended reliably</small></div>
+      <div class="diagram-node"><b>Chunk 5 (middle)</b><small>lowest attention share</small></div>
+      <div class="diagram-node hub-center"><b>Softmax over N keys</b><small>always sums to one (Concept 04)</small></div>
+      <div class="diagram-node"><b>Chunk 10 (end)</b><small>attended reliably</small></div>
+      <div class="diagram-node"><b>Context length N</b><small>grows per Concept 07 — more keys sharing one unit of weight</small></div>
+    </div>
+  </div>
+  <figcaption>Ten chunks enter one softmax computation. Chunks 1 and 10 sit at the edges of the window and draw a larger-than-average share; chunk 5 sits near the geometric middle and draws the smallest share of all — despite no difference in how relevant any of the ten chunks actually are. The lab in the advanced section lets you move the answer-bearing chunk across positions and watch its share change.</figcaption>
+  <ol class="diagram-key"><li><b>One shared budget:</b> every chunk's weight is drawn from the same one-unit total Concept 04's softmax always produces.</li><li><b>Edges win by default:</b> start and end positions carry a built-in advantage that has nothing to do with content.</li><li><b>The middle inherits neither advantage:</b> it is simply what's left after the edges take their larger shares.</li></ol>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Where the effect actually comes from</h3>
+<div class="example-grid">
+<article class="info-card"><span>SOFTMAX OVER N KEYS</span><h3>Concept 04's normalization step</h3><p>Σw<sub>j</sub> = 1 across every key in the window, regardless of how many keys N there are.</p></article>
+<article class="info-card"><span>GROWING CONTEXT</span><h3>Concept 07's window filling up</h3><p>Retrieved chunks, conversation history, and instructions all add keys — the exact source of a bigger N.</p></article>
+<article class="info-card"><span>ATTENTION SINK</span><h3>A learned start-of-window bias</h3><p>Early positions draw an outsized, largely content-independent share of attention (Xiao et al.).</p></article>
+<article class="info-card"><span>RECENCY ADVANTAGE</span><h3>A learned end-of-window bias</h3><p>Positions closest to the generation step get attended to reliably for a separate reason — proximity.</p></article>
+<article class="info-card"><span>U-SHAPED RELIABILITY CURVE</span><h3>The empirical measurement</h3><p>Liu et al.'s finding: answer accuracy is highest when evidence sits near the start or end, lowest near the middle.</p></article>
+<article class="info-card"><span>NOT A RELEVANCE PROBLEM</span><h3>Retrieval can be correct and still lose</h3><p>A retriever can rank a chunk correctly, and the model can still under-use it purely because of where it landed in the assembled prompt.</p></article>
+</div>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One bias baked in during training, one problem that changes shape every request</h3>
+<div class="mental-compare">
+<div><span>TRAINING TIME — ONCE</span><p>Whatever positional bias and attention-sink tendency pretraining left behind is fixed once training stops.</p></div>
+<div><span>INFERENCE TIME — EVERY CALL</span><p>Every request's context length and chunk order changes where, specifically, that fixed bias hurts.</p></div>
+</div>
+<div class="scroll-flow">
+<span>Retrieved chunks assembled (Module 03 territory)</span><i>→</i>
+<span>Prompt = instructions + N chunks + question</span><i>→</i>
+<span>Forward pass, N keys per query (Concept 04)</span><i>→</i>
+<span>Softmax normalizes across all N, always sums to one</span><i>→</i>
+<span>Positional bias skews the split (empirical)</span><i>→</i>
+<span>Decoding loop generates from what it actually attended to (Module 01, Concept 07)</span>
+</div>
+<details class="beginner-answer">
+<summary>Open where this sits in the full RAG pipeline</summary>
+<div>
+<div class="pipeline-preview">
+<span>Documents chunked and retrieved (Module 03 territory)</span><i>↓</i>
+<span>Context assembly picks an order — this concept's subject</span><i>↓</i>
+<span>Prompt = instructions + N chunks + question</span><i>↓</i>
+<span>Forward pass → softmax over N keys (Concept 04)</span><i>↓</i>
+<span>Attention lands unevenly: strong at the edges, weak in the middle</span><i>↓</i>
+<span>Decoding loop generates from whatever it actually attended to (Module 01, Concept 07)</span>
+</div>
+</div>
+</details>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Five terms that get flattened into "the model ignored the evidence"</h3>
+<div class="distinction-table" role="table" aria-label="Attention dilution distinctions">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually is</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Attention dilution</span><span role="cell">Arithmetic consequence of softmax normalizing over more keys as N grows (Concept 04)</span><span role="cell">Mistaken for a bug, or the model simply "getting worse"</span></div>
+<div role="row"><span role="cell">Lost-in-the-middle</span><span role="cell">The empirical, positionally uneven version of dilution — the middle loses out more than the edges</span><span role="cell">Assumed to be identical to dilution itself</span></div>
+<div role="row"><span role="cell">Context window limit</span><span role="cell">Concept 07's hard ceiling on how many tokens fit in one forward pass</span><span role="cell">Confused with why attention is uneven within that limit</span></div>
+<div role="row"><span role="cell">Retrieval relevance ranking</span><span role="cell">A score assigned before assembly, describing how well a chunk matches the query</span><span role="cell">Assumed to guarantee even attention once the chunk is inside the prompt</span></div>
+<div role="row"><span role="cell">Hallucination (Concept 09)</span><span role="cell">Fluent output with no supporting evidence at all, anywhere in the model</span><span role="cell">Confused with a case where evidence existed in the prompt but was under-attended</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often misunderstand</h3>
+<div class="mistake-list">
+<div><b>"If retrieval put the right chunk in the context, the model will use it."</b><p>Position inside the assembled window still matters independently of whether the retriever ranked the chunk correctly.</p></div>
+<div><b>"Dilution and lost-in-the-middle are the same thing."</b><p>Dilution is the arithmetic — why the total available weight shrinks. Lost-in-the-middle is the extra, empirical unevenness stacked on top of it.</p></div>
+<div><b>"A bigger context window fixes this."</b><p>Concept 07's bigger window raises the ceiling and the cost; it doesn't flatten the U-shaped reliability curve — it can make the middle sag proportionally further below the average.</p></div>
+<div><b>"Putting the best chunk first or last is cheating the result."</b><p>It's a legitimate mitigation strategy this course revisits later (Module 17), not a hack around a "real" answer.</p></div>
+<div><b>"This only matters for very long contexts."</b><p>The U-shape shows up at context lengths far shorter than a model's maximum window — Section 11 shows it at N as small as five.</p></div>
+<div><b>"A reranker's relevance score and the model's attention weight are the same number."</b><p>A reranker's score is computed once, offline of generation. Attention weight is computed fresh, per query, inside the forward pass — and skewed by position independently of that score.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in Oracle RAG</h3>
+<div class="project-map">
+<div><span>CHUNK ORDER IN THE PROMPT</span><b>Not yet controlled</b><p>Oracle RAG's baseline pipeline assembles retrieved chunks in whatever order the vector search returns them — Section 15's trade-off table names the first real lever over that order.</p></div>
+<div><span>RETRIEVED-CHUNK COUNT</span><b>Directly sets N</b><p>Every additional chunk Oracle RAG's top-k retrieval adds is one more key sharing Concept 04's fixed one-unit softmax budget.</p></div>
+<div><span>MIDDLE-BURIED EVIDENCE</span><b>The highest-risk placement</b><p>A correct chunk landing near the center of an assembled prompt is the single riskiest position for Oracle RAG's answer quality — independent of how well the retriever ranked it.</p></div>
+<div><span>THE ARCHITECTURAL FIX</span><b>Deferred to Module 17</b><p>"Context selection and ordering" and "Lost-in-the-middle mitigation" are named, later course topics — diagnosed here, not solved here.</p></div>
+</div>
+<p>Nothing here means Oracle RAG's retrieval is broken — a chunk landing mid-window can still be the correctly retrieved, correctly ranked answer. The point is that Concepts 01–09's mechanism, run as-is on a naive chunk order, has no built-in reason to treat position as anything other than an accident of how the vector search happened to return results.</p>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Attention dilution</b><p>Softmax normalizing over more keys shrinks the average per-key weight as N grows.</p></div>
+<div><b>Lost-in-the-middle</b><p>An empirical finding: that shrinkage is uneven, worst near the middle of the window.</p></div>
+<div><b>Context window (Concept 07)</b><p>Sets the ceiling on N — a separate question from why attention inside it is uneven.</p></div>
+<div><b>Not a relevance failure</b><p>Correct retrieval and correct ranking can still be under-attended purely from position.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does Concept 04's softmax guarantee that adding more retrieved chunks shrinks the average attention weight per chunk?</li>
+<li>What's the precise difference between attention dilution and the lost-in-the-middle effect?</li>
+<li>Why doesn't simply widening Concept 07's context window fix the middle-position problem?</li>
+<li>Why can a correctly retrieved, correctly ranked chunk still be under-attended?</li>
+<li>What produces the start-of-window advantage, and what produces the end-of-window advantage?</li>
+<li>Which later module actually mitigates this, and what does this concept do instead?</li>
+</ol>
+<details class="beginner-answer">
+<summary>Check a quick position-and-outcome exercise</summary>
+<div>
+<ol>
+<li>"Correct chunk ranked 1st of 6" — <b>reliable; start-of-window advantage applies</b>.</li>
+<li>"Correct chunk ranked 3rd of 6" — <b>at risk; approaching the flattest part of the curve</b>.</li>
+<li>"Correct chunk ranked 6th of 6 (last)" — <b>reliable; end-of-window advantage applies</b>.</li>
+<li>"Doubling context length from 6 to 12 chunks, same relative middle position" — <b>the risk gets worse; more keys are sharing the same one-unit softmax budget, per Concept 04</b>.</li>
+<li>"Reordering so the correct chunk moves from the middle to first, same 12 chunks" — <b>reliability improves; a real, later-course mitigation lever (Module 17), not something this concept implements</b>.</li>
+</ol>
+</div>
+</details>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Next: Structured generation and constrained outputs</h3>
+<p>This concept covered where evidence sits inside a long, unstructured prompt and what that does to attention. The next concept turns to a different axis entirely: forcing a model's fluent-but-unstructured output into a schema-valid, machine-parseable shape it can be trusted to produce every time.</p>
+<div class="beginner-memory"><b>Concept 10 is complete.</b> Continue to Structured generation and constrained outputs.</div>
+<a class="button primary" href="module-02-concept-11.html">Start Concept 11 →</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Required mechanism, optional depth.</h2>
+<p>Master the difference between dilution and lost-in-the-middle first. Open the U-curve mathematics, from-scratch code, and the position lab only when wanted.</p>
+</header>
+<div class="bridge-steps">
+<a href="#b01"><span>01</span><b>Separate</b><small>Dilution (arithmetic) from lost-in-the-middle (empirical, uneven).</small></a>
+<a href="#b04"><span>02</span><b>Compare</b><small>Softmax over N keys versus positional bias and attention-sink skew.</small></a>
+<a href="#b08"><span>03</span><b>Decide</b><small>Chunk count and chunk order are levers this concept only names.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Open the U-curve mathematics, code, and the position lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> Retrieved chunks assembled (Module 03 territory) → prompt = N chunks + question → softmax over N keys (Concept 04) → positional bias skews the split → middle-positioned evidence under-attended → decoding loop generates (Module 01, Concept 07).</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the attention-dilution deep dive</b><em>The U-curve mathematics, a from-scratch positional-weight demo, and the context-position lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where this sits between Concept 09 and Module 03's retrieval</h2></div></header>
+<p>Concept 09 traced hallucination to a gap that exists with zero external evidence anywhere in the prompt. This concept assumes Module 03 has conceptually already handed the model retrieved evidence, and asks a narrower question: given that evidence now sits inside the context window, does the forward pass actually use all of it equally? It does not re-derive Concept 04's query/key/value mechanism or Concept 07's context-window cost — both are cited, not rebuilt. What it adds is the arithmetic consequence of a growing N (dilution) plus the empirical, uneven version of that consequence (lost-in-the-middle), which together motivate Module 17's context-ordering and evidence-placement work, three phases from now.</p>
+<div class="flow">
+<div class="flow-node">Chunks retrieved (Module 03 territory)</div>
+<div class="flow-node">Context assembled, N chunks</div>
+<div class="flow-node">Softmax over N keys (Concept 04)</div>
+<div class="flow-node hot">Positional bias skews the split</div>
+<div class="flow-node hot">Middle-positioned evidence under-attended</div>
+<div class="flow-node">Module 17: ordering &amp; mitigation</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>State dilution and lost-in-the-middle precisely</h3><p>Name them as two distinct, stacking causes — one arithmetic, one empirical.</p></article>
+<article class="info-card"><span>TRACE</span><h3>Follow N through both mechanisms</h3><p>Show how a growing context (Concept 07) interacts with softmax's always-sums-to-one guarantee (Concept 04).</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Separate "never retrieved" from "retrieved but under-attended"</h3><p>Keep Concept 09's parametric gap and this concept's positional gap from collapsing into one idea.</p></article>
+<article class="info-card"><span>BOUND</span><h3>State what this concept does not implement</h3><p>Name the ordering fix that belongs to Module 17, not here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Query, key, value and softmax (Concept 04):</b> the normalization guarantee this concept's arithmetic depends on — assumed known, not re-derived.</li>
+<li><b>Context windows and in-context learning (Concept 07):</b> where N actually comes from, and why a bigger N already has a cost before this concept adds a second one.</li>
+<li><b>LLM knowledge limitations, parametric knowledge and hallucination (Concept 09):</b> the adjacent, but mechanically different, gap this concept does not re-explain.</li>
+<li><b>Top-k evidence selection (Module 11, forthcoming):</b> assumed only informally — chunks are treated as already ranked; this concept starts after that ranking exists.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A spotlight of fixed brightness, and a rig built to favor the ends</h2></div></header>
+<p>Picture a single spotlight beam of fixed total brightness — Concept 04's one unit of softmax weight — shone across a growing row of objects on a stage — Concept 07's context window. Spread the beam over four objects and each gets a reasonable share. Spread the identical beam over twenty and the average share per object drops sharply: that's dilution alone, and it would happen even with the plainest, most even lighting rig imaginable. Now imagine the rig itself was built, during rehearsal, to always brighten the leftmost and rightmost objects a little extra, regardless of which object the scene actually needs lit — that's the lost-in-the-middle effect stacked on top. The middle of the row goes dimmer than an even split would predict, because the edges are quietly taking more than their fair share first.</p>
+<div class="callout warning"><b>Analogy boundary</b>A spotlight rig is a physical, symmetric fixture built on purpose. A transformer's positional bias is a fitted, imperfect property learned across one training corpus — Xiao et al.'s attention-sink observation, Liu et al.'s empirical U-curve — not a designed feature, and Section 09's equations don't guarantee a clean, symmetric dip for every model, prompt, or task the way this analogy implies for teaching purposes.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Term</th><th>Definition</th><th>Boundary</th></tr></thead>
+<tbody>
+<tr><td>Attention dilution</td><td>The reduction in the average softmax weight any one key can receive as N, the number of keys, grows — since Σw<sub>j</sub> = 1 regardless of N (Concept 04)</td><td>Pure arithmetic; says nothing about which specific position loses out</td></tr>
+<tr><td>Lost-in-the-middle</td><td>The empirical finding that real trained models attend less reliably to content near the middle of a long context than near its start or end</td><td>Not derivable from softmax's normalization alone; requires the model's learned positional behavior</td></tr>
+<tr><td>Attention sink</td><td>A learned tendency for early context positions to draw a disproportionate, largely content-independent share of attention</td><td>Explains the start-of-window advantage specifically, not the whole lost-in-the-middle picture</td></tr>
+<tr><td>Context window (Concept 07)</td><td>The hard ceiling on how many tokens one forward pass can process</td><td>Sets the maximum possible N; does not itself explain unevenness inside that ceiling</td></tr>
+<tr><td>U-shaped reliability curve</td><td>An empirical plot of answer accuracy against the position of the answer-bearing evidence within the context</td><td>A measured outcome across many prompts, not a property directly readable off any single equation</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>One lane that's true by construction, one lane that had to be learned</h2></div></header>
+<div class="two-lane">
+<article class="lane"><span>LANE A — ARITHMETIC, TRUE FOR ANY MODEL</span>
+<div class="lane-flow">
+<div>N keys enter one query's softmax computation (Concept 04)</div>
+<div>Normalization forces Σw<sub>j</sub> = 1, whatever N is</div>
+<div>Average available weight per key = 1/N — shrinks as N grows</div>
+<div>This is dilution: true by construction, before any training happens</div>
+</div>
+</article>
+<article class="lane"><span>LANE B — EMPIRICAL, LEARNED DURING PRETRAINING</span>
+<div class="lane-flow">
+<div>Pretraining exposes early positions to disproportionately reinforcing gradients (Concept 06), producing attention-sink behavior</div>
+<div>Positions near the current generation step benefit from proximity within the same forward pass</div>
+<div>Positions in between inherit neither advantage</div>
+<div>Result: lane A's 1/N average is not distributed evenly — the middle falls below it, the edges rise above it</div>
+</div>
+</article>
+</div>
+<p>Lane A alone would predict a flat, even decline as N grows — every position losing the same amount. Lane B is why the real decline is a U-shape instead of a flat line. Section 07 visualizes exactly what that difference looks like.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Short context versus long context, same relevance profile</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable split diagram showing the same equally-relevant chunk set forking into a short-context case with a mild middle penalty and a long-context case with a severe middle penalty">
+  <div class="diagram-split">
+    <div class="diagram-node"><b>Same per-chunk relevance score, N chunks</b><small>content held identical on purpose</small></div>
+    <div class="diagram-fork" aria-hidden="true">↗<br>↘</div>
+    <div class="diagram-node active"><b>Short context (N=4)</b><small>mild edge advantage; the middle still lands close to a fair 1/N share</small></div>
+    <div class="diagram-node"><b>Long context (N=20)</b><small>dilution shrinks the average far below a short context's 1/N, and positional bias crushes the middle's share even further below that shrunken average</small></div>
+  </div>
+</div>
+<ol class="diagram-key"><li><b>One shared source:</b> both branches start from chunks with identical relevance scores — position is the only variable that changes.</li><li><b>N sets the baseline:</b> the average share, 1/N, is already much smaller on the right before positional bias is even applied.</li><li><b>Bias compounds, not replaces, dilution:</b> the long-context middle chunk loses to both effects at once.</li></ol>
+<p>Section 09 turns this picture into the exact equation behind it, and Section 10 runs the equation on real numbers.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits relative to the RAG skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents indexed and chunked — Module 03 onward</span><i>↓</i>
+<span>Query embedded, top-k chunks retrieved and ranked — Module 11 onward</span><i>↓</i>
+<span>Context assembled: N chunks + instructions + question, order not yet controlled</span><i>↓</i>
+<span>Forward pass → softmax over N keys (Concept 04)</span><i>↓</i>
+<span>Attention lands unevenly: edges favored, middle under-attended</span><i>↓</i>
+<span>Decoding loop generates from whatever it actually attended to (Module 01, Concept 07)</span>
+</div>
+<p>Everything to the left of the forward pass in this skeleton is machinery the rest of the course still has to build in detail — retrieval, ranking, and eventually ordering. This concept's contribution is naming exactly why the last two steps on the right can go wrong even after every step on the left worked correctly.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Formalizing "shrinks with N" and "shrinks unevenly"</h2></div></header>
+<p>Concept 04's softmax guarantees the following for any context, short or long:</p>
+<div class="equation">Σ w_j = 1, for j = 1 … N — always, whatever N is</div>
+<p>If every key scored identically under Concept 04's raw similarity, that one unit of weight would split into an equal, fair share per key:</p>
+<div class="equation">w_j = 1 / N — the baseline dilution shrinks as N grows, with no positional bias involved yet</div>
+<p>A toy sketch of how a learned positional bias sits on top of that baseline, without claiming this is any real model's literal internal computation:</p>
+<div class="equation">w_j ∝ exp( s_j / √d_k + β · edge(j, N) ), where edge(j, N) = | 2·(j−1)/(N−1) − 1 |</div>
+<p><code>s_j</code> is chunk <i>j</i>'s content-relevance contribution to Concept 04's raw <code>QK<sup>T</sup></code> score; <code>d_k</code> is the key dimension from that same formula; <code>β</code> is a fixed positional-bias strength standing in for the learned attention-sink and recency behavior Section 04 described; <code>edge(j, N)</code> ranges from 0 at the dead center of the window to 1 at either edge — deliberately symmetric and simplified for teaching, since Section 04's callout already flagged that real curves aren't guaranteed to be this clean. Set <code>β = 0</code> and this equation collapses back to ordinary content-based softmax from Concept 04 — dilution only, no positional skew. Raise <code>β</code> above zero and the edges gain weight the middle loses beyond what dilution alone predicted — Lane A and Lane B from Section 06, written as one formula.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Seven equally relevant chunks, one buried in the middle</h2></div></header>
+<p>Oracle RAG retrieves seven chunks about a policy topic, all judged equally relevant by the retriever, so every <code>s_j = 1.0</code> — position is the only variable left to explain any difference. Using Section 09's positional-bias formula with <code>β = 1.5</code> and <code>d_k</code> folded into the score for simplicity, the edge term for each of the seven positions works out to:</p>
+<div class="equation">edge(j,7) for j=1..7 → 1.00, 0.667, 0.333, 0.00, 0.333, 0.667, 1.00</div>
+<div class="equation">logits = s_j + 1.5·edge(j,7) → 2.5, 2.0, 1.5, 1.0, 1.5, 2.0, 2.5</div>
+<div class="equation">exp(logits) → 12.18, 7.39, 4.48, 2.72, 4.48, 7.39, 12.18 — sum ≈ 50.82</div>
+<div class="equation">weights → 24.0%, 14.5%, 8.8%, 5.4%, 8.8%, 14.5%, 24.0%</div>
+<p>Chunk 4, dead center, holds exactly the same content-relevance score as chunks 1 and 7, yet ends up with roughly 5.4% of the attention weight against their 24.0% each — a gap of nearly 4.5x, produced entirely by position. If Oracle RAG's answer happens to depend on chunk 4, this is the mechanical reason the model can generate a fluent response that quietly leans on a different, better-attended chunk instead.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Examples and counterexamples</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>EDGE-POSITIONED, RELIABLE</span><h3>Correct chunk ranked 1st of 8</h3><p>Benefits from both a smaller dilution penalty at this N and the start-of-window advantage.</p></article>
+<article class="info-card"><span>MID-POSITIONED, AT RISK</span><h3>Correct chunk ranked 4th of 8</h3><p>Section 10's numbers apply directly: identical content score, a meaningfully smaller attention share.</p></article>
+<article class="info-card"><span>LONG CONTEXT, DEEPENED RISK</span><h3>Correct chunk ranked 4th of 20, not 4th of 8</h3><p>Same relative position, but the larger N deepens the dilution penalty before positional bias is even applied.</p></article>
+<article class="info-card"><span>SHORT CONTEXT, SHALLOWER RISK</span><h3>Correct chunk ranked 4th of 5</h3><p>Fewer total keys sharing the one-unit budget; the middle penalty is far less severe at this N.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"A higher relevance-ranking score guarantees more attention"</h3><p>Section 10's trace deliberately holds relevance constant — a higher-ranked but middle-positioned chunk can still lose out to a lower-ranked edge chunk once positional bias is added.</p></article>
+<article class="info-card"><span>COUNTEREXAMPLE</span><h3>"This is just the model being too small"</h3><p>The U-curve shows up across many model sizes and providers in Liu et al.'s tests — a property of how attention was trained to behave over position, not a capacity shortfall alone.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A from-scratch demonstration of the position penalty</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM-SCRATCH PSEUDOCODE</span>
+<pre><code>import math
+
+def edge_bias(position, n):
+    if n == 1:
+        return 0.0
+    normalized = (position - 1) / (n - 1)        # 0 at the first key, 1 at the last
+    return abs(2 * normalized - 1)                 # 0 at dead center, 1 at either edge
+
+def attention_weights(relevance_scores, beta):
+    n = len(relevance_scores)
+    logits = [relevance_scores[j] + beta * edge_bias(j + 1, n) for j in range(n)]
+    peak = max(logits)                              # for numerical stability only
+    exponentials = [math.exp(x - peak) for x in logits]
+    total = sum(exponentials)
+    return [value / total for value in exponentials]  # Section 09's third equation
+
+for n in (4, 8, 16):
+    scores = [1.0] * n                              # identical content relevance -- isolates position
+    weights = attention_weights(scores, beta=1.5)
+    middle_index = n // 2
+    print(n, "keys -> middle weight", round(weights[middle_index], 4),
+          "edge weight", round(weights[0], 4))
+    # the gap between these two numbers widens as n grows: dilution and positional
+    # bias are compounding, exactly as Section 06's two lanes predicted separately.
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>How production systems work around this, one layer up</h2></div></header>
+<p>No mainstream inference stack changes Concept 04's attention computation itself to fix this — the practical response, where one exists today, is applied one layer up, at context-assembly time, before the forward pass ever runs. LangChain ships a document-reordering transformer that rearranges retrieved chunks so the most relevant ones sit at the start and end of the assembled context and weaker ones get pushed toward the middle — a direct, practical response to the U-shaped curve this concept describes. Long-context benchmark suites such as RULER (Section 24) exist specifically because a model's raw context-window size, on its own, overstates how much of that window it can actually use reliably at every position. None of this touches softmax or the block stack; it only decides what order Module 03's retrieved evidence enters the prompt in — exactly the lever Module 17's "Context selection and ordering" and "Lost-in-the-middle mitigation" concepts pick up in full.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Context-position dilution lab</h2></div></header>
+<div class="lab">
+<p>Set how many chunks are in the assembled context, then drag the answer-bearing chunk to any rank position. Every chunk is given an identical content-relevance score on purpose, so the only thing changing the attention-weight chart below is position — exactly Section 09's third equation, computed live.</p>
+<div class="lab-controls">
+<div class="control">
+<label for="contextLength0210">Context length (retrieved chunks)</label>
+<input id="contextLength0210" type="range" min="4" max="20" step="2" value="8">
+<output id="contextLengthValue0210">8</output>
+</div>
+<div class="control">
+<label for="factPosition0210">Rank position of the answer-bearing chunk</label>
+<input id="factPosition0210" type="range" min="1" max="8" step="1" value="4">
+<output id="factPositionValue0210">4</output>
+</div>
+</div>
+<div class="lab-actions" role="group" aria-label="Reset the dilution lab">
+<button type="button" class="secondary" id="dilutionResetButton0210">Reset to defaults</button>
+</div>
+<div class="sample-output" id="dilutionSummary0210" aria-live="polite"></div>
+<div class="prob-bars" id="dilutionBars0210" aria-live="polite"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three responses to the same U-curve</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Response</th><th>What it costs</th><th>What it actually fixes</th></tr></thead>
+<tbody>
+<tr><td>Do nothing — assemble chunks in raw retrieval-score order</td><td>Free</td><td>Nothing — the top-ranked chunk can still land mid-window when scores are tied or near-tied</td></tr>
+<tr><td>Reorder chunks (best-first / best-last "sandwich")</td><td>Cheap, one extra sort step, no retraining</td><td>Reduces the odds the single best chunk lands in the worst position; doesn't remove dilution itself</td></tr>
+<tr><td>Shrink N via reranking or compression before assembly (Module 16 territory)</td><td>An extra reranking pass or compression step</td><td>Shrinks the denominator in 1/N directly — a smaller N means less dilution and a shallower U-curve overall</td></tr>
+</tbody>
+</table>
+<p>Only the third row changes N itself. The first two leave Section 09's equations, and the total amount of dilution they describe, completely untouched.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MIDDLE-BURIED ANSWER</span><h3>Correct, ranked, ignored anyway</h3><p>The answer-bearing chunk was retrieved and ranked correctly, but landed mid-context and was under-attended.</p></article>
+<article class="info-card"><span>FALSE CONFIDENCE FROM A DISTRACTOR</span><h3>A fluent answer from the wrong chunk</h3><p>The model answers fluently, Concept 09-style, but pulled from a well-attended edge chunk instead of the correct middle one.</p></article>
+<article class="info-card"><span>DILUTION MISTAKEN FOR RETRIEVAL FAILURE</span><h3>Debugging the wrong layer</h3><p>Effort spent re-tuning the retriever when the actual defect is chunk order at assembly time.</p></article>
+<article class="info-card"><span>WINDOW SIZE MISTAKEN FOR A FIX</span><h3>Widening the ceiling, not the curve</h3><p>Raising Concept 07's context-window limit without addressing order just adds more middle ground to lose evidence in.</p></article>
+<article class="info-card"><span>UNTESTED LONG-CONTEXT ASSUMPTION</span><h3>"It handles long context" — untested by position</h3><p>Assuming a large window means reliable use of every position in it, without ever checking accuracy by rank.</p></article>
+<article class="info-card"><span>ORDER DRIFT ACROSS RERUNS</span><h3>Non-deterministic ranking, inconsistent risk</h3><p>Near-tied retrieval scores silently shift the same answer chunk between reliable and buried positions run to run.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A bigger context window means the model uses more of it reliably</td><td>A bigger window raises Concept 07's ceiling on N; it does not flatten the U-shaped reliability curve inside that ceiling, and can deepen the middle's disadvantage.</td></tr>
+<tr><td>Dilution and lost-in-the-middle describe the same phenomenon</td><td>Dilution is the arithmetic consequence of softmax normalizing over more keys; lost-in-the-middle is the separate, empirical fact that the loss is uneven across position.</td></tr>
+<tr><td>If the retriever ranked a chunk first, the model treats it as first</td><td>Retrieval ranking and prompt-assembly order are two different things until an explicit ordering step (Module 17) exists — a naive pipeline can place the top-ranked chunk anywhere.</td></tr>
+<tr><td>This is only a long-document problem</td><td>The U-curve shows up at moderate context lengths too — Section 11 traces a middle penalty at N as low as five.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Log the rank position of the answer-bearing chunk in every evaluation example, not just whether it was retrieved.</li>
+<li>Treat "context window size" and "effective usable context" as two different numbers when sizing a system.</li>
+<li>Prefer chunk counts and orderings that keep likely-relevant evidence away from the geometric middle of the assembled prompt.</li>
+<li>Budget for a context-ordering step (Module 17) in any pipeline that regularly assembles more than a handful of chunks.</li>
+<li>Re-test position sensitivity whenever the underlying model changes — attention-sink and recency behavior isn't guaranteed to transfer across model families.</li>
+<li>Don't accept "we widened the context window" as a complete answer to a middle-position failure a user reports.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does adding more retrieved chunks always shrink the average attention weight per chunk, regardless of the model?</summary><div>Concept 04's softmax normalizes across however many keys are present, so Σw_j = 1 always holds; more keys sharing that fixed total forces the average share, 1/N, down as N grows.</div></details>
+<details class="quiz"><summary>What produces the specifically U-shaped, not flat, decline?</summary><div>Learned positional bias and attention-sink behavior from pretraining give start-of-window positions, and separately end-of-window/recency positions, a disproportionate share, leaving the middle below even the shrunken average dilution alone would predict.</div></details>
+<details class="quiz"><summary>Would reranking chunks by relevance alone fix this?</summary><div>No — reranking changes which chunk is judged most relevant. It says nothing about where that chunk ends up positioned in the assembled prompt unless an explicit ordering step is added afterward.</div></details>
+<details class="quiz"><summary>Why isn't this the same failure mode as Concept 09's hallucination?</summary><div>Concept 09 covers evidence that never existed in the weight groups at all. This concept covers evidence that was actually retrieved and present in the prompt but under-attended purely because of where it landed.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Pick an Oracle RAG scenario that retrieves somewhere between eight and twelve chunks for one question. Predict which rank position, or positions, the answer-bearing chunk should most avoid landing in, using Section 06's two-lane mechanism — arithmetic dilution plus positional bias — to justify the prediction with numbers, not just intuition. Then state one concrete, low-effort change to the assembly step that would reduce that risk, without implementing it, since the actual mitigation work belongs to Module 17.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz"><summary>Open one worked reasoning pattern</summary><div>Take a retrieval that returns ten roughly tied-relevance chunks for a policy question, with the correct chunk at rank six. Section 06's lane A predicts every chunk's fair share drops to roughly 1/10 as N reaches ten, down sharply from a much larger share at a smaller N. Lane B then predicts the rank-six chunk, sitting almost exactly at the geometric center of the window, receives less than even that already-shrunken 1/10 average, while rank-one and rank-ten receive more — Section 10's worked numbers show the shape of that gap directly. The concrete, low-effort fix Section 20 asks for, without implementing it: move the rank-six chunk to rank one or rank ten in the assembled prompt — same retrieved evidence, same relevance score, no retraining, no reranking model required. That is exactly the "sandwich" pattern Section 13's document-reordering tool automates, and exactly what Module 17 covers as a designed pipeline stage rather than a one-off trick.</div></details>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>The mechanism</h3><p>Attention dilution is Concept 04's softmax normalizing over a growing N (Concept 07), shrinking the average per-key weight. Lost-in-the-middle is the separate, empirical fact that real models don't spread that shrinkage evenly — learned attention-sink and recency behavior favor the start and end of the window, leaving the middle worse off than dilution alone predicts. Together they motivate Module 17's context-ordering work.</p></div>
+<div><h3>Selection rule</h3><ul><li>Treat "retrieved" and "reliably attended" as two different guarantees</li><li>Track answer-chunk rank position in every evaluation, not just retrieval hit-rate</li><li>Never assume a wider context window flattens the middle</li><li>Default to a context-ordering step once assembled contexts regularly exceed a handful of chunks</li></ul></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>A teammate says doubling the context window will make retrieval-augmented answers more reliable across the board. How do you respond?</summary><div>It raises Concept 07's ceiling and lets more evidence fit, but Concept 04's softmax still has to normalize over more keys, and the empirical U-curve means the middle of that bigger window can get relatively worse, not better — window size and positional reliability are different axes entirely.</div></details>
+<details class="quiz"><summary>How would you detect a lost-in-the-middle failure in production, as opposed to a plain retrieval failure?</summary><div>Check whether the correct evidence was actually retrieved and ranked well — a retrieval metric — separately from whether the final answer reflects it — a generation or attribution metric. If the first is fine and the second isn't, log the answer chunk's rank position across the failing cases and look for a concentration near the middle of the assembled context.</div></details>
+<details class="quiz"><summary>Name a concrete, no-retraining mitigation and explain why it works.</summary><div>Reorder the assembled chunks so the highest-confidence evidence sits at the start or end of the context rather than the middle — it works because it exploits the same start/end advantage that causes the problem in the first place, without touching the model or the softmax computation itself.</div></details>
+<details class="quiz"><summary>Why can't you tell from the softmax equation alone that the middle of a context will be worse-attended?</summary><div>The equation only guarantees the weights sum to one; whether that unit of weight distributes evenly, favors the edges, or favors the middle is an empirical property of a specific model's learned positional behavior, not something derivable from normalization alone.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2307.03172"><b>Liu et al. — Lost in the Middle: How Language Models Use Long Contexts</b><br><span>The empirical source for this lesson's U-shaped reliability curve, testing many production models across context positions.</span></a>
+<a href="https://arxiv.org/abs/2309.17453"><b>Xiao et al. — Efficient Streaming Language Models with Attention Sinks</b><br><span>Identifies and explains the attention-sink behavior behind this lesson's start-of-window advantage.</span></a>
+<a href="https://arxiv.org/abs/2403.04797"><b>Hsieh et al. — Found in the Middle: How Language Models Use Long Contexts Better via Plug-and-Play Positional Encoding</b><br><span>A mitigation approach grounding this lesson's claim that the effect is addressed one architectural layer up, not by rewriting attention itself.</span></a>
+<a href="https://arxiv.org/abs/2404.06654"><b>Hsieh et al. — RULER: What's the Real Context Size of Your Long-Context Language Models?</b><br><span>A long-context benchmark showing effective usable context shrinks well below a model's advertised window — the source for Section 13's ecosystem claim.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 10 · COMPLETE</span>
+<h3>The advanced layer remains optional revision</h3>
+<p>You separated the arithmetic from the empirical curve — dilution is softmax normalizing over more keys, lost-in-the-middle is the uneven, empirically-worse-in-the-middle version of that — explained why a bigger context window alone doesn't fix it, and named which later module actually owns the mitigation. The 24-section deep dive above stays here for revisiting the U-curve mathematics, the from-scratch positional-weight demo, and the context-position lab whenever you want them again.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-02-concept-11.html">Start Concept 11 →</a>
+</div>
+<p class="fine-print">Next in the canonical roadmap: Structured generation and constrained outputs.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 02 · Concept 10 · Complete</p>
+<a href="module-02-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>
