@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 07 opens by motivating chunking itself: a document too large to embed as one unit either gets silently truncated, or embeds fine but as one diluted vector that can't be found or cited precisely.">
+<title>Why chunk documents? — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 01 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 01</p>
+<h1>One document.<br><em>Too big to embed as one piece.</em></h1>
+<p class="lesson-lead">Module 06 closed with nine concepts' worth of parsing, cleaning, deduplication, versioning and provenance — a pipeline that turns a messy source into one clean, traceable document. None of that says what happens when a model has to turn that document into a single vector. This concept names the two ways skipping that step fails: the document is either too large to embed at all, or it embeds fine as one vector so diluted it can't be found or cited precisely. Module 07 exists to fix both.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First concept in Module 07 (Phase 2), opening after Module 06's 9/9 close</b></div>
+<div><span>PREREQUISITE</span><b>Module 02 Concept 07's context windows and Module 04 Concept 03's cosine similarity, both reused directly rather than re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the two failure modes of not chunking and compute a token-loss and a similarity-dilution figure for a concrete case</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A document that never gets split has nowhere to hide its size</h2>
+</div>
+<p>Every concept in Module 06 assumed a document eventually gets embedded and retrieved. None of them said how a document that runs pages long actually becomes one embeddable, retrievable unit. This concept names why that question can't be skipped, before Concepts 02 through 04 answer how.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Chunking is the WHY, not yet the HOW</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Why a document has to be split into smaller pieces before it can be embedded and retrieved at all — the two concrete ways skipping that step fails, and the numbers that make each failure visible.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Which splitting method to use — fixed-size, recursive, sentence/paragraph, semantic, proposition-based. Those are Concepts 02 through 04's job, reused here only by name.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> chunking exists because of two independent failures — a document can be too big to embed at all, or it can embed fine as one vector so diluted it stops being useful. Fixing one doesn't fix the other.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Module 06 produced a clean document. It never said how big a "unit" can be.</h3>
+<p>Concept 09 closed Module 06 by naming this module by name: "Module 07, 'Chunking &amp; document representation,' opens next with 'Why chunk documents?' — named here only, not yet built." Concepts 01 through 09 gave a document a stable identity, a clean parse, a dedup check, a version, and a provenance trail. Every one of those concepts operated on a document as a whole. Embedding models don't. Module 02 Concept 07 already established that a transformer's block stack processes a bounded number of tokens per forward pass — a hard ceiling, not a suggestion. This concept is where that ceiling stops being an abstract limit and starts being a design problem.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A 7,000-token handbook, a 512-token embedding cap</h3>
+<p>An onboarding handbook runs 7,000 tokens end to end. The embedding model in use — a representative, round figure for many smaller sentence-embedding models — accepts at most 512 tokens per input. Feed the whole handbook in as one unit and the model doesn't error. It truncates: the first 512 tokens go in, the remaining 6,488 are silently dropped, no warning raised. That's <b>92.69% of the document gone</b> before retrieval ever gets a chance to work with it.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0701-beginner-visual-title">
+<strong class="concept-visual-title" id="c0701-beginner-visual-title">VISUAL · 512 TOKENS KEPT, 6,488 TOKENS SILENTLY DROPPED</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0701-svg-title-b c0701-svg-desc-b">
+<title id="c0701-svg-title-b">A token axis from 0 to 7000 showing a 512-token embedding cap</title>
+<desc id="c0701-svg-desc-b">A horizontal axis runs from token 0 to token 7000. A lime-filled segment covers tokens 0 through 512, labeled kept. An orange-filled segment covers tokens 512 through 7000, labeled lost. A vertical dashed line marks the 512-token cap.</desc>
+<line x1="40" y1="90" x2="420" y2="90" stroke="#14241f" stroke-width="10"/>
+<line x1="40" y1="90" x2="67.7" y2="90" stroke="#d7ff53" stroke-width="10"/>
+<line x1="67.7" y1="90" x2="420" y2="90" stroke="#ff7957" stroke-width="10"/>
+<line x1="67.7" y1="60" x2="67.7" y2="120" stroke="#14241f" stroke-width="2" stroke-dasharray="3 4"/>
+<g font-size="9" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="40" y="45">token 0</text>
+<text x="67.7" y="45" font-weight="700">token 512 · cap</text>
+<text x="420" y="45">token 7,000</text>
+<text x="53" y="140">kept</text>
+<text x="240" y="140">lost — never embedded (6,488 tokens, 92.69%)</text>
+</g>
+</svg>
+<figcaption>512 of the handbook's 7,000 tokens make it into the embedding — everything past the dashed cap line is silently dropped, not flagged. Fully covering the document without loss would take 14 windows of 512 tokens each, the exact number chunking is built to produce — Concept 02 shows how.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The second failure: embeds fine, but as one diluted average</h3>
+<p>Raise the cap and the truncation problem shrinks. It does not disappear, and it does not touch a second, independent failure. Module 04 Concept 03 already showed cosine similarity between two toy vectors. Reuse that machinery here: Topic A ("benefits enrollment") sits at unit vector (1, 0); Topic B ("expense reimbursement") — a genuinely different topic — sits at (0, 1). A query about benefits enrollment is (1, 0), so it matches Topic A alone with cosine similarity exactly 1.0. Average the two topics into one whole-document vector and normalize it: the result is (0.7071, 0.7071), and its similarity to that same query drops to <b>0.7071 — a 29.29% relative loss</b>, with no arithmetic error anywhere. Averaging two legitimate topics geometrically pulls the vector toward their midpoint, which is provably farther from either topic than either topic is from itself.</p>
+<table class="compare-table">
+<thead><tr><th>Failure mode</th><th>What happens</th><th>What fixes it</th></tr></thead>
+<tbody>
+<tr><td>(a) Too large to embed at all</td><td>Silent truncation past the model's max input length</td><td>A smaller unit that fits under the cap</td></tr>
+<tr><td>(b) One diluted vector</td><td>Embeds fine, but the single vector averages unrelated content together</td><td>A smaller unit that stays on one topic</td></tr>
+</tbody>
+</table>
+<p>Both fixes point the same direction: split the document into smaller pieces before embedding. That's chunking — the mechanism itself starts at Concept 02.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Chunking sits between a clean document and an embeddable unit</h3>
+<div class="pipeline-preview">
+<span>Module 06 — clean, versioned, traceable documents</span><i>↓</i><span class="hot">Module 07 — chunking (this concept: why)</span><i>↓</i><span>Module 08 — embeddings</span>
+</div>
+<p>Module 06 answers "is this document trustworthy." Module 08 answers "how does text become a vector." Module 07 sits between them, deciding what the actual unit of text handed to Module 08 should be. This concept only argues that a unit decision is unavoidable — Concepts 02 through 04 decide how to make it.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Chunking's WHY distinguished from chunking's HOW and from embeddings">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Why chunking is necessary (this concept)</span><span role="cell">How to chunk — fixed-size, recursive, semantic, proposition-based (Concepts 02-04)</span><span role="cell">This concept never picks a splitting method. Conflating the two makes the later methods look arbitrary instead of motivated.</span></div>
+<div role="row"><span role="cell">Truncation (failure mode a — a token-count ceiling)</span><span role="cell">Dilution (failure mode b — an averaging effect)</span><span role="cell">A bigger cap fixes (a) but has zero effect on (b) — Section 15's lab shows this explicitly by varying each independently.</span></div>
+<div role="row"><span role="cell">This concept's unit-of-text decision</span><span role="cell">Module 08's text-to-vector mechanism</span><span role="cell">Chunking decides what gets embedded. Module 08 decides how anything, once decided, becomes a vector at all.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A model with a bigger max input length makes chunking unnecessary."</b><p>False — it only shrinks failure mode (a). Failure mode (b) is a property of averaging unrelated content, not of any token ceiling, and a bigger model does nothing to fix it.</p></div>
+<div><b>"If the whole document fits under the cap, there's nothing to worry about."</b><p>False per Section 14's lab: a 2-topic document well under any reasonable cap still loses 29.29% of its retrievability to dilution alone.</p></div>
+<div><b>"Chunking is a minor preprocessing detail."</b><p>False — it decides the actual unit every later retrieval and citation operates on. Get it wrong and no downstream fix (better embeddings, better reranking) fully recovers what was lost.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>SCHEMA IMPACT</span><b>Chunks become their own row, not a document column</b><p>Module 10's schema design gives chunks their own table, keyed back to the parent document — a direct consequence of this concept's conclusion that "document" and "embeddable unit" are different things.</p></div>
+<div><span>COST</span><b>Every chunk is a separate embedding call</b><p>Splitting a document into N pieces means N embedding calls instead of one — a real cost this module's later trade-off concepts (05-06) weigh against retrieval quality.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concept 05's precision-context trade-off builds directly on this</b><p>Once "some splitting is necessary" is settled here, Concept 05 asks how small is too small — named forward only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Two independent failure modes</b><p>Truncation (too large to embed) and dilution (embeds fine, but as one averaged vector) are separate problems with separate causes.</p></div>
+<div><b>A bigger cap only fixes one of them</b><p>Raising the embedding model's max input length shrinks truncation loss but leaves dilution completely untouched.</p></div>
+<div><b>Both failures point to the same fix</b><p>Splitting a document into smaller, more topically-focused pieces before embedding addresses both — this module's actual subject, starting at Concept 02.</p></div>
+<div><b>This concept picks no method</b><p>Fixed-size, recursive, semantic and proposition-based chunking are all still ahead, in Concepts 02 through 04.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>A document is well under the embedding model's max input length. Why might it still need to be chunked?</li>
+<li>Why doesn't switching to an embedding model with a larger max input length fix failure mode (b)?</li>
+<li>What does chunking decide that Module 08's embedding step does not?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 OPENS — 1 of 10</h3>
+<p>This concept only argues that a document-to-embeddable-unit decision can't be skipped. Concept 02 makes the first concrete version of that decision: fixed-size chunking (split every N characters or tokens) and recursive chunking (prefer a natural separator like a paragraph break, fall back to smaller ones only where needed) — the simplest two ways to actually produce the smaller pieces this concept has been arguing for.</p>
+<div class="beginner-memory"><b>Concept 01 is active.</b> Module 07 has opened at 1 of 10 concepts.</div>
+<a class="button primary" href="module-06-concept-09.html">← Back to Concept 09</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two failure modes, one shared fix, no method chosen yet</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The 7,000/512 handbook</b><small>92.69% of a document silently truncated at embedding time.</small></a>
+<a href="#b04"><span>02</span><b>Truncation vs. dilution</b><small>Two independent failures, laid out side by side.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Splitting methods (Concepts 02-04) and embeddings (Module 08) stay separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Single-Vector Squeeze lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> Module 06's closing forward-reference → two independently-verified failure modes (92.69% truncation loss, 29.29% dilution loss) → one shared conclusion: some splitting is unavoidable → Module 07 opens, 1 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "why chunk documents?" deep dive</b><em>Formal notation, from-scratch code, and the Single-Vector Squeeze lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From a trustworthy document to an embeddable unit</h2></div></header>
+<p>Module 06 spent nine concepts making sure a document is clean, deduplicated, versioned and traceable. None of that says how big a piece of text an embedding model can actually accept, or what happens to relevance when a whole multi-topic document gets squeezed into one vector. This concept opens Module 07 by making both problems concrete before any splitting method gets chosen.</p>
+<div class="flow">
+<div class="flow-node">Module 06 — clean, versioned documents</div>
+<div class="flow-node hot">Concept 01 — why chunk documents?</div>
+<div class="flow-node">Concepts 02-04 — how to chunk</div>
+<div class="flow-node">Module 08 — embeddings</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Name and distinguish the two failure modes</h3><p>Truncation (too large to embed at all) and dilution (embeds fine, but as one averaged vector) — independent problems with independent causes.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute a token-loss figure and a similarity-dilution figure</h3><p>Given a document length and an embedding cap, or a set of topic vectors, derive the exact loss either failure mode produces.</p></article>
+<article class="info-card"><span>DECIDE</span><h3>Recognize when raising a cap does and doesn't help</h3><p>A bigger max input length shrinks truncation loss and has zero effect on dilution — knowing which failure you're looking at determines which fix applies.</p></article>
+<article class="info-card"><span>MAP</span><h3>Place chunking correctly between ingestion and embedding</h3><p>Chunking decides the unit of text; it does not clean documents (Module 06) or turn text into vectors (Module 08).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 02 Concept 07's context windows, reused directly.</b> The maximum sequence length a transformer's block stack can process in one forward pass is exactly the ceiling failure mode (a) runs into — cited here, not re-derived.</li>
+<li><b>Module 04 Concept 03's cosine similarity, reused directly.</b> Failure mode (b)'s dilution math is the same dot-product/norm mechanics that concept already established with toy vectors.</li>
+<li><b>Module 06's clean-document guarantee, cited by name.</b> Concept 09's own closing line named this module and this concept explicitly — the document arriving here is trustworthy; what to do with its size is this concept's own question.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A translator with one index card</h2></div></header>
+<p>Picture a translator asked to summarize an entire book onto a single index card. One option: write as much of the opening chapters as fits, and leave everything past that point off the card entirely — failure mode (a), truncation. The other option: write one blurry sentence that tries to average every chapter's theme into a single line — technically covers the whole book, but is too vague to answer a question about any one chapter precisely. Failure mode (b), dilution, is that second option: nothing was dropped, but nothing survived clearly either.</p>
+<div class="callout warning"><b>Analogy boundary</b>The index-card analogy explains why either shortcut fails. It does not explain how to compute a token-loss percentage or a cosine-similarity drop — Sections 05 and 09 give those formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>max_input_tokens</td><td>The largest number of tokens an embedding model accepts in one call before truncating</td><td>cap</td></tr>
+<tr><td>tokens_lost</td><td>Tokens beyond the cap that get silently dropped, never embedded</td><td>max(0, docLen − cap)</td></tr>
+<tr><td>windows_needed</td><td>Number of cap-sized pieces required to cover a document without any loss</td><td>⌈docLen / cap⌉</td></tr>
+<tr><td>dilution</td><td>The drop in cosine similarity to a query caused by averaging N unrelated topic vectors into one document vector</td><td>1 − cos(q, mean(v₁..v_N))</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes, two causes, two independent fixes</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>TRUNCATION LANE</span><p>Caused by a hard token-count ceiling. Grows with document length, shrinks with a larger cap. Silent by default — most embedding APIs truncate rather than error.</p></div>
+<div class="lane"><span>DILUTION LANE</span><p>Caused by averaging unrelated content into one vector. Grows with topic count packed into one unit, completely unaffected by the cap — a document well under any reasonable length limit can still dilute badly.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>7,000 tokens, a 512-token cap, 14 windows to cover it losslessly</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0701-adv-visual-title">
+<strong class="concept-visual-title" id="c0701-adv-visual-title">VISUAL · THE HANDBOOK'S 7,000 TOKENS AGAINST 14 CAP-SIZED WINDOWS</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable token axis showing 14 windows of 512 tokens covering a 7000-token document">
+<svg class="vector-plane" viewBox="0 0 900 150" role="img" aria-labelledby="c0701-svg-title-a c0701-svg-desc-a" style="min-width:900px">
+<title id="c0701-svg-title-a">A token axis divided into 14 windows of 512 tokens each, covering a 7000-token document</title>
+<desc id="c0701-svg-desc-a">A horizontal axis from token 0 to token 7168 is divided into 14 equal tick marks 512 tokens apart. The first tick, at token 512, is highlighted lime and labeled as the single-window embedding cap; the remaining 13 ticks are labeled as additional windows needed to cover the rest of the document.</desc>
+<line x1="30" y1="80" x2="870" y2="80" stroke="#14241f" stroke-width="3"/>
+<line x1="90.0" y1="60" x2="90.0" y2="100" stroke="#14241f" stroke-width="3"/><circle cx="90.0" cy="80" r="6" fill="#d7ff53" stroke="#14241f" stroke-width="2"/><text x="90.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 1 (cap)</text><line x1="150.0" y1="60" x2="150.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="150.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="150.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 2</text><line x1="210.0" y1="60" x2="210.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="210.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="210.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 3</text><line x1="270.0" y1="60" x2="270.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="270.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="270.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 4</text><line x1="330.0" y1="60" x2="330.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="330.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="330.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 5</text><line x1="390.0" y1="60" x2="390.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="390.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="390.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 6</text><line x1="450.0" y1="60" x2="450.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="450.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="450.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 7</text><line x1="510.0" y1="60" x2="510.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="510.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="510.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 8</text><line x1="570.0" y1="60" x2="570.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="570.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="570.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 9</text><line x1="630.0" y1="60" x2="630.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="630.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="630.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 10</text><line x1="690.0" y1="60" x2="690.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="690.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="690.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 11</text><line x1="750.0" y1="60" x2="750.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="750.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="750.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 12</text><line x1="810.0" y1="60" x2="810.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="810.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="810.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 13</text><line x1="870.0" y1="60" x2="870.0" y2="100" stroke="#8a978f" stroke-width="1.5"/><circle cx="870.0" cy="80" r="4" fill="#fff" stroke="#14241f" stroke-width="2"/><text x="870.0" y="118" font-size="7.5" text-anchor="middle" font-family="DM Mono, monospace" fill="#14241f">window 14</text>
+<text x="30" y="45" font-size="9" font-family="DM Mono, monospace" fill="#14241f">token 0</text>
+<text x="870" y="45" font-size="9" text-anchor="end" font-family="DM Mono, monospace" fill="#14241f">token 7,168</text>
+</svg>
+</div>
+<figcaption>Fourteen windows of 512 tokens each are needed to cover the handbook's 7,000 tokens without dropping any of them — one embedding call per window instead of one call for the whole document. Producing exactly these windows, sensibly, is chunking's job starting at Concept 02; this figure only establishes the number.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents (Module 06)</span><i>↓</i><span class="hot">Chunks — this concept argues they're necessary</span><i>↓</i><span>Embedding model (Module 08)</span><i>↓</i><span>Vector index (Module 09)</span>
+</div>
+<p>Every later stage in this skeleton assumes "chunk" is already a settled unit. This concept is the argument for why that unit has to exist at all before Module 08 can do anything useful with it.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Truncation loss and dilution loss, stated formally</h2></div></header>
+<div class="equation">tokens_lost = max(0, docLen − cap)<br>pct_lost = tokens_lost / docLen<br>windows_needed = ⌈docLen / cap⌉<br>mean(v₁..v_N) = (1/N) · Σ vᵢ<br>dilution_drop = 1 − cos(q, normalize(mean(v₁..v_N)))</div>
+<p>Truncation loss depends only on docLen and cap — raise the cap and pct_lost falls, with no effect on anything else. Dilution depends only on how many distinct topics get averaged into one vector and how far apart those topics are — raise the cap all you like and dilution_drop does not move, because dilution never depended on cap in the first place.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>92.69% truncation loss; 29.29% dilution loss — from two unrelated causes</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Failure mode</th><th>Inputs</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>(a) Truncation</td><td>docLen=7,000 tokens, cap=512 tokens</td><td>tokens_lost=6,488; pct_lost=92.69%; windows_needed=⌈7000/512⌉=14</td></tr>
+<tr><td>(b) Dilution</td><td>Topic A=(1,0), Topic B=(0,1), query=(1,0)</td><td>cos(chunk)=1.0000; cos(doc)=0.70711; dilution_drop=29.29%</td></tr>
+</tbody>
+</table>
+<p>Every figure above was computed once via an executed Node.js script and independently reproduced via a separately executed Python script; both runs printed identical results for tokens_lost, pct_lost, windows_needed, and every cosine value shown. Note what the two results do <em>not</em> share: nothing about docLen or cap appears anywhere in the dilution computation, and nothing about topic count appears anywhere in the truncation computation — confirming the two failures really are independent, not two views of the same number.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A short, single-topic FAQ entry</h3><p>Already well under any reasonable cap and about one topic — chunking still applies for pipeline consistency, but neither failure mode is a real risk here.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A document a few hundred tokens over the cap</h3><p>Truncation loss is small in percentage terms, but still silent — a document that "mostly" fits is exactly the case most likely to go unnoticed without deliberate chunking.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming a larger-context embedding model removes the need to chunk</h3><p>It removes failure mode (a) for that document. Failure mode (b) — dilution from mixing topics into one vector — is untouched, and Section 14's lab shows it degrading further as more unrelated topics get packed in, regardless of model size.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Both failure modes, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def truncation_loss(doc_len, cap):
+    lost = max(0, doc_len - cap)
+    pct_lost = lost / doc_len
+    windows = math.ceil(doc_len / cap)
+    return lost, pct_lost, windows
+
+def mean_vector(vectors):
+    n = len(vectors)
+    sx = sum(v[0] for v in vectors)
+    sy = sum(v[1] for v in vectors)
+    return (sx / n, sy / n)
+
+def cosine_to_query(mean_vec, query=(1, 0)):
+    norm = math.sqrt(mean_vec[0] ** 2 + mean_vec[1] ** 2)
+    if norm < 1e-9:
+        return None
+    return (mean_vec[0] * query[0] + mean_vec[1] * query[1]) / norm
+
+lost, pct_lost, windows = truncation_loss(7000, 512)
+assert lost == 6488
+assert round(pct_lost * 100, 2) == 92.69
+assert windows == 14
+
+topics = [(math.cos(i * math.pi / 2), math.sin(i * math.pi / 2)) for i in range(2)]
+doc_vec = mean_vector(topics)
+cos_doc = cosine_to_query(doc_vec)
+assert round(cos_doc, 5) == 0.70711
+drop_pct = (1 - cos_doc) * 100
+assert round(drop_pct, 2) == 29.29
+
+print("truncation:", lost, round(pct_lost * 100, 2), windows)
+print("dilution cos:", round(cos_doc, 5), "drop%:", round(drop_pct, 2))
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Chunking as a first-class concern in real tooling</h2></div></header>
+<p>LangChain ships text splitters as a named, first-class abstraction — chunking is not an implementation detail teams invent from scratch, but a documented, reusable layer real production pipelines rely on. Sentence-Transformers' own documentation states a fixed <code>max_seq_length</code> and truncates beyond it by default, the exact mechanism behind failure mode (a). Pinecone's own chunking-strategies guide frames the same motivation this concept opened with: a document has to be split to be usable by a retrieval system at all, independent of which specific method a team ultimately picks.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Single-Vector Squeeze</h2></div></header>
+<div class="lab">
+<p>Two independent panels, matching the two failure modes above. The token bar shows truncation: pick a document length and an embedding cap, watch how much gets kept versus lost. The compass shows dilution: pick how many distinct topics get averaged into one document vector, watch the combined vector's similarity to a fixed query collapse — all the way to an undefined zero vector at four topics.</p>
+<div class="lab-controls">
+<div class="control"><label for="sqDocLen_0701">Document length (tokens) <output id="sqDocLenOut_0701">7,000</output></label>
+<input type="range" id="sqDocLen_0701" min="500" max="10000" step="100" value="7000"></div>
+</div>
+<div class="dim-toggle" role="group" aria-label="Embedding model max input length" id="sqCapToggle_0701">
+<button type="button" class="secondary active" data-cap="512">512 tokens</button>
+<button type="button" class="secondary" data-cap="2048">2,048 tokens</button>
+</div>
+<div id="sqTokenBarWrap_0701"></div>
+<div class="norm-readout" id="sqTokenReadout_0701"></div>
+<div class="lab-controls" style="margin-top:26px">
+<div class="control"><label for="sqTopics_0701">Distinct topics mixed into this one document <output id="sqTopicsOut_0701">2</output></label>
+<input type="range" id="sqTopics_0701" min="1" max="4" step="1" value="2"></div>
+</div>
+<div id="sqCompassWrap_0701"></div>
+<div class="norm-readout" id="sqCosReadout_0701"></div>
+<div class="callout" id="sqVerdict_0701"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Raising the cap vs. splitting by topic</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Fix</th><th>Helps truncation?</th><th>Helps dilution?</th></tr></thead>
+<tbody>
+<tr><td>Raise the embedding cap (bigger model)</td><td>Yes — fewer tokens lost per document</td><td>No effect at all</td></tr>
+<tr><td>Split into smaller, topically-focused pieces (chunking)</td><td>Yes — pieces fit under any cap</td><td>Yes — fewer unrelated topics per vector</td></tr>
+</tbody>
+</table>
+<p>Only chunking addresses both failure modes at once, which is exactly why it's a required layer rather than an optional optimization — a bigger model is a partial substitute for one of the two problems this concept named, never for the other.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT TRUNCATION</span><h3>Most embedding APIs truncate, they don't error</h3><p>A document over the cap doesn't fail loudly — it just quietly loses everything past the limit, which is precisely why it's easy to miss without deliberate handling.</p></article>
+<article class="info-card"><span>WASTED EMBEDDING COST</span><h3>A diluted vector still costs a full embedding call</h3><p>Embedding an unsplit, multi-topic document pays the same compute cost as embedding a well-scoped chunk, for a vector that retrieves worse.</p></article>
+<article class="info-card"><span>INCONSISTENT UNITS</span><h3>Some documents chunked, others left whole</h3><p>A pipeline that only chunks documents it happens to notice are "too long" leaves silently-diluted short-but-multi-topic documents unaddressed — named forward to Concept 09's chunk-quality evaluation.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A bigger max-input embedding model solves the whole problem</td><td>False — it only shrinks failure mode (a). Dilution (b) is untouched, as Section 14's lab shows directly.</td></tr>
+<tr><td>Chunking only matters for very long documents</td><td>False — a short document mixing two unrelated topics still dilutes, independent of length entirely.</td></tr>
+<tr><td>There's one universal correct chunk size</td><td>False — this concept only establishes that splitting is necessary. How small is genuinely a trade-off, covered starting at Concept 05.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Silent truncation is easy to ship unnoticed — a retrieval system can run for months before someone traces a "the model should have known this" complaint back to content that was truncated away long before retrieval ever ran.</li>
+<li>Embedding cost scales with the number of chunks produced, not the number of source documents — a real budget line Module 19's cost material returns to, named forward only here.</li>
+<li>Chunk size, chunk overlap, and chunk-quality evaluation (Concepts 05, 06 and 09) all build on this concept's conclusion that some splitting decision is unavoidable, not optional.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why doesn't raising the embedding model's max input length fix dilution?</summary><div>Dilution comes from averaging multiple topics into one vector, not from a token-count ceiling. Section 09's formula shows dilution_drop depends only on the topic vectors and the query — cap never appears in it at all.</div></details>
+<details class="quiz"><summary>A 7,000-token document is fed to a 2,048-token-cap model instead of a 512-token one. Does truncation loss reach zero?</summary><div>No — tokens_lost = 7000 − 2048 = 4,952, still 70.74% lost. A bigger cap shrinks the loss; it doesn't eliminate it unless the cap exceeds the document's full length.</div></details>
+<details class="quiz"><summary>What does this concept decide that Module 08's embedding step does not?</summary><div>This concept decides what the unit of text handed to an embedding model should be. Module 08 decides how any given unit of text, once chosen, gets turned into a vector at all.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different document runs 3,000 tokens against a 400-token embedding cap. Separately, three genuinely distinct topics get averaged into one document vector, each at 90 degrees from its neighbors, query fixed at Topic 1's own direction. Compute: (1) tokens lost, percent lost, and windows needed to cover the document losslessly; (2) the resulting cosine similarity between the query and the 3-topic mean vector.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Truncation: tokens_lost = 3000 − 400 = 2,600; pct_lost = 2600/3000 = 86.67%; windows_needed = ⌈3000/400⌉ = 8. Dilution: with topics at 0°, 90° and 180°, the mean vector is (0, 1/3) — its x-component is exactly 0, so cosine similarity to a query at (1, 0) is exactly 0.0000: the mean vector is well-defined and nonzero, but sits exactly orthogonal to the query. A query that would perfectly match a Topic-1-only chunk retrieves nothing at all from this document.</div>
+</details>
+<p>Teach-back: explain, in your own words, why a mean vector can be nonzero and still produce a cosine similarity of exactly zero.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Why chunk documents?</h3><ul><li><b>Failure (a) — truncation:</b> too large to embed at all; a token-count ceiling silently drops the excess</li><li><b>Failure (b) — dilution:</b> embeds fine, but as one vector averaging unrelated content together</li><li><b>Core relation:</b> a bigger embedding cap fixes (a) only; splitting into smaller, topically-focused pieces fixes both</li></ul></div>
+<div><h3>Memorable example</h3><p>A 7,000-token handbook against a 512-token cap loses 92.69% of itself to silent truncation. Two unrelated topics averaged into one vector drop query similarity from 1.0000 to 0.7071 — a 29.29% loss with no arithmetic error anywhere, purely from averaging.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what's the real difference between the two chunking failure modes?</summary><div>Truncation is caused by a hard token-count ceiling and depends only on document length versus cap. Dilution is caused by averaging unrelated content into one vector and depends only on topic count and topic separation — the two causes share no variables at all.</div></details>
+<details class="quiz"><summary>Mathematical: derive the truncation-loss and dilution-drop formulas.</summary><div>tokens_lost = max(0, docLen − cap); pct_lost = tokens_lost / docLen; windows_needed = ⌈docLen / cap⌉. dilution_drop = 1 − cos(q, normalize(mean(v₁..v_N))), where mean(v₁..v_N) = (1/N)·Σvᵢ.</div></details>
+<details class="quiz"><summary>Coding: implement a check that flags a document as at-risk for truncation before it's embedded.</summary><div>Tokenize the document, compare the token count against the target embedding model's documented max_seq_length, and flag any document whose token count exceeds that cap before it reaches the embedding call — exactly the guard Section 16's silent-truncation failure mode argues for.</div></details>
+<details class="quiz"><summary>Debugging: retrieval keeps missing an answer that's clearly present in a source document. What do you check first?</summary><div>Whether the relevant passage survived embedding at all — check the document's token count against the embedding model's cap for truncation, and check whether the passage shares its chunk with unrelated topics for dilution. Either failure mode alone can explain a present-but-unretrievable answer.</div></details>
+<details class="quiz"><summary>System design: how would you decide whether a corpus needs aggressive chunking or can mostly stay whole?</summary><div>Profile the corpus for two signals: document length relative to the embedding cap (truncation risk) and topic homogeneity within documents (dilution risk). Short, single-topic documents need little to no chunking; long or multi-topic documents need it regardless of whether they individually exceed the cap.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.pinecone.io/learn/chunking-strategies/"><b>Chunking Strategies for LLM Applications — Pinecone</b><br><span>Grounds chunking's motivation as an industry-standard practitioner concern, cited generically in Section 04 since specific splitting methods are out of scope until Concept 02.</span></a>
+<a href="https://python.langchain.com/docs/concepts/text_splitters/"><b>Text splitters — LangChain</b><br><span>Names the production abstraction real tooling uses for chunking, cited in Section 13 as evidence this is a first-class, named concern rather than an implementation detail.</span></a>
+<a href="https://www.sbert.net/docs/quickstart.html"><b>Sentence-Transformers — Quickstart</b><br><span>Documents a real library's max_seq_length and truncation behavior, grounding failure mode (a) without pinning to one specific model's exact token limit.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 COMPLETE · MODULE 07 OPEN — 1/10</span>
+<h3>Two failure modes named. Splitting methods start next.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute both a truncation figure and a dilution figure by hand. Concept 02 opens the actual mechanism: fixed-size chunking and recursive chunking, the simplest two ways to produce the smaller pieces this concept has been arguing are necessary.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-06-concept-09.html">← Back to Concept 09</a>
+</div>
+<p class="fine-print">Module 07 open, 1 of 10 concepts. Next concept: Fixed-size and recursive chunking.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 01 · Active</p>
+<a href="module-06-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>
