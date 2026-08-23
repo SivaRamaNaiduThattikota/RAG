@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 07's closing concept: no new chunking technique, just three empirical checks run against one fixed chunking scheme (fixed-size, N=100, 0% overlap) on a fresh 3-passage, 9-chunk corpus. Fact-coverage: 66.67% (2 of 3 facts fully contained). Recall@k: a perfect 100%/100% on source-phrased test queries collapses to 33.3%/66.7% on paraphrased queries with the identical intent -- the same corpus, same scheme, same chunks, only the query wording changed. A scheme is never good or bad in the abstract; it's only as good as the query set it's measured against.">
+<title>Evaluating chunk quality — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 10 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 10</p>
+<h1>Nine choices made.<br><em>Now measure whether any of them worked.</em></h1>
+<p class="lesson-lead">Concepts 02 through 09 each picked or fixed something about how chunks get built. This concept builds nothing new. It asks a plainer question: given a chunking scheme -- any combination of those nine choices -- how do you actually know it's good? Three checks answer it on one fixed scheme, applied uniformly across a fresh 3-passage corpus: does the answer even fit inside a retrievable chunk (fact coverage), does retrieval actually surface that chunk for a real query (recall@k), and what did the scheme cost along the way (a combined accounting of every cost axis this module has priced). The twist is in the second check: the exact same corpus, same scheme, same 9 chunks score a perfect 100%/100% recall on queries phrased like the source text -- and collapse to 33.3%/66.7% on paraphrased queries asking for the identical thing.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth and closing concept of Module 07 — applies Concepts 02-09 together, introduces nothing new</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's containment logic (reused verbatim); Concepts 04/06/07/08's own already-published cost figures (cited, not re-derived); Module 05's precision/recall/MRR formalism, now applied at the chunk level</b></div>
+<div><span>BEGINNER GOAL</span><b>Run all three checks against one scheme and explain why the same scheme can look perfect on one query set and unreliable on another</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Three checks, one fixed scheme, zero new techniques</h2>
+</div>
+<p>Every earlier concept in this module chose or fixed something about chunks. This concept asks whether any of those choices actually worked -- an empirical question, answered by measurement, not intuition.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Grading a scheme, not building a new one</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Three independent empirical checks against ONE fixed chunking scheme: fact coverage (can the answer ever be found), recall@k (does retrieval actually surface it), and cost (what did this scheme cost across every axis Concepts 04/06/07/08 already priced).</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Introducing a tenth chunking method. Every technique used here already exists from Concepts 02-09.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a scheme isn't good or bad in the abstract -- it's only as good as the query set it's actually measured against.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Intuition alone already failed once</h3>
+<p>Concept 06's own 40%→50% overlap regression already proved that intuition alone can't be trusted to say whether a chunking choice helps. Only measurement catches this -- and the measurement itself has to be trustworthy, or it just replaces one bad guess with another.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One scheme, three passages, a perfect score that isn't</h3>
+<p>Three short Oracle Order Management passages (P1 reused verbatim from Concept 06, P2 and P3 new), each holding one target fact, all chunked the same way: fixed-size, N=100 characters, 0% overlap -- Concepts 02/06's own baseline. Fact coverage: 2 of 3 facts land fully inside one chunk (66.67%). For 3 queries phrased close to the source text, recall@1 = recall@3 = 100%. For 3 paraphrased queries asking the exact same thing in different words, recall@1 drops to 33.3% and recall@3 to 66.7% -- same corpus, same chunks, same scheme, only the wording changed.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0710-b03-title">
+<strong class="concept-visual-title" id="c0710-b03-title">VISUAL · SAME SCHEME, TWO VERY DIFFERENT RECALL SCORES</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0710-svg-title-b c0710-svg-desc-b">
+<title id="c0710-svg-title-b">Two pairs of bars showing recall at 1 and recall at 3 for primary versus paraphrased queries</title>
+<desc id="c0710-svg-desc-b">Primary queries reach 100 percent for both recall at 1 and recall at 3. Paraphrased queries reach 33.3 percent for recall at 1 and 66.7 percent for recall at 3, using the identical corpus, chunks and chunking scheme.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<text x="10" y="16" font-weight="700">PRIMARY QUERIES (source-phrased)</text>
+<text x="10" y="30">recall@1</text>
+<rect x="70" y="24" width="300" height="12" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="70" y="24" width="300" height="12" fill="#3fae86" fill-opacity="0.6"/>
+<text x="375" y="34" font-size="7.5" font-weight="700">100.0%</text>
+<text x="10" y="48">recall@3</text>
+<rect x="70" y="42" width="300" height="12" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="70" y="42" width="300" height="12" fill="#3fae86" fill-opacity="0.6"/>
+<text x="375" y="52" font-size="7.5" font-weight="700">100.0%</text>
+<text x="10" y="80" font-weight="700">PARAPHRASED QUERIES (same intent, different words)</text>
+<text x="10" y="94">recall@1</text>
+<rect x="70" y="88" width="300" height="12" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="70" y="88" width="100" height="12" fill="#ff7957" fill-opacity="0.6"/>
+<text x="180" y="98" font-size="7.5" font-weight="700">33.3%</text>
+<text x="10" y="112">recall@3</text>
+<rect x="70" y="106" width="300" height="12" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="70" y="106" width="200" height="12" fill="#ff7957" fill-opacity="0.6"/>
+<text x="280" y="116" font-size="7.5" font-weight="700">66.7%</text>
+<text x="10" y="140" font-size="7.5">Same 3-passage corpus, same 9 chunks, same fixed-size scheme -- only the query wording differs.</text>
+</g>
+</svg>
+<figcaption>The scheme itself never changed between the two rows. What changed was which queries it got tested against.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three checks, side by side</h3>
+<table class="compare-table">
+<thead><tr><th>Check</th><th>What it actually asks</th></tr></thead>
+<tbody>
+<tr><td>Fact coverage</td><td>Does the answer ever land fully inside one retrievable chunk? (reuses Concept 06's exact containment logic)</td></tr>
+<tr><td>Recall@k</td><td>For a set of test queries with known-correct chunks, does retrieval actually surface the right one in the top k?</td></tr>
+<tr><td>Cost accounting</td><td>What did this scheme cost, across every axis Concepts 04/06/07/08 already priced?</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The last stop before real embeddings</h3>
+<div class="scroll-flow">
+<span>Concepts 02-09 — nine chunking choices</span><i>→</i>
+<span class="hot">Concept 10 — measure whether any of them worked</span><i>→</i>
+<span>Module 08 — embeddings, at real scale</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three orthogonal axes, not one score</h3>
+<div class="distinction-table" role="table" aria-label="Fact coverage, recall at k and cost distinguished from each other">
+<div role="row"><b role="cell">Check</b><b role="cell">What it does NOT tell you</b></div>
+<div role="row"><span role="cell">Fact coverage</span><span role="cell">Whether retrieval will actually FIND the chunk that contains the fact -- containment and retrievability are different questions</span></div>
+<div role="row"><span role="cell">Recall@k</span><span role="cell">What the scheme cost to build and index -- a scheme can retrieve perfectly and still be expensive</span></div>
+<div role="row"><span role="cell">Cost accounting</span><span role="cell">Whether the scheme actually answers real queries -- cheap and wrong is still wrong</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A scheme that scores well on my test queries is good."</b><p>False if those queries were written to match the chunking scheme you already chose -- this concept's own central point.</p></div>
+<div><b>"High fact-coverage guarantees retrieval will find it."</b><p>False -- P2 and P3's facts are fully contained, yet a badly-worded query (Q3') can still miss the right chunk entirely.</p></div>
+<div><b>"Cheaper is always better, or pricier is always better."</b><p>False -- the cost table is four independent axes, not one ranking. Late chunking's real gain (Concept 08) wouldn't even help this corpus's actual failure.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>A REPEATABLE PROCESS</span><b>Run all three checks before shipping any chunking scheme</b><p>And re-run them whenever chunk_size, overlap, or method changes -- not a one-off audit.</p></div>
+<div><span>DIAGNOSE BEFORE SPENDING</span><b>The paraphrase failure isn't a chunking-boundary problem</b><p>None of Concepts 06/07/08's fixes (overlap, parent-child, late chunking) would address it -- it's a vocabulary-mismatch problem, Module 05 Concept 11's territory.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 07 COMPLETE (10/10)</b><p>Module 08, Embeddings &amp; representation learning, is next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Recite the three checks and what each one catches</b><p>Fact coverage, recall@k, and cost -- three orthogonal axes, not one combined score.</p></div>
+<div><b>Explain why the same scheme scores 100% and 33.3% on the same corpus</b><p>The queries changed. The corpus, chunks, and scheme did not.</p></div>
+<div><b>Explain why the cost table wouldn't fix this concept's own measured failure</b><p>The paraphrase problem is lexical, not structural -- none of Concepts 06-08's fixes target vocabulary mismatch.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is fact coverage not the same question as retrievability?</li>
+<li>Why does Q1' tie all 9 chunks at cosine 0.0000?</li>
+<li>Why would spending on overlap or parent-child indexing not fix this concept's own measured recall drop?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 07 closes here</h3>
+<p>Module 07, Chunking &amp; document representation, is complete. Module 08, Embeddings &amp; representation learning, is next -- still within Phase 2.</p>
+<div class="beginner-memory"><b>Module 07 is complete (10/10).</b> Module 08 opens with real embedding models at scale.</div>
+<a class="button primary" href="module-07-concept-09.html">← Back to Concept 09</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Grading the scheme, not building a new one</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>One scheme, three checks</b><small>Fact coverage, recall@k, cost -- run together.</small></a>
+<a href="#b03"><span>02</span><b>100% → 33.3%</b><small>Same everything, only the query wording changed.</small></a>
+<a href="#b08"><span>03</span><b>Diagnose before spending</b><small>The failure here isn't a boundary problem.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full corpus, all six queries, from-scratch code, and the Query-Set Verdict lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> Fix one scheme (N=100, 0% overlap) → fact coverage: 2/3 contained → primary queries: 100%/100% recall → paraphrased queries: 33.3%/66.7% recall → the combined cost table shows none of Concepts 06-08's fixes would help → Module 07 complete (10/10).</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the evaluating chunk quality deep dive</b><em>The full corpus, all six queries, from-scratch code, and the Query-Set Verdict lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The closing knot, not a new thread</h2></div></header>
+<p>Concepts 02-09 each picked or fixed something about chunks. This concept ties them together with a measurement, not a tenth technique.</p>
+<div class="flow">
+<div class="flow-node">Concepts 02-09 — nine chunking choices</div>
+<div class="flow-node hot">Concept 10 — measure it</div>
+<div class="flow-node">Module 08 — embeddings, real scale</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COMPUTE</span><h3>Recall@k at the chunk level</h3><p>Against a query set with known-correct chunks.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Concept 06's containment check to a new corpus</h3><p>Reused unchanged, on two brand-new passages.</p></article>
+<article class="info-card"><span>ASSEMBLE</span><h3>The combined 04/06/07/08 cost table</h3><p>Four cost axes, side by side, for the first time.</p></article>
+<article class="info-card"><span>STATE</span><h3>Why query-set representativeness matters</h3><p>The same scheme's measured quality depends entirely on what it's tested against.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06's contains_fact()/chunk_fixed() logic, reused verbatim.</b> Applied here to two brand-new passages it was never run against before.</li>
+<li><b>Concepts 04/06/07/08's own already-published cost figures, cited not re-derived.</b> Assembled side by side for the first time.</li>
+<li><b>Module 05 Concepts 08-09's precision/recall/MRR formalism, reused at the chunk level.</b> A new application of an existing formalism, not a new one.</li>
+<li><b>Module 05 Concept 11's vocabulary-mismatch finding, reused by name.</b> Explains the paraphrased-query recall drop; not re-derived here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Grading a policy after it's written</h2></div></header>
+<p>Writing a company policy and grading whether it actually works in practice are two different jobs. Concepts 02-09 wrote the policy -- picked a chunking method, size, overlap, structure. This concept grades it: does it actually answer real questions, and at what cost?</p>
+<div class="callout warning"><b>Analogy boundary</b>The grading picture explains why this concept exists. It doesn't replace the three actual checks -- Sections 09-10 give those precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Fact-coverage rate</td><td>Fraction of known facts that land fully inside one retrievable chunk</td><td>contained facts / total facts</td></tr>
+<tr><td>Recall@k (chunk-level)</td><td>Fraction of queries for which the known-correct chunk appears in the top k retrieved results</td><td>hits@k / total queries</td></tr>
+<tr><td>Cost axis</td><td>Any of the independent cost dimensions named by Concepts 04 (compute), 06 (storage/embedding-call redundancy), 07 (structural indexing overhead), 08 (embedding-order/model requirement)</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Three lanes, run independently</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>RETRIEVAL-METRIC LANE</span><p>Tokenize each chunk and query, score by cosine overlap, rank, check whether the known-correct chunk lands in the top k.</p></div>
+<div class="lane"><span>FACT-COVERAGE LANE</span><p>Reuse Concept 06's exact chunk_fixed()/contains_fact() logic on each passage's known fact -- containment either holds or it doesn't, no ranking involved.</p></div>
+</div>
+<p>The cost-accounting lane runs separately again: no computation of its own, just tabulating Concepts 04/06/07/08's already-published figures against this scheme's actual settings.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One corpus, three checks radiating out</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Hub diagram showing the 3-passage 9-chunk corpus with fact-coverage, recall-at-k and cost-accounting as three surrounding checks">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>3-passage, 9-chunk corpus</b><small>Fixed-size, N=100, 0% overlap</small></div>
+<div class="diagram-node"><b>Fact coverage</b><small>2 of 3 facts contained (66.67%)</small></div>
+<div class="diagram-node"><b>Recall@k</b><small>100%/100% primary → 33.3%/66.7% paraphrased</small></div>
+<div class="diagram-node"><b>Cost accounting</b><small>4 axes, cited from Concepts 04/06/07/08</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The measurement step, right before real scale</h2></div></header>
+<div class="pipeline-preview">
+<span>Concepts 02-09 — chunking decisions</span><i>↓</i><span class="hot">Concept 10 — measurement</span><i>↓</i><span>Module 08 — embeddings, real scale</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Recall@k and fact-coverage, stated precisely</h2></div></header>
+<div class="equation">recall@k = (queries where correct_chunk ∈ top_k(ranked_chunks)) / total_queries<br>fact_coverage = (facts where contains_fact(chunk_fixed(passage), fact) is true for some chunk) / total_facts</div>
+<p>recall@k matches LlamaIndex's own Recall/HitRate metric definition (expected_ids vs. retrieved_ids); fact_coverage reuses Concept 06's own contains_fact()/chunk_fixed() functions unchanged.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One scheme, three passages, six queries</h2></div></header>
+<p><b>Corpus.</b> P1 (297 chars, reused verbatim from Concept 06): fact "The order-cancellation grace period is 14 days from the ship date." at [94,160). P2 (270 chars, new): fact "The label must be used to ship the item back within 21 days of issuance." at [103,175). P3 (279 chars, new): fact "Tickets above priority level three are routed to a senior queue automatically." at [110,188). All three chunked fixed-size, N=100, stride=100: C11/C12/C13, C21/C22/C23, C31/C32/C33.</p>
+<table class="worked-table">
+<thead><tr><th>Passage</th><th>Fact span</th><th>Contained?</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td>[94,160)</td><td>NO -- crosses the C11/C12 boundary (same result Concept 06 already found)</td></tr>
+<tr><td>P2</td><td>[103,175)</td><td>YES -- fully inside C22</td></tr>
+<tr><td>P3</td><td>[110,188)</td><td>YES -- fully inside C32</td></tr>
+</tbody>
+</table>
+<p>Fact coverage = 2/3 = <b>66.67%</b>. Total corpus = 846 characters (297+270+279); total stored/embedded chunk characters = 846 exactly; redundancy = (846−846)/846 = <b>0.00%</b> -- confirming 0% overlap produces exactly 0% storage redundancy, as Concept 06's own formula predicts.</p>
+<p><b>Recall@k.</b> Retrieval model: a stopword-filtered bag-of-words cosine-overlap score over each chunk's and query's content words (domain-generic words like "oracle," "order," "management," "customer" excluded as stopwords, matching the style of Concepts 04/07/09's own toy models).</p>
+<table class="worked-table">
+<thead><tr><th>Query</th><th>Correct chunk</th><th>Winning chunk (cosine)</th><th>Rank of correct</th></tr></thead>
+<tbody>
+<tr><td>Q1 "What is the order-cancellation grace period?"</td><td>C12</td><td>C12 (0.3333)</td><td>1 of 9</td></tr>
+<tr><td>Q2 "How many days do I have to ship a return label back?"</td><td>C22</td><td>C22 (0.4000)</td><td>1 of 9</td></tr>
+<tr><td>Q3 "Which tickets get routed to the senior queue automatically?"</td><td>C32</td><td>C32 (0.5455)</td><td>1 of 9</td></tr>
+<tr><td>Q1′ "How much time do I get before an order cancellation expires?"</td><td>C12</td><td>all 9 tie at 0.0000</td><td>2 of 9 (tie-break)</td></tr>
+<tr><td>Q2′ "What is the deadline for sending merchandise back for a refund?"</td><td>C22</td><td>C22 (0.1195)</td><td>1 of 9</td></tr>
+<tr><td>Q3′ "What issues get escalated to a specialist team without manual action?"</td><td>C32</td><td>C21 (0.1260)</td><td>8 of 9</td></tr>
+</tbody>
+</table>
+<p>Primary set (Q1-Q3): recall@1 = recall@3 = 3/3 = <b>100.00%</b>. Paraphrased set (Q1′-Q3′): recall@1 = 1/3 = <b>33.33%</b> (only Q2′ ranks 1st), recall@3 = 2/3 = <b>66.67%</b> (Q1′'s rank-2 tie and Q2′'s rank-1 both count within top 3; Q3′'s rank 8 does not). Q1′ ties every chunk at 0.0000 because "cancellation" never survives as a whole word anywhere in the corpus -- P1's own mid-word chunk boundary split it into "der-cancellation," and the query's phrasing shares no other content word with any chunk. Q3′ actively misleads: C21 (0.1260, a coincidental match on "issues" from P2's own opening sentence) and C13 (0.1054, a coincidental match on "manual" from P1's "manual override") both outrank the actually-correct C32, which scores 0.0000.</p>
+<p><b>Cost table</b> (citing Concepts 04/06/07/08's own already-published figures, not re-derived):</p>
+<table class="compare-table">
+<thead><tr><th>Axis (source)</th><th>This scheme's actual cost</th></tr></thead>
+<tbody>
+<tr><td>Compute (Concept 04)</td><td>9 embedding calls total (1 per chunk), no extra LLM calls</td></tr>
+<tr><td>Storage/embedding-call redundancy (Concept 06)</td><td>0% overlap → 0.00% redundancy (846 stored = 846 corpus chars, exact)</td></tr>
+<tr><td>Structural indexing overhead (Concept 07)</td><td>0 parent/child pointers, no extra structure</td></tr>
+<tr><td>Embedding-order/model requirement (Concept 08)</td><td>Early chunking, works with any short-context model</td></tr>
+</tbody>
+</table>
+<p><b>Synthesis.</b> None of Concepts 06-08's fixes (paying for overlap, adding parent-child structure, or switching to late chunking) would address Q1′/Q3′'s failure -- that failure is a vocabulary mismatch (Module 05 Concept 11's territory), not a chunk-boundary problem. Diagnosing which check actually failed is what decides which cost, if any, is worth paying.</p>
+<p>VERIFICATION: every containment, character-count, tokenization, cosine, rank, and recall figure above was computed once via an executed Node.js script and independently re-verified line by line against the script's own printed output before use.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A mature corpus with a stable scheme</h3><p>Periodic re-evaluation against a refreshed, representative query set as real usage drifts.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A scheme scoring perfectly on hand-written test queries</h3><p>Then degrading on real, paraphrased ones -- this concept's own Q1′/Q3′ result.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Evaluating only on queries written to match the scheme you already chose</h3><p>The evaluation itself needs the same train/holdout discipline as any other measurement.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Recall@k and fact-coverage, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES CONCEPT 06'S OWN FUNCTIONS</span>
+<pre><code># chunk_fixed() and contains_fact() are Concept 06's own functions, reused unchanged.
+def fact_coverage(passages_and_facts):
+    hits = sum(1 for text, fact_start, fact_end in passages_and_facts
+               if contains_fact(chunk_fixed(text, 100, 100), fact_start, fact_end))
+    return hits / len(passages_and_facts)
+
+def tokenize(text, stopwords):
+    words = text.lower().replace("-", " ").split()
+    return {w.strip(".,?!") for w in words if w.strip(".,?!") not in stopwords}
+
+def cosine_overlap(a, b):
+    if not a or not b:
+        return 0.0
+    return len(a & b) / (len(a) * len(b)) ** 0.5
+
+def recall_at_k(queries, chunks, k):
+    hits = 0
+    for query_tokens, correct_id in queries:
+        scored = sorted(chunks.items(), key=lambda kv: -cosine_overlap(query_tokens, kv[1]))
+        top_k_ids = [cid for cid, _ in scored[:k]]
+        if correct_id in top_k_ids:
+            hits += 1
+    return hits / len(queries)
+
+# Reproduces this concept's own Section 10 result
+P1 = "Oracle Order Management lets a customer cancel an order within a fixed period after purchase. The order-cancellation grace period is 14 days from the ship date. Once it elapses, the order status locks to CLOSED and refunds stop processing automatically. Support agents must file a manual override."
+P2 = "Oracle Order Management issues a prepaid return shipping label once a customer opens a return request. The label must be used to ship the item back within 21 days of issuance. Returns received after that window are rejected and the original order remains billed in full."
+P3 = "Oracle Order Management assigns every support ticket a priority level based on order value and customer tier. Tickets above priority level three are routed to a senior queue automatically. A senior queue ticket receives its first response within two business hours of assignment."
+passages_and_facts = [
+    (P1, 94, 160),   # NOT contained -- crosses the C11/C12 boundary
+    (P2, 103, 175),  # contained inside C22
+    (P3, 110, 188),  # contained inside C32
+]
+assert round(fact_coverage(passages_and_facts), 4) == 0.6667
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The real metric library, and where full evaluation frameworks live</h2></div></header>
+<p><a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/evaluation/retrieval/metrics.py">LlamaIndex's retrieval-metrics source</a> confirms HitRate, MRR, and Recall classes computed from expected_ids vs. retrieved_ids -- the production-grade counterpart of this concept's own recall@k check. <a href="https://arxiv.org/abs/2309.15217">RAGAS ("Automated Evaluation of Retrieval Augmented Generation")</a> is named forward to Module 18's evaluation-framework concept -- it grounds the point that a chunking scheme's measured quality is only as good as the test-query set it's measured against. <a href="https://en.wikipedia.org/wiki/Training,_validation,_and_test_data_sets">Train/validation/test methodology</a> grounds the general discipline point: a scheme that looks good against the data used to tune it can still fail against data from a different distribution -- exactly what the primary-vs-paraphrased split demonstrates.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Query-Set Verdict</h2></div></header>
+<div class="lab">
+<p>The same 3-passage, 9-chunk corpus and the same fixed-size chunking scheme, held constant. Click through all 6 queries -- 3 primary, 3 paraphrased -- and watch the ranking, and the verdict, change with nothing but the query.</p>
+<div class="lab-actions" role="group" aria-label="Choose a query" id="querySetRow_0710">
+<button type="button" class="secondary active" data-query="Q1">Q1</button>
+<button type="button" class="secondary" data-query="Q2">Q2</button>
+<button type="button" class="secondary" data-query="Q3">Q3</button>
+<button type="button" class="secondary" data-query="Q1p">Q1′</button>
+<button type="button" class="secondary" data-query="Q2p">Q2′</button>
+<button type="button" class="secondary" data-query="Q3p">Q3′</button>
+</div>
+<div class="rank-chip-row" id="queryVerdictChips_0710"></div>
+<div class="norm-readout" id="queryVerdictReadout_0710"></div>
+<div class="callout" id="queryVerdictCallout_0710"></div>
+<p id="queryVerdictSummary_0710" style="margin-top:10px;font:11px 'DM Mono',monospace;color:var(--muted)"></p>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Four ways to evaluate, only one that's honest</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Catches what?</th></tr></thead>
+<tbody>
+<tr><td>Evaluate once on hand-written queries</td><td>Only whether the scheme matches the queries it was designed against -- can look perfect and still fail in production</td></tr>
+<tr><td>Evaluate on a held-out/paraphrased set</td><td>Vocabulary-mismatch failures a source-phrased set can't reveal</td></tr>
+<tr><td>Evaluate cost only</td><td>Budget, but says nothing about whether the scheme actually works</td></tr>
+<tr><td>Run all three together (this concept)</td><td>Coverage, retrievability, and cost -- independently, so a failure can be correctly diagnosed and correctly priced</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SOURCE-PHRASED QUERIES ONLY</span><h3>Testing only on queries that echo the source text</h3><p>Produces an inflated recall score that collapses the moment real users paraphrase.</p></article>
+<article class="info-card"><span>CONTAINMENT MISTAKEN FOR SUFFICIENCY</span><h3>Treating fact-coverage as if it guaranteed retrievability</h3><p>A contained fact can still be missed by a poorly-matching query -- two different failure surfaces.</p></article>
+<article class="info-card"><span>WRONG COST-TABLE ROW</span><h3>Fixing the wrong axis because the failure was misdiagnosed</h3><p>Paying for overlap or parent-child structure would not have fixed this concept's own paraphrase failure.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A scheme that scores well on my test queries is good</td><td>False if those queries were written to match the scheme already chosen -- this concept's own central point.</td></tr>
+<tr><td>High fact-coverage guarantees retrieval will find it</td><td>False -- containment and retrievability are different questions, as Q3′ shows directly.</td></tr>
+<tr><td>Cheaper is always better, or pricier is always better</td><td>False -- the cost table is four independent axes, not a single ranking.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Re-run this evaluation whenever chunk_size, overlap, or method changes -- a chunking scheme's quality isn't a one-time measurement.</li>
+<li>Refresh the held-out/paraphrased query set as real usage drifts -- a set that was representative at launch can go stale.</li>
+<li>Use the combined cost table for budgeting BEFORE committing to a mitigation, not after -- diagnosing which check actually failed decides which row is worth paying for.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why is fact coverage not the same question as retrievability?</summary><div>Fact coverage asks whether the answer CAN structurally exist inside a single retrievable chunk. Retrievability asks whether an actual query will surface that chunk. P2 and P3's facts are both fully contained, yet Q3′ still misses P3's chunk entirely -- containment doesn't guarantee a matching query will find it.</div></details>
+<details class="quiz"><summary>Why does Q1′ tie all 9 chunks at cosine 0.0000?</summary><div>The word "cancellation" never survives as a whole token anywhere in the corpus -- P1's own chunk boundary splits it mid-word into "der-cancellation," and Q1′'s paraphrased wording shares no other content word with any chunk. Zero vocabulary overlap means zero cosine score for every chunk.</div></details>
+<details class="quiz"><summary>Why would spending on overlap or parent-child indexing not fix this concept's own measured recall drop?</summary><div>The paraphrased-query failures (Q1′, Q3′) are vocabulary-mismatch problems -- the correct words simply don't appear in the query. Overlap and parent-child indexing both fix boundary/context problems, not lexical mismatch, so neither would move these specific scores.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A 4th passage, P4 (279 chars): "Oracle Order Management processes credit-card refunds through the original payment network. A refund confirmation email is sent within three business days once the payment processor approves the reversal. Customers can also check refund status anytime in their account dashboard." Target fact (112 chars): "A refund confirmation email is sent within three business days once the payment processor approves the reversal." at [92,204). Using the same fixed-size scheme (N=100, 0% overlap): is the fact contained? For the query "How soon after approval is the refund confirmation email sent?" (direct) and "What is the turnaround time for getting a refund receipt by email?" (paraphrased), which chunk wins each?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Chunks: C41[0,100), C42[100,200), C43[200,279). The fact spans [92,204) -- starting 8 characters before C41 ends and continuing past C42 into the first 4 characters of C43. No single chunk covers [92,204) fully, so the fact is NOT CONTAINED, the same "split" result as P1. For the direct query, C42 wins clearly (cosine 0.3586) -- it holds "confirmation," "email," "sent," and "days," all shared with the query. For the paraphrased query ("turnaround time... refund receipt by email"), C41 wins instead (0.1179 vs. C42's 0.1054) -- a WRONG-chunk result: C41's generic opening mention of "refund" survives the paraphrase better than C42's more specific "confirmation email...sent" wording, even though C42 is the chunk that actually contains the fact.</div>
+</details>
+<p>Teach-back: explain why the paraphrased query in this exercise doesn't just lose recall (as Q1′ did) but actively picks the WRONG chunk over the right one -- a different failure shape than a tie.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Evaluating chunk quality</h3><ul><li><b>Three checks:</b> fact coverage, recall@k, cost accounting -- orthogonal axes, not one score</li><li><b>Headline numbers:</b> 66.67% fact coverage; 100%/100% primary recall vs. 33.3%/66.7% paraphrased recall</li><li><b>Rule:</b> a scheme is only as good as the query set it's measured against</li></ul></div>
+<div><h3>Memorable example</h3><p>The identical corpus, identical 9 chunks, identical chunking scheme score a perfect 100%/100% recall on source-phrased queries and collapse to 33.3%/66.7% on paraphrased queries asking the exact same thing. Nothing about the chunks changed -- only the words used to ask for them.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't a single "chunking quality score" enough?</summary><div>Fact coverage, recall@k, and cost each catch a different failure mode -- a scheme can be cheap and comprehensive yet still fail real queries, or expensive and precise yet cover almost no real facts. Collapsing them into one number would hide which axis actually failed.</div></details>
+<details class="quiz"><summary>Mathematical: define recall@k and fact-coverage precisely.</summary><div>recall@k = (queries where the known-correct chunk appears in the top k ranked results) / total queries. fact_coverage = (facts fully contained in some single chunk, via Concept 06's contains_fact/chunk_fixed) / total facts.</div></details>
+<details class="quiz"><summary>Coding: implement recall_at_k reusing an existing cosine-overlap scorer.</summary><div>Rank all chunks by cosine-overlap score against the query, take the top k chunk ids, and check whether the query's known-correct chunk id is among them -- Section 12 gives the full implementation.</div></details>
+<details class="quiz"><summary>Debugging: a chunking scheme scores 95% recall in testing but users report frequent misses. What's the likely cause?</summary><div>The test query set was probably phrased close to the source text -- exactly this concept's own primary-vs-paraphrased gap. Re-test against a held-out set of real, paraphrased user queries before trusting the 95% figure.</div></details>
+<details class="quiz"><summary>System design: how would you build a repeatable chunk-quality evaluation pipeline?</summary><div>Maintain a versioned test-query set with known-correct chunk ids (refreshed periodically as usage drifts), run fact-coverage and recall@k against it on every chunking-scheme change, and tabulate the relevant cost axes before committing to any fix -- diagnosing which check failed before spending on a mitigation.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/evaluation/retrieval/metrics.py"><b>evaluation/retrieval/metrics.py — LlamaIndex source</b><br><span>Confirms HitRate, MRR and Recall retrieval-metric classes -- the production-grade counterpart of this concept's own recall@k check.</span></a>
+<a href="https://arxiv.org/abs/2309.15217"><b>RAGAS: Automated Evaluation of Retrieval Augmented Generation — arXiv:2309.15217</b><br><span>Named forward to Module 18's evaluation-framework concept -- grounds the query-set-representativeness point.</span></a>
+<a href="https://en.wikipedia.org/wiki/Training,_validation,_and_test_data_sets"><b>Training, validation, and test data sets — Wikipedia</b><br><span>General grounding for the train/holdout discipline point this concept applies to chunk-quality evaluation itself.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 07 COMPLETE (10/10)</span>
+<h3>Nine choices, one measurement — and the measurement is only as good as its query set</h3>
+<p>You can now run fact-coverage, recall@k, and cost checks against any chunking scheme, and explain why the same scheme can look perfect on one query set and unreliable on another. Module 07, Chunking &amp; document representation, is complete. Module 08, Embeddings &amp; representation learning, is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Query-Set Verdict ↑</a>
+</div>
+<p class="fine-print">Module 07 is complete (10/10). Next: Module 08, Embeddings &amp; representation learning.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 10 · Active</p>
+<a href="module-07-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>

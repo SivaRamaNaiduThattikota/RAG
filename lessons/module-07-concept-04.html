@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Two content-aware chunking strategies that ignore existing boundaries entirely: semantic chunking cuts where embedding similarity between neighboring sentences drops, and proposition-based chunking decomposes text into atomic, self-contained facts -- both cost more than any prior method, a trade-off stated explicitly against a real 5-sentence passage.">
+<title>Semantic and proposition-based chunking — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 04</p>
+<h1>No heading announces it.<br><em>The topic just changes.</em></h1>
+<p class="lesson-lead">Concept 03 read sentences, paragraphs and headings — but a topic can shift mid-paragraph with no period, blank line, or heading anywhere near it. This concept covers two strategies that ignore formatting entirely and look at meaning instead: semantic chunking embeds neighboring sentences and cuts where their similarity drops, and proposition-based chunking decomposes a passage into atomic, self-contained facts. Both cost real compute — a trade-off this concept states plainly, not one Concept 02 or 03 ever had to face.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth concept in Module 07 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Module 04 Concept 03's cosine similarity, reused directly; Concept 03's own boundary-detection methods, now contrasted against a meaning-based one</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute cosine similarity between sentence embeddings, apply a threshold cut, and decompose a compound sentence into atomic propositions</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Cutting where the meaning changes, not where the formatting does</h2>
+</div>
+<p>Concepts 02 and 03 all detect boundaries from something visible on the page — a character, a period, a heading. This concept detects a boundary that isn't visible at all: a shift in topic, found only by comparing what consecutive sentences actually mean.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Semantic cuts on similarity. Propositions decompose into atomic facts.</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Semantic chunking — embed each sentence, measure similarity between neighbors, cut where it drops (a topic-shift detector, not a boundary detector). Proposition-based chunking — decompose text into atomic, self-contained factual statements, each independently retrievable.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>The chunk-size/context trade-off (Concept 05) and chunk overlap (Concept 06) — both named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> both methods look at content, not formatting — and both cost real embedding or LLM calls, unlike Concepts 02-03's near-free string operations.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A topic can shift with no signal a parser can see</h3>
+<p>Concept 03's sentence, paragraph and structural lenses all rely on something visible: a period, a blank line, a heading. None of them would notice a passage that drifts from a company's funding history straight into its support hours, mid-paragraph, with no formatting signal announcing the change at all. Structural chunking would keep all five sentences together if they happened to sit in one section — oblivious to the shift, because it never reads what the sentences actually mean.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Five sentences, one unannounced topic shift</h3>
+<p>Five sentences about Acme Corp, no heading, no blank line, no size parameter: (1) "Acme Corp was founded in 2015 in Austin, Texas." (2) "The company builds industrial sensors for factories." (3) "Acme raised $10M in 2023 after its Series A round." (4) "Acme's customer support team is available Monday through Friday, 9 a.m. to 6 p.m. Central." (5) "Support tickets are typically answered within four business hours." Sentences 1-3 are about the company and its funding; sentences 4-5 are about support hours — a real topic shift sitting between sentences 3 and 4, with nothing marking it.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0704-beginner-visual-title">
+<strong class="concept-visual-title" id="c0704-beginner-visual-title">VISUAL · SENTENCE-PAIR SIMILARITY ACROSS THE ACME PASSAGE</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0704-svg-title-b c0704-svg-desc-b">
+<title id="c0704-svg-title-b">A line chart of cosine similarity between four consecutive sentence pairs, with one sharp drop</title>
+<desc id="c0704-svg-desc-b">Four points along a horizontal axis labeled S1-S2, S2-S3, S3-S4 and S4-S5. The first two points sit near the top at similarity 0.996 and 0.9955. The third point drops sharply to 0.4374. The fourth point rises back to 0.9963. A dashed horizontal line at similarity 0.70 marks the threshold used in the worked example, crossed only by the third point.</desc>
+<line x1="50" y1="150" x2="420" y2="150" stroke="#14241f" stroke-width="1.5"/>
+<line x1="50" y1="20" x2="50" y2="150" stroke="#14241f" stroke-width="1.5"/>
+<line x1="50" y1="70" x2="420" y2="70" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="424" y="74" font-size="8" font-family="DM Mono, monospace" fill="#8a978f">0.70 threshold</text>
+<polyline points="90,23 180,25 270,138 360,22" fill="none" stroke="#14241f" stroke-width="2"/>
+<circle cx="90" cy="23" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="180" cy="25" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="270" cy="138" r="6" fill="#ff7957" stroke="#14241f" stroke-width="2"/>
+<circle cx="360" cy="22" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<g font-size="8" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="90" y="12">0.9960</text>
+<text x="180" y="14">0.9955</text>
+<text x="270" y="160" font-weight="700">0.4374 · CUT</text>
+<text x="360" y="12">0.9963</text>
+<text x="90" y="170">S1-S2</text>
+<text x="180" y="170">S2-S3</text>
+<text x="270" y="184" font-weight="700">S3-S4</text>
+<text x="360" y="170">S4-S5</text>
+</g>
+</svg>
+<figcaption>Similarity stays above 0.99 across the first two and last edges — the sentences on either side genuinely resemble each other. Only the S3-S4 edge drops to 0.4374, well below the 0.70 threshold, marking the one real topic shift: company/funding into support hours.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two mechanisms, two different outputs</h3>
+<table class="compare-table">
+<thead><tr><th>Technique</th><th>How it decides</th><th>Reuses</th></tr></thead>
+<tbody>
+<tr><td>Semantic chunking</td><td>Embed each sentence — the same embedding idea Module 08 covers in depth, used here operationally — compute similarity between neighbors, cut where it drops below a threshold</td><td>Module 04 Concept 03's cosine similarity formula, applied directly, not re-derived</td></tr>
+<tr><td>Proposition-based chunking</td><td>Decompose a passage into atomic, self-contained factual statements — each one an independent retrievable unit</td><td>New mechanism, first introduced here (Dense X Retrieval)</td></tr>
+</tbody>
+</table>
+<p>Semantic chunking regroups existing sentences using a similarity signal; proposition chunking rewrites content into new, smaller units entirely. They solve related but different problems, and a pipeline can use either, both, or neither.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The third HOW, and the most expensive one yet</h3>
+<div class="pipeline-preview">
+<span>Concept 02 — mechanical HOW</span><i>↓</i><span>Concept 03 — linguistic/structural HOW</span><i>↓</i><span class="hot">Concept 04 — semantic/proposition HOW</span><i>↓</i><span>Concepts 05-06 — size, overlap</span>
+</div>
+<p>Every earlier method in this module was a string operation costing effectively nothing. This concept is the first to spend real embedding or LLM calls at ingestion time — a cost this concept states explicitly, distinct from Concept 05's later size-versus-context trade-off.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Semantic chunking distinguished from structural chunking, from proposition chunking, and from Concept 05's size trade-off">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Semantic chunking (meaning-aware, embeds content)</span><span role="cell">Structural chunking (markup-aware, blind to meaning — Concept 03)</span><span role="cell">A heading-scoped section can still bundle two unrelated topics if they happen to sit under the same heading — structural chunking would never notice.</span></div>
+<div role="row"><span role="cell">Semantic chunking (regroups existing sentences)</span><span role="cell">Proposition chunking (rewrites into new atomic units)</span><span role="cell">Semantic chunking never changes any sentence's text. Proposition chunking can split or reword a sentence entirely — S3 becomes two new sentences, neither identical to the original.</span></div>
+<div role="row"><span role="cell">This concept's compute-cost trade-off (embedding/LLM calls per chunk)</span><span role="cell">Concept 05's precision-context trade-off (chunk size versus retrieval quality)</span><span role="cell">Two independent axes — a corpus can be expensive AND poorly sized, or cheap AND well sized. Confusing them hides which lever actually needs adjusting.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Semantic chunking is just a synonym for chunking well."</b><p>False — it's one specific technique (embed, compare, cut on a threshold), not a general compliment for any good chunking outcome.</p></div>
+<div><b>"A proposition is just a shorter sentence."</b><p>False — Dense X Retrieval's propositions can reword or merge content across clause boundaries, not just cut an existing sentence into pieces.</p></div>
+<div><b>"These methods are free because they're 'smarter.'"</b><p>False — smarter costs more. This concept's own worked example shows proposition chunking needing 2.20x as many model calls as semantic chunking on the identical passage.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>SCHEMA IMPACT</span><b>chunk_method gains 'semantic' and 'proposition' values</b><p>Alongside 'fixed', 'recursive', 'sentence', 'paragraph' and 'structural' from Concepts 02-03.</p></div>
+<div><span>NEW DEPENDENCY</span><b>Chunking now needs an embedding or LLM call at ingestion time</b><p>Unlike Concepts 02-03's pure string logic — a real forward dependency on Module 08's embedding models.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concept 05 decides how big the resulting chunks should be</b><p>This concept decides which sentences group together; Concept 05 decides how much content one chunk should actually hold.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>A similarity threshold is a topic-shift detector</b><p>Not a fixed boundary rule — moving it changes where cuts land, sometimes missing real shifts, sometimes creating false ones.</p></div>
+<div><b>Propositions are atomic and self-contained</b><p>Each one stands alone as a retrievable fact, potentially reworded from the original sentence, not just a smaller slice of it.</p></div>
+<div><b>Both methods cost real compute</b><p>Embedding calls for semantic chunking, LLM decomposition calls for propositions — neither is free like Concepts 02-03's string operations.</p></div>
+<div><b>This concept's cost trade-off is not Concept 05's size trade-off</b><p>Two independent axes: how expensive chunking is, versus how big the resulting chunks are.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a similarity threshold act as a topic-shift detector rather than a fixed boundary rule?</li>
+<li>Why can proposition chunking change a sentence's actual wording, while semantic chunking never does?</li>
+<li>Why is a 2.20x model-call multiplier a different concern from Concept 05's chunk-size trade-off?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 4 of 10</h3>
+<p>This concept picked WHICH sentences belong together, by meaning. Concept 05 asks a different question entirely: once you've picked a splitting method, how big should the resulting chunks actually be? The precision-context trade-off — named forward only here.</p>
+<div class="beginner-memory"><b>Concept 04 is active.</b> Module 07 is at 4 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-03.html">← Back to Concept 03</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A shift with no visible signal, found by meaning alone</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Five sentences, one hidden shift</b><small>Company/funding into support hours, with no formatting cue.</small></a>
+<a href="#b04"><span>02</span><b>Embed, compare, cut vs. decompose into facts</b><small>Two content-aware mechanisms, two different outputs.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Chunk size (Concept 05) and overlap (Concept 06) stay separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Topic-Shift Detector lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> Concept 03's admitted limit — boundaries only from formatting — → sentence-pair similarity drops from 0.9955 to 0.4374 at the real topic shift → a 0.70 threshold correctly finds it, 2.20x more model calls than semantic chunking alone to also decompose S3 into propositions → Module 07 at 4 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the semantic and proposition-based chunking deep dive</b><em>Formal notation, from-scratch code, and the Topic-Shift Detector lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The third HOW, and the first to read meaning</h2></div></header>
+<p>Concept 02 gave the mechanical HOW, Concept 03 the linguistic/structural HOW. Both detect a boundary from something visible — a character, a period, a heading. This concept is the first to detect a boundary from something invisible to any parser: a shift in what the text actually means.</p>
+<div class="flow">
+<div class="flow-node">Concept 02 — mechanical HOW</div>
+<div class="flow-node">Concept 03 — linguistic/structural HOW</div>
+<div class="flow-node hot">Concept 04 — semantic/proposition HOW</div>
+<div class="flow-node">Concepts 05-06 — size, overlap</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COMPUTE</span><h3>Compute cosine similarity between sentence embeddings</h3><p>Reusing Module 04 Concept 03's formula directly, applied to consecutive sentence pairs.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Apply a similarity threshold to find chunk boundaries</h3><p>Cut where similarity drops below the threshold; recognize that raising or lowering it changes which shifts get found.</p></article>
+<article class="info-card"><span>DECOMPOSE</span><h3>Decompose a compound sentence into atomic propositions</h3><p>Per Dense X Retrieval's self-contained-fact definition.</p></article>
+<article class="info-card"><span>WEIGH</span><h3>State the compute-cost trade-off explicitly</h3><p>Embedding calls for semantic chunking, LLM calls for proposition decomposition — both strictly more expensive than Concepts 02-03.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 04 Concept 03's cosine similarity, reused directly.</b> Semantic chunking's similarity computation is the exact same dot-product/norm mechanics, applied to sentence embeddings instead of toy vectors.</li>
+<li><b>Concept 03's own admitted limit, cited directly.</b> Structural boundaries are still markup-blind — this concept's motivation is exactly the gap that leaves open.</li>
+<li><b>Module 08 (forward reference only, not required yet).</b> This concept uses embeddings operationally without teaching how they're produced — that's Module 08's full job.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Noticing a change of subject with no signal announcing it</h2></div></header>
+<p>Concept 03's reader-with-a-pen checks periods and headings. This concept's reader has to notice something no punctuation mark or heading would ever flag: partway through a paragraph, the subject quietly changes from "how the company is doing" to "how to reach support" — same paragraph, same formatting, genuinely different topic. Noticing that requires understanding what each sentence is actually about, not just where it sits on the page.</p>
+<div class="callout warning"><b>Analogy boundary</b>This picture explains why a meaning-based signal is necessary at all. It does not explain the exact cosine-similarity-and-threshold mechanism, or how a compound sentence gets split into propositions — Sections 05, 06 and 09 give those formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Semantic boundary</td><td>A point between consecutive sentences where cosine similarity of their embeddings falls below a chosen threshold</td><td>sim(eᵢ, eᵢ₊₁) &lt; τ</td></tr>
+<tr><td>Breakpoint threshold τ</td><td>The similarity cutoff below which a boundary is placed — a tunable parameter, not a fixed rule</td><td>τ</td></tr>
+<tr><td>Proposition</td><td>An atomic, self-contained factual statement extracted from a passage, independently understandable without surrounding context</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: embed-compare-cut, and decompose</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>SEMANTIC LANE</span><p>Embed each sentence. Compute cosine similarity between every consecutive pair. Cut wherever similarity falls below the threshold — regroup the surviving spans into chunks.</p></div>
+<div class="lane"><span>PROPOSITION LANE</span><p>For each sentence, ask whether it bundles more than one atomic fact. If so, decompose it into separate self-contained propositions; otherwise keep it as-is. Each resulting proposition becomes its own retrievable unit.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The same similarity curve, annotated with the chosen threshold</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0704-adv-visual-title">
+<strong class="concept-visual-title" id="c0704-adv-visual-title">VISUAL · WHERE THE THRESHOLD LANDS RELATIVE TO ALL FOUR EDGES</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0704-svg-title-a c0704-svg-desc-a">
+<title id="c0704-svg-title-a">The same four-edge similarity curve as the beginner figure, with three candidate thresholds marked</title>
+<desc id="c0704-svg-desc-a">The same line and four points as the beginner-core figure, with three additional dashed horizontal reference lines at similarity 0.40 (below the real shift, causing under-segmentation), 0.70 (the worked example's choice, correctly cutting only the real shift) and 0.996 (above nearly every edge, causing over-segmentation).</desc>
+<line x1="50" y1="150" x2="420" y2="150" stroke="#14241f" stroke-width="1.5"/>
+<line x1="50" y1="20" x2="50" y2="150" stroke="#14241f" stroke-width="1.5"/>
+<line x1="50" y1="146" x2="420" y2="146" stroke="#5ee6c3" stroke-width="1.5" stroke-dasharray="3 3"/>
+<line x1="50" y1="70" x2="420" y2="70" stroke="#8a978f" stroke-width="1.5" stroke-dasharray="4 4"/>
+<line x1="50" y1="21" x2="420" y2="21" stroke="#ff7957" stroke-width="1.5" stroke-dasharray="2 5"/>
+<polyline points="90,23 180,25 270,138 360,22" fill="none" stroke="#14241f" stroke-width="2"/>
+<circle cx="90" cy="23" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="180" cy="25" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<circle cx="270" cy="138" r="6" fill="#ff7957" stroke="#14241f" stroke-width="2"/>
+<circle cx="360" cy="22" r="5" fill="#d7ff53" stroke="#14241f" stroke-width="2"/>
+<g font-size="8" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="90" y="170">S1-S2</text>
+<text x="180" y="170">S2-S3</text>
+<text x="270" y="184" font-weight="700">S3-S4</text>
+<text x="360" y="170">S4-S5</text>
+</g>
+<g font-size="8" font-family="DM Mono, monospace">
+<text x="424" y="150" fill="#5ee6c3">τ=0.40 (misses the shift)</text>
+<text x="424" y="74" fill="#8a978f">τ=0.70 (correct)</text>
+<text x="424" y="25" fill="#ff7957">τ=0.996 (over-splits)</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Module 06 — clean documents</span><i>↓</i><span>Concepts 02-03 — mechanical, linguistic HOW</span><i>↓</i><span class="hot">Concept 04 — semantic/proposition HOW</span><i>↓</i><span>Module 08 — embeddings, in full</span>
+</div>
+<p>This concept borrows embeddings operationally to decide chunk boundaries. Module 08 is where embeddings themselves — how text becomes a vector at all — get their full treatment; this concept only consumes that mechanism, it doesn't teach it.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same cosine formula, a new use for it</h2></div></header>
+<div class="equation">sim(eᵢ, eᵢ₊₁) = (eᵢ · eᵢ₊₁) / (‖eᵢ‖ ‖eᵢ₊₁‖)<br>cut between sentence i and i+1  ⟺  sim(eᵢ, eᵢ₊₁) &lt; τ<br>chunk_count(τ) = 1 + |{i : sim(eᵢ, eᵢ₊₁) &lt; τ}|</div>
+<p>Cosine similarity here is identical to Module 04 Concept 03's formula — nothing new mathematically, only a new place to apply it: comparing meaning between neighboring sentences instead of comparing two arbitrary toy vectors.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>1 real cut, 6 propositions, a 2.20x cost multiplier</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Edge</th><th>Similarity</th><th>Below τ=0.70?</th></tr></thead>
+<tbody>
+<tr><td>S1-S2</td><td>0.9960</td><td>No</td></tr>
+<tr><td>S2-S3</td><td>0.9955</td><td>No</td></tr>
+<tr><td>S3-S4</td><td>0.4374</td><td><b>Yes — the real topic shift</b></td></tr>
+<tr><td>S4-S5</td><td>0.9963</td><td>No</td></tr>
+</tbody>
+</table>
+<p>Exactly 1 cut, at S3-S4, producing 2 semantic chunks: {S1,S2,S3} and {S4,S5}. Separately, decomposing S3 ("Acme raised $10M in 2023 after its Series A round.") into P1 ("Acme raised $10M in 2023.") and P2 ("Acme's 2023 raise came after its Series A round.") turns 5 sentences into 6 propositions. Cost: semantic chunking needs 5 embedding calls (one per sentence, 0 LLM calls); proposition chunking needs 5 LLM decomposition calls plus 6 embedding calls (one per resulting proposition) = 11 total model calls — <b>2.20x</b> semantic chunking's total, and 20.0% more embedding calls alone. Every number here was computed once via an executed Node.js script (dot/norm/cosine for all four edges, cross-checked by hand for S3-S4: dot=0.38, norm(S3)=0.8775, norm(S4)=0.9899, cos=0.38/(0.8775×0.9899)=0.4374) and the threshold/cost arithmetic verified in a second script run with no discrepancy.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>FAQ or onboarding docs with unannounced topic shifts</h3><p>Long-form prose that drifts between subjects with no heading structure to lean on — exactly where structural chunking has nothing to key on.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Short, topically-similar technical sentences</h3><p>Similarity scores cluster tightly together, and threshold choice becomes noisy — a small change in τ can flip several cuts at once.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Running proposition decomposition on already-atomic sentences</h3><p>Paying an LLM call for zero gain — sentences 1, 2, 4 and 5 in the worked example are already atomic and don't need decomposing.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Semantic cutting and a toy proposition splitter, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def dot(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+def cosine_similarity(a, b):
+    return dot(a, b) / (math.sqrt(dot(a, a)) * math.sqrt(dot(b, b)))
+
+def semantic_chunk(sentences, embeddings, threshold):
+    groups, current = [], [sentences[0]]
+    for i in range(1, len(sentences)):
+        sim = cosine_similarity(embeddings[i - 1], embeddings[i])
+        if sim < threshold:
+            groups.append(current)
+            current = [sentences[i]]
+        else:
+            current.append(sentences[i])
+    groups.append(current)
+    return groups
+
+EMBEDDINGS = [
+    [0.90, 0.10, 0.20], [0.85, 0.15, 0.25], [0.80, 0.20, 0.30],
+    [0.10, 0.90, 0.40], [0.15, 0.85, 0.45],
+]
+SENTENCES = ["S1", "S2", "S3", "S4", "S5"]
+
+chunks = semantic_chunk(SENTENCES, EMBEDDINGS, threshold=0.70)
+assert chunks == [["S1", "S2", "S3"], ["S4", "S5"]]
+
+# Toy, illustrative-only proposition split -- real extraction needs an LLM.
+def propositionize_toy(sentence, connector=" after "):
+    if connector in sentence:
+        head, tail = sentence.split(connector, 1)
+        return [head.strip() + ".", "This followed " + tail.strip()]
+    return [sentence]
+
+props = propositionize_toy("Acme raised $10M in 2023 after its Series A round")
+assert len(props) == 2
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real implementations of both mechanisms</h2></div></header>
+<p>LangChain's SemanticChunker (verified directly from source) implements exactly the embed-neighbors-and-cut-on-distance mechanism taught here, with a configurable breakpoint_threshold_type (percentile, standard deviation, interquartile, or gradient) — a more adaptive alternative to this concept's single fixed threshold. Dense X Retrieval (arXiv 2312.06648) is the primary source for proposition-based chunking, proposing atomic propositions as the retrieval unit and demonstrating retrieval-quality gains over sentence- or passage-level units. Classical, pre-embedding topic segmentation (TextTiling-style lexical-cohesion methods) is named here only as the historical precursor this concept's embedding-based approach has largely superseded.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Topic-Shift Detector</h2></div></header>
+<div class="lab">
+<p>The same 5-sentence Acme passage, with all four inter-sentence similarities precomputed. Drag the threshold to watch chunks form and split live, and toggle proposition mode to see sentence 3 decompose into two atomic facts.</p>
+<div class="lab-controls">
+<div class="control"><label for="tsThreshold_0704">Similarity threshold <output id="tsThresholdOut_0704">0.70</output></label>
+<input type="range" id="tsThreshold_0704" min="0.30" max="0.99" step="0.01" value="0.70"></div>
+</div>
+<label style="display:flex;gap:8px;align-items:center;margin:14px 0;font:13px DM Mono"><input type="checkbox" id="tsPropToggle_0704"> Proposition mode — decompose sentence 3</label>
+<div class="boundary-strip" id="tsStripWrap_0704"></div>
+<div class="norm-readout" id="tsReadout_0704"></div>
+<div class="callout" id="tsVerdict_0704"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Semantic vs. proposition vs. structural vs. recursive</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Method</th><th>Signal used</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td>Recursive (Concept 02)</td><td>Separator characters</td><td>Near zero — pure string operations</td></tr>
+<tr><td>Structural (Concept 03)</td><td>Headings, tags, section breaks</td><td>Near zero — depends only on already-parsed markup</td></tr>
+<tr><td>Semantic (this concept)</td><td>Embedding similarity between neighbors</td><td>One embedding call per sentence</td></tr>
+<tr><td>Proposition (this concept)</td><td>LLM-decomposed atomic facts</td><td>One LLM call per sentence plus one embedding call per resulting proposition — the most expensive of the four</td></tr>
+</tbody>
+</table>
+<p>Decision framework: reach for semantic or proposition chunking only when retrieval precision on ambiguous, unstructured prose justifies the extra embedding or LLM cost — for well-formatted documents, Concept 03's structural chunking is usually cheaper and good enough.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>THRESHOLD TOO HIGH</span><h3>Over-splitting even within one topic</h3><p>A threshold set too close to 1.0 treats ordinary sentence-to-sentence variation as a topic shift, fragmenting a single coherent topic into many tiny chunks.</p></article>
+<article class="info-card"><span>THRESHOLD TOO LOW</span><h3>Missing real topic shifts</h3><p>A threshold set below the real shift's similarity score merges genuinely unrelated content into one chunk, exactly as the lab's under-segmentation state shows.</p></article>
+<article class="info-card"><span>PROPOSITION HALLUCINATION</span><h3>An LLM decomposition step inventing or dropping a qualifier</h3><p>Proposition extraction is generative — it can silently add detail that wasn't in the source or drop a qualifier that changes the fact's meaning.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Semantic chunking is a synonym for good chunking</td><td>False — it's one specific technique with its own failure modes, not a general guarantee of quality.</td></tr>
+<tr><td>A proposition is just a shorter sentence</td><td>False — Dense X's propositions can reword or merge content, not just cut an existing sentence.</td></tr>
+<tr><td>These methods are free because they use embeddings</td><td>False — Section 10's cost table shows proposition chunking at 2.20x semantic chunking's total model-call count.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Embedding and LLM calls at ingestion time scale with corpus size — semantic and proposition chunking are usually reserved for smaller, high-value corpora rather than run over an entire large corpus by default.</li>
+<li>A fixed threshold rarely transfers across corpora with different writing styles — LangChain's SemanticChunker's percentile/std-dev/IQR/gradient breakpoint types exist specifically to adapt the cutoff per-document instead of hardcoding one number.</li>
+<li>Proposition decomposition needs its own quality check (does the decomposition preserve the original meaning?) before it's trusted in production, echoing the general LLM-output-verification discipline this course applies elsewhere.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why is a similarity threshold called a topic-shift detector rather than a boundary rule?</summary><div>It doesn't detect a fixed structural feature like a period or heading — it detects a drop in similarity between neighbors, which only correlates with an actual topic change. The same threshold can miss a real shift or manufacture a false one depending on how the content happens to embed.</div></details>
+<details class="quiz"><summary>Why does proposition chunking need 11 model calls versus semantic chunking's 5 on the same passage?</summary><div>Semantic chunking only embeds each of the 5 original sentences (5 embedding calls). Proposition chunking must first check each of the 5 sentences for decomposition (5 LLM calls), then embed each of the resulting 6 propositions (6 embedding calls) — 5 + 6 = 11 total.</div></details>
+<details class="quiz"><summary>Why doesn't structural chunking (Concept 03) catch the Acme passage's topic shift?</summary><div>Structural chunking only looks at markup — headings, tags, section breaks. If all five sentences sit in one paragraph with no heading between them, structural chunking has no signal to key on at all, regardless of how different their actual topics are.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Two new toy sentence embeddings: E1=[0.70,0.70,0.10] (topic: pricing) and E2=[0.05,0.10,0.95] (topic: shipping). Compute cosine similarity between E1 and E2, and state whether a threshold of 0.70 would cut between them.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>dot(E1,E2) = 0.70×0.05 + 0.70×0.10 + 0.10×0.95 = 0.035 + 0.070 + 0.095 = 0.20. norm(E1) = √(0.49+0.49+0.01) = √0.99 ≈ 0.995. norm(E2) = √(0.0025+0.01+0.9025) = √0.915 ≈ 0.9566. cos = 0.20 / (0.995×0.9566) ≈ 0.2103. Since 0.2103 &lt; 0.70, a threshold of 0.70 would cut between E1 and E2 — correctly, since pricing and shipping are genuinely different topics.</div>
+</details>
+<p>Teach-back: explain why this result (0.21) is much closer to the worked example's real-shift edge (0.4374) than to any of its same-topic edges (all above 0.99), and what that gap tells you about setting a threshold in practice.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Semantic and proposition-based chunking</h3><ul><li><b>Semantic:</b> embed sentences, cut where neighbor similarity drops below a threshold — a topic-shift detector</li><li><b>Proposition:</b> decompose text into atomic, self-contained facts, each independently retrievable</li><li><b>Core relation:</b> both cost real embedding/LLM calls, unlike Concepts 02-03's near-free string operations</li></ul></div>
+<div><h3>Memorable example</h3><p>Five Acme sentences, similarity 0.996/0.996/0.437/0.996 across four edges — one sharp drop marks the real topic shift. Decomposing sentence 3 turns 5 sentences into 6 propositions, at 2.20x the total model-call cost of semantic chunking alone.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what's the real difference between semantic chunking and structural chunking?</summary><div>Structural chunking follows markup it can see directly — headings, tags, nesting. Semantic chunking follows meaning, computed via embedding similarity, and can catch a topic shift with zero formatting signal that structural chunking would completely miss.</div></details>
+<details class="quiz"><summary>Mathematical: derive the chunk-count formula for a fixed similarity threshold.</summary><div>chunk_count(τ) = 1 + the number of consecutive-sentence edges whose cosine similarity falls below τ — each qualifying edge adds exactly one cut, and one cut always adds exactly one chunk.</div></details>
+<details class="quiz"><summary>Coding: implement propositionize using an LLM call (pseudocode is fine).</summary><div>Prompt the LLM with the sentence and an instruction to output one atomic, self-contained factual statement per line, then parse the response into a list of proposition strings — unlike the from-scratch toy stub, a real implementation cannot rely on a fixed connector word.</div></details>
+<details class="quiz"><summary>Debugging: semantic chunking is producing far more chunks than expected on a new corpus. What do you check first?</summary><div>Whether the similarity threshold is miscalibrated for this corpus's embedding distribution — a fixed threshold tuned on one dataset can be far too high for another, which is exactly why LangChain's SemanticChunker offers percentile/std-dev/IQR/gradient breakpoint types instead of one hardcoded number.</div></details>
+<details class="quiz"><summary>System design: when would you choose proposition chunking despite its 2x+ cost over semantic chunking?</summary><div>When retrieval precision on dense, fact-heavy text (e.g. legal or medical documents where a single sentence often bundles multiple distinct claims) justifies the extra LLM and embedding cost — small, high-value corpora are the typical fit, not large general-purpose ones.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2312.06648"><b>Dense X Retrieval: What Retrieval Granularity Should We Use? — arXiv</b><br><span>Primary source for proposition-based chunking, cited throughout Sections 05, 10 and 13.</span></a>
+<a href="https://raw.githubusercontent.com/langchain-ai/langchain-experimental/main/libs/experimental/langchain_experimental/text_splitter.py"><b>SemanticChunker source — LangChain Experimental</b><br><span>Confirms the embed-neighbors-and-cut-on-distance mechanism and the breakpoint_threshold_type parameter cited in Sections 06 and 13.</span></a>
+<a href="https://www.sbert.net/docs/quickstart.html"><b>Sentence-Transformers — Quickstart</b><br><span>Grounds the sentence-embedding computation step semantic chunking uses operationally.</span></a>
+<a href="https://en.wikipedia.org/wiki/Text_segmentation"><b>Text segmentation — Wikipedia</b><br><span>Names classical, pre-embedding topic-segmentation methods as the historical precursor cited in Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 COMPLETE · MODULE 07 · 4/10</span>
+<h3>Meaning-based chunking, and its real cost. Chunk size is next.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute a new sentence-pair similarity and decide whether it crosses a given threshold. Concept 05 asks a genuinely different question: once a splitting method is chosen, how big should the resulting chunks actually be?</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-03.html">← Back to Concept 03</a>
+</div>
+<p class="fine-print">Module 07 at 4 of 10 concepts. Next concept: Chunk size as a precision-context trade-off.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 04 · Complete</p>
+<a href="module-07-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

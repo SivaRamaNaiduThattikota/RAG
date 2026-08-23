@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Two ideas share one title. Hierarchical chunking generalizes Concept 07's 2-level parent-child link into a full multi-level tree -- document, section, paragraph, sentence -- so retrieval and expansion can happen at any level, not just child-to-parent. Late chunking is a genuinely new axis: instead of splitting text first and embedding each piece alone ('early chunking', what every prior concept in this module does), it embeds the whole document first, then pools per chunk -- on the exact same 10-word chunk, similarity to a query rises from 0.4657 to 0.6354 purely from that reordering.">
+<title>Hierarchical and late chunking — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 08</p>
+<h1>One name, two axes —<br><em>a taller tree, and a different order.</em></h1>
+<p class="lesson-lead">Concept 07 built exactly two levels: a small child for search, a larger parent for reading. Hierarchical chunking is the same idea generalized to as many levels as a document actually has -- document, section, paragraph, sentence -- with retrieval and expansion possible at any of them. Late chunking is not a generalization of anything so far: every concept up to this one splits text first and embeds each piece in isolation. Late chunking embeds the whole document first, so each chunk's vector carries the rest of the document's context before it's ever pooled down to a chunk. On the identical 10-word chunk, that reordering alone moves its similarity to a real query from 0.4657 to 0.6354.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth concept in Module 07 (Phase 2), second of three closing the module</b></div>
+<div><span>PREREQUISITE</span><b>Concept 07's parent-child link and merge-ratio rule (generalized here); Concept 01's average-pooling mechanism (reused directly for late chunking); Concept 05's dilution framing</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why hierarchical chunking is a generalization of Concept 07 while late chunking is a genuinely new axis, and compute both</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two ideas, one title, kept separate</h2>
+</div>
+<p>Hierarchical chunking makes Concept 07's 2-level parent/child structure into a full multi-level tree. Late chunking stops splitting-then-embedding independently: embed the whole document first, then split the resulting token embeddings into chunk vectors. They solve different problems and don't depend on each other.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A taller tree, and a different embedding order</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Hierarchical chunking: Concept 07's 2-level parent/child structure, generalized to a full multi-level tree (document → section → paragraph → sentence), with retrieval and expansion possible at any level. Late chunking: embed the WHOLE document first, then pool per-chunk -- instead of splitting first and embedding each piece alone (every prior concept in this module, "early chunking," named here for contrast).</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Treating these as one fix -- they're independent and could in principle combine, though this course doesn't build that combination. Treating "late" as "splitting happens later" -- it doesn't; embedding does.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> one of these two ideas generalizes Concept 07; the other opens a completely new axis none of Concepts 01-07 ever touched.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A fixed 2-level cut, and an embedding blind spot</h3>
+<p>Hierarchical chunking exists because real documents have more than 2 natural levels -- a whole document, not just one parent and one child. A fixed 2-level structure forces one arbitrary cut regardless of how deep a document's real structure goes. Late chunking exists because every splitting method taught so far embeds each chunk with zero visibility into the rest of the document -- reintroducing a version of Concept 01's dilution/context-loss problem that no amount of clever splitting can fix, because it isn't a splitting problem at all.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A 15-node tree, and one chunk embedded two ways</h3>
+<p>Hierarchical: a new Oracle "Cancellations and Refunds" tree (1 document, 2 sections, 4 paragraphs, 8 sentences = 15 nodes). Best match for "How long does a store credit refund take?" is sentence B1b, "Store credit refunds process within 24 hours instead." -- but "instead" has no antecedent alone. Expanding up one level to its parent paragraph resolves it.</p>
+<p>Late chunking: a new Northwind Analytics pair -- sentence 1 mentions "premium plan," sentence 2 is "It renews automatically every 12 months unless canceled." For the query "How often does the premium plan renew?", chunk 2's raw text can never contain "premium" or "plan" -- they're only in sentence 1. Embedded alone (early), its similarity to the query is 0.4657. Embedded after the whole document is processed first (late), the identical chunk text scores 0.6354.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0708-b03-title">
+<strong class="concept-visual-title" id="c0708-b03-title">VISUAL · SAME CHUNK TEXT, TWO EMBEDDING ORDERS</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0708-svg-title-b c0708-svg-desc-b">
+<title id="c0708-svg-title-b">Two similarity bars for the identical chunk text, one for early chunking and one for late chunking</title>
+<desc id="c0708-svg-desc-b">Two horizontal bars of equal starting position. The early-chunking bar reaches 46.57 percent of full width, labeled cosine 0.4657. The late-chunking bar reaches 63.54 percent, labeled cosine 0.6354. A caption notes the chunk text and split boundary are identical in both bars.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<text x="40" y="26" font-weight="700">EARLY (split → embed) · cosine 0.4657</text>
+<rect x="40" y="34" width="380" height="22" fill="none" stroke="#14241f" stroke-width="1.2"/>
+<rect x="40" y="34" width="177" height="22" fill="#ff7957" fill-opacity="0.5"/>
+<text x="40" y="86" font-weight="700">LATE (embed → pool) · cosine 0.6354</text>
+<rect x="40" y="94" width="380" height="22" fill="none" stroke="#14241f" stroke-width="1.2"/>
+<rect x="40" y="94" width="241" height="22" fill="#3fae86" fill-opacity="0.5"/>
+<text x="40" y="140" font-size="7.5">Both bars: chunk 2 = "It renews automatically every 12 months unless canceled." Same 10 words, same boundary.</text>
+<text x="40" y="152" font-size="7.5" font-weight="700">+0.1696 absolute · +36.42% relative, from embedding order alone</text>
+</g>
+</svg>
+<figcaption>Nothing about the chunk's text or boundary changed between the two bars -- only whether the embedding model saw the rest of the document before this chunk was pooled.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two small tables, side by side</h3>
+<table class="compare-table">
+<thead><tr><th>Idea</th><th>Mechanism</th></tr></thead>
+<tbody>
+<tr><td>Hierarchical chunking</td><td>Split at multiple levels, link each level to its parent/children, retrieve or expand at any level</td></tr>
+<tr><td>Late chunking</td><td>Embed the whole document first → get per-token context-carrying vectors → apply chunk boundaries → pool per chunk</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One generalizes forward; the other opens sideways</h3>
+<div class="scroll-flow">
+<span>Concept 06 — overlap (probabilistic)</span><i>→</i>
+<span>Concept 07 — parent-child (structural, 2 levels)</span><i>→</i>
+<span class="hot">Concept 08a hierarchical (N levels) + 08b late chunking (embedding order)</span><i>→</i>
+<span>Concept 09 — metadata / headers</span>
+</div>
+<p>Hierarchical chunking sits at the same point in the pipeline as Concept 07, generalized in depth. Late chunking sits somewhere new -- inside the embedding step itself, since it changes what the embedding model even receives as input.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Generalization, new axis, and independence</h3>
+<div class="distinction-table" role="table" aria-label="Hierarchical chunking distinguished from parent-child and from late chunking">
+<div role="row"><b role="cell">Pairing</b><b role="cell">Relationship</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Hierarchical chunking vs. Concept 07's parent-child</span><span role="cell">Direct generalization -- N levels instead of a fixed 2</span><span role="cell">Not a new mechanism; the same expand/link idea, just deeper</span></div>
+<div role="row"><span role="cell">Late chunking vs. early chunking (Concepts 02-07)</span><span role="cell">A genuinely new, orthogonal axis -- WHEN embedding happens, not how chunks relate</span><span role="cell">No amount of better splitting fixes what late chunking fixes</span></div>
+<div role="row"><span role="cell">Hierarchical chunking vs. late chunking</span><span role="cell">Independent of each other</span><span role="cell">Could in principle combine; this course doesn't build that combination</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Late chunking means splitting happens later in the pipeline."</b><p>False -- boundary decisions still happen up front. What's delayed is the embedding step, not the split.</p></div>
+<div><b>"Hierarchical chunking is unrelated to Concept 07."</b><p>False -- it's a direct generalization of the exact same parent/child link, just extended past 2 levels.</p></div>
+<div><b>"Any embedding model can do late chunking."</b><p>False -- it requires a genuinely long-context embedding model capable of processing a whole document in one pass (Module 08, named forward only).</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>MULTI-SCALE QUERIES</span><b>A hierarchical index serves both broad and narrow questions from one structure</b><p>"What is Oracle's full refund policy?" and "How long does a store credit refund take?" retrieve at different levels of the same tree.</p></div>
+<div><span>NOT A FREE UPGRADE</span><b>Late chunking requires swapping in a long-context embedding model</b><p>A Module 08 decision, not something layered on top of the current model for free.</p></div>
+<div><span>REAL COST NAMED</span><b>Embedding every level of a hierarchy costs +87.50% more calls than leaf-only indexing</b><p>15 embedding calls vs. 8, on this concept's own 15-node tree -- a real, explicit trade-off.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Which idea generalizes, which one is new</b><p>Hierarchical chunking generalizes Concept 07. Late chunking is a new axis none of Concepts 01-07 touched.</p></div>
+<div><b>Why "instead" needs exactly one level of expansion, not zero and not three</b><p>Zero leaves it unresolved; three reintroduces an unrelated section's content -- dilution, same as Concept 05.</p></div>
+<div><b>Why the SAME chunk text gets two different embeddings</b><p>Early chunking embeds it alone; late chunking embeds it after the whole document has already been processed once.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is hierarchical chunking called a generalization rather than a new idea?</li>
+<li>Why is "late" chunking not really about splitting later?</li>
+<li>What's the one prerequisite late chunking has that not every embedding model meets?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 8 of 10</h3>
+<p>This concept closed out Module 07's structural mitigations -- one generalizing Concept 07's link, one opening an entirely new axis. Concept 09 turns to what travels alongside chunk text rather than the text itself: metadata and contextual headers.</p>
+<div class="beginner-memory"><b>Concept 08 is active.</b> Module 07 is at 8 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-07.html">← Back to Concept 07</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A taller tree, and a different order</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>A 15-node tree</b><small>Expand up one level to resolve "instead."</small></a>
+<a href="#b03"><span>02</span><b>One chunk, two embeddings</b><small>0.4657 → 0.6354, same text, same boundary.</small></a>
+<a href="#b06"><span>03</span><b>Generalization vs. new axis</b><small>Only one of these two ideas builds on Concept 07.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Both full worked examples, from-scratch code, and the Depth &amp; Order Explorer lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concept 07's 2-level link → generalized to a 15-node, 4-level tree → "instead" needs +1 level, not +3 → separately, the same chunk embedded early (0.4657) vs. late (0.6354) → +36.42% from order alone → Module 07 at 8 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the hierarchical and late chunking deep dive</b><em>Both full worked examples, from-scratch code, and the Depth &amp; Order Explorer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The module's second wave of fixes</h2></div></header>
+<p>Concept 07 built a structural (non-probabilistic) fix at exactly 2 levels. This concept's first idea generalizes that fix to N levels; its second idea opens a completely new axis -- embedding order -- that Concepts 01-07 never touched.</p>
+<div class="flow">
+<div class="flow-node">Concept 06 — overlap (probabilistic)</div>
+<div class="flow-node">Concept 07 — parent-child (structural, 2 levels)</div>
+<div class="flow-node hot">Concept 08a hierarchical (N levels)</div>
+<div class="flow-node hot">Concept 08b late chunking (embedding order)</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DISTINGUISH</span><h3>Hierarchical (generalization) from parent-child (fixed 2-level)</h3><p>Same mechanism, different depth.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>An expand decision at arbitrary depth</h3><p>A merge-ratio-style rule generalized from Concept 07's 2-level version.</p></article>
+<article class="info-card"><span>STATE PRECISELY</span><h3>What "early" vs. "late" actually means</h3><p>The order of splitting vs. embedding -- not "when in the pipeline" loosely.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Real transformer self-attention (Module 08, named forward only) -- this concept's own contextualization step is an explicitly labeled linear stand-in, not a claim about how transformers work.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 07's parent/child link and merge-ratio math, reused and generalized.</b> This concept's expand(node, depth) is the same idea extended past 2 levels.</li>
+<li><b>Concept 01's average-pooling mechanism, reused directly.</b> Unlike Concept 07, which deliberately avoided it, this concept's late-chunking toy model uses Concept 01's exact average-pooling approach on purpose -- fixing Concept 01's own dilution problem from a different angle.</li>
+<li><b>Concept 05's dilution framing, reused for the depth=3 warning.</b> Expanding too far up a hierarchy reintroduces exactly the dilution Concept 05 first named.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Two analogies, kept separate</h2></div></header>
+<p>Hierarchical chunking is a book's table of contents at multiple levels -- book, chapter, section, paragraph -- versus Concept 07's single index-card-to-page pointer. Late chunking is writing chapter summaries only after reading the whole book once, versus summarizing each chapter the moment you finish it with no memory of earlier chapters.</p>
+<div class="callout warning"><b>Analogy boundary</b>Both pictures explain WHY each idea helps. Neither explains the exact expand-decision rule or the pooling formula -- Section 09 gives those precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Tree node</td><td>A unit at any level of the hierarchy -- document, section, paragraph, or sentence</td><td>n</td></tr>
+<tr><td>Depth / ancestor distance</td><td>How many levels up from a leaf a given ancestor sits</td><td>depth(n, a), generalizing Concept 07's parent(c)</td></tr>
+<tr><td>Early chunking</td><td>Split document D, then embed each resulting chunk independently</td><td>split(D) → {embed(c) : c ∈ split(D)}</td></tr>
+<tr><td>Late chunking</td><td>Embed D as a whole first, then pool each chunk's span of the resulting token vectors</td><td>embed(D) → tokens_with_context → {pool(tokens ∈ span(c)) : c ∈ boundaries(D)}</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes, same shape as Concept 07's</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>HIERARCHICAL LANE</span><p>Build an N-level tree at indexing time. At retrieval time, expand up from a matched leaf toward the root, or down from a matched higher-level node toward its descendants, stopping wherever the query is actually answered.</p></div>
+<div class="lane"><span>LATE-CHUNKING LANE</span><p>Run the whole document through the embedding model's transformer layer first, producing token-level vectors that each carry the entire document's context. Only then apply the chunk boundaries and pool each span -- contrasted step-by-step against early chunking's split-then-embed order.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The 15-node Oracle tree, and the retrieve-and-expand trace</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Hub diagram showing the 15-node Oracle Cancellations and Refunds tree with the retrieve-and-expand trace highlighted">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Full document</b><small>616 chars — 2 sections, 4 paragraphs, 8 sentences</small></div>
+<div class="diagram-node"><b>Section B — Refund Policy</b><small>283 chars, 2 paragraphs</small></div>
+<div class="diagram-node"><b>Paragraph B1</b><small>141 chars — resolves B1b's "instead"</small></div>
+<div class="diagram-node"><b>Sentence B1b (leaf)</b><small>53 chars — best match, incomplete alone</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Two different positions in the pipeline</h2></div></header>
+<div class="pipeline-preview">
+<span>Concept 07 — parent-child (index time, 2 levels)</span><i>↓</i><span class="hot">Concept 08a hierarchical — same position, N levels</span><i>↓</i><span class="hot">Concept 08b late chunking — inside the embedding step itself</span>
+</div>
+<p>Hierarchical chunking sits at the same point in the pipeline as Concept 07, just deeper. Late chunking sits somewhere genuinely new -- between "chunks exist" and "embedding model," since it changes what the embedding step even receives as input (the whole document, not isolated chunk text).</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Expand at arbitrary depth, and the pooling equation</h2></div></header>
+<div class="equation">expand(leaf, depth) = ancestor of leaf at distance "depth" toward the root (generalizes Concept 07's merge-ratio rule to arbitrary ancestor distance)<br>chunk_vec(c) = mean over t ∈ span(c) of contextualize(t, D)</div>
+<p>"contextualize" is named exactly as Jina AI describes it: the transformer layer applied to the whole document, producing token vectors that already encode full-document context, before any chunk boundary is applied. This concept's own worked example (Section 10b) uses an explicitly labeled linear stand-in, contextualize(t) = base(t) + α·doc_mean, α=0.5 -- a stylized simplification of real self-attention mixing, not a claim about how transformers actually work.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two independent examples, one per idea</h2></div></header>
+<h4>10a. Hierarchical chunking — the Oracle Cancellations-and-Refunds tree</h4>
+<table class="worked-table">
+<thead><tr><th>Node</th><th>Chars</th><th>Level</th></tr></thead>
+<tbody>
+<tr><td>Full document</td><td>616</td><td>root</td></tr>
+<tr><td>Section A — Cancellation Policy</td><td>332</td><td>+2 from leaf</td></tr>
+<tr><td>Section B — Refund Policy</td><td>283</td><td>+2 from leaf</td></tr>
+<tr><td>Paragraph A1 / A2</td><td>164 / 167</td><td>+1 from leaf</td></tr>
+<tr><td>Paragraph B1 / B2</td><td>141 / 141</td><td>+1 from leaf</td></tr>
+<tr><td>8 sentences (leaves)</td><td>62,101,124,42,87,53,76,64</td><td>0 (leaf)</td></tr>
+</tbody>
+</table>
+<p>1 document + 2 sections + 4 paragraphs + 8 sentences = 15 nodes total. Embedding every level (if made independently searchable) costs 15 calls versus 8 for leaf-only indexing -- (15−8)/8×100 = <b>+87.50%</b> more embedding calls. Retrieve-and-expand trace for "How long does a store credit refund take?": best leaf match is B1b, "Store credit refunds process within 24 hours instead." (53 chars) -- "instead" has no antecedent alone. Expand up 1 level to Paragraph B1 (141 chars) resolves it via sibling B1a's 5-7 business day standard timing. Expand up 2 levels to Section B (283 chars) additionally adds Paragraph B2's refund-eligibility exclusions. Expand up 3 levels to the full document (616 chars) reintroduces Section A's unrelated cancellation policy -- dilution, exactly as Concept 05 described. A contrasting query, "What is Oracle's full refund policy?", matches Section B directly at the top rather than any single sentence, and can expand DOWN via the same tree to reveal its 2 child paragraphs, then its 4 grandchild sentences individually.</p>
+<h4>10b. Late chunking — the Northwind Analytics pair</h4>
+<p>S1: "Northwind Analytics' premium plan includes unlimited cloud storage." S2 (chunk 2): "It renews automatically every 12 months unless canceled." Query: "How often does the premium plan renew?" A toy 2-D content-word vector model (dimension A = plan/subscription topic, dimension B = renewal/cadence topic): premium=(1.0,0.0), plan=(0.9,0.0), renew/renews=(0.0,1.0), automatically=(0.0,0.6), months=(0.0,0.8), canceled=(0.0,0.5). Query vector = average(premium, plan, renew) = (0.6333, 0.3333).</p>
+<table class="worked-table">
+<thead><tr><th>Mode</th><th>Chunk-2 vector</th><th>Cosine to query</th></tr></thead>
+<tbody>
+<tr><td>Early (split → embed alone)</td><td>average(renews, automatically, months, canceled) = (0.0, 0.7250)</td><td>0.4657</td></tr>
+<tr><td>Late (embed whole doc → pool)</td><td>average of contextualized tokens = (0.1875, 0.9063)</td><td>0.6354</td></tr>
+</tbody>
+</table>
+<p>Contextualization (linear stand-in, α=0.5): contextualize(t) = base(t) + 0.5×doc_mean, where doc_mean = average of all 8 content words across both sentences = (0.3750, 0.3625). Result: +0.1696 absolute, <b>+36.42% relative</b> increase, from embedding order alone -- chunk 2's own words structurally can never contain "premium" or "plan," so no reweighting of chunk 2 itself can close that gap under early chunking; late chunking's whole-document pass is the only lever that can, because it runs before any chunk boundary is applied. All values in both examples were computed by an executed Node.js script (string/array arithmetic for 10a; dot/norm/cosine and average-pooling helpers plus the linear contextualize() function for 10b), re-read against its own console output line by line before use here.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a real-model boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Multi-scale queries against one hierarchy</h3><p>Both broad ("what is the policy") and narrow ("how many days") queries served from one index, at different levels.</p></article>
+<article class="info-card"><span>BOUNDARY CASE, AT REAL-MODEL SCALE</span><h3>Jina AI's own Berlin Wikipedia example</h3><p>A chunk whose only link to "Berlin" is the pronoun "it" scores 0.708 naive vs. 0.825 late; another scores 0.753 vs. 0.850 -- the identical structural problem as this concept's toy example, cited not self-computed.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Expecting late chunking to help on already-short documents</h3><p>Jina's own BEIR table shows Quora (avg. 62.2 chars/document) essentially unchanged either way (87.19%) -- the gain correlates with document length.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Expand-at-depth, and toy late-chunking pooling, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>def expand_up(leaf_id, chain, tree, depth):
+    """Generalizes Concept 07's single parent lookup to arbitrary
+    ancestor distance along a precomputed leaf-to-root chain."""
+    node_id = chain[depth]
+    return tree[node_id]
+
+def contextualize_and_pool(base_vectors, doc_mean, alpha, chunk_indices):
+    """Toy late-chunking pooling: contextualize each token against the
+    whole document's mean, THEN average only the chunk's own tokens."""
+    contextualized = [
+        (v[0] + alpha * doc_mean[0], v[1] + alpha * doc_mean[1])
+        for v in base_vectors
+    ]
+    chunk_vecs = [contextualized[i] for i in chunk_indices]
+    n = len(chunk_vecs)
+    return (sum(v[0] for v in chunk_vecs) / n, sum(v[1] for v in chunk_vecs) / n)
+
+def cosine(a, b):
+    dot = a[0] * b[0] + a[1] * b[1]
+    na, nb = (a[0]**2 + a[1]**2) ** 0.5, (b[0]**2 + b[1]**2) ** 0.5
+    return dot / (na * nb) if na and nb else 0.0
+
+# Reproduces this concept's own Section 10b result
+renews, automatically, months, canceled = (0,1), (0,0.6), (0,0.8), (0,0.5)
+query = (0.6333, 0.3333)
+early_chunk2 = ((0+0+0+0)/4, (1+0.6+0.8+0.5)/4)
+assert round(cosine(early_chunk2, query), 4) == 0.4657
+doc_mean = (0.375, 0.3625)
+chunk2_late = contextualize_and_pool(
+    [renews, automatically, months, canceled], doc_mean, 0.5, [0, 1, 2, 3]
+)
+assert round(cosine(chunk2_late, query), 4) == 0.6354
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The real N-level tool, and the real long-context requirement</h2></div></header>
+<p><a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/node_parser/relational/hierarchical.py">LlamaIndex's HierarchicalNodeParser source</a> (confirmed directly, since docs.llamaindex.ai itself returns HTTP 403 to a live check) takes <code>chunk_sizes: Optional[List[int]]</code> -- its own docstring names a 3-level example (2048 → 512 → 128) -- and exposes <code>get_deeper_nodes(nodes, depth)</code>, the real expand-down primitive this concept's mechanism needs, confirmed by direct code inspection walking from root nodes through child nodes in a loop of "depth" iterations. This is the production-grade generalization of Concept 07's 2-level tool to arbitrary depth. <a href="https://jina.ai/news/late-chunking-in-long-context-embedding-models/">Jina AI's "Late Chunking in Long-Context Embedding Models"</a> (and its formal paper, <a href="https://arxiv.org/abs/2409.04701">arXiv:2409.04701</a>) is the primary source for late chunking -- confirms the exact mechanism, names jina-embeddings-v2-base-en's 8192-token context as the long-context requirement, and supplies the real Berlin and BEIR results cited in Sections 11 and 18.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Depth &amp; Order Explorer</h2></div></header>
+<div class="lab">
+<p>Two modes, one per idea. Switch between them with the toggle below -- the controls themselves change shape depending on which axis you're exploring.</p>
+<div class="lab-actions" role="group" aria-label="Choose which idea to explore">
+<button type="button" class="secondary active" data-mode="depth">Hierarchical depth</button>
+<button type="button" class="secondary" data-mode="order">Chunking order</button>
+</div>
+<div id="depthOrderControls_0708"></div>
+<div class="norm-readout" id="depthOrderReadout_0708"></div>
+<div class="callout" id="depthOrderVerdict_0708"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three rows: 2-level, N-level, and orthogonal</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Parent-child (Concept 07, 2 levels)</td><td>Simple, one fixed structural link</td><td>Forces one arbitrary cut regardless of a document's real depth</td></tr>
+<tr><td>Hierarchical (this concept, N levels)</td><td>Matches a document's actual structure at any depth</td><td>Embedding every level costs +87.50% more calls than leaf-only</td></tr>
+<tr><td>Late chunking (this concept, orthogonal axis)</td><td>Fixes cross-chunk context loss that no amount of splitting can</td><td>Requires a genuinely long-context embedding model</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>TREE TOO DEEP OR TOO SHALLOW</span><h3>Mirrors Concept 07's threshold problem, generalized</h3><p>A tree that doesn't match a corpus's real structure either forces unnecessary dilution (too shallow, forced to expand far) or fragments obvious units (too deep).</p></article>
+<article class="info-card"><span>SHORT-CONTEXT MODEL, LATE CHUNKING ATTEMPTED</span><h3>Silently truncates the "whole document" pass</h3><p>Reintroduces exactly Concept 01's original truncation problem one level up the stack -- the model can't actually see the whole document it's supposed to.</p></article>
+<article class="info-card"><span>ALL-LEVEL EMBEDDING WITHOUT A REASON</span><h3>Paying +87.50% for searchability no query uses</h3><p>If retrieval only ever needs leaf-level precision, embedding every ancestor level too is pure cost with no benefit.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Late chunking splits later in the pipeline</td><td>False -- boundary cues are still needed up front; what's delayed is the embedding step.</td></tr>
+<tr><td>Hierarchical chunking is a different technique from parent-child</td><td>False -- direct generalization, same mechanism at more levels.</td></tr>
+<tr><td>Any embedding model can do late chunking</td><td>False -- requires long-context capability (Module 08, named forward only).</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Jina AI's own BEIR benchmark (nDCG@10) shows late chunking improving every tested dataset with real documents -- NFCorpus 23.46%→29.98%, SciFact 64.20%→66.10% -- with the gain correlating with average document length and vanishing on short-document datasets (Quora, 62.2 avg. chars: 87.19% unchanged).</li>
+<li>Hierarchical chunking's real cost is the +87.50% all-level-embedding figure from this concept's own tree, if every level is made independently searchable -- an explicit trade-off against leaf-only indexing.</li>
+<li>Neither idea is free: hierarchical chunking trades embedding-call cost for structural flexibility; late chunking trades a long-context-model requirement for cross-chunk context.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why is hierarchical chunking called a generalization rather than a new idea?</summary><div>It reuses Concept 07's exact parent/child link mechanism -- a node still points to what structurally contains it -- just extended past a fixed 2 levels to however many levels a document actually has.</div></details>
+<details class="quiz"><summary>Why is "late" chunking not really about splitting later?</summary><div>Chunk boundaries are still decided up front, the same as early chunking. What's delayed is the embedding step: the whole document is processed by the model first, and only afterward are chunk boundaries applied to pool the resulting token vectors.</div></details>
+<details class="quiz"><summary>What's the one prerequisite late chunking has that not every embedding model meets?</summary><div>A genuinely long-context embedding model capable of processing an entire document in one forward pass -- a short-context model would silently truncate that pass, reintroducing the same truncation problem Concept 01 first described.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>New query against this concept's own Oracle tree: "What happens to a canceled order after the grace period?" Using the tree from Section 10a, predict which sentence matches best, whether it needs to expand up, and to which level.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>The best match is likely Sentence A1b, "After 14 days, the order status locks to CLOSED and no cancellation is possible through self-service." -- this sentence is already self-contained: it states the trigger (14 days elapsed), the consequence (status locks to CLOSED), and the restriction (no self-service cancellation), with no unresolved pronoun or dangling reference the way B1b's "instead" was. No expansion is needed at depth 0. This contrasts directly with B1b, which DID need one level of expansion -- not every leaf sentence has the same completeness, which is exactly why the expand decision has to be checked per leaf, not assumed globally.</div>
+</details>
+<p>Teach-back: explain why some leaf sentences in this tree need expansion to answer a query and others don't, using A1b and B1b as the two contrasting examples.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Hierarchical and late chunking</h3><ul><li><b>Hierarchical:</b> Concept 07's parent/child link generalized to N levels; expand up or down at retrieval time</li><li><b>Late chunking:</b> embed the whole document first, pool per chunk after -- not a generalization of anything, a new axis</li><li><b>Headline numbers:</b> +87.50% embedding calls for all-level hierarchy indexing; 0.4657 → 0.6354 (+36.42%) for late chunking on the identical chunk</li></ul></div>
+<div><h3>Memorable example</h3><p>"It renews automatically every 12 months unless canceled." -- same 10 words, same split boundary, scores 0.4657 embedded alone and 0.6354 embedded after the whole document is processed first. The words "premium" and "plan" that make the match are physically in a different sentence; only late chunking's embedding order can reach them.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why bundle two seemingly different ideas under one concept title?</summary><div>Both concern "chunking," but on genuinely different axes -- one generalizes Concept 07's structural link to more levels, the other changes the order of splitting versus embedding. They're taught together because both are the module's remaining structural fixes, not because they're the same mechanism.</div></details>
+<details class="quiz"><summary>Mathematical: define expand(leaf, depth) and contextualize-then-pool precisely.</summary><div>expand(leaf, depth) returns the ancestor of leaf at the given distance toward the root, generalizing Concept 07's single parent(c) lookup. contextualize-then-pool applies a context-mixing function to every token in the whole document first, then averages only the tokens inside a given chunk's span -- Section 09 gives both formally.</div></details>
+<details class="quiz"><summary>Coding: implement an expand-down function analogous to LlamaIndex's get_deeper_nodes.</summary><div>Starting from a set of nodes, walk through get_child_nodes in a loop of "depth" iterations, collecting the resulting descendant set at each step -- Section 12 gives a from-scratch expand_up() counterpart; expand-down is the same walk in the opposite direction.</div></details>
+<details class="quiz"><summary>Debugging: a team adopts late chunking with a 512-token embedding model and sees no improvement. What's wrong?</summary><div>The embedding model's context window is too short to actually process a full document in one pass for documents longer than 512 tokens -- the "whole document" forward pass silently truncates, so the model never sees the context late chunking is supposed to supply. A genuinely long-context model (e.g. Jina's 8192-token embeddings) is required.</div></details>
+<details class="quiz"><summary>System design: how would you choose between adding hierarchy depth and adopting late chunking for a given corpus?</summary><div>Check the corpus's real document-length distribution and query pattern: if queries genuinely span multiple natural scales (sentence vs. section vs. document), add hierarchy depth; if documents are long enough that cross-chunk context loss is the real problem (per Jina's own length-correlated BEIR gains) and a long-context embedding model is available, late chunking is the more targeted fix. The two aren't mutually exclusive, though this course doesn't build their combination.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/node_parser/relational/hierarchical.py"><b>hierarchical.py — LlamaIndex source</b><br><span>Confirms chunk_sizes: List[int] and get_deeper_nodes() -- the real N-level generalization of Concept 07's 2-level parent/child tool.</span></a>
+<a href="https://jina.ai/news/late-chunking-in-long-context-embedding-models/"><b>Late Chunking in Long-Context Embedding Models — Jina AI</b><br><span>Primary source for the late-chunking mechanism, the Berlin Wikipedia example, and the BEIR benchmark table cited above.</span></a>
+<a href="https://arxiv.org/abs/2409.04701"><b>Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models — arXiv:2409.04701</b><br><span>The formal paper behind the Jina blog post, Günther et al.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 ACTIVE · MODULE 07 · 8/10</span>
+<h3>One generalizes forward. One opens sideways. Two concepts remain.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can tell, per leaf, whether expansion is needed at all. Concept 09 turns to what travels alongside chunk text: metadata and contextual headers.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-07.html">← Back to Concept 07</a>
+</div>
+<p class="fine-print">Module 07 at 8 of 10 concepts. Next concept: metadata and contextual headers.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 08 · Complete</p>
+<a href="module-07-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>

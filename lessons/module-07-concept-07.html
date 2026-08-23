@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 06's overlap and this concept both fix boundary loss, but differently: overlap gambles on a stride, hoping the shared span is at least as long as the fact. Parent-document, parent-child and small-to-big retrieval instead search on small children for precision and return their larger parent for completeness -- a structural guarantee, not a bet. On Concept 06's own Oracle passage, the single best-matching child (cosine 0.8944) is cut off right before '14 days from the ship date' -- its parent restores the answer by construction, and small-to-big's merge-ratio rule decides, per parent, when that's worth doing.">
+<title>Parent-document, parent-child and small-to-big retrieval — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 07</p>
+<h1>Search small.<br><em>Return big — by construction, not by luck.</em></h1>
+<p class="lesson-lead">Concept 06 named this concept as the structural escape from its own gamble, and here it is. Overlap tries to guess a stride large enough to keep a fact whole, and can fail even when you make it bigger. Parent-document, parent-child and small-to-big retrieval sidestep the guess entirely: index small, precise children for search, but hand back their larger parent at answer time. On the exact passage Concept 06 used, the single best-matching child scores highest for a real reason -- and is missing the actual number anyway. Its parent isn't.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh concept in Module 07 (Phase 2) -- the first structural escape from Concepts 05-06's size/overlap trade-off</b></div>
+<div><span>PREREQUISITE</span><b>Concept 05's size trade-off and Concept 06's overlap guarantee, both named directly; reuses Concept 06's own Oracle Order Management passage and fact</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why searching on a small child and returning its larger parent resolves boundary loss without needing to guess an overlap size</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One index, two units</h2>
+</div>
+<p>Every concept so far picked ONE chunk size and used it for both jobs a RAG system needs: matching a query, and being read as context. This concept splits that into two jobs with two different units -- a small unit for matching, a larger one for reading.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Decouple the search unit from the answer unit</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Split each document into larger PARENT chunks (kept for reading) and smaller CHILD chunks nested inside them (used for search). Retrieval matches the query against children for precision, then returns the matching child's parent for completeness -- a structural link, fixed at indexing time, not a probabilistic hope.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Concept 06's overlap, which shares characters across neighboring chunks and hopes the shared span is long enough. Hierarchical / late chunking (Concept 08), a different structural idea, named forward only here.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> the unit you search with and the unit you read don't have to be the same chunk -- that single decoupling is the whole concept.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 06 already named the problem this solves</h3>
+<p>Concept 06 derived an exact guarantee -- overlap_size must be at least as long as the fact -- and showed that below it, more overlap can even fail where less had worked. That guarantee requires knowing every fact's length in advance and paying a real, compounding storage cost to cover the longest one. This concept removes the guessing game: instead of widening the search unit itself to try to hold whole facts, it keeps the search unit small (for precision, Concept 01/05's dilution problem) and structurally guarantees a complete unit is always available to fall back to -- the parent.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The exact fact Concept 06 fixed with overlap, fixed here without it</h3>
+<p>Same 297-character Oracle Order Management passage and the same 66-character fact ("The order-cancellation grace period is 14 days from the ship date.") as Concept 06. This time the passage is split into 4 sentence-clean PARENTS (P1-P4), each further tiled into small 35-character blind CHILDREN for search. For the query "What is the grace period length for canceling an order?", the single best-matching child is C2a ("The order-cancellation grace period") -- highest cosine similarity (0.8944) of any child, and cut off one word before the number that answers the question.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0707-b03-title">
+<strong class="concept-visual-title" id="c0707-b03-title">VISUAL · THE TOP-SCORING CHILD, AND ITS PARENT</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0707-svg-title-b c0707-svg-desc-b">
+<title id="c0707-svg-title-b">A small child chunk nested inside a larger parent chunk, both drawn over the same passage span</title>
+<desc id="c0707-svg-desc-b">A narrow highlighted band from character 94 to 129 labeled child C2a, cosine 0.8944, reading "The order-cancellation grace period" with no number stated. Beneath it, a wider band from character 94 to 161 labeled parent P2, cosine 0.6761, reading the full sentence including the number 14 and the words days from the ship date. An arrow points from the child band to the parent band labeled return the parent instead.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<text x="40" y="26" font-weight="700">CHILD C2a · cosine 0.8944 · [94,129)</text>
+<rect x="40" y="34" width="164" height="30" fill="#ff7957" fill-opacity="0.35" stroke="#14241f" stroke-width="1.2"/>
+<text x="45" y="53" font-size="7.5">"The order-cancellation grace period"</text>
+<text x="210" y="53" font-weight="700" fill="#ff7957">← no number</text>
+<line x1="122" y1="66" x2="122" y2="90" stroke="#14241f" stroke-width="1.5" marker-end="url(#arrow0707)"/>
+<text x="130" y="82" font-size="7.5" font-weight="700">return the parent instead</text>
+<text x="40" y="106" font-weight="700">PARENT P2 · cosine 0.6761 · [94,161)</text>
+<rect x="40" y="114" width="330" height="30" fill="#3fae86" fill-opacity="0.35" stroke="#14241f" stroke-width="1.2"/>
+<text x="45" y="133" font-size="7.5">"The order-cancellation grace period is 14 days from the ship date."</text>
+<text x="380" y="133" font-weight="700" fill="#3fae86">← complete</text>
+</g>
+<defs><marker id="arrow0707" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14241f"/></marker></defs>
+</svg>
+<figcaption>The child that scores highest at search time is exactly the one missing the number. Its parent isn't -- and which parent to return is fixed at indexing time, not discovered by luck.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Index children, retrieve their parents</h3>
+<table class="compare-table">
+<thead><tr><th>Step</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><td>1. Split</td><td>Each parent chunk (larger, kept whole for reading) is split into smaller child chunks (kept only for search)</td></tr>
+<tr><td>2. Link</td><td>Every child stores a pointer to its parent -- a fixed structural link, made once at indexing time</td></tr>
+<tr><td>3. Embed</td><td>Only children are embedded and searched; parents are stored as plain text, never embedded themselves</td></tr>
+<tr><td>4. Retrieve</td><td>A query matches against child embeddings; the matching child's linked parent is what actually gets returned</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A third mitigation, structurally different from the first two</h3>
+<div class="scroll-flow">
+<span>Concepts 02-04 — which method</span><i>→</i>
+<span>Concept 05 — how big</span><i>→</i>
+<span>Concept 06 — overlap (probabilistic)</span><i>→</i>
+<span class="hot">Concept 07 — parent-child (structural)</span><i>→</i>
+<span>Concept 08 — hierarchical / late chunking</span>
+</div>
+<p>Overlap makes the search unit bigger and hopes. This concept keeps the search unit small and structurally guarantees a bigger fallback -- a different kind of fix, not a bigger dose of the same one.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three closely related terms, precisely separated</h3>
+<div class="distinction-table" role="table" aria-label="Parent-document, parent-child and small-to-big retrieval distinguished from each other">
+<div role="row"><b role="cell">Term</b><b role="cell">What it actually does</b><b role="cell">Common confusion</b></div>
+<div role="row"><span role="cell">Parent-document retrieval</span><span role="cell">Always returns the FULL parent of any matched child, regardless of how many of that parent's children matched</span><span role="cell">Treated as identical to small-to-big -- it isn't threshold-adaptive.</span></div>
+<div role="row"><span role="cell">Parent-child retrieval</span><span role="cell">The general name for the child-search / parent-return mechanism itself, at any number of levels</span><span role="cell">Used interchangeably with parent-document -- parent-document is one specific (always-merge) policy under this general mechanism.</span></div>
+<div role="row"><span role="cell">Small-to-big / auto-merging retrieval</span><span role="cell">Merges up to the parent only when enough of ITS children were independently retrieved (a ratio threshold); otherwise keeps the smaller child</span><span role="cell">Assumed to always return the biggest unit -- Section 10's own table shows it deliberately does NOT, for two of its three retrieved parents.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"This is the same idea as overlap, just bigger."</b><p>False -- overlap shares characters across neighbors and hopes the shared span is enough. This concept has NO overlap between children at all; the fix is a fixed parent link, not a wider shared border.</p></div>
+<div><b>"Parents get embedded too, for extra safety."</b><p>False -- in this concept's own worked example, only the 10 children are embedded. Parents are stored as plain text, looked up by pointer, never searched directly.</p></div>
+<div><b>"Small-to-big always returns the biggest available unit."</b><p>False -- Section 10's merge-ratio table shows two of the three matched parents staying unmerged (33.3% each, below the 50% threshold) while only one (50.0%) merges.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>THIRD COST AXIS</span><b>Embedding-call count rises with child granularity, not with redundant characters</b><p>10 children vs. Concept 06's 3-chunk baseline is +233.3% more embedding calls at indexing time -- but the storage overhead is span pointers, not duplicated text.</p></div>
+<div><span>SOURCED PATTERN</span><b>LangChain's ParentDocumentRetriever and LlamaIndex's auto-merging retriever are the real implementations</b><p>Named directly in Section 13 -- this concept's mechanism isn't a simplification invented for teaching, it's the documented default behavior of both.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concept 08 is a different structural idea again</b><p>Hierarchical / late chunking, named forward only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Search unit ≠ answer unit</b><p>Children are embedded and searched; parents are stored and returned -- two different units doing two different jobs.</p></div>
+<div><b>The parent link is structural, not probabilistic</b><p>Unlike overlap's guarantee (which depends on knowing a fact's length), a child's parent is always fully returned regardless of what the fact turns out to be.</p></div>
+<div><b>Small-to-big is a specific, threshold-driven policy</b><p>It only merges to the parent when enough of that parent's own children were retrieved -- not automatically, and not for every match.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does the single best-matching child in this concept's own example fail to state the answer, and why doesn't that matter?</li>
+<li>Why is this concept's fix described as structural rather than probabilistic, in contrast to Concept 06's overlap?</li>
+<li>Why does small-to-big retrieval sometimes leave a matched parent unmerged?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 7 of 10</h3>
+<p>This concept solved boundary loss structurally instead of probabilistically, at the cost of more embedding calls at index time. Concept 08 introduces a different structural idea again -- hierarchical and late chunking -- as the module moves toward its close.</p>
+<div class="beginner-memory"><b>Concept 07 is active.</b> Module 07 is at 7 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-06.html">← Back to Concept 06</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A structural guarantee, not a bigger gamble</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Top child, missing number</b><small>Highest cosine score, cut off before the answer.</small></a>
+<a href="#b04"><span>02</span><b>Index children, return parents</b><small>A fixed pointer, not a probability.</small></a>
+<a href="#b06"><span>03</span><b>Three related terms</b><small>Parent-document, parent-child, small-to-big -- precisely separated.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The merge-ratio math, from-scratch code, and the Small-to-Big Merger lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Concept 06's overlap guarantee needs a known fact length → this concept indexes small children instead → the top-matching child (0.8944) is missing the number → its parent (0.6761) has it, by construction → small-to-big adds a per-parent merge-ratio threshold on top → Module 07 at 7 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the parent-document, parent-child and small-to-big retrieval deep dive</b><em>The merge-ratio math, from-scratch code, and the Small-to-Big Merger lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first structural, non-probabilistic fix in this module</h2></div></header>
+<p>Concepts 02-04 chose a splitting method. Concept 05 named size as its own axis. Concept 06 built a probabilistic fix -- overlap -- with a real threshold below which it can fail. This concept is the module's first fix that doesn't depend on guessing a size: it restructures what gets searched versus what gets returned.</p>
+<div class="flow">
+<div class="flow-node">Concepts 02-04 — which method</div>
+<div class="flow-node">Concept 05 — how big</div>
+<div class="flow-node">Concept 06 — overlap (probabilistic)</div>
+<div class="flow-node hot">Concept 07 — parent-child (structural)</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DISTINGUISH</span><h3>Parent-document, parent-child and small-to-big precisely</h3><p>One always merges, one is the general mechanism, one merges conditionally on a ratio threshold.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>A merge ratio for a given retrieved-child set</h3><p>retrieved children of a parent / total children of that parent, compared against a chosen threshold.</p></article>
+<article class="info-card"><span>QUANTIFY</span><h3>The real embedding-call cost of child-level indexing</h3><p>10 children vs. a 3-chunk parent-only baseline -- a measurable, real increase, distinct from overlap's character-duplication cost.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Hierarchical/late chunking (Concept 08) and real vector embeddings (Module 08, named forward only) -- this concept's own similarity numbers use a simplified content-word vector model, not a trained embedding model.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 06's coverage guarantee and its own Oracle Order Management passage/fact, both reused directly.</b> This concept solves the identical containment problem with a different mechanism.</li>
+<li><b>Concept 05's dilution/precision framing, reused for why children stay small.</b> A small child avoids diluting a query match across unrelated sentences, same reasoning as Concept 05's "Tight" chunk.</li>
+<li><b>Concept 01's average-pooling cosine similarity is explicitly NOT reused here.</b> This concept's cosine scores come from a simplified content-word term-frequency vector, not average-pooled word vectors -- a deliberately cheaper stand-in, named as a simplification in Section 09.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A book index versus a highlighted sentence</h2></div></header>
+<p>A book's index points from a single word to a page number -- precise, but a page number alone doesn't answer anything. Handing someone the whole page the index pointed to, instead of just the word, is this concept's whole idea: search on the precise, narrow thing; hand back the larger thing it structurally belongs to.</p>
+<div class="callout warning"><b>Analogy boundary</b>The index/page picture explains why returning a bigger unit helps. It doesn't explain WHEN small-to-big chooses to return the whole page versus just a paragraph of it -- Section 09's merge-ratio rule is the actual mechanism.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Parent chunk</td><td>A larger unit of text, stored as plain text and never itself embedded</td><td>P</td></tr>
+<tr><td>Child chunk</td><td>A smaller unit nested inside exactly one parent, embedded and searched</td><td>c ∈ children(P)</td></tr>
+<tr><td>Parent-document retrieval</td><td>Policy: any matched child's parent is returned in full, unconditionally</td><td>match(c) ⇒ return(parent(c))</td></tr>
+<tr><td>Merge ratio</td><td>Fraction of a parent's own children present in the retrieved set</td><td>ratio(P) = |retrieved ∩ children(P)| / |children(P)|</td></tr>
+<tr><td>Small-to-big / auto-merging</td><td>Policy: merge to the parent only if ratio(P) ≥ a chosen threshold τ; otherwise keep the matched children raw</td><td>ratio(P) ≥ τ ⇒ return(P), else return(matched children of P)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: always-merge vs. ratio-gated merge</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>PARENT-DOCUMENT LANE</span><p>Any child match triggers returning its full parent, no matter how many or how few of that parent's other children also matched. Simple, but can pull in a full parent on the strength of one weak, isolated match.</p></div>
+<div class="lane"><span>SMALL-TO-BIG LANE</span><p>Only merges to the parent when a threshold fraction of that parent's children are independently present in the retrieved set -- otherwise keeps the individually matched children small. Adaptive, at the cost of one more parameter (the threshold itself) to choose.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Four parents, ten children, one retrieval</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Hub diagram showing ten child chunks nested under four parent chunks, with the query connecting to the matched children">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Query</b><small>"What is the grace period length for canceling an order?"</small></div>
+<div class="diagram-node"><b>C2a (0.8944)</b><small>Top match, under parent P2</small></div>
+<div class="diagram-node"><b>C1b (0.5164)</b><small>Second match, under parent P1</small></div>
+<div class="diagram-node"><b>C3a (0.3162)</b><small>Third match, under parent P3</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Concepts 02-05 — method, size</span><i>↓</i><span>Concept 06 — overlap (probabilistic)</span><i>↓</i><span class="hot">Concept 07 — index children, return parents (structural)</span><i>↓</i><span>Concept 08 — hierarchical, late chunking</span>
+</div>
+<p>The parent/child link is fixed once, at ingestion time, alongside whichever method and size Concepts 02-05 already chose for the parent level. Nothing about retrieval-time behavior is probabilistic the way Concept 06's containment was.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The merge-ratio rule, and the similarity model behind these numbers</h2></div></header>
+<div class="equation">ratio(P) = |retrieved ∩ children(P)| / |children(P)|<br>merge(P) ⟺ ratio(P) ≥ τ</div>
+<p>Every cosine score in this concept's worked example comes from a simplified content-word term-frequency vector: stopwords removed, a small fixed vocabulary of domain terms, cosine similarity computed the standard way (dot product over the product of norms). This is a deliberate simplification of Module 08's real embedding models, kept only for this concept's own didactic ranking -- the ranking it produces (C2a highest, then C1b, then C3a and C1c tied, etc.) is what drives every number in Section 10's table, not an assumption.</p>
+<div class="callout warning"><b>Simplification named</b>A real embedding model captures meaning beyond shared keywords -- this toy model cannot. It's used here only because it's fully inspectable and reproducible by hand, which a trained embedding is not.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Top match, truncated; its parent, complete</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Unit</th><th>Span</th><th>Text</th><th>Cosine to query</th><th>States the number?</th></tr></thead>
+<tbody>
+<tr><td>Child C2a</td><td>[94,129)</td><td>"The order-cancellation grace period"</td><td>0.8944</td><td>NO</td></tr>
+<tr><td>Parent P2</td><td>[94,161)</td><td>"The order-cancellation grace period is 14 days from the ship date."</td><td>0.6761</td><td>YES</td></tr>
+</tbody>
+</table>
+<p>Full ranked children for the query "What is the grace period length for canceling an order?": C2a 0.8944, C1b 0.5164, C1c 0.3162, C3a 0.3162, C1a 0.2582, all others 0.0000. C2a wins by a wide margin -- "grace" and "period" are dense in a 35-character fragment with nothing else competing for space -- and it is exactly the fragment that got cut one word before the number. Returning its parent, P2, is not a second search: it's a fixed pointer, resolved instantly, structurally guaranteed to contain the child that matched.</p>
+<p>Small-to-big's merge-ratio table, for the top-3 retrieved children {C2a, C1b, C3a}: P1 has 1 of 3 children retrieved (33.3%), P2 has 1 of 2 (50.0%), P3 has 1 of 3 (33.3%), P4 has 0 of 2 (0.0%, not retrieved at all). At a 50% threshold, only P2 merges to its full parent; P1 and P3 remain as their raw, still-incomplete matched children. All spans, cosine scores and ratios were computed by an executed Node.js script (a fixed content-word vector model plus set-intersection ratio arithmetic), run once to build the hierarchy and once more, independently, isolating just the merge-ratio counts to confirm them.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A fact fully inside one child already</h3><p>Parent expansion costs nothing extra in that case -- the child alone would have worked, and the parent just adds harmless surrounding context.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A fact whose parent itself is very long</h3><p>If the parent chunk is nearly whole-document sized, returning it can reintroduce Concept 05's dilution problem at the generation step -- parent size still needs its own bound.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Always using parent-document's always-merge policy</h3><p>On a corpus where many isolated, weak child matches occur, always-merge can flood the context window with mostly-irrelevant full parents -- small-to-big's threshold exists specifically to avoid this.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The parent/child link and the merge-ratio rule, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>def build_children(parents, child_size):
+    """Tiles each parent into fixed-size children, each linked back
+    to its own parent id -- the structural pointer this concept relies on."""
+    children = []
+    for pid, (p_start, p_end) in parents.items():
+        start = p_start
+        while start < p_end:
+            end = min(start + child_size, p_end)
+            children.append({"parent": pid, "start": start, "end": end})
+            start = end
+    return children
+
+def merge_ratio(parent_id, children, retrieved_labels, label_of):
+    kids = [c for c in children if c["parent"] == parent_id]
+    retrieved = [c for c in kids if label_of(c) in retrieved_labels]
+    return len(retrieved) / len(kids)
+
+def small_to_big(parent_ids, children, retrieved_labels, label_of, threshold):
+    """Returns which parents merge (ratio >= threshold) versus which
+    retrieved children stay raw -- the actual small-to-big decision."""
+    merged, unmerged = [], []
+    for pid in parent_ids:
+        ratio = merge_ratio(pid, children, retrieved_labels, label_of)
+        kids = [c for c in children if c["parent"] == pid]
+        matched = [c for c in kids if label_of(c) in retrieved_labels]
+        if matched and ratio >= threshold:
+            merged.append(pid)
+        elif matched:
+            unmerged.extend(label_of(c) for c in matched)
+    return merged, unmerged
+
+# Reproduces this concept's own Section 10 result
+PARENTS = {"P1": (0, 94), "P2": (94, 161), "P3": (161, 254), "P4": (254, 297)}
+children = build_children(PARENTS, 35)
+label_of = lambda c: c["parent"].replace("P", "C") + chr(97 + [
+    x for x in children if x["parent"] == c["parent"]
+].index(c))
+merged, unmerged = small_to_big(
+    list(PARENTS.keys()), children, {"C2a", "C1b", "C3a"}, label_of, 0.5
+)
+assert merged == ["P2"]
+assert set(unmerged) == {"C1b", "C3a"}
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real, shipped implementations of this exact idea</h2></div></header>
+<p><a href="https://python.langchain.com/docs/how_to/parent_document_retriever/">LangChain's ParentDocumentRetriever</a> implements exactly the always-merge policy described here: a child_splitter and a parent_splitter are configured together, children are embedded and searched via a vectorstore, and their linked parent documents are fetched from a separate docstore at retrieval time (confirmed directly from the docs' own "Retrieving larger chunks" example). <a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/retrievers/auto_merging_retriever.py">LlamaIndex's AutoMergingRetriever</a>, built on its HierarchicalNodeParser, implements the ratio-gated small-to-big policy this concept's own lab reproduces -- confirmed directly from its source (docs.llamaindex.ai itself returns HTTP 403 to a live check), which names a configurable simple_ratio_thresh parameter controlling exactly the merge-ratio rule in Section 09's equation.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Small-to-Big Merger</h2></div></header>
+<div class="lab">
+<p>The same Oracle Order Management hierarchy in two modes: step through matched children to see each one's raw text against its parent's, or switch to small-to-big and drag the merge threshold to watch which parents merge.</p>
+<div class="lab-actions" role="group" aria-label="Choose a retrieval mode">
+<button type="button" class="secondary active" data-mode="parentchild">Parent-child</button>
+<button type="button" class="secondary" data-mode="smalltobig">Small-to-big</button>
+</div>
+<div id="mergerRankWrap_0707"></div>
+<div class="norm-readout" id="mergerReadout_0707"></div>
+<div class="callout" id="mergerVerdict_0707"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Overlap, parent-document, and small-to-big</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Overlap (Concept 06)</td><td>Simple, one parameter</td><td>Probabilistic below the guarantee threshold; needs a known fact length</td></tr>
+<tr><td>Parent-document (always-merge)</td><td>Structural guarantee, simple policy</td><td>Can pull a full parent in on one weak, isolated match</td></tr>
+<tr><td>Small-to-big (ratio-gated)</td><td>Adaptive -- merges only where evidence concentrates</td><td>One more parameter (the threshold) to choose and tune</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>PARENT TOO LARGE</span><h3>Reintroducing Concept 05's dilution</h3><p>If a parent itself spans many unrelated sentences, returning it wholesale can dilute the generation-time context the same way an oversized single chunk would.</p></article>
+<article class="info-card"><span>THRESHOLD TOO LOW</span><h3>Small-to-big degenerates toward always-merge</h3><p>A very low ratio threshold merges almost every parent with even one matched child, erasing the adaptive benefit over plain parent-document retrieval.</p></article>
+<article class="info-card"><span>THRESHOLD TOO HIGH</span><h3>Genuinely well-supported parents never merge</h3><p>A very high threshold can leave even a parent with most of its children matched stuck as fragmented raw text.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Parent-document and small-to-big retrieval are the same technique</td><td>False -- parent-document always merges; small-to-big merges only past a chosen ratio threshold.</td></tr>
+<tr><td>Parents are embedded for extra search accuracy</td><td>False -- in the real implementations named in Section 13 and this concept's own worked example, only children are embedded.</td></tr>
+<tr><td>This fixes boundary loss the same way overlap does, just structured differently</td><td>False in the sense that matters -- overlap's fix is probabilistic (a guarantee threshold that can still fail below it); this concept's fix is unconditional once a child matches.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Embedding-call count scales with child count, not parent count -- a corpus-wide indexing cost that rises with how small children are chosen to be, independent of overlap's character-duplication cost from Concept 06.</li>
+<li>The merge-ratio threshold (LlamaIndex's simple_ratio_thresh) is a real, tunable production parameter, not a fixed constant -- different corpora with different parent/child size ratios need different thresholds.</li>
+<li>Parent text still needs to be stored somewhere retrievable by id (a docstore, in LangChain's own terminology) -- an additional storage layer beyond the vector index itself.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does the highest-scoring child in this concept's own example fail to state the answer?</summary><div>Cosine similarity here rewards keyword density in a narrow span -- "grace" and "period" are dense in C2a's 35 characters, with nothing else competing. The blind character cut that produced that 35-character span happens to land one word before the number, purely a matter of where the tiling boundary fell -- the same kind of blind, character-level cut Concept 06 described, just now at the child-search level instead of the whole-index level.</div></details>
+<details class="quiz"><summary>Why is returning the matched child's parent described as structural rather than probabilistic?</summary><div>The parent link is a fixed pointer created once when children are built, not a bet on a size parameter. Whatever the matched child turns out to be missing, its linked parent is returned unconditionally -- there's no threshold the fact's length has to clear the way Concept 06's overlap_size ≥ fact_length guarantee required.</div></details>
+<details class="quiz"><summary>Why does small-to-big leave two of the three retrieved parents unmerged in Section 10's table?</summary><div>P1 and P3 each had only 1 of 3 children retrieved (33.3%), below the 50% merge threshold used -- so their single matched child stays raw rather than expanding to the full parent. Only P2, at 1 of 2 (50.0%), meets the threshold and merges.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Same passage and hierarchy, a new query: "When does the order status become CLOSED?" Using the same content-word vector model, the ranked children are: C3a 0.8165, C3b 0.4082, C1a 0.3333, C1b 0.3333, C2a 0.2887, and all others 0.0000. Predict which parent gets returned for the top-1 match, and check whether its parent contains the answer to the query.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>The top-1 match is C3a (cosine 0.8165), spanning [161,196) = "Once it elapses, the order status l" -- cut off mid-word inside "locks," exactly the same shape of truncation as C2a's in the main worked example. C3a's parent is P3, spanning [161,254) = "Once it elapses, the order status locks to CLOSED and refunds stop processing automatically." -- this parent does contain the answer ("locks to CLOSED"). So parent-child retrieval resolves this query the same structural way it resolved the main example: the best-matching child is once again exactly the fragment missing the key word, and its parent restores it by construction, independent of where the specific truncation happened to fall.</div>
+</details>
+<p>Teach-back: explain why it isn't a coincidence that the top-ranked child in both this exercise and the main worked example turned out to be missing part of the actual answer.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Parent-document, parent-child and small-to-big retrieval</h3><ul><li><b>Mechanism:</b> embed and search small children; return their larger parent, linked at indexing time</li><li><b>Parent-document:</b> always merges to the parent on any child match</li><li><b>Small-to-big:</b> merges only when ratio(P) = retrieved children of P / total children of P ≥ threshold τ</li></ul></div>
+<div><h3>Memorable example</h3><p>The single best-matching child (cosine 0.8944) for "grace period length" is "The order-cancellation grace period" -- cut off exactly before "is 14 days from the ship date." Its parent isn't. Returning the parent instead of the child is a fixed structural link, not a bet on overlap size.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why decouple the search unit from the answer unit at all?</summary><div>A small unit keeps search precise (avoiding Concept 01/05's dilution), while a larger unit keeps the answer complete (avoiding Concept 06's boundary loss) -- one chunk size can't optimize both at once, so splitting the job into two units removes the trade-off entirely.</div></details>
+<details class="quiz"><summary>Mathematical: define the merge-ratio rule and explain what threshold=0 and threshold=1 each reduce to.</summary><div>ratio(P) = retrieved children of P / total children of P; merge if ratio(P) ≥ τ. At τ=0, any single matched child merges its parent -- equivalent to plain parent-document retrieval. At τ=1, EVERY child of a parent must be retrieved before it merges -- the strictest possible small-to-big policy.</div></details>
+<details class="quiz"><summary>Coding: implement the merge-ratio check for a single parent given a set of retrieved child labels.</summary><div>Filter the full child list to that parent's children, filter again to those whose label is in the retrieved set, and divide the counts -- Section 12 gives the complete from-scratch implementation, including the small_to_big() function that applies the threshold across all parents at once.</div></details>
+<details class="quiz"><summary>Debugging: a parent-document retriever keeps returning long, mostly irrelevant parents. What's the likely fix?</summary><div>Switch from always-merge parent-document retrieval to a ratio-gated small-to-big policy, so isolated weak child matches no longer pull in their entire parent -- and/or shrink the parent chunk size itself if even a fully-merged parent is too dilutive at generation time.</div></details>
+<details class="quiz"><summary>System design: how would you choose child size, parent size, and merge threshold together for a new corpus?</summary><div>Set child size small enough to keep search precision high for the corpus's typical query length (per Concept 05's reasoning), set parent size large enough to keep any single atomic fact from splitting across parents (per Concept 06's own fact-length reasoning, now applied at the parent level instead of paid for with overlap), then tune the merge threshold empirically against how concentrated true matches tend to be within a parent for that corpus.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://python.langchain.com/docs/how_to/parent_document_retriever/"><b>Parent Document Retriever — LangChain docs</b><br><span>Confirms the always-merge child-embed / parent-return mechanism described in Sections 04-06, including the separate vectorstore/docstore split.</span></a>
+<a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/retrievers/auto_merging_retriever.py"><b>auto_merging_retriever.py — LlamaIndex source</b><br><span>Confirms the ratio-gated small-to-big policy and its configurable simple_ratio_thresh parameter, the direct real-world counterpart of Section 09's merge-ratio rule. (docs.llamaindex.ai returns HTTP 403 to a direct check -- this raw source file is the actually-verified citation.)</span></a>
+<a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/node_parser/relational/hierarchical.py"><b>hierarchical.py — LlamaIndex source</b><br><span>Confirms the underlying parent/child node-tree construction that the auto-merging retriever operates over.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 ACTIVE · MODULE 07 · 7/10</span>
+<h3>Structural, not probabilistic. One more structural idea remains.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can predict which parent gets returned and whether it answers the query. Concept 08 closes out this module's mitigations with a different structural idea: hierarchical and late chunking.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-06.html">← Back to Concept 06</a>
+</div>
+<p class="fine-print">Module 07 at 7 of 10 concepts. Next concept: hierarchical and late chunking.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 07 · Complete</p>
+<a href="module-07-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

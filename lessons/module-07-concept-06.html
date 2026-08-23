@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chunk overlap shares trailing/leading characters across chunk borders (stride &lt; chunk_size, Concept 02's own notation) to stop a fact from splitting across a boundary. On a 297-character Oracle Order Management passage, 0% overlap cuts a fact mid-word inside 'order-cancellation'; 10% overlap fixes it for +10.10% storage and +33% embedding calls -- but 50% overlap fails again where 40% succeeded, because the real guarantee is overlap_size >= fact_length, not 'more overlap is always safer.'">
+<title>Chunk overlap and boundary loss — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 06</p>
+<h1>Overlap fixes the cut —<br><em>until it doesn't.</em></h1>
+<p class="lesson-lead">Concept 02 already had a name for this: stride. Every worked example there used stride = chunk_size — zero overlap, named at the time as the case this concept would generalize past. Concept 05's own closing line named overlap as the first mitigation for its size trade-off. This concept builds it, and finds the fix has a real cost and a real limit: shrinking the stride does not reduce boundary-loss risk in a straight line. Only one exact condition — overlap_size at least as large as the fact itself — actually guarantees safety.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth concept in Module 07 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's stride/chunk_size notation, extended to stride &lt; N, and Concept 05's trade-off framing — both reused directly</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute stride and overlap on one passage, watch a fact go from split to whole, and see why more overlap doesn't always keep it that way</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A stride adjustment, not a new method</h2>
+</div>
+<p>Concepts 02 through 05 picked a splitting method and a size. This concept asks a narrower question about the boundary itself: what if neighboring chunks shared a little content across it, so a fact that happens to straddle the cut doesn't lose meaning on either side?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Overlap means consecutive chunks share characters across the boundary</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Chunk k starts at k·stride instead of k·chunk_size (Concept 02's own notation). When stride is smaller than chunk_size, neighboring chunks share their trailing/leading characters. Concept 02's own worked examples all used stride = chunk_size — zero overlap, the special case this concept now generalizes past.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Parent-document, parent-child and small-to-big retrieval (Concept 07) and hierarchical/late chunking (Concept 08) — the two structural escapes from this same trade-off, named forward only here.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> overlap doesn't split differently or resize a chunk — it's a stride adjustment riding on top of whichever method and size Concepts 02-05 already chose.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 05 already named this fix</h3>
+<p>Concept 05's own closing line named chunk overlap as one of two forthcoming mitigations for the size trade-off it introduced. This concept builds it. The problem it targets: a fact or sentence that happens to straddle a chunk boundary can lose meaning if the split shares nothing with the chunk on either side — Concept 02's own blind, character-level cut, now happening to land inside a whole fact instead of just one word.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Oracle Order Management's grace-period fact, cut mid-word</h3>
+<p>Passage (297 characters): "Oracle Order Management lets a customer cancel an order within a fixed period after purchase. The order-cancellation grace period is 14 days from the ship date. Once it elapses, the order status locks to CLOSED and refunds stop processing automatically. Support agents must file a manual override." Target fact: "The order-cancellation grace period is 14 days from the ship date." — 66 characters, at position [94, 160).</p>
+<p>At chunk_size N=100 with zero overlap (stride=100, Concept 02's own special case), chunk 1 ends "...The or" and chunk 2 begins "der-cancellation grace period..." — a blind character-level cut lands mid-word inside "order-cancellation." Neither chunk alone states the complete fact. Shrinking the stride to 90 (a 10% overlap) fixes it: chunk 2 now runs [90,190), which fully covers the fact's [94,160) span.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0706-beginner-visual-title">
+<strong class="concept-visual-title" id="c0706-beginner-visual-title">VISUAL · THE SAME FACT, SPLIT AT 0% OVERLAP AND WHOLE AT 10%</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0706-svg-title-b c0706-svg-desc-b">
+<title id="c0706-svg-title-b">Two rows of chunk spans over the same 297-character passage, one at zero overlap and one at ten percent overlap</title>
+<desc id="c0706-svg-desc-b">Row one shows three chunks at zero overlap, boundaries at 100 and 200 characters, with the target fact's span from 94 to 160 characters marked as two broken red segments split exactly at the 100-character boundary. Row two shows four chunks at ten percent overlap, starting at 0, 90, 180 and 270 characters, with the same fact span marked as one continuous green segment fully inside the second chunk.</desc>
+<g font-size="8" fill="#14241f" text-anchor="start" font-family="DM Mono, monospace">
+<text x="40" y="26" font-weight="700">0% OVERLAP · stride=100 · 3 chunks</text>
+</g>
+<rect x="40.0" y="34" width="127.9" height="26" fill="#d7ff53" stroke="#14241f" stroke-width="1.2"/>
+<rect x="167.9" y="34" width="128.0" height="26" fill="#5ee6c3" stroke="#14241f" stroke-width="1.2"/>
+<rect x="295.9" y="34" width="124.1" height="26" fill="#d7ff53" stroke="#14241f" stroke-width="1.2"/>
+<line x1="167.9" y1="30" x2="167.9" y2="64" stroke="#14241f" stroke-width="1.5" stroke-dasharray="2 2"/>
+<rect x="160.3" y="66" width="7.6" height="6" fill="#ff7957" stroke="#14241f" stroke-width="1"/>
+<rect x="171.0" y="66" width="73.7" height="6" fill="#ff7957" stroke="#14241f" stroke-width="1"/>
+<g font-size="8" fill="#ff7957" font-family="DM Mono, monospace" font-weight="700">
+<text x="200" y="82">SPLIT — cut lands inside "order-cancellation"</text>
+</g>
+<g font-size="8" fill="#14241f" text-anchor="start" font-family="DM Mono, monospace">
+<text x="40" y="100" font-weight="700">10% OVERLAP · stride=90 · 4 chunks</text>
+</g>
+<rect x="40.0" y="108" width="127.9" height="26" fill="#d7ff53" stroke="#14241f" stroke-width="1.2"/>
+<rect x="155.2" y="108" width="127.9" height="26" fill="#5ee6c3" stroke="#14241f" stroke-width="1.2"/>
+<rect x="270.3" y="108" width="127.9" height="26" fill="#d7ff53" stroke="#14241f" stroke-width="1.2"/>
+<rect x="385.5" y="108" width="34.5" height="26" fill="#5ee6c3" stroke="#14241f" stroke-width="1.2"/>
+<rect x="160.3" y="140" width="84.4" height="6" fill="#3fae86" stroke="#14241f" stroke-width="1"/>
+<g font-size="8" fill="#14241f" font-family="DM Mono, monospace" font-weight="700">
+<text x="200" y="156">CONTAINED — whole fact inside one chunk</text>
+</g>
+<g font-size="7.5" fill="#14241f" font-family="DM Mono, monospace">
+<text x="160.3" y="172">fact span [94,160)</text>
+</g>
+</svg>
+<figcaption>Same fact, same passage, same chunk_size — only the stride changed. Zero overlap lands the cut mid-word; a 10% overlap shifts chunk 2's start left just enough to hold the whole fact.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>stride = chunk_size − overlap_size, and the cost of shrinking it</h3>
+<table class="compare-table">
+<thead><tr><th>Setting</th><th>Chunks</th><th>Chars stored</th><th>Extra vs. original 297</th><th>Fact status</th></tr></thead>
+<tbody>
+<tr><td>0% overlap (stride=100)</td><td>3</td><td>297</td><td>+0.00%</td><td>SPLIT</td></tr>
+<tr><td>10% overlap (stride=90)</td><td>4 (+33% embedding calls)</td><td>327</td><td>+10.10%</td><td>CONTAINED</td></tr>
+</tbody>
+</table>
+<p>Shrinking the stride below chunk_size makes neighboring chunks share characters — that's what fixes the cut. But every shared character gets stored and embedded twice. Fixing this one fact with the cheapest overlap that works costs 10.10% more storage and 33% more embedding calls at ingestion time, before a single query is ever asked.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A stride adjustment on top of an already-chosen method and size</h3>
+<div class="pipeline-preview">
+<span>Concepts 02-04 — which method</span><i>↓</i><span>Concept 05 — how big</span><i>↓</i><span class="hot">Concept 06 — overlap, this one</span><i>↓</i><span>Concepts 07-08 — structural escapes</span>
+</div>
+<p>Overlap isn't a seventh splitting technique — it's a stride adjustment layered on top of whichever method (Concepts 02-04) and size (Concept 05) already made the boundary decisions.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Overlap distinguished from size and from the module's other two cost axes">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Overlap (this concept — how much neighbors share)</span><span role="cell">Size (Concept 05 — how big one chunk is)</span><span role="cell">Independent dials — overlap doesn't change how big a chunk is, only how much it shares with its neighbor.</span></div>
+<div role="row"><span role="cell">This concept's redundant storage/embedding cost</span><span role="cell">Concept 04's per-method compute cost, Concept 05's per-chunk dilution/precision cost</span><span role="cell">Three separate cost axes now on the books — a corpus can be expensive, poorly sized, AND redundant, independently of each other.</span></div>
+<div role="row"><span role="cell">"More overlap" as a dial</span><span role="cell">A guarantee that increases monotonically with the dial</span><span role="cell">Section 09's derivation shows a real threshold — below it, more overlap can fail where less overlap succeeded.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"More overlap is always safer."</b><p>False, and not just a little false — the advanced section derives a case where 50% overlap fails after 40% succeeded on the identical fact. Held here as a simplified pointer; Section 09 proves it.</p></div>
+<div><b>"Overlap is free."</b><p>False — quantified above. Even the cheapest fix that works on this one fact costs +10.10% storage and +33% more embedding calls.</p></div>
+<div><b>"Overlap fixes every boundary-loss case."</b><p>False — a longer fact needs proportionally more overlap to guarantee coverage, or a structural fix (Concept 07's parent-child retrieval, named forward) instead of paying for ever-larger overlap.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>SECOND TUNABLE PARAMETER</span><b>overlap_size / overlap_ratio joins chunk_size as a per-corpus ingestion setting</b><p>Not a global constant — different document types carry different atomic-fact lengths, so the overlap that's "enough" varies by corpus.</p></div>
+<div><span>SOURCED DEFAULTS</span><b>Real frameworks use modest ratios, not large ones</b><p>LlamaIndex's DEFAULT_CHUNK_OVERLAP is 20 tokens against a 1024-token default chunk_size — about 2%. LangChain's TextSplitter defaults chunk_overlap to 200 characters against a 4000-character chunk_size — about 5%. Both sit far below this lesson's demonstration overlaps of 10-66%.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concept 07 is the structural alternative to paying for ever-larger overlap</b><p>Parent-document / parent-child / small-to-big retrieval, named forward only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Zero overlap is a special case</b><p>stride = chunk_size, Concept 02's own default — overlap generalizes past it by shrinking the stride.</p></div>
+<div><b>Overlap has a real, quantifiable cost</b><p>Shared characters get stored and embedded twice — a corpus-wide storage and embedding-call increase, paid at ingestion time.</p></div>
+<div><b>This cost axis is independent of Concepts 04 and 05's</b><p>Method cost, size's dilution cost, and overlap's redundancy cost are three separate design decisions.</p></div>
+<div><b>Concepts 07-08 are the two structural escapes</b><p>Parent-child retrieval and hierarchical/late chunking — named only, not built here.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is zero overlap described as a special case of stride rather than a separate, unrelated method?</li>
+<li>Why does adding overlap have a real, quantifiable storage and embedding-call cost?</li>
+<li>Why is this cost axis different from Concept 04's per-method compute cost and Concept 05's per-chunk dilution cost?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 6 of 10</h3>
+<p>This concept built the first engineered mitigation for the size trade-off, and showed it has limits — a cost that compounds with corpus size, and a threshold below which "more" doesn't mean "safer." Concept 07 gives the structural escape: parent-document, parent-child and small-to-big retrieval, which sidesteps the whole gamble instead of paying for it.</p>
+<div class="beginner-memory"><b>Concept 06 is active.</b> Module 07 is at 6 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-05.html">← Back to Concept 05</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A cheap fix, with a real limit</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Split at 0%, whole at 10%</b><small>Same fact, same passage — only the stride changed.</small></a>
+<a href="#b04"><span>02</span><b>The redundancy cost</b><small>+10.10% storage, +33% embedding calls, just for the cheapest fix.</small></a>
+<a href="#b07"><span>03</span><b>Not a guarantee</b><small>A real threshold exists — Section 09 derives it.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The coverage proof, from-scratch code, and the Coverage Gamble lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 02's stride notation, generalized past stride=chunk_size → the grace-period fact split mid-word at 0% overlap, fixed at 10% → 40% overlap succeeds, 50% fails on the same fact → the real guarantee is overlap_size ≥ fact_length → Module 07 at 6 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the chunk overlap and boundary loss deep dive</b><em>The coverage guarantee proof, from-scratch code, and the Coverage Gamble lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The sixth concept, the first engineered mitigation</h2></div></header>
+<p>Concepts 02-04 picked a splitting method. Concept 05 named size as a parameter on top of that method. This concept is the first to build an actual mitigation rather than just name a trade-off — shrinking the stride so neighboring chunks share content across their border.</p>
+<div class="flow">
+<div class="flow-node">Concepts 02-04 — which method</div>
+<div class="flow-node">Concept 05 — how big</div>
+<div class="flow-node hot">Concept 06 — overlap</div>
+<div class="flow-node">Concepts 07-08 — structural escapes</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COMPUTE</span><h3>Compute stride and overlap_ratio</h3><p>Given a chunk_size and a target overlap percentage, using Concept 02's own notation extended to stride &lt; N.</p></article>
+<article class="info-card"><span>QUANTIFY</span><h3>Quantify the storage and embedding-call cost</h3><p>Every overlap setting increases total stored/embedded characters beyond the original document length — a real, measurable number, not an abstract downside.</p></article>
+<article class="info-card"><span>DERIVE</span><h3>State and apply the coverage guarantee</h3><p>overlap_size ≥ fact_length is the exact condition under which containment is certain regardless of where the fact sits.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Distinguish this cost axis from Concept 04's and Concept 05's</h3><p>Method cost, size's dilution cost, and overlap's redundancy cost are three independent design decisions.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02's stride/chunk_size notation, reused and extended.</b> Concept 02 always used stride = chunk_size; this concept generalizes to stride &lt; chunk_size.</li>
+<li><b>Concept 05's trade-off framing, reused directly.</b> This concept is the first of its two named mitigations.</li>
+<li><b>Concept 01's average-pooling dilution formula is explicitly NOT reused here.</b> Overlap changes redundancy — how much content is stored and embedded more than once — not how one chunk's own embedding is pooled.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Overlapping camera frames in a panorama</h2></div></header>
+<p>A panorama stitched from non-overlapping frames can cut a subject in half right at a seam — half of it in one frame, half in the next, neither frame showing the whole thing. Overlapping frames, each sharing edge content with its neighbor, make it far less likely a subject near a seam gets cut in half in every frame at once.</p>
+<div class="callout warning"><b>Analogy boundary</b>The panorama picture explains why overlap helps. It doesn't explain that there's an exact size a subject can be past which overlap stops guaranteeing anything — Section 09 gives that formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Stride</td><td>Distance between the start of one chunk and the start of the next</td><td>stride</td></tr>
+<tr><td>Overlap size</td><td>How many characters chunk_size exceeds the stride by — the shared span between neighbors</td><td>overlap_size = N − stride</td></tr>
+<tr><td>Overlap ratio</td><td>Overlap size as a fraction of chunk_size</td><td>overlap_ratio = overlap_size / N</td></tr>
+<tr><td>Chunk count</td><td>Number of fixed-width chunks a sliding window of width N and step stride produces over a document of length L</td><td>num_chunks = ⌈(L−N)/stride⌉ + 1</td></tr>
+<tr><td>Redundancy</td><td>How much more is stored/embedded than the document's own length</td><td>redundancy_pct = (total_stored − L) / L</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: zero overlap vs. positive overlap</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>ZERO-OVERLAP LANE</span><p>stride = chunk_size (Concept 02's own case). Every character is stored and embedded exactly once. A fact straddling a boundary is split with nothing shared on either side.</p></div>
+<div class="lane"><span>POSITIVE-OVERLAP LANE</span><p>stride &lt; chunk_size. Characters in the shared span are stored and embedded in both neighboring chunks — raising num_chunks and total stored/embedded characters beyond L, in exchange for a chance (not a guarantee, below the threshold) that a boundary-straddling fact lands whole inside one chunk.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The guarantee zone on the overlap_size axis</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0706-adv-visual-title">
+<strong class="concept-visual-title" id="c0706-adv-visual-title">VISUAL · SEVEN TESTED OVERLAP SIZES AGAINST THE 66-CHARACTER GUARANTEE THRESHOLD</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0706-svg-title-a c0706-svg-desc-a">
+<title id="c0706-svg-title-a">A number line from 0 to 100 characters of overlap size, with a guaranteed zone from 66 to 100 and seven tested points</title>
+<desc id="c0706-svg-desc-a">A horizontal axis from 0 to 100 characters of overlap size. A lime-shaded region from 66 to 100 marks the guaranteed zone, where overlap size is at least the fact's own 66-character length. Seven markers sit at overlap sizes 0, 10, 20, 30, 40, 50 and 66. The markers at 0 and 50 are colored red and labeled split. The markers at 10, 20, 30 and 40 are colored amber and labeled contained by luck. The marker at 66 is colored green and labeled contained, guaranteed.</desc>
+<line x1="40" y1="90" x2="420" y2="90" stroke="#14241f" stroke-width="2"/>
+<rect x="291" y="80" width="129" height="20" fill="#d7ff53" opacity=".6" stroke="#14241f"/>
+<circle cx="40" cy="90" r="5" fill="#ff7957" stroke="#14241f" stroke-width="2"/>
+<circle cx="78" cy="90" r="5" fill="#f4b942" stroke="#14241f" stroke-width="2"/>
+<circle cx="116" cy="90" r="5" fill="#f4b942" stroke="#14241f" stroke-width="2"/>
+<circle cx="154" cy="90" r="5" fill="#f4b942" stroke="#14241f" stroke-width="2"/>
+<circle cx="192" cy="90" r="5" fill="#f4b942" stroke="#14241f" stroke-width="2"/>
+<circle cx="230" cy="90" r="5" fill="#ff7957" stroke="#14241f" stroke-width="2"/>
+<circle cx="291" cy="90" r="5" fill="#3fae86" stroke="#14241f" stroke-width="2"/>
+<g font-size="7.5" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="40" y="70">0</text>
+<text x="78" y="70">10</text>
+<text x="116" y="70">20</text>
+<text x="154" y="70">30</text>
+<text x="192" y="70">40</text>
+<text x="230" y="70">50</text>
+<text x="291" y="115">66</text>
+<text x="291" y="127">threshold</text>
+<text x="420" y="70">100</text>
+<text x="40" y="107" font-weight="700" fill="#ff7957">SPLIT</text>
+<text x="192" y="107" font-weight="700">luck (10-40)</text>
+<text x="230" y="127" font-weight="700" fill="#ff7957">SPLIT again</text>
+<text x="355" y="70" font-weight="700">GUARANTEED ZONE</text>
+</g>
+</svg>
+</figure>
+<p>Every point below overlap_size=66 is "positional luck" for this particular fact — it happened to work at 10/20/30/40% and happened to fail again at 50%. Only overlap_size=66, meeting the fact's own 66-character length, enters the shaded zone where containment is certain regardless of exactly where the fact sits.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Concepts 02-04 — which method</span><i>↓</i><span>Concept 05 — how big</span><i>↓</i><span class="hot">Concept 06 — overlap, a stride adjustment ON TOP of method+size</span><i>↓</i><span>Concept 07 — parent-child</span><i>↓</i><span>Concept 08 — hierarchical, late chunking</span>
+</div>
+<p>Overlap is set once per corpus at ingestion time, alongside chunk_size — it changes embedding-call count and index storage immediately, and changes retrieval's boundary-loss risk only probabilistically, unless the guarantee condition is actually checked and met.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The coverage guarantee: overlap_size ≥ fact_length</h2></div></header>
+<div class="equation">overlap_size = N − stride<br>Guarantee: a fact of length ℓ, placed anywhere in the document's interior, lands fully inside some chunk regardless of position ⇔ overlap_size ≥ ℓ (equivalently stride ≤ N − ℓ)</div>
+<p>Chunk starts are multiples of stride. For a fact spanning [a, a+ℓ), a chunk containing it needs its own start s to fall in the interval [a+ℓ−N, a] — an interval of length N−ℓ. That interval is guaranteed to contain a multiple of stride, for ANY placement of a, exactly when N−ℓ ≥ stride, i.e. overlap_size = N−stride ≥ ℓ. For this lesson's fact, ℓ=66, so the guarantee threshold is overlap_size ≥ 66, i.e. stride ≤ 34 — exactly the stride=34 row in Section 10's table, which succeeds, while every overlap between 10% and 50% is positional luck: none of those overlap_sizes (10, 20, 30, 40, 50) reach the 66-character threshold this specific fact needs, so their pass/pass/pass/pass/FAIL pattern is exactly what the formula predicts — not "more is always safer."</p>
+<div class="callout warning"><b>Interior assumption</b>This derivation assumes the fact sits away from the document's very start or its final, possibly-shorter clipped chunk. This lesson's fact at [94,160) of a 297-character document is safely interior, so the numbers above aren't affected — but the guarantee as stated doesn't unconditionally cover a fact sitting right at position 0 or inside the last chunk.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Split → contained → contained again → split again → guaranteed</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Overlap</th><th>Stride</th><th>Chunks</th><th>Stored (extra)</th><th>Embedding calls (extra)</th><th>Fact status</th></tr></thead>
+<tbody>
+<tr><td>0%</td><td>100</td><td>3</td><td>297 (+0.00%)</td><td>3 (+0.0%)</td><td>SPLIT — mid-word</td></tr>
+<tr><td>10%</td><td>90</td><td>4</td><td>327 (+10.10%)</td><td>4 (+33.3%)</td><td>CONTAINED — positional luck</td></tr>
+<tr><td>20%</td><td>80</td><td>4</td><td>357 (+20.20%)</td><td>4 (+33.3%)</td><td>CONTAINED — positional luck</td></tr>
+<tr><td>30%</td><td>70</td><td>4</td><td>387 (+30.30%)</td><td>4 (+33.3%)</td><td>CONTAINED — positional luck</td></tr>
+<tr><td>40%</td><td>60</td><td>5</td><td>457 (+53.87%)</td><td>5 (+66.7%)</td><td>CONTAINED — positional luck</td></tr>
+<tr><td>50%</td><td>50</td><td>5</td><td>497 (+67.34%)</td><td>5 (+66.7%)</td><td>SPLIT AGAIN</td></tr>
+<tr><td>66%</td><td>34</td><td>7</td><td>693 (+133.33%)</td><td>7 (+133.3%)</td><td>CONTAINED — guaranteed</td></tr>
+</tbody>
+</table>
+<p>The 40%→50% row is the section's proof, not noise: a LARGER overlap fails where a smaller one succeeded, because neither 40% (overlap_size=40) nor 50% (overlap_size=50) reaches the fact's 66-character threshold — both are luck, and this particular roll of the dice happened to land differently. Only 66% clears the threshold and is certain. Every row was computed by an executed Node.js sliding-window script (chunkFixed(text,N,stride), containment and cost arithmetic), run twice independently on two passage drafts and a third time isolating strides {40,34,30} to confirm the threshold, then cross-checked against the hand-derived formula above.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Short FAQ-style facts</h3><p>A modest overlap (LlamaIndex's ~2%, LangChain's ~5%) is usually enough in practice, because most atomic facts are much shorter than a full chunk.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A long clause or definition</h3><p>When a fact's own length approaches or exceeds a modest overlap budget, the guarantee threshold demands an overlap large enough to feel expensive — or a structural fix (Concept 07, named forward).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Setting a large blanket overlap "to be safe"</h3><p>Paying 133% extra storage (this lesson's 66% row) still isn't certain for a fact longer than 66 characters in this passage — "large" isn't the same as "checked against the formula."</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The sliding-window chunker and containment checker, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>def chunk_fixed(text, n, stride):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + n, len(text))
+        chunks.append((start, end))
+        if end == len(text):
+            break
+        start += stride
+    return chunks
+
+def contains_fact(chunks, fact_start, fact_end):
+    return any(c[0] <= fact_start and c[1] >= fact_end for c in chunks)
+
+def cost(chunks, doc_len):
+    total_stored = sum(end - start for start, end in chunks)
+    extra_pct = (total_stored - doc_len) / doc_len * 100
+    return len(chunks), total_stored, extra_pct
+
+PASSAGE = ("Oracle Order Management lets a customer cancel an order within a "
+           "fixed period after purchase. The order-cancellation grace period "
+           "is 14 days from the ship date. Once it elapses, the order status "
+           "locks to CLOSED and refunds stop processing automatically. "
+           "Support agents must file a manual override.")
+FACT = "The order-cancellation grace period is 14 days from the ship date."
+fact_start = PASSAGE.index(FACT)
+fact_end = fact_start + len(FACT)
+N = 100
+
+for stride in (100, 90, 50, 34):
+    chunks = chunk_fixed(PASSAGE, N, stride)
+    n_chunks, stored, extra_pct = cost(chunks, len(PASSAGE))
+    contained = contains_fact(chunks, fact_start, fact_end)
+    print(stride, n_chunks, stored, round(extra_pct, 2), contained)
+
+assert contains_fact(chunk_fixed(PASSAGE, N, 100), fact_start, fact_end) is False
+assert contains_fact(chunk_fixed(PASSAGE, N, 90), fact_start, fact_end) is True
+assert contains_fact(chunk_fixed(PASSAGE, N, 50), fact_start, fact_end) is False
+assert contains_fact(chunk_fixed(PASSAGE, N, 34), fact_start, fact_end) is True
+assert (N - 34) >= len(FACT)  # 66 >= 66 -- the guarantee condition, exactly met
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real defaults sit far below this lesson's demonstration overlaps</h2></div></header>
+<p>LlamaIndex's SentenceSplitter ships DEFAULT_CHUNK_OVERLAP = 20 tokens against DEFAULT_CHUNK_SIZE = 1024 tokens (confirmed directly from source) — an overlap_ratio of about 2%. LangChain's TextSplitter defaults chunk_overlap to 200 characters against a 4000-character chunk_size (confirmed directly from source) — about 5% — and its constructor raises a ValueError if chunk_overlap exceeds chunk_size, a real production guardrail confirming overlap must stay smaller than chunk_size (stride must stay positive). Both real defaults are "cheap, partial risk reduction" in practice, not "the guarantee" this lesson derives — production systems accept some residual boundary-loss risk rather than paying this lesson's 66% row for every corpus.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Coverage Gamble</h2></div></header>
+<div class="lab">
+<p>The same Oracle Order Management passage and fact, at seven overlap settings. Step through them and watch the fact's status flip unpredictably below a threshold this lab's own readout names exactly.</p>
+<div class="dim-toggle" role="group" aria-label="Overlap size" id="coverageSteps_0706">
+<button type="button" class="secondary active" data-pct="0">0%</button>
+<button type="button" class="secondary" data-pct="10">10%</button>
+<button type="button" class="secondary" data-pct="20">20%</button>
+<button type="button" class="secondary" data-pct="30">30%</button>
+<button type="button" class="secondary" data-pct="40">40%</button>
+<button type="button" class="secondary" data-pct="50">50%</button>
+<button type="button" class="secondary" data-pct="66">66% (guaranteed)</button>
+</div>
+<div id="coverageTrackWrap_0706"></div>
+<div class="norm-readout" id="coverageReadout_0706"></div>
+<div class="callout" id="coverageVerdict_0706"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Zero, modest, guaranteed, and the structural escape</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Zero overlap (stride=chunk_size)</td><td>No redundant storage or embedding cost</td><td>No protection at all for a boundary-straddling fact</td></tr>
+<tr><td>Modest overlap (real defaults, ~2-5%)</td><td>Cheap, catches most short facts in practice</td><td>Probabilistic below the guarantee threshold — can still fail, non-monotonically</td></tr>
+<tr><td>Guaranteed overlap (overlap_size ≥ fact_length)</td><td>Certain regardless of fact position</td><td>Expensive, and requires knowing the corpus's longest atomic fact in advance</td></tr>
+<tr><td>Structural escape (Concept 07, named only)</td><td>Sidesteps the gamble entirely</td><td>Different mechanism, its own cost — not built here</td></tr>
+</tbody>
+</table>
+<p>Decision framework: start from a sourced default (LlamaIndex's ~2% or LangChain's ~5%), then only pay for a larger, checked overlap when a corpus's known atomic facts are long enough to need it — measured against the guarantee formula, not guessed.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>INSUFFICIENT OVERLAP</span><h3>Still splits, unpredictably</h3><p>Any overlap_size below the fact's own length is positional luck, not protection — it can pass on one fact and fail on the next.</p></article>
+<article class="info-card"><span>UNCHECKED "MORE IS SAFER"</span><h3>A larger overlap regresses on the same fact</h3><p>This lesson's own 40%→50% row: increasing overlap made containment fail again after it had already succeeded.</p></article>
+<article class="info-card"><span>ONE FIXED OVERLAP, VARYING FACT LENGTHS</span><h3>A single overlap_size across a heterogeneous corpus</h3><p>An overlap sized for short facts leaves long facts unprotected — the guarantee is per-fact-length, not a corpus-wide constant.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Increasing overlap always reduces boundary-loss risk</td><td>False — directly refuted by the 40%→50% regression on the identical fact.</td></tr>
+<tr><td>Overlap has no real cost</td><td>False — refuted by the quantified table: every overlap setting stores and embeds real characters twice.</td></tr>
+<tr><td>Overlap and chunk size solve the same problem</td><td>False — size is how much content one chunk holds; overlap is how much neighboring chunks share across the border.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Redundant embedding calls and index storage both compound with corpus size — a fixed overlap_ratio on a 10x larger corpus means 10x the redundant characters, not a fixed cost.</li>
+<li>Unlike Concept 05's per-query dilution cost, overlap's redundancy cost is paid entirely at ingestion time, regardless of which queries are ever asked against the corpus.</li>
+<li>overlap_size is normally tuned empirically against a corpus's own known maximum atomic-fact length, not chosen as a round percentage — Section 09's formula is the actual tuning target.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does 50% overlap fail on this fact while 40% overlap succeeded?</summary><div>Neither overlap_size (40 or 50) reaches the fact's 66-character guarantee threshold, so both results are positional luck rather than certainty. This particular fact's position happened to align with a chunk boundary at 50% overlap and not at 40% — the guarantee formula doesn't predict "more is safer" below the threshold, so this isn't a contradiction, it's exactly what the formula says can happen.</div></details>
+<details class="quiz"><summary>What does the coverage guarantee formula actually require?</summary><div>overlap_size ≥ fact_length (equivalently stride ≤ chunk_size − fact_length), for a fact sitting in the document's interior. Only when the shared span between neighboring chunks is at least as long as the fact itself is containment certain regardless of exactly where that fact sits.</div></details>
+<details class="quiz"><summary>Why is overlap's redundancy cost paid regardless of which queries are ever asked?</summary><div>Overlap is applied once, at ingestion time, before any query exists — every overlapping character is stored and embedded then, unconditionally. This is different from Concept 05's dilution cost, which only shows up per query at retrieval time.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>New passage (219 characters): "Oracle Order Management flags any order over five thousand dollars for manager review. The review must finish within two hours of flagging. Orders left unreviewed past that window release automatically without approval." Target fact: "The review must finish within two hours of flagging." — 52 characters, at position [87, 139). Using chunk_size N=80: compute whether the fact is contained at stride=80 (0% overlap) and at stride=50 (30% overlap, overlap_size=30), then check both results against the guarantee formula from Section 09.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>At stride=80 (0% overlap), chunks are [0,80), [80,160), [160,219). The fact spans [87,139), which falls entirely inside chunk 2's range [80,160) — CONTAINED. At stride=50 (30% overlap, overlap_size=30), chunks are [0,80), [50,130), [100,180), [150,219). No single chunk covers all of [87,139): chunk 2 ends at 130, nine characters short of the fact's own end at 139 — SPLIT. So zero overlap happens to contain this fact while a real 30% overlap does not. The guarantee formula explains why neither result is surprising: the fact is 52 characters long, so the real threshold is overlap_size ≥ 52 (stride ≤ 28). Neither stride=80 (overlap_size=0) nor stride=50 (overlap_size=30) reaches that threshold, so both outcomes are positional luck — one landed as contained, one didn't, and the formula never claimed overlap_size=30 would help here. This is the same lesson as Section 10's 40%→50% row, in a fresh passage: below the threshold, containment is luck in either direction, not a monotonic function of overlap.</div>
+</details>
+<p>Teach-back: explain why it's meaningful that zero overlap (stride=80) happened to contain this exercise's fact while a real, non-zero overlap (stride=50) did not — and why that isn't a contradiction of anything this lesson claims.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Chunk overlap and boundary loss</h3><ul><li><b>Definition:</b> overlap_size = chunk_size − stride; overlap_ratio = overlap_size / chunk_size</li><li><b>Guarantee:</b> overlap_size ≥ fact_length ⇒ containment is certain (interior facts)</li><li><b>Real defaults:</b> LlamaIndex ~2% (20/1024 tokens), LangChain ~5% (200/4000 chars) — cheap, partial risk reduction, not the guarantee</li></ul></div>
+<div><h3>Memorable example</h3><p>A 66-character fact is cut mid-word at 0% overlap, fixed at 10% (+10.10% storage), still fixed at 20/30/40% — then SPLIT AGAIN at 50%, before finally becoming certain at 66%, exactly where overlap_size (66) meets the fact's own length. More overlap is not always safer; only overlap_size ≥ fact_length is.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't "just add more overlap" a reliable fix for boundary loss?</summary><div>Below the guarantee threshold (overlap_size ≥ fact_length), containment depends on exactly where the fact happens to sit relative to chunk boundaries — a matter of position, not overlap magnitude. This lesson's own 40%→50% regression shows a larger overlap failing where a smaller one succeeded on the identical fact.</div></details>
+<details class="quiz"><summary>Mathematical: derive the exact condition under which overlap guarantees containment.</summary><div>Chunk starts are multiples of stride. A chunk containing a fact spanning [a, a+ℓ) needs a start s in [a+ℓ−N, a], an interval of length N−ℓ. That interval contains a multiple of stride for every possible a exactly when N−ℓ ≥ stride, i.e. overlap_size = N−stride ≥ ℓ.</div></details>
+<details class="quiz"><summary>Coding: implement a fact-containment checker and a cost calculator for a given stride.</summary><div>chunk_fixed(text, N, stride) produces (start, end) spans via a sliding window; contains_fact checks whether any span fully covers [fact_start, fact_end); cost() sums span lengths for total_stored and derives extra_pct against the raw document length — Section 12 gives the full from-scratch implementation.</div></details>
+<details class="quiz"><summary>Debugging: a corpus still loses a fact despite a 30% chunk overlap. What do you check first?</summary><div>Whether overlap_size (0.30 × chunk_size) actually meets or exceeds that fact's own character length — if the fact is longer than the overlap, the failure is exactly what the coverage formula predicts, not a bug in the chunker.</div></details>
+<details class="quiz"><summary>System design: how would you choose overlap_size for a corpus with a known maximum atomic-fact length?</summary><div>Set overlap_size at or above that maximum length to satisfy the guarantee for every fact in the corpus, then weigh the resulting storage/embedding-call cost against a structural alternative (Concept 07's parent-child retrieval) if that overlap turns out too expensive to justify corpus-wide.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/constants.py"><b>constants.py — LlamaIndex source</b><br><span>Confirms DEFAULT_CHUNK_OVERLAP = 20 tokens alongside DEFAULT_CHUNK_SIZE = 1024 tokens — the ~2% real-default overlap ratio cited in Section 13.</span></a>
+<a href="https://raw.githubusercontent.com/langchain-ai/langchain/master/libs/text-splitters/langchain_text_splitters/base.py"><b>base.py — LangChain text-splitters source</b><br><span>Confirms TextSplitter's default chunk_overlap of 200 characters against a 4000-character chunk_size (~5%), and its ValueError guard when chunk_overlap exceeds chunk_size — both cited in Section 13.</span></a>
+<a href="https://docs.langchain.com/oss/python/integrations/splitters"><b>Text splitters — LangChain docs</b><br><span>Confirms chunk_overlap is still a live, first-class constructor parameter in LangChain's current splitter API, not a deprecated setting.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 ACTIVE · MODULE 07 · 6/10</span>
+<h3>Overlap reduces risk. It doesn't guarantee safety below the threshold.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can check a containment result against the guarantee formula by hand. Concept 07 gives the structural escape: parent-document, parent-child and small-to-big retrieval, sidestepping this whole gamble instead of paying for it.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-05.html">← Back to Concept 05</a>
+</div>
+<p class="fine-print">Module 07 at 6 of 10 concepts. Next concept: parent-document, parent-child and small-to-big retrieval.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 06 · Complete</p>
+<a href="module-07-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

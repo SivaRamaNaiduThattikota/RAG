@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Two more mechanisms, this time about what travels alongside a chunk rather than the chunk itself. Metadata (source, section, date) never touches the embedding -- it only filters candidates before ranking. A contextual header IS prepended before embedding, so it rewrites the vector. On two SaaS vendors' near-identical refund clauses, S1 and B1 tie at exactly cosine 0.6644 -- a case pure similarity provably cannot break. A metadata filter resolves it by exclusion; a header resolves it by lifting S1 to 0.9759, +46.89%.">
+<title>Metadata and contextual headers — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 09</p>
+<h1>Not every fix touches<br><em>the embedding itself.</em></h1>
+<p class="lesson-lead">Concepts 07 and 08 both changed what happens to a chunk's TEXT. This concept is about what travels alongside it. Metadata -- source document, section, date -- is structured data attached at indexing time that never reaches the embedding model at all; it only narrows which chunks are even candidates. A contextual header is different: a short line of text prepended before a chunk is embedded, so the vector itself changes. Two SaaS vendors' near-identical refund clauses tie at exactly the same cosine score -- a case pure similarity provably cannot break -- and this concept fixes it two genuinely different ways.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth concept in Module 07 (Phase 2), third of the module's closing fixes</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's average-pooling mechanism (reused); Concept 05's dilution framing (contrasted); Concepts 07-08 named only as neighboring "adds context" mechanisms not to confuse with this one</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain which of the two mechanisms touches the embedding and which doesn't, and compute both on a provably tied case</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One stays outside the embedding. One rewrites it.</h2>
+</div>
+<p>Metadata is structured fields attached to a chunk at indexing time -- document id, section, page, timestamp, author -- used for filtering, citation, and provenance, never fed into the embedding. A contextual header is literal text prepended to a chunk before it's embedded, so the embedding itself changes. They solve different blind spots and are easy to conflate with each other and with Concepts 07-08.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Structured data beside the index, or text inside the embedding</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Metadata: structured fields (doc id, section, date) attached at indexing time, used for filtering/citation/provenance, never fed into the embedding. Contextual header: literal text prepended to a chunk BEFORE it's embedded, so the embedding itself changes.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Confusing a header with Concept 07's parent-child expansion (happens AFTER a match already occurred) or Concept 08's late chunking (reorders embed-vs-split for a WHOLE document, adds no text at all).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> one of these two mechanisms is never an input to the embedding model. The other is nothing else.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Two separate blind spots</h3>
+<p>A vector index has no principled way to enforce "only this document" or "only after this date" -- and similarity can tie or mismatch on facts an embedding never encodes, like a differing numeral. Separately, a chunk's own words may say nothing about which document or section produced it, leaving the embedding blind to context a human reader would have for free -- the opposite extreme of Concept 01's dilution (too little context reaching the embedding, not too much unrelated context diluting it).</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Two vendors, one identical clause, one exact tie</h3>
+<p>Solstice Cloud and Cobalt Systems are two fictional SaaS vendors with near-identical boilerplate Terms of Service. S1 (Solstice, Refunds): "Refunds are processed within 30 days of the request." B1 (Cobalt, Refunds): "Refunds are processed within 45 days of the request." For the query "How long does Solstice Cloud take to process a refund?", S1 and B1 score <b>exactly the same</b> -- cosine 0.6644 -- because "30" and "45" are numerals this toy model's vocabulary never assigns a vector to. A metadata filter on source document resolves it by excluding B1 outright. A contextual header prepended to S1 resolves it by lifting S1's own score to 0.9759.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0709-b03-title">
+<strong class="concept-visual-title" id="c0709-b03-title">VISUAL · AN EXACT TIE, BROKEN TWO DIFFERENT WAYS</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0709-svg-title-b c0709-svg-desc-b">
+<title id="c0709-svg-title-b">Four bars showing baseline cosine scores for S1, B1, S2 and B2, with S1 and B1 tied</title>
+<desc id="c0709-svg-desc-b">S1 and B1 both reach 66.44 percent of full bar width, an exact tie. S2 and B2 both reach zero. A second row shows S1 alone rising to 97.59 percent once a contextual header is added, while B1 stays at 66.44 percent.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<text x="40" y="18" font-weight="700">BASELINE — S1 and B1 tied at 0.6644</text>
+<rect x="40" y="24" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="24" width="119.6" height="16" fill="#5ee6c3" fill-opacity="0.5"/>
+<text x="225" y="36" font-size="7.5">S1 = 0.6644</text>
+<rect x="40" y="44" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="44" width="119.6" height="16" fill="#5ee6c3" fill-opacity="0.5"/>
+<text x="225" y="56" font-size="7.5">B1 = 0.6644 (identical)</text>
+<text x="40" y="86" font-weight="700">AFTER HEADER ON S1 ONLY</text>
+<rect x="40" y="92" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="92" width="175.7" height="16" fill="#d7ff53" fill-opacity="0.7"/>
+<text x="225" y="104" font-size="7.5" font-weight="700">S1 = 0.9759 (+46.89%)</text>
+<rect x="40" y="112" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="112" width="119.6" height="16" fill="#5ee6c3" fill-opacity="0.5"/>
+<text x="225" y="124" font-size="7.5">B1 = 0.6644 (unchanged)</text>
+<text x="40" y="150" font-size="7.5">S1/B1's own text never changed -- only S1 got a header, and only S1 moved.</text>
+</g>
+</svg>
+<figcaption>Metadata (not shown as a score change) would instead remove B1 from consideration entirely, leaving S1's un-lifted 0.6644 to win by elimination.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two rows, two very different relationships to the embedding</h3>
+<table class="compare-table">
+<thead><tr><th>Mechanism</th><th>Relationship to the embedding</th></tr></thead>
+<tbody>
+<tr><td>Metadata</td><td>Attach structured fields, apply as an exact-match/range filter -- never passed to the embedding model</td></tr>
+<tr><td>Contextual header</td><td>Derive a short text string, prepend it, embed the COMBINED text -- the vector itself changes</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Beside the index, or inside the embedding step</h3>
+<div class="scroll-flow">
+<span>Concept 07 — parent-child (after a match)</span><i>→</i>
+<span>Concept 08 — late chunking (whole-document reorder)</span><i>→</i>
+<span class="hot">Concept 09a metadata (beside the index) + 09b header (inside embedding)</span><i>→</i>
+<span>Concept 10 — evaluating chunk quality</span>
+</div>
+<p>Metadata sits beside the vector index as an independent filter -- a WHERE clause, never inside the embedding step. A header sits INSIDE the embedding step itself, upstream of everything Concepts 07-08 do.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four easy-to-conflate pairs</h3>
+<div class="distinction-table" role="table" aria-label="Metadata and contextual headers distinguished from each other and from Concepts 05, 07 and 08">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Metadata vs. header</span><span role="cell">Orthogonal -- one never touches embed(), the other only touches embed()</span></div>
+<div role="row"><span role="cell">Header vs. Concept 07's parent-child</span><span role="cell">A header changes the vector BEFORE retrieval; parent-child returns a bigger unit AFTER a match</span></div>
+<div role="row"><span role="cell">Header vs. Concept 08's late chunking</span><span role="cell">A header adds a few words to ONE chunk; late chunking reorders embed-vs-split for the WHOLE document, adding no new text</span></div>
+<div role="row"><span role="cell">Header vs. Concept 05's dilution</span><span role="cell">Same surface action (more text going in), opposite effect -- a short targeted disambiguation versus more unrelated raw passage text</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Metadata gets embedded along with the chunk."</b><p>False -- it's a structurally separate field (LangChain's own Document class keeps page_content and metadata as distinct attributes).</p></div>
+<div><b>"A header is just another name for metadata."</b><p>False -- a header is literal text that becomes part of what gets embedded; metadata never does.</p></div>
+<div><b>"Prepending a header is the same as late chunking."</b><p>False -- no reordering of embed-vs-split is involved; a few words are added to one chunk's own text.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>TIE-BREAKING GUARANTEE</span><b>Metadata resolves the provable S1/B1 tie by exclusion</b><p>Guaranteed correctness, zero embedding change, zero marginal cost.</p></div>
+<div><span>CHEAP VS. NOT FREE</span><b>A header has a real, quoted cost</b><p>Anthropic's own figure: $1.02 per million document tokens for LLM-generated headers -- this concept's own worked example uses a free template header instead.</p></div>
+<div><span>REAL-WORLD SCALE</span><b>Anthropic's Contextual Retrieval cuts retrieval failure rate 35-67%</b><p>Contextual Embeddings alone: 35%. Plus Contextual BM25: 49%. Plus reranking: 67%.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Which mechanism touches the embedding</b><p>Only the header. Metadata never does.</p></div>
+<div><b>Why the tie is provably unbreakable by ranking alone</b><p>S1 and B1 produce byte-identical vectors -- there is no threshold or ranking rule that can separate two identical numbers.</p></div>
+<div><b>Why a header isn't "more Concept 05 dilution"</b><p>It's a short, targeted disambiguation, not more unrelated raw passage text -- same surface action, opposite intent and effect.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can't any ranking rule break the S1/B1 tie without either a filter or a header?</li>
+<li>Why does adding a header to S1 never change B1's score?</li>
+<li>Why is a header described as "inside" the embedding step and metadata as "beside" it?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 9 of 10</h3>
+<p>Concepts 07, 08, and this one close out the module's structural and representational fixes. Concept 10 is the module's true closing synthesis: not a new technique, but a check on whether any of the schemes Concepts 02-09 built are actually good, on one connected worked case.</p>
+<div class="beginner-memory"><b>Concept 09 is active.</b> Module 07 is at 9 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-08.html">← Back to Concept 08</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">An exact tie, broken two different ways</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>S1 and B1 tie at 0.6644</b><small>Identical vectors -- no ranking rule can break it.</small></a>
+<a href="#b04"><span>02</span><b>Filter excludes; header rewrites</b><small>Two mechanisms, opposite relationship to the embedding.</small></a>
+<a href="#b06"><span>03</span><b>Four pairs, easy to conflate</b><small>Metadata, header, Concept 07, Concept 08, Concept 05.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full worked example, from-scratch code, and the Filter-or-Prepend Console.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Two vendors' identical refund clauses tie at 0.6644 → metadata filter excludes B1 by elimination → contextual header instead lifts S1 to 0.9759, B1 unchanged → real-world figures confirm 35-67% failure-rate reduction → Module 07 at 9 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the metadata and contextual headers deep dive</b><em>The full worked example, from-scratch code, and the Filter-or-Prepend Console lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The third of the module's structural/representational fixes</h2></div></header>
+<p>Concept 07 built a link that resolves AFTER a match. Concept 08 reordered embedding for a whole document. This concept has two hot flow-nodes of its own: metadata beside the index, and a header inside the embedding step.</p>
+<div class="flow">
+<div class="flow-node">Concept 07 — parent-child link</div>
+<div class="flow-node">Concept 08 — late chunking</div>
+<div class="flow-node hot">Concept 09a metadata</div>
+<div class="flow-node hot">Concept 09b contextual header</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DISTINGUISH</span><h3>Metadata from a contextual header</h3><p>One never touches the embedding; the other only touches it.</p></article>
+<article class="info-card"><span>PROVE</span><h3>A case pure similarity provably ties</h3><p>Two identical raw vectors, one exact cosine score, no ranking rule can separate them.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>The exact header cosine gain</h3><p>0.6644 → 0.9759, +46.89% relative, on the same chunk.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>LLM-header prompt design beyond naming it; Module 09/10's SQL/index-level filter mechanics, forward-referenced only.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's average-pooling mechanism, reused directly.</b> This concept's toy embed() is the same pooling function.</li>
+<li><b>Concept 05's dilution definition, reused for contrast.</b> A header's short, targeted disambiguation is the opposite of dilution's unrelated raw text.</li>
+<li><b>Concepts 07 and 08, named only as neighboring "adds context" mechanisms.</b> Not building on them directly -- just distinguishing this concept from both.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A catalog card, and a translator's footnote</h2></div></header>
+<p>Metadata is a library catalog card stapled to a book -- it helps find the right book, and changes no word inside it. A contextual header is a translator's footnote added to a lone paragraph before a reader who never saw the rest of the book -- the paragraph's own words are now genuinely different to that reader.</p>
+<div class="callout warning"><b>Analogy boundary</b>Both pictures explain why each mechanism helps. Neither explains the exact filter/rank ordering or the pooling formula -- Section 09 gives those precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Chunk</td><td>The text a splitting method produced</td><td>c</td></tr>
+<tr><td>Metadata</td><td>Structured fields attached to a chunk, never passed to the embedding model</td><td>m(c)</td></tr>
+<tr><td>Contextual header</td><td>Text prepended to a chunk before embedding</td><td>h(c)</td></tr>
+<tr><td>Filter predicate</td><td>A boolean check against metadata, applied before ranking</td><td>filter(m(c), constraints) ∈ {true, false}</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes, opposite relationship to embed()</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>METADATA LANE</span><p>Attach structured fields at indexing time; apply filter(m(c), constraints) before or alongside ranking. Zero extra embedding calls, near-zero marginal cost.</p></div>
+<div class="lane"><span>HEADER LANE</span><p>Derive h(c) -- either a free deterministic template ("Document: X > Section: Y") or an LLM-generated summary (Anthropic's real method, one model call per chunk) -- then embed(h(c) + c) as one combined string.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One arrow merges in; one stays structurally disconnected</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Hub diagram showing a header merging into the embedding step while metadata stays connected only to the filter at query time">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Chunk text c</b><small>What every prior concept in this module operated on</small></div>
+<div class="diagram-node"><b>+ header h(c)</b><small>Merges INTO c before embed() runs</small></div>
+<div class="diagram-node"><b>Embedding model</b><small>Only ever sees c, or h(c)+c</small></div>
+<div class="diagram-node"><b>Metadata m(c) → filter()</b><small>Structurally disconnected from embed() entirely</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where each mechanism sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Chunks</span><i>↓</i><span class="hot">+metadata attached, +header optionally prepended</span><i>↓</i><span>Embedding model</span><i>↓</i><span>Vectors</span><i>↓</i><span class="hot">Retrieval (filter applied here)</span><i>↓</i><span>Context</span><i>↓</i><span>LLM → Answer</span>
+</div>
+<p>Metadata resurfaces again at the very end as citation/provenance information alongside the answer. Whether header text itself persists into what the LLM ultimately reads, versus being stripped back to the original chunk, is not something the primary source states outright -- an open question, not a settled fact, forward-referenced to Module 17's context-construction concepts.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Filter narrows the set; cosine ranks within it</h2></div></header>
+<div class="equation">embed(c) vs. embed(h(c) + c) -- the only two things ever passed to the embedding model<br>filter(m(c), constraints) ∈ {true, false} -- never an argument to embed()<br>rank = argsort over {c : filter(m(c)) = true} of cosine(embed(...), query)</div>
+<p>This restates Concept 01's own average-pooling formula as the toy embed() stand-in used throughout this concept's worked example.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>An exact tie, and two ways to break it</h2></div></header>
+<p>Toy 3-D content-word vector model (average-pooling, Concept 01's exact mechanism): dim1 = company-identity signal, dim2 = refund-topic signal, dim3 = billing-topic signal. Vocabulary: solstice=(1.0,0,0), cloud=(0.8,0,0); refunds/refund=(0,1.0,0), processed/process=(0,0.6,0), days=(0,0.4,0), request=(0,0.5,0); invoices=(0,0,0.5), billing=(0,0,0.4), cycle=(0,0,0.2), generated=(0,0,0.3), automatically=(0,0,0.2), month=(0,0,0.2). Query "How long does Solstice Cloud take to process a refund?" → content words {solstice, cloud, process, refund} → query vector = (0.45, 0.4, 0.0).</p>
+<table class="worked-table">
+<thead><tr><th>Chunk</th><th>Metadata</th><th>Text</th><th>Raw cosine to query</th></tr></thead>
+<tbody>
+<tr><td>S1</td><td>doc=solstice-cloud-tos, section=Refunds</td><td>"Refunds are processed within 30 days of the request."</td><td>0.6644</td></tr>
+<tr><td>B1</td><td>doc=cobalt-systems-tos, section=Refunds</td><td>"Refunds are processed within 45 days of the request."</td><td>0.6644 (identical vector)</td></tr>
+<tr><td>S2</td><td>doc=solstice-cloud-tos, section=Billing</td><td>"Invoices are issued on the first day of each billing cycle."</td><td>0.0000</td></tr>
+<tr><td>B2</td><td>doc=cobalt-systems-tos, section=Billing</td><td>"Invoices are generated automatically at the end of each month."</td><td>0.0000</td></tr>
+</tbody>
+</table>
+<p>S1 and B1 share every content word this toy model tracks except the numeral ("30" vs. "45"), which carries no vocabulary vector at all -- their raw vectors are byte-for-byte identical (0, 0.625, 0), confirmed by a strict-equality check, not just equal after rounding. <b>Mechanism 1 -- metadata.</b> filter(doc_id="solstice-cloud-tos") narrows {S1,B1,S2,B2} to {S1,S2} before ranking runs. B1 is excluded outright regardless of its tied score; S1 wins the survivors trivially (0.6644 over 0.0000). Nothing about S1's own score changed. <b>Mechanism 2 -- contextual header.</b> Prepending h(S1) = "Solstice Cloud — Terms of Service, Refunds section." to S1 contributes new vocabulary {solstice, cloud} beyond S1's own body (the header's repeated word "Refunds" is deliberately not double-counted, isolating the effect to the company-identity axis -- a stated modeling choice). Combined vector = (0.3, 0.416667, 0). New cosine to query = <b>0.9759</b> — an absolute gain of +0.3115, a relative gain of <b>+46.89%</b>. B1 is untouched, still 0.6644, since a header is added per-chunk, never globally.</p>
+<p>VERIFICATION: computed via an executed Node.js script (avg/dot/norm/cosine helpers over the vocabulary above), then independently re-written from scratch in a separate Python script with no shared code -- both runs matched to 6 decimal places: query=(0.45,0.4,0.0), S1_raw=B1_raw=(0.0,0.625,0.0), cos=0.664364 for both, cos(S2)=cos(B2)=0.0, S1_header=(0.3,0.4166667,0.0), cos(S1_header)=0.975869, absolute gain=0.311505, relative gain=46.8877%.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a real-scale figure, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A multi-tenant knowledge base with near-identical boilerplate</h3><p>metadata.tenant_id as the only reliable isolation between otherwise-identical documents across tenants.</p></article>
+<article class="info-card"><span>BOUNDARY CASE, AT REAL-MODEL SCALE</span><h3>Anthropic's own Contextual Retrieval figures</h3><p>Contextual Embeddings alone: -35% retrieval failure rate (5.7%→3.7%). Plus Contextual BM25: -49% (→2.9%). Plus reranking: -67% (→1.9%).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Relying on a filter field that's inconsistently populated</h3><p>A metadata field missing on half a corpus silently produces wrong or empty filter results -- traces back to Module 06's provenance/lineage discipline.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A metadata filter that never calls embed(), from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>def embed_pool(words, vocab):
+    """Concept 01's exact average-pooling toy embedding."""
+    vectors = [vocab[w] for w in words if w in vocab]
+    n = len(vectors)
+    return tuple(sum(v[i] for v in vectors) / n for i in range(3)) if n else (0, 0, 0)
+
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    na = sum(x * x for x in a) ** 0.5
+    nb = sum(x * x for x in b) ** 0.5
+    return dot / (na * nb) if na and nb else 0.0
+
+def apply_metadata_filter(chunks, constraints):
+    """A boolean predicate over metadata -- structurally never calls embed()."""
+    return [c for c in chunks if all(c["metadata"].get(k) == v for k, v in constraints.items())]
+
+# Reproduces this concept's own Section 10 result
+VOCAB = {"solstice": (1.0,0,0), "cloud": (0.8,0,0), "refunds": (0,1.0,0),
+         "processed": (0,0.6,0), "days": (0,0.4,0), "request": (0,0.5,0)}
+query = embed_pool(["solstice","cloud","processed","refunds"], VOCAB)
+s1 = embed_pool(["refunds","processed","days","request"], VOCAB)
+assert round(cosine(s1, query), 4) == 0.6644
+s1_header = embed_pool(["solstice","cloud","refunds","processed","days","request"], VOCAB)
+assert round(cosine(s1_header, query), 4) == 0.9759
+
+chunks = [{"id": "S1", "metadata": {"doc_id": "solstice-cloud-tos"}},
+          {"id": "B1", "metadata": {"doc_id": "cobalt-systems-tos"}}]
+survivors = apply_metadata_filter(chunks, {"doc_id": "solstice-cloud-tos"})
+assert [c["id"] for c in survivors] == ["S1"]
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The real cost figures, and structural proof metadata never embeds</h2></div></header>
+<p><a href="https://www.anthropic.com/engineering/contextual-retrieval">Anthropic's "Introducing Contextual Retrieval"</a> is the primary source for the header mechanism: Contextual Embeddings and Contextual BM25 prepend chunk-specific explanatory context generated by an LLM before embedding and indexing, cutting top-20 retrieval failure rate 35% (Contextual Embeddings alone), 49% (plus Contextual BM25), and 67% (plus reranking) -- with a quoted one-time cost of $1.02 per million document tokens (Claude, with prompt caching, at 800-token chunks and 8k-token documents). <a href="https://docs.pinecone.io/guides/index-data/indexing-overview#metadata">Pinecone's metadata-filtering docs</a> confirm metadata filtering runs alongside vector similarity, independent of the embedding itself. <a href="https://raw.githubusercontent.com/langchain-ai/langchain/master/libs/core/langchain_core/documents/base.py">LangChain's Document class source</a> is direct, structural proof: page_content and metadata are two separate fields on the same object -- only page_content is ever what a splitter or embedder actually processes.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Filter-or-Prepend Console</h2></div></header>
+<div class="lab">
+<p>The same 4 chunks, the same query, two modes. Switch between them to see the same tie broken by exclusion versus by rewriting one chunk's own embedding.</p>
+<div class="lab-actions" role="group" aria-label="Choose which mechanism to explore">
+<button type="button" class="secondary active" data-mode="filter">Metadata filter</button>
+<button type="button" class="secondary" data-mode="header">Contextual header</button>
+</div>
+<div id="filterHeaderControls_0709"></div>
+<div class="rank-chip-row" id="filterHeaderChips_0709"></div>
+<div class="callout" id="filterHeaderVerdict_0709"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Filter, header, or neither</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Metadata filter</td><td>Hard, deterministic, guarantees correctness on facts embeddings can't encode</td><td>Worthless if the query can't be mapped to a field value</td></tr>
+<tr><td>Contextual header</td><td>Fixes the embedding itself, needs zero filter infrastructure</td><td>A real, named, non-zero generation cost; helps only the one chunk it's added to</td></tr>
+<tr><td>Neither</td><td>Simplest, zero extra work</td><td>Cannot guarantee a document-correct answer, per this concept's own tie</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSING/INCONSISTENT METADATA</span><h3>Silently wrong or empty filter results</h3><p>Traces back to Module 06's provenance/lineage discipline -- a field only half the corpus has produces unreliable filtering.</p></article>
+<article class="info-card"><span>HEADER DRIFT</span><h3>A stale header actively corrupts the vector</h3><p>Unlike metadata, which merely fails to filter when wrong, a header built from stale metadata changes the embedding itself for the worse.</p></article>
+<article class="info-card"><span>OVER-FILTERING</span><h3>Too many ANDed constraints zero out a relevant chunk</h3><p>A slightly different field value than expected can exclude the one chunk that would have answered the query.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Metadata gets embedded along with the chunk</td><td>False -- structurally separate field, confirmed by LangChain's own Document source.</td></tr>
+<tr><td>A header is just another name for metadata</td><td>False -- a header becomes part of the embedded text; metadata never does.</td></tr>
+<tr><td>More metadata fields always help</td><td>False -- only if a query can actually be mapped to that field's value.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Anthropic's cited figures (35%/49%/67% failure-rate reduction) are real, at-scale numbers, not this concept's own toy result -- cited directly, not self-computed.</li>
+<li>A template header (this concept's own worked example) costs nothing extra to generate; an LLM-generated header (Anthropic's real method) costs $1.02 per million document tokens, one-time, with prompt caching -- a real trade-off between quality and cost.</li>
+<li>Metadata's marginal cost is near-zero regardless of corpus size; a header's cost scales with chunk count, since it's a per-chunk generation step.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Which mechanism touches the embedding, and which doesn't?</summary><div>A contextual header touches the embedding -- it's prepended to the chunk's own text before embed() runs. Metadata never does -- it's a structurally separate field, used only for filtering.</div></details>
+<details class="quiz"><summary>Why is the S1/B1 tie unbreakable by ranking alone?</summary><div>Their raw vectors are byte-for-byte identical (0, 0.625, 0) -- there is no ranking rule, threshold, or reordering that can separate two mathematically identical numbers. Only excluding one (metadata) or changing one (header) can break the tie.</div></details>
+<details class="quiz"><summary>Why isn't a contextual header just more Concept 05 dilution?</summary><div>Dilution adds more unrelated raw passage text, diluting the average toward off-topic content. A header adds a short, targeted disambiguating string specifically chosen to resolve an ambiguity the chunk's own text can't -- same surface action, opposite intent and effect.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A third vendor, Vertex Systems, has the identical generic refund clause (a different day count, e.g. "60 days"). Predict: does it also tie with S1 and B1? Which single metadata field would guarantee retrieving Vertex specifically? If a header is added to Vertex alone, does it break the tie into a full ranking, or just into a 2-way tie plus a new leader?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Yes -- Vertex's clause has the identical content words {refunds, processed, days, request} as S1 and B1 (the day count is a numeral, carrying no vocabulary vector), so all three tie at exactly 0.6644. The field doc_id (or source_doc) = "vertex-systems-tos" would guarantee retrieving Vertex specifically, the same way it guaranteed Solstice earlier. Adding a header to Vertex alone lifts only Vertex's score -- S1 and B1 remain exactly tied with each other for second place. A header is a strictly per-chunk decision: it can promote the one chunk it's added to, but it can never resolve a tie between two OTHER chunks that didn't receive one.</div>
+</details>
+<p>Teach-back: explain why adding a header to one chunk can never change any other chunk's score, even when those other chunks were part of the original tie.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Metadata and contextual headers</h3><ul><li><b>Metadata:</b> structured fields, never embedded, filters the candidate set</li><li><b>Contextual header:</b> text prepended before embedding, rewrites the vector</li><li><b>Headline numbers:</b> 0.6644 = 0.6644 exact tie; 0.9759 after header (+46.89%); Anthropic's -35%/-49%/-67%; $1.02/million tokens</li></ul></div>
+<div><h3>Memorable example</h3><p>Solstice Cloud and Cobalt Systems' refund clauses tie at exactly the same cosine score -- a case pure similarity provably cannot break. A filter excludes one vendor outright; a header instead rewrites the other's own vector, lifting it without touching anyone else's score.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does this concept teach two mechanisms instead of one?</summary><div>They fix genuinely different blind spots by genuinely different means -- metadata narrows the candidate set before ranking (embedding untouched); a header changes the vector that gets ranked in the first place (candidate set untouched). Neither alone covers what the other does.</div></details>
+<details class="quiz"><summary>Mathematical: define embed(c), embed(h(c)+c), and filter(m(c)), and state which ever appears inside a cosine computation.</summary><div>embed(c) and embed(h(c)+c) both produce vectors that can appear inside cosine(·, query) -- they're the only two things ever passed to the embedding model. filter(m(c), constraints) returns a boolean and never appears inside a cosine computation at all; it only decides which vectors are eligible to be ranked.</div></details>
+<details class="quiz"><summary>Coding: implement apply_metadata_filter and show it never calls embed().</summary><div>A pure boolean predicate over each chunk's metadata dict, filtering a list comprehension -- Section 12 gives the full implementation; it takes no embedding vectors as input and returns none, only chunk records.</div></details>
+<details class="quiz"><summary>Debugging: a migration adds a new metadata field to only half the corpus. What breaks?</summary><div>Any filter that relies on that field silently returns incomplete or empty results for the unmigrated half -- not an embedding problem, a provenance/lineage gap (Module 06) that surfaces as a retrieval bug.</div></details>
+<details class="quiz"><summary>System design: a multi-tenant corpus has near-identical boilerplate across tenants. Metadata, header, or both?</summary><div>Metadata (tenant_id) first, since it's free and guarantees correct isolation between tenants. Add a header only if queries within a single tenant's own documents still need disambiguation the filter can't provide -- the two solve different layers of the same ambiguity.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.anthropic.com/engineering/contextual-retrieval"><b>Introducing Contextual Retrieval — Anthropic</b><br><span>Primary source for the contextual-header mechanism, the 35%/49%/67% failure-rate figures, and the $1.02/million-document-tokens cost.</span></a>
+<a href="https://docs.pinecone.io/guides/index-data/indexing-overview#metadata"><b>Indexing overview — metadata filtering — Pinecone docs</b><br><span>Confirms metadata filtering runs alongside vector similarity, independent of the embedding itself.</span></a>
+<a href="https://raw.githubusercontent.com/langchain-ai/langchain/master/libs/core/langchain_core/documents/base.py"><b>documents/base.py — LangChain source</b><br><span>Direct, structural proof that page_content and metadata are separate fields -- only page_content is ever embedded.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 COMPLETE · MODULE 07 · 9/10</span>
+<h3>One mechanism stays outside the embedding. The other rewrites it. One concept remains.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can predict what a header can and can't fix. Concept 10 is the module's true closing synthesis: evaluating chunk quality.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-08.html">← Back to Concept 08</a>
+</div>
+<p class="fine-print">Module 07 at 9 of 10 concepts. Next concept: evaluating chunk quality.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 09 · Complete</p>
+<a href="module-07-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

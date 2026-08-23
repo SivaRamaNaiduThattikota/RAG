@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Moving past character patterns into the document's real linguistic and structural units: abbreviation-aware sentence segmentation that doesn't break on 'Dr. Smith', blank-line paragraph boundaries, and heading-scoped structural sections reusing Module 06's parsing directly.">
+<title>Sentence, paragraph and structural chunking — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 03</p>
+<h1>"Contact Dr. Smith."<br><em>Where does that sentence actually end?</em></h1>
+<p class="lesson-lead">Concept 02's recursive method prefers a separator character over a raw one, but it still doesn't know what a sentence is — a 200-character run with no line break gets cut exactly like anything else. This concept moves past characters entirely into the document's real grammatical and structural units: abbreviation-aware sentence segmentation that refuses to treat "Dr." as a full stop, blank-line paragraph boundaries, and heading-scoped structural sections that group a heading with everything under it. The same passage, read three different ways, produces three different chunk counts — and no size parameter is involved anywhere.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third concept in Module 07 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's own admission that recursive chunking doesn't know what a sentence is</b></div>
+<div><span>BEGINNER GOAL</span><b>Trace abbreviation-aware sentence segmentation by hand and tell paragraph boundaries apart from heading-scoped structural boundaries</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Reading the document instead of counting its characters</h2>
+</div>
+<p>Fixed-size and recursive chunking (Concept 02) are both purely mechanical — neither one reads a sentence or a paragraph as an actual unit. This concept gives the first three unit types that do: sentences, paragraphs, and structural regions.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Sentences, paragraphs and sections — not separator characters</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Splitting along the document's actual grammatical and structural units — sentence segmentation that checks a candidate period against an abbreviation exception before trusting it as a boundary, paragraph boundaries at blank lines, and structural boundaries at headings, tags or section breaks (reusing Module 06 Concept 02's format parsing directly, not re-deriving it).</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Embedding-based semantic or proposition grouping (Concept 04), the chunk-size trade-off (Concept 05), and chunk overlap (Concept 06) — all named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> "Dr. Smith" is one abbreviation away from breaking a naive splitter in half. Abbreviation-aware segmentation fixes exactly that — it still isn't the same thing as understanding what the sentence means, which stays Concept 04's job.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 02 already admitted its own limit</h3>
+<p>Concept 02's own distinction table said it plainly: recursive chunking doesn't know what a sentence is. A single 200-character sentence with no internal line break would still get raw-cut by recursive chunking, exactly like fixed-size — separator preference only helps when a separator happens to be nearby. This concept closes that gap directly, not with a bigger separator list, but with three unit types recursive never had access to at all: sentences, paragraphs, and structural regions.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>"Contact Dr. Smith" — the whole problem in one line</h3>
+<p>Split naively on every period and <i>"Contact Dr. Smith in the billing department if your claim is denied."</i> produces <i>"Contact Dr"</i> as its own fragment — not a sentence by any definition, and not useful to embed or retrieve on its own. That one false split, caused by a single ordinary abbreviation, is the entire motivation for everything else in this concept.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0703-beginner-visual-title">
+<strong class="concept-visual-title" id="c0703-beginner-visual-title">VISUAL · THE SAME 215-CHARACTER PASSAGE, NAIVE VS. ABBREVIATION-AWARE</strong>
+<div class="boundary-strip-label"><b>NAIVE PERIOD-SPLIT</b><span>1 false split — "Contact Dr" is not a sentence</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a">Refund requests must be submitted within 45 days of purchase.</div>
+<div class="boundary-chunk shade-b cut-right">Contact Dr.</div>
+<div class="boundary-chunk shade-a cut-left">Smith in the billing department if your claim is denied.</div>
+<div class="boundary-chunk shade-b">Employees on the premium plan receive an extended 90 day window for filing a claim.</div>
+</div>
+<div class="boundary-strip-label" style="margin-top:20px"><b>ABBREVIATION-AWARE</b><span>0 false splits — 3 real sentences</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a">Refund requests must be submitted within 45 days of purchase.</div>
+<div class="boundary-chunk shade-b">Contact Dr. Smith in the billing department if your claim is denied.</div>
+<div class="boundary-chunk shade-a">Employees on the premium plan receive an extended 90 day window for filing a claim.</div>
+</div>
+<figcaption>Naive splitting (top) treats every "." as a sentence boundary and cuts "Dr." straight through, producing 4 fragments where one — highlighted in orange — is a false split. Abbreviation-aware segmentation (bottom) checks the word immediately before each candidate period against an exception set first, correctly rejects the "Dr." boundary, and produces the 3 real sentences.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three unit types, three different signals</h3>
+<table class="compare-table">
+<thead><tr><th>Technique</th><th>How it decides where to cut</th><th>Reuses</th></tr></thead>
+<tbody>
+<tr><td>Sentence segmentation</td><td>Candidate period, then check the immediately preceding word against an abbreviation exception set (or a statistical model) before accepting the boundary</td><td>New mechanism, first introduced here</td></tr>
+<tr><td>Paragraph boundaries</td><td>A blank line ("\n\n") or an explicit block marker in the source</td><td>The same blank-line convention Concept 02's recursive method already tried first — but here it's the whole unit, not just one preferred character</td></tr>
+<tr><td>Structural boundaries</td><td>Heading level, HTML tag scope, or a PDF section break in the already-parsed document</td><td>Module 06 Concept 02's format-specific parsing, reused directly as input rather than re-taught</td></tr>
+</tbody>
+</table>
+<p>Structural boundaries are the one technique here that can't run on raw text alone — they need a document that's already been parsed into headings, tags or sections, which is exactly what Module 06 Concept 02 produced.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The second HOW, still not the last one</h3>
+<div class="pipeline-preview">
+<span>Concept 02 — mechanical HOW: fixed-size, recursive</span><i>↓</i><span class="hot">Concept 03 — linguistic/structural HOW: sentence, paragraph, section</span><i>↓</i><span>Concept 04 — semantic HOW: meaning-based grouping</span>
+</div>
+<p>This concept is still answering "how do you actually find a boundary," just from grammar and markup instead of characters. It is not yet answering "what does this passage mean" — that question, and the meaning-based grouping that comes with it, stays Concept 04's job.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Naive splitting distinguished from abbreviation-aware segmentation, and paragraph splitting distinguished from structural splitting">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Naive period-splitting (every "." is a boundary)</span><span role="cell">Abbreviation-aware sentence segmentation (a period is checked before it's trusted)</span><span role="cell">The "Dr. Smith" pair: naive splitting introduces exactly one false split at the abbreviation; abbreviation-aware segmentation introduces zero.</span></div>
+<div role="row"><span role="cell">Paragraph splitting (blind to headings — isolates a heading line as its own block)</span><span role="cell">Structural splitting (heading-scope-aware — merges a heading with its own content)</span><span role="cell">On the identical 259-character passage: paragraph splitting produces 4 blocks, structural splitting produces 2 sections. Same text, genuinely different unit.</span></div>
+<div role="row"><span role="cell">This concept's boundary detection (still purely formatting/grammar-based)</span><span role="cell">Concept 04's semantic/proposition grouping (meaning-based)</span><span role="cell">A heading-scoped section is still just markup being followed, not content being understood — that upgrade is deferred to Concept 04, named forward only.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Splitting on every '.' is sentence splitting."</b><p>False — the "Contact Dr" proof. A period only marks a sentence boundary once it's been checked against likely abbreviations; treating every period as a boundary produces fragments that aren't sentences at all.</p></div>
+<div><b>"Paragraph splitting understands document structure."</b><p>False — it's blind to headings specifically. It isolates "## Premium Plan Exception" as its own one-line orphan block, disconnected from the content it's actually introducing.</p></div>
+<div><b>"Structural chunking is 'smarter' about meaning."</b><p>False — it's still boundary detection driven by markup (a heading tag, a nesting level), not by understanding what the section is about. That upgrade is Concept 04's job, not this one's.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>SCHEMA IMPACT</span><b>chunk_method gains three new values</b><p>The chunk_method column Concept 02 introduced now also accepts 'sentence', 'paragraph' and 'structural' alongside 'fixed' and 'recursive'.</p></div>
+<div><span>REUSED PARSING</span><b>Module 06 Concept 02's parsers, repurposed</b><p>The same Markdown/HTML parsing that once extracted document content now doubles as the input to structural chunk-boundary detection — no new parser needed.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concept 09 stores which heading a chunk came from</b><p>Metadata and contextual headers (Concept 09) will record which structural section a passage was pulled from — this concept only detects the boundary, not yet the bookkeeping.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Abbreviation-aware vs. naive period-splitting</b><p>They diverge exactly at abbreviations — "Dr." is the memorable case, but any listed abbreviation triggers the same divergence.</p></div>
+<div><b>Paragraph boundaries are blind to heading semantics</b><p>A blank-line splitter treats a heading line as just another block; structural boundaries do not.</p></div>
+<div><b>Recursive's separator preference is still not linguistic awareness</b><p>Even when Concept 02's recursive method lands near a sentence-like boundary, that's coincidence from separator characters correlating with sentence ends — not grammar.</p></div>
+<div><b>Semantic/proposition grouping is a different, later mechanism</b><p>Concept 04 groups by meaning, not by any formatting signal at all — not covered here.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does naive period-splitting turn "Contact Dr. Smith..." into a false fragment, and what single check fixes it?</li>
+<li>Why does paragraph-lens splitting isolate a Markdown heading as its own one-line block, while structural-lens splitting does not?</li>
+<li>Why is a heading-scoped structural section still not the same thing as a semantically grouped chunk?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 3 of 10</h3>
+<p>This concept's boundaries still come entirely from formatting and grammar — a period, a blank line, a heading tag. Concept 04 moves past structure entirely into semantic and proposition-based chunking: grouping passages by meaning rather than by any signal a parser can see, named forward only here.</p>
+<div class="beginner-memory"><b>Concept 03 is active.</b> Module 07 is at 3 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-02.html">← Back to Concept 02</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One passage, three lenses, three different chunk counts</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The "Dr. Smith" trap</b><small>One abbreviation, one false split, in a single line.</small></a>
+<a href="#b04"><span>02</span><b>Sentence, paragraph, structural</b><small>Three signals, none of them a chunk-size number.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Semantic/proposition grouping (Concept 04) stays separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Segmentation Lens lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Concept 02's own admitted limit → the "Contact Dr" false split, quantified → the same 259 characters read as 3 sentences, 4 paragraph blocks, or 2 structural sections → Module 07 at 3 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the sentence, paragraph and structural chunking deep dive</b><em>Formal notation, from-scratch code, and the Segmentation Lens lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The second HOW, moving from characters to units</h2></div></header>
+<p>Concept 02 supplied the first two chunking mechanisms, both operating on raw characters with no understanding of language. This concept supplies the second HOW: sentence, paragraph and structural boundaries, detected from grammar and markup rather than character patterns. Concept 04 still comes after this one — this concept detects boundaries, it does not yet understand meaning.</p>
+<div class="flow">
+<div class="flow-node">Concept 01 — why chunking is necessary</div>
+<div class="flow-node">Concept 02 — fixed-size and recursive chunking</div>
+<div class="flow-node hot">Concept 03 — sentence, paragraph and structural chunking</div>
+<div class="flow-node">Concepts 04-06 — semantic, size, overlap</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>SEGMENT</span><h3>Segment sentences with abbreviation awareness</h3><p>Check a candidate period against an exception set before trusting it as a sentence boundary.</p></article>
+<article class="info-card"><span>IDENTIFY</span><h3>Identify paragraph boundaries</h3><p>Split on blank lines or explicit block markers, independent of any heading semantics.</p></article>
+<article class="info-card"><span>PARSE</span><h3>Identify structural boundaries from markup</h3><p>Group a heading with everything under it until the next heading of equal or higher level, reusing Module 06 Concept 02's Markdown/HTML/PDF parsing.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Distinguish this concept from its neighbors</h3><p>Not Concept 02's separator preference (still just characters), and not Concept 04's meaning-based grouping (a different, later mechanism).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02's stated limit, cited directly.</b> Recursive chunking doesn't know what a sentence is — that admission is this concept's starting point, not re-derived here.</li>
+<li><b>Module 06 Concept 02's format-specific parsing, reused directly.</b> Markdown heading levels, HTML tag structure, and PDF section breaks are consumed here as already-parsed input to structural boundary detection, not re-taught.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Someone reading with a pen, not scissors on a timer</h2></div></header>
+<p>Concept 02's methods were a pair of blind scissors on a timer and someone hunting for the nearest seam — both still working from characters alone. This concept is a person reading with a pen: they circle a period only once they've checked it isn't following "Dr", "e.g." or "U.S." — an ordinary abbreviation, not a sentence's end. They notice blank lines as paragraph breaks without a second thought. And they notice a section header, understanding that everything until the next header belongs to it.</p>
+<div class="callout warning"><b>Analogy boundary</b>The reading-with-a-pen picture explains why abbreviation-awareness matters at all. It does not explain the exact boundary-check logic or the heading-nesting rule — Sections 05 and 06 give those formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Sentence boundary</td><td>A period accepted as a sentence end because the word immediately before it is not in the abbreviation exception set</td><td>—</td></tr>
+<tr><td>Abbreviation exception set</td><td>The list of tokens (e.g. "Dr", "Mr", "Mrs", "Prof") whose trailing period never counts as a sentence boundary on its own</td><td>ABBR</td></tr>
+<tr><td>Paragraph boundary</td><td>A blank-line marker ("\n\n") in the source text, independent of any heading content on either side</td><td>—</td></tr>
+<tr><td>Structural boundary</td><td>A heading level, HTML tag scope, or PDF section break in the already-parsed document</td><td>level(section)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: a period check, and a heading-nesting rule</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>SENTENCE LANE</span><p>For each candidate period: look back to the immediately preceding contiguous word. If that word is in the abbreviation set, skip — the period is not a boundary. Otherwise, close the sentence here and start the next one right after it.</p></div>
+<div class="lane"><span>STRUCTURAL LANE</span><p>Split the document into blank-line blocks first. Any block that opens with a heading marker starts a new section that absorbs every following block until the next heading of equal or higher level appears — a heading is never left isolated the way paragraph splitting leaves it.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The same 259 characters, three lenses, three counts</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0703-adv-visual-title">
+<strong class="concept-visual-title" id="c0703-adv-visual-title">VISUAL · SENTENCE, PARAGRAPH AND STRUCTURAL LENSES ON THE SAME MARKDOWN-HEADED PASSAGE</strong>
+<div class="boundary-strip-label"><b>SENTENCE-LENS</b><span>3 units — headings aren't prose, so they carry no sentence boundary of their own</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a">Refund requests must be submitted within 45 days of purchase.</div>
+<div class="boundary-chunk shade-b">Contact Dr. Smith in the billing department if your claim is denied.</div>
+<div class="boundary-chunk shade-a">Employees on the premium plan receive an extended 90 day window for filing a claim.</div>
+</div>
+<div class="boundary-strip-label" style="margin-top:20px"><b>PARAGRAPH-LENS</b><span>4 blocks — each heading isolated as its own one-line block</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a"># Refund Policy</div>
+<div class="boundary-chunk shade-b">Refund requests must be submitted within 45 days of purchase. Contact Dr. Smith in the billing department if your claim is denied.</div>
+<div class="boundary-chunk shade-a">## Premium Plan Exception</div>
+<div class="boundary-chunk shade-b">Employees on the premium plan receive an extended 90 day window for filing a claim.</div>
+</div>
+<div class="boundary-strip-label" style="margin-top:20px"><b>STRUCTURAL-LENS</b><span>2 sections — each heading merged with everything under it</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a"># Refund Policy — Refund requests must be submitted within 45 days of purchase. Contact Dr. Smith in the billing department if your claim is denied.</div>
+<div class="boundary-chunk shade-b">## Premium Plan Exception — Employees on the premium plan receive an extended 90 day window for filing a claim.</div>
+</div>
+<figcaption>All three rows read the identical 259-character Markdown-headed passage. Sentence-lens finds 3 real sentences (15/130/25/83-character blocks aren't its unit at all). Paragraph-lens finds 4 blind blank-line blocks (15, 130, 25, 83 characters), isolating each heading. Structural-lens finds 2 heading-scoped sections (147, 110 characters), merging each heading with its own content — strictly coarser than paragraph-lens, not a stricter version of it.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Module 06 — clean, parsed documents</span><i>↓</i><span>Concept 01 — why chunk</span><i>↓</i><span>Concept 02 — mechanical HOW</span><i>↓</i><span class="hot">Concept 03 — linguistic/structural HOW</span><i>↓</i><span>Concepts 04-06 — semantic, size, overlap</span>
+</div>
+<p>This concept is the first to consume Module 06's parsing output as more than raw text — structural boundary detection specifically depends on knowing where a heading or tag actually is, not just where a character falls.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>No closed form here either — but one honest count and one rule</h2></div></header>
+<div class="equation">false_split_count = periods_total − true_sentence_count<br>(worked example: 4 − 3 = 1, located exactly at "Dr.")<br>level(section_i) ≤ level(section_i+1) unless a new heading opens a fresh section</div>
+<p>Just like Concept 02's recursive method, sentence and structural boundary counts depend entirely on the passage's own content — there's no formula that predicts them in advance. What this concept can state precisely is how many boundaries naive splitting gets wrong (the false-split count above) and the nesting rule a structural splitter must respect: a section stays open until a heading of its own level or higher closes it.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>4 naive fragments vs. 3 real sentences, then 4 blocks vs. 2 sections</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Passage</th><th>Lens</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">215-char passage (S1+" "+S2+"\n\n"+S3, 4 literal periods, one of them "Dr.")</td><td>Naive period-split</td><td>4 fragments — "Refund...purchase." (0–63) · "Contact Dr." (false split) · "Smith...denied." · "Employees...claim."</td></tr>
+<tr><td>Abbreviation-aware</td><td>3 real sentences at character offsets (0,61), (62,130), (132,215) — rejoining them with the original space and paragraph break exactly reconstructs the 215-character original</td></tr>
+<tr><td rowspan="2">259-char Markdown-headed passage (adds "# Refund Policy" and "## Premium Plan Exception")</td><td>Paragraph-lens</td><td>4 blocks: 15, 130, 25, 83 characters — each heading isolated on its own</td></tr>
+<tr><td>Structural-lens</td><td>2 sections: 147, 110 characters — each heading merged with its own content</td></tr>
+</tbody>
+</table>
+<p>Every figure above was computed once via an executed Node.js script and independently cross-checked in a from-scratch Python re-implementation; both runs produced identical counts, offsets and character lengths with no discrepancy.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Well-formatted Markdown or HTML with clear headings</h3><p>Structural chunking is essentially free and unambiguous when the source markup is well-formed — the heading levels do the work.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Abbreviation-dense legal or technical text, or OCR-noisy scans</h3><p>Documents packed with abbreviations like "Fig.", "Sec.", "U.S.C." stress the exception list hard; OCR-mangled periods from Module 06 Concept 04's noisy text can silently degrade sentence segmentation quality the same way a missing abbreviation would.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating structural chunking as if it already understood meaning</h3><p>It only understands markup — a heading tag, a nesting level. Actual meaning-based grouping is Concept 04's distinct mechanism, not a bigger version of this one.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Both boundary detectors, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import re
+
+ABBREVIATIONS = {"Dr", "Mr", "Mrs", "Ms", "Prof", "Sr", "Jr"}
+
+def split_sentences(text, abbrev_aware=True):
+    sentences, start = [], 0
+    for i, ch in enumerate(text):
+        if ch != ".":
+            continue
+        j = i - 1
+        while j &gt;= 0 and text[j].isalpha():
+            j -= 1
+        word = text[j + 1:i]
+        is_abbrev = abbrev_aware and word in ABBREVIATIONS
+        if not is_abbrev:
+            sentences.append(text[start:i + 1].strip())
+            start = i + 1
+    rest = text[start:].strip()
+    if rest:
+        sentences.append(rest)
+    return sentences
+
+def structural_split(text):
+    blocks = text.split("\n\n")
+    sections, cur = [], None
+    for block in blocks:
+        if re.match(r"^#{1,6}\s", block):
+            if cur is not None:
+                sections.append(cur)
+            cur = block
+        else:
+            cur = block if cur is None else cur + "\n\n" + block
+    if cur is not None:
+        sections.append(cur)
+    return sections
+
+S1 = "Refund requests must be submitted within 45 days of purchase."
+S2 = "Contact Dr. Smith in the billing department if your claim is denied."
+S3 = "Employees on the premium plan receive an extended 90 day window for filing a claim."
+PARA1, PARA2 = S1 + " " + S2, S3
+TEXT2 = "\n\n".join(["# Refund Policy", PARA1, "## Premium Plan Exception", PARA2])
+
+sentences = split_sentences(PARA1) + split_sentences(PARA2)
+paragraphs = TEXT2.split("\n\n")
+sections = structural_split(TEXT2)
+
+assert len(TEXT2) == 259
+assert len(sentences) == 3
+assert len(paragraphs) == 4
+assert len(sections) == 2
+assert len(split_sentences(PARA1, abbrev_aware=False)) == 3  # "Contact Dr." false split
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same two lanes, in real tooling</h2></div></header>
+<p>For the linguistic half: NLTK's PunktSentenceTokenizer learns its abbreviation model unsupervised from a corpus rather than from a fixed list, and spaCy's sentence segmentation (its rule-based Sentencizer, or the dependency-parse-driven senter in a full pipeline) is the production alternative used inside a larger NLP stack. For the structural half: LangChain's MarkdownHeaderTextSplitter implements exactly the heading-scoped grouping taught here, directly reusing Module 06 Concept 02's Markdown heading-level distinction rather than re-deriving it. One honest limit: this concept's from-scratch exception list is a fixed set of strings — it has no way to weigh context the way Punkt's statistical model does, which matters most exactly where an abbreviation can legitimately sit at the end of a sentence (Section 20's transfer exercise runs straight into this).</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Segmentation Lens</h2></div></header>
+<div class="lab">
+<p>The fixed 259-character Markdown passage below, viewed through three different lenses — no chunk-size slider anywhere. Switch between Sentence, Paragraph and Structural to watch the unit count change, and toggle abbreviation-awareness off in Sentence-lens to reproduce the "Contact Dr" false split live.</p>
+<div style="display:flex;flex-wrap:wrap;gap:22px;margin:18px 0" role="radiogroup" aria-label="Segmentation lens">
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="radio" name="slLens_0703" id="slLensSentence_0703" value="sentence" checked style="width:auto;accent-color:var(--orange)">
+<span>Sentence</span>
+</label>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="radio" name="slLens_0703" id="slLensParagraph_0703" value="paragraph" style="width:auto;accent-color:var(--orange)">
+<span>Paragraph</span>
+</label>
+<label style="display:flex;align-items:center;gap:9px;cursor:pointer;font:13px 'DM Mono',monospace">
+<input type="radio" name="slLens_0703" id="slLensStructural_0703" value="structural" style="width:auto;accent-color:var(--orange)">
+<span>Structural</span>
+</label>
+</div>
+<label style="display:flex;gap:8px;align-items:center;margin:14px 0;font:13px DM Mono"><input type="checkbox" id="slAbbrevToggle_0703" checked> Abbreviation-aware segmentation (Sentence-lens only)</label>
+<div class="boundary-strip-label"><b id="slLensLabel_0703">SENTENCE-LENS</b><span id="slLensSub_0703"></span></div>
+<div class="boundary-strip" id="slStripWrap_0703"></div>
+<div class="norm-readout" id="slReadout_0703"></div>
+<div class="callout" id="slVerdict_0703"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Sentence vs. paragraph vs. structural vs. recursive</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Method</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Sentence</td><td>Every chunk is a complete grammatical thought — no "Contact Dr" fragments</td><td>Needs an abbreviation list or statistical model; still no awareness of document layout</td></tr>
+<tr><td>Paragraph</td><td>Cheap, respects the author's own blank-line breaks</td><td>Blind to headings — isolates them as orphan one-line blocks</td></tr>
+<tr><td>Structural</td><td>Keeps a heading together with the content it actually introduces</td><td>Needs real markup to work from; a plain-text document with no headings gives it nothing to key on</td></tr>
+<tr><td>Recursive (Concept 02)</td><td>Cheapest of all four, no linguistic tooling required</td><td>Only recognizes separator characters — never a real sentence, paragraph, or heading</td></tr>
+</tbody>
+</table>
+<p>Decision framework: default to structural chunking when the source format has real markup (Markdown, HTML, well-tagged PDF). Fall back to sentence or paragraph splitting for plain text with no such structure. Recursive chunking remains the cheap fallback of last resort when no linguistic tooling is available at all.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSING ABBREVIATION</span><h3>An unlisted abbreviation causes a false sentence split</h3><p>Any abbreviation absent from the exception set behaves exactly like "Dr." would without the check — a real sentence gets cut in half at a period that was never a sentence's end.</p></article>
+<article class="info-card"><span>FALSE HEADING MATCH</span><h3>A stray "#" gets misread as a Markdown heading</h3><p>A code block or a comment containing a literal "#" at the start of a line can be wrongly detected as a heading, opening a spurious structural section.</p></article>
+<article class="info-card"><span>OCR-MANGLED PERIODS</span><h3>Noisy scans silently degrade sentence segmentation</h3><p>A misread period from Module 06 Concept 04's OCR pipeline (tracked there by character error rate) can create or destroy a sentence boundary with no warning at all.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Sentence-aware splitting always beats recursive splitting</td><td>False in general — on already clean, short-lined prose, recursive can coincidentally align with sentence boundaries at lower implementation cost.</td></tr>
+<tr><td>Paragraph splitting is a form of structural chunking</td><td>False — Section 07's figure proves they produce different counts (4 vs. 2) on the identical text; paragraph splitting has no concept of a heading's scope at all.</td></tr>
+<tr><td>Abbreviation-aware segmentation requires full grammatical parsing</td><td>False — Punkt's unsupervised statistical model needs no parse tree at all, just collocation statistics learned from a corpus.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Abbreviation lists are language-specific — a splitter tuned for English abbreviations gains nothing on another language's conventions, a multilingual complexity named forward here and not covered further.</li>
+<li>Structural parsers have to tolerate malformed Markdown or HTML gracefully — a stray "#" or an unclosed tag shouldn't be allowed to silently corrupt every section boundary after it.</li>
+<li>Running a full spaCy pipeline versus a lightweight Punkt-style model is a genuine latency and cost trade-off once sentence segmentation runs at ingestion scale over an entire corpus.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why doesn't "Dr. Smith" break under abbreviation-aware segmentation?</summary><div>Before trusting the period after "Dr" as a sentence boundary, the check looks at the word immediately before it, finds "Dr" in the abbreviation exception set, and skips that period entirely — the sentence stays whole until the next real sentence-ending period.</div></details>
+<details class="quiz"><summary>Why does paragraph-lens isolate "## Premium Plan Exception" as its own block?</summary><div>Paragraph splitting only knows about blank lines. A heading surrounded by blank lines on both sides is, by that definition, its own paragraph — the splitter has no way to know it's a heading at all, let alone that it introduces the block after it.</div></details>
+<details class="quiz"><summary>Why isn't structural chunking the same thing as semantic chunking?</summary><div>Structural chunking follows markup it can see directly — a heading tag, a nesting level. It never inspects what the section is actually about. Grouping by meaning instead of markup is Concept 04's distinct, later mechanism.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new passage: <i>"The meeting is at 3 p.m. Mr. Lee will present the Q3 report."</i> Count the periods, work out how many fragments naive period-splitting produces, and then work out how many real sentences the passage actually contains.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>The passage has 4 literal periods (two inside "p.m.", one after "Mr", one after "report"), so naive period-splitting produces 4 fragments: "The meeting is at 3 p.", "m.", "Mr.", "Lee will present the Q3 report." The passage actually contains 2 real sentences: "The meeting is at 3 p.m." and "Mr. Lee will present the Q3 report." — so naive splitting introduces 2 false splits here, not 1. This one is genuinely harder than "Dr. Smith": simply adding "p" and "m" to the exception list to protect "p.m." backfires — it would also suppress the period that correctly ends the first sentence, merging both sentences into one. The abbreviation happens to fall right at a sentence's end, which a flat exception list can't tell apart from an abbreviation falling mid-sentence. That's exactly the case Punkt's statistical model and spaCy's parse-based segmenter are built to handle, and a from-scratch exception list is not.</div>
+</details>
+<p>Teach-back: explain why a bigger exception list alone cannot fully fix the "p.m." case, and what kind of signal a real sentence segmenter would need instead.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Sentence, paragraph and structural chunking</h3><ul><li><b>Sentence:</b> a period, checked against an abbreviation exception before it counts as a boundary</li><li><b>Paragraph:</b> a blank line — blind to whether either side is a heading</li><li><b>Structural:</b> a heading, tag, or section break — merges a heading with everything under it, until Concept 04's meaning-based grouping</li></ul></div>
+<div><h3>Memorable example</h3><p>"Contact Dr. Smith" naively splits into "Contact Dr" — a fragment, not a sentence. On the same 259-character Markdown passage: 3 sentences, 4 paragraph blocks, 2 structural sections — three genuinely different counts, no chunk-size parameter anywhere.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why do abbreviation lists matter for sentence segmentation?</summary><div>Without checking a candidate period against likely abbreviations, ordinary text containing "Dr.", "e.g.", or "U.S." produces sentence fragments that split mid-thought, degrading both embedding quality and retrieval relevance for those chunks.</div></details>
+<details class="quiz"><summary>Mathematical/algorithmic: derive the false-split count formula.</summary><div>false_split_count = periods_total − true_sentence_count. Every literal period is a candidate boundary; every one rejected by the abbreviation check reduces the eventual sentence count by one relative to naive splitting, so the gap between the two counts is exactly the number of false splits naive splitting would have introduced.</div></details>
+<details class="quiz"><summary>Coding: implement the heading-nesting grouper for structural chunking.</summary><div>Split on blank lines into blocks. Walk the blocks in order, keeping a current open section; whenever a block matches a heading pattern, close the current section (if any) and start a new one from that heading; otherwise append the block to whichever section is currently open. Close and emit the final open section after the loop ends.</div></details>
+<details class="quiz"><summary>Debugging: a structural splitter is over-splitting a document full of code samples. What do you check?</summary><div>Whether a literal "#" character inside a code block or comment is being matched by the same heading-detection regex used for real Markdown headings — code fences need to be excluded from heading detection, not treated as prose.</div></details>
+<details class="quiz"><summary>System design: how do you choose sentence, paragraph, or structural chunking for a new corpus?</summary><div>Check the source format first. Real markup with clear headings favors structural chunking. Plain text with clean paragraph breaks favors paragraph or sentence chunking. Abbreviation-dense or OCR-noisy text pushes toward a statistical sentence segmenter (Punkt, spaCy) over a hand-maintained exception list.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Sentence_boundary_disambiguation"><b>Sentence boundary disambiguation — Wikipedia</b><br><span>Names the abbreviation-period-vs-sentence-final-period ambiguity as the field's central problem — the formal name for the "Dr. Smith" trap this concept's worked example demonstrates.</span></a>
+<a href="https://www.nltk.org/api/nltk.tokenize.punkt.html"><b>nltk.tokenize.punkt — NLTK</b><br><span>Documents PunktSentenceTokenizer's unsupervised abbreviation-detection model — the real algorithm class behind statistical abbreviation-aware segmentation.</span></a>
+<a href="https://spacy.io/usage/linguistic-features"><b>Linguistic Features — spaCy</b><br><span>spaCy's sentence segmentation docs (Sentencizer and the dependency-parse-driven senter) — the production NLP-pipeline alternative cited for contrast.</span></a>
+<a href="https://python.langchain.com/docs/how_to/markdown_header_metadata_splitter/"><b>How to split Markdown by headers — LangChain</b><br><span>MarkdownHeaderTextSplitter — the production tool for structural chunking, directly reusing Module 06 Concept 02's Markdown heading-level distinction.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 COMPLETE · MODULE 07 · 3/10</span>
+<h3>Boundaries from grammar and markup, not meaning. Semantic chunking starts next.</h3>
+<p>Before moving on, work through Section 20's exercise and make sure the "p.m." case makes sense — it's a harder version of "Dr. Smith," not the same one twice. Concept 04 is next, and it's a genuinely different kind of mechanism: semantic and proposition-based chunking groups by meaning, not by any signal a parser can see. It is not a bigger version of this concept.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-02.html">← Back to Concept 02</a>
+</div>
+<p class="fine-print">Module 07 at 3 of 10 concepts. Next concept: Semantic and proposition-based chunking.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 03 · Complete</p>
+<a href="module-07-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

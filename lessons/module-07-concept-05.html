@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chunk size is a dial, not a binary choice: a 1-sentence chunk scores highest on retrieval yet leaves a dangling 'the window' with no antecedent; a 2-sentence chunk resolves it at a real 26.87% precision cost; the whole 5-sentence passage dilutes a further 10.67% while wasting 60% of its own sentences on the query -- the same average-pooling dilution from Concept 01, recurring at a smaller scale.">
+<title>Chunk size as a precision–context trade-off — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 05</p>
+<h1>The highest-scoring chunk<br><em>can still be unreadable.</em></h1>
+<p class="lesson-lead">Concepts 02 through 04 each picked a splitting METHOD. None of them answered a question that applies to all three equally: once you've decided how to split, how big should each piece actually be? A chunk that's too small retrieves precisely but can leave a dangling reference with nothing to resolve it against. A chunk that's too large stays fully readable but dilutes its own embedding — Concept 01's dilution mechanism, recurring here as a size choice rather than a chunk/no-chunk decision — and wastes context on sentences a given query never needed.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth concept in Module 07 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's average-pooling dilution formula and Concept 04's cosine similarity, both reused directly</b></div>
+<div><span>BEGINNER GOAL</span><b>Compute cosine similarity across chunk-size variants of one passage and explain why the size dial has two opposite failure modes, not one</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One dial, two ways to lose</h2>
+</div>
+<p>Concepts 02-04 chose a splitting method. This concept asks the question that sits on top of all three: for whichever method you picked, how big should a chunk actually be? Shrink it and you risk losing context a reader would need. Grow it and you dilute the very relevance you were trying to preserve.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Chunk size is a dial, not a binary choice</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Once a splitting method is chosen (Concepts 02-04), how big should the resulting chunks be? Small chunks retrieve precisely but risk losing context a reader needs. Large chunks stay readable but dilute relevance and waste budget on content a given query didn't ask for.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Chunk overlap (Concept 06) and parent-document/small-to-big retrieval (Concept 07) — the two engineered mitigations for this exact trade-off, named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> the small-chunk failure and the large-chunk failure are two ends of the SAME dial, not two separate problems — moving away from one always moves you toward the other.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 04 already named this question</h3>
+<p>Concept 04's own closing line asked it directly: "once a splitting method is chosen, how big should the resulting chunks actually be?" Every method from Concepts 02 through 04 can produce a chunk that's too small or too large, regardless of which one picked the boundary — fixed-size, recursive, sentence-aware, or semantic, the size question sits on top of all of them equally.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Meridian Freight's claims window, and a dangling "the window"</h3>
+<p>Five sentences about a shipment-insurance policy: (S1) "Meridian Freight offers two shipment-insurance tiers for commercial accounts: Basic and Priority." (S2) "Priority-tier accounts get an extended claims-filing window instead of Basic tier's standard rule." (S3) "The window is 60 days." (S4) "Once the window elapses without a filed claim, Meridian's system marks the shipment closed and no further compensation is issued." (S5) "Accounts enrolled in auto-renewal keep Priority-tier status without needing to resubmit paperwork each year." Query: "What happens if a claim isn't filed before the window elapses?" S4 alone answers the "what happens" half — but "the window" has no antecedent unless S3 comes with it.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0705-beginner-visual-title">
+<strong class="concept-visual-title" id="c0705-beginner-visual-title">VISUAL · PRECISION FALLS AS THE CHUNK GROWS ENOUGH TO STAY READABLE</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0705-svg-title-b c0705-svg-desc-b">
+<title id="c0705-svg-title-b">A bar chart of cosine similarity for three chunk sizes, decreasing as size grows</title>
+<desc id="c0705-svg-desc-b">Three bars. Chunk A, one sentence, reaches similarity 0.9946 but is marked unresolved. Chunk B, two sentences, reaches similarity 0.7273 and is marked resolved. Chunk C, five sentences, reaches similarity 0.6497 and is marked resolved but wasteful.</desc>
+<line x1="50" y1="150" x2="420" y2="150" stroke="#14241f" stroke-width="1.5"/>
+<line x1="50" y1="20" x2="50" y2="150" stroke="#14241f" stroke-width="1.5"/>
+<rect x="90" y="21" width="60" height="129" fill="#ff7957" stroke="#14241f" stroke-width="1.5"/>
+<rect x="220" y="55" width="60" height="95" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<rect x="350" y="68" width="60" height="82" fill="#d7ff53" stroke="#14241f" stroke-width="1.5"/>
+<g font-size="9" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="120" y="14">0.9946</text>
+<text x="250" y="48">0.7273</text>
+<text x="380" y="61">0.6497</text>
+<text x="120" y="166">Chunk A · 1 sentence</text>
+<text x="120" y="178" font-weight="700">unresolved</text>
+<text x="250" y="166">Chunk B · 2 sentences</text>
+<text x="250" y="178" font-weight="700">resolved</text>
+<text x="380" y="166">Chunk C · 5 sentences</text>
+<text x="380" y="178" font-weight="700">resolved, 60% wasted</text>
+</g>
+</svg>
+<figcaption>Chunk A scores highest on the query yet leaves "the window" undefined. Chunk B pays 26.87% of that precision to resolve it. Chunk C pays a further 10.67% for zero extra comprehension, since nothing past Chunk B was needed to answer this query.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Shrink loses context; grow dilutes relevance</h3>
+<table class="compare-table">
+<thead><tr><th>Direction</th><th>What happens</th><th>Failure mode</th></tr></thead>
+<tbody>
+<tr><td>Shrink</td><td>Fewer sentences per chunk, embedding narrows to one idea</td><td>An antecedent or qualifier the sentence depends on can land in a different chunk</td></tr>
+<tr><td>Grow</td><td>More sentences per chunk, embedding averages more ideas (Concept 01's pooling formula, reused directly)</td><td>Relevance dilutes and unrelated content rides along, wasting context-window budget</td></tr>
+</tbody>
+</table>
+<p>Both directions are the same dial. There is no size that avoids both failure modes at once for every possible query — only a size that's appropriate for the antecedent chains this particular corpus actually has.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A parameter of the method, not a fourth method</h3>
+<div class="pipeline-preview">
+<span>Concepts 02-04 — which splitting method</span><i>↓</i><span class="hot">Concept 05 — how big, a parameter of that method</span><i>↓</i><span>Concepts 06-07 — engineered mitigations</span>
+</div>
+<p>Size isn't a fifth splitting technique sitting alongside fixed-size, recursive, sentence-aware, and semantic — it's a parameter that applies to whichever of those four already made the boundary decision.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="The size axis distinguished from the method axis, from Concept 04's cost axis, and from Concept 06's overlap">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Size (this concept — how big a chunk is)</span><span role="cell">Method (Concepts 02-04 — how a boundary is chosen)</span><span role="cell">Independent axes — any method can be paired with any size.</span></div>
+<div role="row"><span role="cell">Size's precision-context cost (this concept)</span><span role="cell">Concept 04's embedding/LLM-call cost</span><span role="cell">Two different cost axes — a corpus can be expensive AND poorly sized, or cheap AND well sized.</span></div>
+<div role="row"><span role="cell">This concept's single-size dial</span><span role="cell">Chunk overlap (Concept 06 — sharing content across chunk borders)</span><span role="cell">Overlap doesn't change chunk size at all; it lets neighboring chunks borrow a little context from each other, named forward only here.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Bigger is always safer."</b><p>False — Chunk C shows zero extra comprehension gain over Chunk B, for a real further precision cost.</p></div>
+<div><b>"There's one universal correct chunk size."</b><p>False — it depends on how long the antecedent chains in a given corpus actually run, which varies by document type.</p></div>
+<div><b>"Smallest possible chunk is always best."</b><p>False — Chunk A scores highest yet is the one chunk in this passage that's actually unreadable on its own.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>PER-CORPUS TUNING</span><b>chunk_size becomes a tunable ingestion parameter, not a global constant</b><p>Billing/claims-style short-reference documents likely need a different size than long-form manuals.</p></div>
+<div><span>SOURCED DEFAULTS</span><b>Real frameworks anchor practical ranges</b><p>LlamaIndex's SentenceSplitter defaults to 1024 tokens; LangChain's TextSplitter defaults to 4000 characters (roughly 800-1000 tokens) — two independently-sourced points in the same broad-context band.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concepts 06-07 are the engineered escapes from this dial</b><p>Overlap and parent-child/small-to-big retrieval, both named forward only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Size is a real, tunable parameter</b><p>With sourced practical ranges (roughly 200-500 tokens narrow, 800-1500 tokens broad), not an abstract dichotomy.</p></div>
+<div><b>Two failure modes, one dial</b><p>Losing context (too small) and diluting relevance while wasting budget (too large) are opposite ends of the same knob.</p></div>
+<div><b>This axis is independent of Concept 04's cost axis</b><p>A chunking method's compute cost and its size are two separate design decisions.</p></div>
+<div><b>Concepts 06-07 are the two forthcoming mitigations</b><p>Overlap and parent-child/small-to-big retrieval — named only, not built here.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does Chunk A score highest on the query yet fail to actually answer it usefully?</li>
+<li>Why is the B-to-C precision drop described as "wasted" while the A-to-B drop is described as "a real cost worth paying"?</li>
+<li>Why is chunk size independent of Concept 04's embedding/LLM-call cost axis?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 5 of 10</h3>
+<p>This concept named the trade-off. Concept 06 gives the first engineered mitigation: chunk overlap, letting neighboring chunks share a little content across their border so a fact that would otherwise straddle a boundary doesn't lose its context either way.</p>
+<div class="beginner-memory"><b>Concept 05 is active.</b> Module 07 is at 5 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-04.html">← Back to Concept 04</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">The same dilution mechanism, recurring at a smaller scale</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The dangling "the window"</b><small>Highest-scoring chunk, and unreadable alone.</small></a>
+<a href="#b04"><span>02</span><b>Shrink vs. grow</b><small>Context loss on one end, dilution and waste on the other.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Overlap (Concept 06) and parent-child (Concept 07) stay separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Precision-Context Seesaw lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Concept 04's own forward-named question → three chunk sizes over one passage, cosine 0.9946 → 0.7273 → 0.6497 → the first drop buys a resolved antecedent, the second buys nothing → Module 07 at 5 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the chunk size precision-context trade-off deep dive</b><em>Formal notation, from-scratch code, and the Precision-Context Seesaw lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The fifth concept, the first to treat size as its own axis</h2></div></header>
+<p>Concepts 02 through 04 each picked a splitting method. This concept is the first to treat SIZE as a parameter that sits on top of all three method choices equally — not a fourth method, a dial that applies regardless of which method chose the boundary.</p>
+<div class="flow">
+<div class="flow-node">Concepts 02-04 — which method</div>
+<div class="flow-node hot">Concept 05 — how big</div>
+<div class="flow-node">Concepts 06-07 — mitigations</div>
+<div class="flow-node">Concept 08 — hierarchical, late chunking</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>COMPUTE</span><h3>Compute cosine similarity across chunk-size variants</h3><p>Given one passage split at three sizes, using Concept 01's average-pooling formula and Concept 04's cosine similarity.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Explain why size has two opposite failure modes</h3><p>Antecedent loss on the small end, dilution and waste on the large end — the same dial, not two separate problems.</p></article>
+<article class="info-card"><span>CITE</span><h3>Cite sourced practical ranges</h3><p>Real framework defaults (LlamaIndex, LangChain) anchoring narrow-vs-broad token bands, rather than an arbitrary number.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Distinguish size from method and from cost</h3><p>Three independent axes: which boundary (Concepts 02-04), how big (this concept), and how expensive (Concept 04's separate cost dimension).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's average-pooling dilution formula, reused directly.</b> Growing a chunk dilutes its embedding by the exact same pooling mechanism Concept 01 first introduced, now as a consequence of a size choice.</li>
+<li><b>Concept 04's cosine similarity, reused directly.</b> Every similarity value in this concept's worked example uses the identical formula.</li>
+<li><b>Module 02 Concept 10's lost-in-the-middle framing, cited not re-derived.</b> An overly large chunk compounds this risk if it lands mid-context at generation time.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A camera zoom, not a simple more-or-less</h2></div></header>
+<p>Zoom a camera in tight on one subject and the shot is sharp and precise — but it crops out the surrounding scene that would explain what's actually happening. Zoom out to capture the whole scene and the subject you care about becomes a small, diluted fraction of the frame. Neither setting is wrong; each is the right choice for a different question.</p>
+<div class="callout warning"><b>Analogy boundary</b>The zoom picture explains why there's a genuine trade-off. It doesn't explain the exact pooling math behind why a bigger chunk's embedding drifts — Sections 05 and 09 give that formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Narrow band</td><td>A commonly-cited chunk-size range favoring precision, roughly 200-500 tokens</td><td>—</td></tr>
+<tr><td>Broad band</td><td>A commonly-cited chunk-size range favoring context, roughly 800-1500 tokens</td><td>—</td></tr>
+<tr><td>Minimal sufficient chunk</td><td>The smallest span whose embedding both matches its target queries and leaves no unresolved antecedent</td><td>—</td></tr>
+<tr><td>Waste fraction</td><td>The share of a chunk's own sentences that do no work answering a specific query</td><td>(n − n_minimal) / n</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: shrink loses context, grow dilutes and wastes</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>SHRINK LANE</span><p>Fewer sentences per chunk narrows the embedding to one idea — raises match precision, raises the risk that a needed antecedent lands in a different chunk entirely.</p></div>
+<div class="lane"><span>GROW LANE</span><p>More sentences per chunk averages more ideas via Concept 01's pooling formula — lowers precision, resolves more antecedents, but raises the fraction of retrieved content irrelevant to any one query.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Precision falling as antecedent risk falls too</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0705-adv-visual-title">
+<strong class="concept-visual-title" id="c0705-adv-visual-title">VISUAL · THREE CHUNK SIZES AGAINST NARROW AND BROAD FRAMEWORK BANDS</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0705-svg-title-a c0705-svg-desc-a">
+<title id="c0705-svg-title-a">A number line from 0 to 1600 tokens showing the narrow and broad practical bands and where LlamaIndex's and LangChain's default sizes fall</title>
+<desc id="c0705-svg-desc-a">A horizontal axis from 0 to 1600 tokens. A lime-shaded region from 200 to 500 marks the narrow band. A second lime-shaded region from 800 to 1500 marks the broad band. A marker at 1024 tokens is labeled LlamaIndex default. A marker at roughly 800-1000 tokens is labeled LangChain default, 4000 characters.</desc>
+<line x1="40" y1="90" x2="420" y2="90" stroke="#14241f" stroke-width="2"/>
+<rect x="87" y="80" width="57" height="20" fill="#d7ff53" opacity=".6" stroke="#14241f"/>
+<rect x="250" y="80" width="132" height="20" fill="#d7ff53" opacity=".6" stroke="#14241f"/>
+<circle cx="337" cy="90" r="5" fill="#ff7957" stroke="#14241f" stroke-width="2"/>
+<circle cx="305" cy="90" r="5" fill="none" stroke="#14241f" stroke-width="2" stroke-dasharray="2 2"/>
+<g font-size="8" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="40" y="70">0</text>
+<text x="115" y="70">narrow band</text>
+<text x="115" y="118">200-500 tokens</text>
+<text x="316" y="70">broad band</text>
+<text x="316" y="118">800-1500 tokens</text>
+<text x="337" y="60" font-weight="700">LlamaIndex 1024</text>
+<text x="290" y="130">LangChain ~800-1000</text>
+<text x="420" y="70">1600</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Concepts 02-04 — which method</span><i>↓</i><span class="hot">Concept 05 — how big, a parameter OF that method</span><i>↓</i><span>Concepts 06-07 — mitigations</span><i>↓</i><span>Concept 08 — hierarchical, late chunking</span>
+</div>
+<p>Chunk size is set once per corpus at ingestion time and then affects every later stage — embedding-call count, index storage, retrieval precision, and how much context-window budget each retrieved chunk consumes at generation time.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same pooling formula, now varying chunk membership</h2></div></header>
+<div class="equation">e_chunk = (1/n) · Σ e_i  (Concept 01's own average-pooling formula)<br>waste_fraction = (n − n_minimal) / n</div>
+<p>Nothing new mathematically — the same pooling formula from Concept 01, applied here to compare what happens as n (the number of sentences pooled into one chunk) grows from 1 to 5 over the identical passage.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>0.9946 → 0.7273 → 0.6497, and what each drop buys</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Chunk</th><th>Sentences</th><th>Cosine to query</th><th>Antecedent</th></tr></thead>
+<tbody>
+<tr><td>A — Tight</td><td>{S4}</td><td>0.9946</td><td>Unresolved — "the window" undefined</td></tr>
+<tr><td>B — Minimal complete</td><td>{S3, S4}</td><td>0.7273</td><td>Resolved</td></tr>
+<tr><td>C — Whole passage</td><td>{S1..S5}</td><td>0.6497</td><td>Resolved, 3 of 5 sentences (60%) unused for this query</td></tr>
+</tbody>
+</table>
+<p>A→B drop: 0.2673 absolute, 26.87% relative — buys a resolved antecedent. B→C drop: 0.0776 absolute, 10.67% relative — buys nothing further for this query. A→C total drop: 34.68% relative. Every figure was computed once via an executed Node.js script (dot/norm/cosine/average-pool helpers) and independently hand-recomputed from raw dot/norm arithmetic for chunks B and C, matching to 6 decimal places.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>FAQ-style factoid queries</h3><p>The answer sentence is usually already self-contained — small chunks work fine, little antecedent risk.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Clause-heavy legal or contract text</h3><p>Several chained cross-references can need a larger minimal-sufficient unit than a single sentence provides.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>One fixed global chunk_size for a heterogeneous corpus</h3><p>Different document types carry different antecedent-chain lengths — a size tuned for one can fail badly on another.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The three chunk variants, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def dot(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+def cosine_similarity(a, b):
+    return dot(a, b) / (math.sqrt(dot(a, a)) * math.sqrt(dot(b, b)))
+
+def average_pool(vectors):
+    n = len(vectors)
+    dims = len(vectors[0])
+    return [sum(v[i] for v in vectors) / n for i in range(dims)]
+
+S1 = [0.85, 0.10, 0.05]
+S2 = [0.70, 0.65, 0.05]
+S3 = [0.10, 0.90, 0.05]
+S4 = [0.05, 0.15, 0.95]
+S5 = [0.05, 0.20, 0.85]
+Q  = [0.05, 0.05, 0.95]
+
+chunk_a = average_pool([S4])
+chunk_b = average_pool([S3, S4])
+chunk_c = average_pool([S1, S2, S3, S4, S5])
+
+cos_a = cosine_similarity(Q, chunk_a)
+cos_b = cosine_similarity(Q, chunk_b)
+cos_c = cosine_similarity(Q, chunk_c)
+
+assert round(cos_a, 4) == 0.9946
+assert round(cos_b, 4) == 0.7273
+assert round(cos_c, 4) == 0.6497
+assert cos_a > cos_b > cos_c  # precision falls monotonically as the chunk grows on this path
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Sourced defaults from real chunking tools</h2></div></header>
+<p>Pinecone's own chunking-strategies guide states the narrow-vs-broad trade-off directly: smaller chunks (around 256 tokens) for granular semantic precision, larger chunks (512-1024 tokens) for retaining more context. LlamaIndex's SentenceSplitter defaults to DEFAULT_CHUNK_SIZE = 1024 tokens with a 20-token overlap (confirmed directly from source) — a real, currently-shipping default sitting in the broad band. LangChain's TextSplitter defaults chunk_size to 4000 characters (confirmed directly from source) — roughly 800-1000 tokens at typical English prose density, an important units caveat: chunk_size is sometimes measured in characters, sometimes in tokens, and confusing the two silently changes what "4000" actually means.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Precision-Context Seesaw</h2></div></header>
+<div class="lab">
+<p>The same Meridian Freight passage and query, at three chunk spans. Switch spans to watch precision, antecedent status, and waste move together — a tug-of-war, not one independent curve.</p>
+<div class="dim-toggle" role="group" aria-label="Chunk span" id="seesawSpan_0705">
+<button type="button" class="secondary active" data-span="tight">Tight (1 sentence)</button>
+<button type="button" class="secondary" data-span="minimal">Minimal complete (2 sentences)</button>
+<button type="button" class="secondary" data-span="whole">Whole passage (5 sentences)</button>
+</div>
+<div id="seesawBarWrap_0705"></div>
+<p id="seesawPrecisionReadout_0705" style="margin-top:10px;font:13px DM Mono"></p>
+<div class="norm-readout" id="seesawReadout_0705"></div>
+<div class="callout" id="seesawVerdict_0705"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Narrow vs. broad vs. minimal-sufficient vs. engineered escapes</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Narrow chunk_size (~200-500 tokens)</td><td>High precision per chunk</td><td>Higher antecedent-loss risk</td></tr>
+<tr><td>Broad chunk_size (~800-1500 tokens)</td><td>Lower antecedent-loss risk</td><td>Diluted relevance, wasted context budget</td></tr>
+<tr><td>Minimal-sufficient targeted sizing</td><td>Best of both, per query pattern</td><td>Requires knowing the corpus's actual antecedent-chain lengths</td></tr>
+<tr><td>Overlap / parent-child (Concepts 06-07, named only)</td><td>Engineered escapes from the pure size dial</td><td>Add their own cost and complexity, not built here</td></tr>
+</tbody>
+</table>
+<p>Decision framework: start from a sourced default (LlamaIndex's 1024 tokens or LangChain's 4000 characters), then narrow or broaden based on how long this corpus's own antecedent chains actually run — measured empirically, not guessed.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>TOO SMALL</span><h3>Antecedent loss</h3><p>An incomplete or ambiguous reference reaches the LLM with nothing to resolve it against.</p></article>
+<article class="info-card"><span>TOO LARGE</span><h3>Dilution, compounded by lost-in-the-middle risk</h3><p>Concept 01's dilution mechanism recurring, plus Module 02 Concept 10's attention-dilution risk if such a chunk lands mid-context.</p></article>
+<article class="info-card"><span>ONE FIXED SIZE, HETEROGENEOUS CORPUS</span><h3>A single global chunk_size across very different document types</h3><p>What works for short FAQ entries can fail badly on clause-heavy contracts in the same corpus.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Smaller is always more precise, so always shrink</td><td>False — Chunk A's own antecedent failure shows the highest-scoring chunk can still be unreadable.</td></tr>
+<tr><td>Bigger is always safer for comprehension</td><td>False — B→C shows zero extra comprehension gain over B, for a real further precision cost.</td></tr>
+<tr><td>Size and overlap solve the same problem</td><td>False — size is how much content one chunk holds; overlap (named forward only) is how much is shared across chunk borders.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>chunk_size affects embedding-call count and index storage directly — more, smaller chunks means more total chunks to embed and store.</li>
+<li>Larger chunks consume more context-window budget at generation time per retrieved result, competing with Module 02 Concept 10's lost-in-the-middle risk.</li>
+<li>chunk_size is normally tuned empirically per corpus against retrieval-quality metrics, not chosen once and left fixed — Module 18's evaluation material, named forward only, not taught here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does Chunk A score highest on the query yet fail to usefully answer it?</summary><div>Cosine similarity measures how closely a chunk's embedding matches the query, not whether the chunk is self-contained. Chunk A's tight focus maximizes similarity but strips away the antecedent "the window" depends on — a high score and an unreadable chunk at the same time.</div></details>
+<details class="quiz"><summary>Why is the A-to-B drop "worth it" while the B-to-C drop is "wasted"?</summary><div>The A-to-B drop buys something real: a resolved antecedent the query needs. The B-to-C drop buys nothing further for this specific query — three of the five sentences in Chunk C do no work answering it, so that additional precision cost has no offsetting benefit.</div></details>
+<details class="quiz"><summary>Why is chunk size independent of Concept 04's embedding/LLM-call cost axis?</summary><div>Concept 04's cost axis is about which chunking METHOD is used (semantic and proposition chunking cost more calls than fixed-size or recursive). Size is about how much content goes into each chunk once a method is already chosen — a cheap method can still be sized well or badly, and an expensive method's chunks can still be too small or too large.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Two new toy sentence embeddings and a query: T1=[0.90,0.10,0.10] (topic: pricing tier name), T2=[0.10,0.85,0.20] (topic: pricing tier price), Query=[0.10,0.90,0.15]. Compute cosine similarity for a tight chunk {T2} alone versus a 2-sentence chunk {T1,T2} averaged, and identify which one leaves a plausible antecedent question unresolved (e.g. "which tier is this the price of?").</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Tight chunk {T2}: cos(Query, T2) ≈ 0.9978 — very high, but "the price" has no antecedent naming which tier it belongs to. 2-sentence chunk {T1,T2} averaged = [0.50,0.475,0.15]; cos(Query, avg) ≈ 0.7718 — lower, but now the tier name (T1) travels with the price, resolving "which tier" the same way Chunk B resolved "the window" in the lesson's own worked example. Both figures were computed via an executed script, matching the same pattern as the lesson's own Chunk A/B numbers.</div>
+</details>
+<p>Teach-back: explain why this exercise's tight-chunk similarity (≈0.99) and the lesson's own Chunk A similarity (0.9946) are both suspiciously close to 1.0, and what that pattern suggests about single-sentence chunks in general.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Chunk size as a precision-context trade-off</h3><ul><li><b>Shrink:</b> raises precision, raises antecedent-loss risk</li><li><b>Grow:</b> lowers antecedent-loss risk, dilutes relevance and wastes budget (Concept 01's pooling formula, recurring)</li><li><b>Core relation:</b> one dial, two opposite failure modes — not two separate problems</li></ul></div>
+<div><h3>Memorable example</h3><p>A 1-sentence chunk scores highest (0.9946) yet is unreadable — "the window" has no antecedent. A 2-sentence chunk resolves it for 26.87% less precision. The whole 5-sentence passage pays a further 10.67% for zero extra comprehension, wasting 60% of its own sentences on this query.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't the smallest possible chunk always the best choice?</summary><div>A smaller chunk maximizes embedding precision to a query but risks stripping away context (an antecedent, a qualifier) the chunk needs to be understood on its own — Chunk A's own dangling "the window" is the concrete case.</div></details>
+<details class="quiz"><summary>Mathematical: derive how average pooling of n vectors affects cosine similarity to a fixed query as n grows.</summary><div>Average pooling computes e_chunk = (1/n)·Σe_i. As unrelated or less-aligned vectors join the average, the resulting vector drifts toward the mean direction of all pooled vectors rather than staying aligned with any single one — cosine similarity to a fixed query generally falls as n grows, unless every newly-added vector happens to point in exactly the query's own direction.</div></details>
+<details class="quiz"><summary>Coding: sketch a minimal-sufficient-chunk finder (pseudocode is fine).</summary><div>Starting from a single sentence, incrementally grow the chunk (adding the next sentence) while checking whether all pronouns/definite references within the current chunk have an antecedent inside that same chunk; stop growing as soon as that check passes, rather than committing to one fixed size upfront.</div></details>
+<details class="quiz"><summary>Debugging: a corpus's retrieval quality drops after doubling chunk_size. What do you check first?</summary><div>Whether the larger chunks are diluting embeddings by pooling unrelated content together (Concept 01's mechanism) rather than genuinely capturing more useful context — measure average intra-chunk topic coherence before assuming size alone is the fix.</div></details>
+<details class="quiz"><summary>System design: how would you choose chunk_size differently for a FAQ corpus versus a legal-contract corpus?</summary><div>A FAQ corpus's answers are typically self-contained per entry, favoring a narrow chunk_size close to one Q&amp;A pair. A legal-contract corpus often has long cross-reference chains between clauses, favoring a broader chunk_size or a structural/hierarchical unit (Concepts 07-08, named forward) large enough to keep a clause's referents together.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.pinecone.io/learn/chunking-strategies/"><b>Chunking Strategies for LLM Applications — Pinecone</b><br><span>States the narrow-vs-broad token-range guidance (256 tokens for granular precision, 512-1024 for more context) cited in Section 13.</span></a>
+<a href="https://raw.githubusercontent.com/run-llama/llama_index/main/llama-index-core/llama_index/core/constants.py"><b>constants.py — LlamaIndex source</b><br><span>Confirms DEFAULT_CHUNK_SIZE = 1024 tokens and DEFAULT_CHUNK_OVERLAP = 20, the sourced broad-band anchor in Section 13.</span></a>
+<a href="https://raw.githubusercontent.com/langchain-ai/langchain/master/libs/text-splitters/langchain_text_splitters/base.py"><b>base.py — LangChain text-splitters source</b><br><span>Confirms TextSplitter's default chunk_size of 4000 characters, grounding the units-matter point (characters vs. tokens) in Section 13.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 COMPLETE · MODULE 07 · 5/10</span>
+<h3>The trade-off is named. Overlap is the first engineered mitigation.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can compute a tight-versus-complete chunk's similarity by hand. Concept 06 gives the first engineered mitigation: chunk overlap, letting neighboring chunks share content across their border.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-04.html">← Back to Concept 04</a>
+</div>
+<p class="fine-print">Module 07 at 5 of 10 concepts. Next concept: Chunk overlap and boundary loss.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 05 · Complete</p>
+<a href="module-07-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

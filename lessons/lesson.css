@@ -342,4 +342,8 @@ html[data-theme=dark] .zero-vector-message{background:#06130f}
 .boundary-readout b{color:var(--ink)}
 .boundary-caption{font-size:13px!important;color:var(--muted);margin-top:8px}
 html[data-theme=dark] .boundary-chunk.shade-b{background:#0c1f18}
+
+/* Filter-or-Prepend Console lab (Module 07, Concept 09) */
+.rank-chip.excluded{opacity:.4}
+.rank-chip.match{outline:3px solid var(--lime);outline-offset:-3px}
 @media(max-width:480px){.token-bar{height:20px}.boundary-strip{font-size:11px}}
