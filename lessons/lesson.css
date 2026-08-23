@@ -329,4 +329,17 @@ html[data-theme=dark] .vocab-tag.iv{background:#0c1f18}
 .zero-vector-message{padding:16px;border:2px dashed var(--orange);color:var(--orange);font:13px DM Mono;text-align:center;margin:14px 0}
 .callout.critical{border-left-width:7px}
 html[data-theme=dark] .zero-vector-message{background:#06130f}
-@media(max-width:480px){.token-bar{height:20px}}
+.boundary-strip-label{display:flex;justify-content:space-between;align-items:baseline;font:11px DM Mono;color:var(--orange);margin:22px 0 8px}
+.boundary-strip-label b{color:var(--ink);font-size:12px}
+.boundary-strip{display:flex;width:100%;border:1px solid var(--ink);overflow:hidden;font:13px/1.5 'DM Mono',monospace;min-height:70px}
+.boundary-chunk{display:flex;align-items:center;padding:9px 7px;white-space:pre-wrap;word-break:break-word;border-right:1px solid var(--ink);box-sizing:border-box}
+.boundary-chunk:last-child{border-right:0}
+.boundary-chunk.shade-a{background:var(--white)}
+.boundary-chunk.shade-b{background:var(--paper)}
+.boundary-chunk.cut-left{box-shadow:inset 4px 0 0 var(--orange)}
+.boundary-chunk.cut-right{box-shadow:inset -4px 0 0 var(--orange)}
+.boundary-readout{font:13px DM Mono;color:var(--muted);margin-top:10px}
+.boundary-readout b{color:var(--ink)}
+.boundary-caption{font-size:13px!important;color:var(--muted);margin-top:8px}
+html[data-theme=dark] .boundary-chunk.shade-b{background:#0c1f18}
+@media(max-width:480px){.token-bar{height:20px}.boundary-strip{font-size:11px}}

@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The first two concrete chunking methods: fixed-size (slice every N characters) and recursive (prefer a natural separator, fall back only where needed) -- the same passage split both ways shows one cutting mid-word by accident and the other never doing so.">
+<title>Fixed-size and recursive chunking — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-07-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 02 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 07 · CONCEPT 02</p>
+<h1>Cut it somewhere.<br><em>Just not through the middle of a word.</em></h1>
+<p class="lesson-lead">Concept 01 proved a document has to be split before it can be embedded safely — it never said how. This concept gives the first two answers, both purely mechanical: fixed-size chunking slices every N characters with no regard for content at all; recursive chunking prefers a natural separator first, and only falls back to a raw cut where nothing better is available. The same 146-character passage, split both ways at the same size, shows exactly what that difference buys.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second concept in Module 07 (Phase 2)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's two failure modes (truncation, dilution), reused directly as motivation, not re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Trace both algorithms by hand and compute a boundary-cut count for a given chunk size</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The two simplest ways to actually cut a document</h2>
+</div>
+<p>Concept 01 argued splitting is unavoidable but picked no method. This concept gives the first two, in order of sophistication — both mechanical, neither understanding a sentence or paragraph as a linguistic unit yet.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Fixed-size cuts blindly; recursive looks for a seam first</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Fixed-size chunking — slice every N characters or tokens, ignoring content entirely. Recursive chunking — try a preferred separator first (paragraph break, then line break, then space), and only fall back to a raw character cut for a piece still too large after that.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Sentence/paragraph-aware NLP segmentation (Concept 03), semantic and proposition-based chunking (Concept 04), the chunk-size trade-off itself (Concept 05), and chunk overlap (Concept 06) — all named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> both methods are purely mechanical — recursive is not "smarter" about language, it just prefers separator characters over raw ones. Understanding an actual sentence boundary is Concept 03's job.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 01 proved a split is needed. It never said which one.</h3>
+<p>Concept 01's own closing line named both methods by title without teaching either: "Concept 02 opens the actual mechanism: fixed-size chunking and recursive chunking, the simplest two ways to actually produce the smaller pieces this concept has been arguing are necessary." This concept keeps that promise. Both methods are content-agnostic — neither reads a sentence or a paragraph as a linguistic unit — which is exactly why they're the simplest possible starting point, not the best available method.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A 146-character passage, cut at chunk_size = 42</h3>
+<p>The passage reuses Concept 07 of Module 06's own versioned refund text as its first sentence, plus a new second sentence: <i>"Refund requests must be submitted within 45 days of purchase.</i> [paragraph break] <i>Employees on the premium plan receive an extended 90 day window for filing a claim."</i> — 61 characters, then 83 characters, plus a 2-character paragraph break, 146 total. Slice it into 42-character pieces two different ways and watch where each one actually lands.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0702-beginner-visual-title">
+<strong class="concept-visual-title" id="c0702-beginner-visual-title">VISUAL · THE SAME PASSAGE, TWO METHODS, ONE CHUNK SIZE (N=42)</strong>
+<div class="boundary-strip-label"><b>FIXED-SIZE</b><span>2 of 3 boundaries cut a word or number</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a">Refund requests must be submitted within 4</div>
+<div class="boundary-chunk shade-b cut-left cut-right">5 days of purchase.⏎⏎Employees on the prem</div>
+<div class="boundary-chunk shade-a cut-left cut-right">ium plan receive an extended 90 day window</div>
+<div class="boundary-chunk shade-b"> for filing a claim.</div>
+</div>
+<div class="boundary-strip-label" style="margin-top:20px"><b>RECURSIVE</b><span>0 of 3 boundaries cut a word or number</span></div>
+<div class="boundary-strip">
+<div class="boundary-chunk shade-a">Refund requests must be submitted within</div>
+<div class="boundary-chunk shade-b">45 days of purchase.</div>
+<div class="boundary-chunk shade-a">Employees on the premium plan receive an</div>
+<div class="boundary-chunk shade-b">extended 90 day window for filing a claim.</div>
+</div>
+<figcaption>Fixed-size (top) slices at exactly every 42nd character with no regard for content — it splits "45" into "4"/"5" and "premium" into "prem"/"ium", marked in orange. Recursive (bottom) prefers to break at a paragraph mark or a space first, so all three of its boundaries land on a dropped separator instead of inside a word.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two algorithms, one shared target size</h3>
+<table class="compare-table">
+<thead><tr><th>Method</th><th>How it decides where to cut</th><th>Fallback</th></tr></thead>
+<tbody>
+<tr><td>Fixed-size</td><td>Every Nth character, no exceptions</td><td>None needed — it never looks at content</td></tr>
+<tr><td>Recursive</td><td>Try "\n\n" first; merge pieces back up to N; recurse into any oversized piece using "\n", then " "</td><td>Raw characters, only for a single unbroken run still longer than N</td></tr>
+</tbody>
+</table>
+<p>Recursive chunking's own fallback list — paragraph break, then line break, then space, then raw characters — is LangChain's actual default separator order for its RecursiveCharacterTextSplitter, confirmed directly from its source. It only reaches the last, riskiest level when a single word or number run is itself longer than the chunk size — which never happens in this passage, since its longest word is 9 characters.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The first HOW, with two more still ahead</h3>
+<div class="pipeline-preview">
+<span>Concept 01 — why chunking is necessary</span><i>↓</i><span class="hot">Concept 02 — mechanical HOW: fixed-size, recursive</span><i>↓</i><span>Concept 03 — linguistic HOW: sentence, paragraph, structure</span>
+</div>
+<p>This concept and Concept 03 both answer "how do you actually split text" — this one purely by character patterns, Concept 03 by the document's actual grammatical and structural units. Neither is "the" answer; Concepts 04 and 05 add two more angles before the module settles into trade-offs.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What this concept is not</h3>
+<div class="distinction-table" role="table" aria-label="Fixed-size distinguished from recursive, and recursive distinguished from sentence-aware splitting">
+<div role="row"><b role="cell">Term</b><b role="cell">Is NOT</b><b role="cell">Why it matters</b></div>
+<div role="row"><span role="cell">Fixed-size chunking (blind, arithmetic)</span><span role="cell">Recursive chunking (separator-preferring, with a fallback)</span><span role="cell">Fixed-size's cut count is a coincidence of where N divides the passage; recursive's is a property of its separator order.</span></div>
+<div role="row"><span role="cell">Recursive chunking's separator preference (still just characters: "\n\n", "\n", " ")</span><span role="cell">Sentence-aware splitting (Concept 03 — actual linguistic sentence boundaries)</span><span role="cell">Recursive doesn't know what a sentence is. A paragraph with no line breaks and a 200-character single sentence would still get raw-cut by recursive, but not by a true sentence splitter.</span></div>
+<div role="row"><span role="cell">chunk_size N (this concept)</span><span role="cell">stride and overlap (Concept 06)</span><span role="cell">Every example here uses stride = N (no overlap). Making stride smaller than N so chunks share content is Concept 06's own mechanism, named forward only.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Recursive chunking understands sentences."</b><p>False — it only recognizes separator characters. It happens to often land near sentence-like boundaries because spaces and paragraph breaks correlate with them, not because it parses grammar.</p></div>
+<div><b>"A bigger chunk_size always means fewer mid-word cuts for fixed-size."</b><p>False, and directly checkable: Section 07's chart shows the cut count bouncing between 0 and 4 as N increases from 20 to 80 — it is not monotonic, because it only depends on where N happens to land relative to word boundaries.</p></div>
+<div><b>"Recursive chunking never cuts mid-word."</b><p>Only true until a single unbroken run of text (a very long word, a URL, a hash) exceeds chunk_size — at that point it falls back to the exact same raw-character cut fixed-size always uses.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>SCHEMA IMPACT</span><b>Each chunk row records which method produced it</b><p>Module 10's chunk table gets a chunk_method column alongside chunk_index — useful for debugging retrieval quality back to how a chunk was actually produced.</p></div>
+<div><span>COST</span><b>Both methods produced the same chunk count here</b><p>4 chunks either way in this worked example — that's a property of this passage, not a guarantee; a different passage could easily produce different counts per method.</p></div>
+<div><span>FORWARD REFERENCE</span><b>Concept 05 decides how big N should actually be</b><p>This concept fixed N at 42 purely to make a clean worked example. Choosing N for a real corpus is Concept 05's own trade-off, named forward only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Both methods are purely mechanical</b><p>Neither fixed-size nor recursive chunking reads a sentence or paragraph as a linguistic unit — that starts at Concept 03.</p></div>
+<div><b>Fixed-size's safety is coincidental</b><p>Whether a given chunk_size happens to avoid cutting mid-word depends only on arithmetic, not on anything about the method itself.</p></div>
+<div><b>Recursive's safety has a real reason, and a real limit</b><p>It's safe here because no word exceeds the chunk size — it would fall back to a raw cut the moment one did.</p></div>
+<div><b>Two more HOWs are still ahead</b><p>Sentence/paragraph-aware splitting (Concept 03) and semantic/proposition-based chunking (Concept 04) haven't been covered yet.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does recursive chunking avoid cutting "45" and "premium" in the worked example, while fixed-size does not?</li>
+<li>Under what condition would recursive chunking fall back to a raw character cut, and would that cut be any safer than fixed-size's?</li>
+<li>Why can't fixed-size's mid-word cut count be trusted to shrink monotonically as chunk_size grows?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 07 · 2 of 10</h3>
+<p>Both methods here still treat text as a stream of characters. Concept 03 moves to the document's actual linguistic and structural units — sentence segmentation that knows "Dr. Smith" isn't a sentence boundary, paragraph boundaries, and structural markers like Markdown headings, reusing Module 06's own parsing work.</p>
+<div class="beginner-memory"><b>Concept 02 is active.</b> Module 07 is at 2 of 10 concepts.</div>
+<a class="button primary" href="module-07-concept-01.html">← Back to Concept 01</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One passage, two mechanical methods, one clear winner on this example</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The 146-character passage</b><small>Reusing Module 06 Concept 07's own versioned refund text.</small></a>
+<a href="#b04"><span>02</span><b>Fixed-size vs. recursive</b><small>Same chunk_size, same chunk count, very different cut rate.</small></a>
+<a href="#b06"><span>03</span><b>What's deferred</b><small>Sentence-aware splitting (Concept 03) and overlap (Concept 06) stay separate, named only.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The formulas, from-scratch code, and the Boundary Cutter lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> Concept 01's named-but-untaught methods → the same passage split both ways at N=42 (2 of 3 cuts vs. 0 of 3) → a live slider proving fixed-size's safety is arithmetic luck, not design → Module 07 at 2 of 10.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the fixed-size and recursive chunking deep dive</b><em>Formal notation, from-scratch code, and the Boundary Cutter lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first HOW, purely mechanical</h2></div></header>
+<p>Concept 01 established that some splitting decision is unavoidable. This concept supplies the first two concrete mechanisms — fixed-size and recursive chunking — both operating on raw characters with no understanding of language at all. Concept 03 will add that understanding; this concept deliberately doesn't have it yet.</p>
+<div class="flow">
+<div class="flow-node">Concept 01 — why chunking is necessary</div>
+<div class="flow-node hot">Concept 02 — fixed-size and recursive chunking</div>
+<div class="flow-node">Concept 03 — sentence, paragraph and structural chunking</div>
+<div class="flow-node">Concepts 04-06 — semantic, size, overlap</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>TRACE</span><h3>Trace both algorithms by hand for a given size</h3><p>Given a passage and a chunk_size, produce the exact chunks either method returns.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Compute a boundary-cut count</h3><p>Count how many chunk boundaries land inside a word or number, for either method.</p></article>
+<article class="info-card"><span>RECOGNIZE</span><h3>Recognize when recursive still falls back to a raw cut</h3><p>Exactly when a single unbroken run of text exceeds chunk_size — never in this passage, but a real risk in others (URLs, hashes, long identifiers).</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Distinguish separator-based splitting from linguistic splitting</h3><p>Recursive's separator list is still just characters — Concept 03's sentence/paragraph awareness is a different, later mechanism.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's two failure modes, cited as motivation.</b> Truncation and dilution are why some split is needed; this concept doesn't re-derive either, it supplies the first two ways to actually produce one.</li>
+<li><b>Module 06 Concept 07's versioned refund text, reused directly.</b> The worked example's first sentence is the exact v2 POLICY-REFUND-001 text that concept tracked through parsing and versioning — the first time this recurring document gets physically cut into pieces.</li>
+<li><b>Module 02 Concept 02's tokenization, cited only in passing.</b> This concept measures chunk_size in characters for hand-verifiable determinism; production splitters often measure in tokens via a real tokenizer instead — a distinction noted, not re-taught.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Blind scissors vs. someone looking for a seam</h2></div></header>
+<p>Fixed-size chunking is a pair of scissors on a timer, cutting a ribbon at a fixed interval with eyes closed — it doesn't matter what's printed on the ribbon at that point. Recursive chunking is someone who first looks for an existing seam or perforation near the target length and cuts there instead; only when no seam is close enough do they close their eyes and cut blind, exactly like the first method.</p>
+<div class="callout warning"><b>Analogy boundary</b>The scissors analogy explains why one method is safer on ordinary text. It does not explain the exact merge-and-recurse algorithm or the boundary-cut arithmetic — Sections 05 and 06 give those formally.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>chunk_size</td><td>The target maximum length of one chunk, in characters (or tokens, in production)</td><td>N</td></tr>
+<tr><td>stride</td><td>The distance between the start of one chunk and the next; stride = N means no overlap</td><td>—</td></tr>
+<tr><td>separator list</td><td>An ordered list of preferred split points, tried from most to least preferred</td><td>["\n\n","\n"," ",""]</td></tr>
+<tr><td>boundary cut</td><td>A chunk boundary whose left and right characters are both letters or digits — i.e., it splits a word or number</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: no preference at all, or a fallback ladder</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>FIXED-SIZE LANE</span><p>Slice the text every N characters, from position 0. No merging, no separators, no recursion — the algorithm never inspects content.</p></div>
+<div class="lane"><span>RECURSIVE LANE</span><p>Split on the first separator in the list; merge consecutive pieces back together (re-inserting the separator) as long as the result stays within N; recurse into any single piece still too large using the next separator down the list.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Fixed-size's cut count bounces; recursive's stays flat at zero</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0702-adv-visual-title">
+<strong class="concept-visual-title" id="c0702-adv-visual-title">VISUAL · MID-WORD BOUNDARY CUTS ACROSS CHUNK_SIZE 20-80</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Scrollable bar chart showing fixed-size boundary cuts bouncing between 0 and 4 across chunk sizes 20 to 80, while recursive stays flat at 0">
+<svg class="vector-plane" viewBox="0 0 900 170" role="img" aria-labelledby="c0702-svg-title-a c0702-svg-desc-a" style="min-width:900px">
+<title id="c0702-svg-title-a">A bar chart of fixed-size chunking's mid-word cut count for chunk sizes from 20 to 80 in steps of 2, ranging from 0 to 4, with no consistent trend as size increases</title>
+<desc id="c0702-svg-desc-a">31 bars, one per chunk size from 20 to 80 in steps of 2, with heights proportional to the number of mid-word cuts at that size (0 to 4). The bars rise and fall with no consistent trend — for example size 22 has 4 cuts, size 40 has 0, size 42 has 2, and size 80 has 0 again. A flat dashed line at zero height represents recursive chunking's cut count, which stays at 0 for every size in this range.</desc>
+<line x1="50" y1="140" x2="850" y2="140" stroke="#14241f" stroke-width="1.5"/>
+<line x1="50" y1="140" x2="850" y2="140" stroke="#8a978f" stroke-width="2" stroke-dasharray="2 5"/>
+<rect x="50.0" y="140.0" width="24.3" height="0.0" fill="#8a978f" stroke="#14241f" stroke-width="0.5"/><rect x="75.8" y="40.0" width="24.3" height="100.0" fill="#ff7957" stroke="#14241f" stroke-width="0.5"/><rect x="101.6" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="127.4" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="153.2" y="65.0" width="24.3" height="75.0" fill="#ff7957" stroke="#14241f" stroke-width="0.5"/><rect x="179.0" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="204.8" y="40.0" width="24.3" height="100.0" fill="#ff7957" stroke="#14241f" stroke-width="0.5"/><rect x="230.6" y="65.0" width="24.3" height="75.0" fill="#ff7957" stroke="#14241f" stroke-width="0.5"/><rect x="256.5" y="65.0" width="24.3" height="75.0" fill="#ff7957" stroke="#14241f" stroke-width="0.5"/><rect x="282.3" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="308.1" y="140.0" width="24.3" height="0.0" fill="#8a978f" stroke="#14241f" stroke-width="0.5"/><rect x="333.9" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="359.7" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="385.5" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="411.3" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="437.1" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="462.9" y="140.0" width="24.3" height="0.0" fill="#8a978f" stroke="#14241f" stroke-width="0.5"/><rect x="488.7" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="514.5" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="540.3" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="566.1" y="140.0" width="24.3" height="0.0" fill="#8a978f" stroke="#14241f" stroke-width="0.5"/><rect x="591.9" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="617.7" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="643.5" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="669.4" y="90.0" width="24.3" height="50.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="695.2" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="721.0" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="746.8" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="772.6" y="140.0" width="24.3" height="0.0" fill="#8a978f" stroke="#14241f" stroke-width="0.5"/><rect x="798.4" y="115.0" width="24.3" height="25.0" fill="#d7ff53" stroke="#14241f" stroke-width="0.5"/><rect x="824.2" y="140.0" width="24.3" height="0.0" fill="#8a978f" stroke="#14241f" stroke-width="0.5"/>
+<g font-size="8" fill="#14241f" text-anchor="middle" font-family="DM Mono, monospace">
+<text x="62" y="155">20</text>
+<text x="217" y="155">42</text>
+<text x="360" y="155">52</text>
+<text x="450" y="155">62</text>
+<text x="837" y="155">80</text>
+</g>
+</svg>
+</div>
+<figcaption>Each bar is fixed-size chunking's mid-word cut count at that chunk_size, from 0 to 4 — the shape has no trend, only arithmetic coincidence with this passage's word lengths. The dashed line at zero is recursive chunking's cut count for the entire range: flat, because no word in this passage reaches 20 characters.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this concept sits in the retrieval-to-answer chain</h2></div></header>
+<div class="pipeline-preview">
+<span>Module 06 — clean documents</span><i>↓</i><span>Concept 01 — why chunk</span><i>↓</i><span class="hot">Concept 02 — mechanical HOW</span><i>↓</i><span>Concepts 03-06 — linguistic, semantic, size, overlap</span>
+</div>
+<p>This concept produces the first real chunks this course actually builds — every later chunking concept either replaces this mechanism with a more content-aware one (Concepts 03-04) or tunes a parameter on top of it (Concepts 05-06).</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>A closed form for one method, an algorithm for the other</h2></div></header>
+<div class="equation">fixed_chunk_count = ⌈docLen / N⌉<br>boundary_cut(i) = isWordChar(text[i·N − 1]) ∧ isWordChar(text[i·N])<br>recursive_chunk_count = no closed form — depends on where separators fall</div>
+<p>Fixed-size chunking has a clean closed-form chunk count and a simple per-boundary cut test. Recursive chunking does not — its chunk count and cut behavior depend entirely on where the passage's own separators happen to fall, which is exactly why this course teaches it as an algorithm to trace, not a formula to evaluate.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>2 of 3 boundaries cut vs. 0 of 3, at the identical chunk size</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Method</th><th>Chunks (chunk_size=42)</th><th>Mid-word cuts</th></tr></thead>
+<tbody>
+<tr><td>Fixed-size</td><td>"Refund requests must be submitted within 4" (42) · "5 days of purchase.⏎⏎Employees on the prem" (42) · "ium plan receive an extended 90 day window" (42) · " for filing a claim." (20)</td><td>2 of 3 — "45"→"4"/"5", "premium"→"prem"/"ium"</td></tr>
+<tr><td>Recursive</td><td>"Refund requests must be submitted within" (40) · "45 days of purchase." (20) · "Employees on the premium plan receive an" (40) · "extended 90 day window for filing a claim." (42)</td><td>0 of 3 — every boundary lands on a dropped separator</td></tr>
+</tbody>
+</table>
+<p>Both methods produce exactly 4 chunks at this size, so the comparison isn't confounded by a different chunk count. Every figure above was computed once via an executed Node.js script and independently reproduced via a from-scratch Python re-implementation; both runs produced identical chunks and identical cut counts.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Fixed-width log lines or CSV rows</h3><p>Content with a genuinely uniform structure and short fields — fixed-size chunking is trivially safe because there's rarely a long word to cut through in the first place.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A passage containing one long URL or hash</h3><p>If a single unbroken run of characters exceeds chunk_size, recursive falls all the way back to a raw cut too — its safety advantage disappears exactly there.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming recursive chunking is content-aware</h3><p>It only prefers separator characters. Concept 03's actual sentence and paragraph segmentation is a different, more capable mechanism, not a bigger version of this one.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Both methods, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>def fixed_size_chunks(text, size):
+    return [text[i:i + size] for i in range(0, len(text), size)]
+
+def is_word_char(ch):
+    return ch is not None and (ch.isalnum())
+
+def recursive_chunks(text, size, separators):
+    if len(text) <= size:
+        return [text]
+    if not separators:
+        return [text[i:i + size] for i in range(0, len(text), size)]
+    sep, rest = separators[0], separators[1:]
+    parts = text.split(sep)
+    merged, cur = [], ""
+    for part in parts:
+        if len(part) > size:
+            if cur:
+                merged.append(cur)
+                cur = ""
+            merged.extend(recursive_chunks(part, size, rest))
+            continue
+        candidate = part if cur == "" else cur + sep + part
+        if len(candidate) <= size:
+            cur = candidate
+        else:
+            merged.append(cur)
+            cur = part
+    if cur:
+        merged.append(cur)
+    return merged
+
+PASSAGE = ("Refund requests must be submitted within 45 days of purchase.\n\n"
+           "Employees on the premium plan receive an extended 90 day window for filing a claim.")
+
+fixed = fixed_size_chunks(PASSAGE, 42)
+recursive = recursive_chunks(PASSAGE, 42, ["\n\n", "\n", " ", ""])
+
+assert [len(c) for c in fixed] == [42, 42, 42, 20]
+assert [len(c) for c in recursive] == [40, 20, 40, 42]
+print("fixed:", fixed)
+print("recursive:", recursive)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The same mechanism, in real tooling</h2></div></header>
+<p>LangChain's CharacterTextSplitter implements fixed-size chunking directly, and its RecursiveCharacterTextSplitter implements the recursive method taught here — its actual default separator list, confirmed by reading its source directly, is exactly ["\n\n", "\n", " ", ""], the same order used throughout this concept. One honest simplification: this lesson's from-scratch code drops the separator character at each chunk boundary for clarity, while LangChain's real default (keep_separator=True) keeps it, usually at the start of the following chunk — a difference worth knowing before treating this code as a literal drop-in replacement.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Boundary Cutter</h2></div></header>
+<div class="lab">
+<p>The same 146-character passage, split live by both methods as you drag the chunk-size slider. Watch fixed-size's cut count flicker on and off purely by arithmetic accident, while recursive's stays at zero for the entire range — because no word in this passage ever reaches 20 characters, the length recursive would need before it risks a raw cut at all.</p>
+<div class="lab-controls">
+<div class="control"><label for="bcSize_0702">Chunk size (characters) <output id="bcSizeOut_0702">42</output></label>
+<input type="range" id="bcSize_0702" min="20" max="80" step="1" value="42"></div>
+</div>
+<div class="boundary-strip-label"><b>FIXED-SIZE</b><span id="bcFixedReadout_0702"></span></div>
+<div class="boundary-strip" id="bcFixedWrap_0702"></div>
+<div class="boundary-strip-label" style="margin-top:22px"><b>RECURSIVE</b><span id="bcRecursiveReadout_0702"></span></div>
+<div class="boundary-strip" id="bcRecursiveWrap_0702"></div>
+<div class="callout" id="bcVerdict_0702"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Fixed-size vs. recursive</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Method</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Fixed-size</td><td>Simplest possible implementation — no separator logic at all, works on any byte stream</td><td>Mid-word cut risk depends entirely on arithmetic coincidence, not on anything controllable</td></tr>
+<tr><td>Recursive</td><td>Prefers natural breaks, so it's safe on ordinary prose at negligible extra cost</td><td>Only as safe as its separator list for the actual content — a separator-free run still forces a raw cut</td></tr>
+</tbody>
+</table>
+<p>Decision framework: default to recursive for ordinary prose — it's almost free and meaningfully safer. Reach for fixed-size only when content genuinely has no useful separators (fixed-width records, some binary-adjacent formats) where recursive's extra logic buys nothing.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT ARITHMETIC LUCK</span><h3>Fixed-size "working" on a test passage by accident</h3><p>A chunk_size that happens to avoid mid-word cuts on one sample document offers no guarantee on the next one — the safety was never designed, just coincidental.</p></article>
+<article class="info-card"><span>UNEXPECTED RAW-CUT FALLBACK</span><h3>Recursive silently degrading to fixed-size behavior</h3><p>A single long token (URL, hash, unbroken identifier) exceeding chunk_size forces the exact same raw cut fixed-size always uses, with no warning.</p></article>
+<article class="info-card"><span>SEPARATOR MISMATCH</span><h3>A separator list tuned for prose, applied to code or logs</h3><p>The default ["\n\n","\n"," ",""] list assumes prose-like structure — content with different natural breaks (e.g. code) may need a different separator list entirely, named forward to production tuning.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Recursive chunking is a form of semantic chunking</td><td>False — it only recognizes separator characters, never meaning. Semantic chunking is Concept 04's distinct mechanism.</td></tr>
+<tr><td>A larger chunk_size is always safer for fixed-size</td><td>False — Section 07's chart shows the cut count is not monotonic in chunk_size at all.</td></tr>
+<tr><td>Chunk_size in characters is the same as chunk_size in tokens</td><td>False in general — production splitters are frequently configured by token count via a real tokenizer, per Module 02 Concept 02's BPE mechanism, not re-derived here.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Real pipelines default to recursive over plain fixed-size at near-identical implementation cost, precisely because the safety margin is close to free.</li>
+<li>chunk_size in characters must still map to something reasonable once tokenized, tying back to Concept 01's embedding-model token cap — a character count and a token count are not interchangeable.</li>
+<li>Neither method here is content-aware; Concepts 03 and 04 are the actual production-grade upgrades once mechanical splitting stops being good enough.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does recursive chunking avoid the exact two cuts fixed-size makes in the worked example?</summary><div>Both of recursive's problem boundaries (around "45" and "premium") sit at a space or paragraph break in the original text. Recursive prefers to split exactly there, dropping the separator instead of cutting through the surrounding word.</div></details>
+<details class="quiz"><summary>Under what condition does recursive chunking fall back to a raw character cut?</summary><div>Only when a single unbroken run of text (no "\n\n", "\n", or " " anywhere inside it) is itself longer than chunk_size — at that point there's no separator left to prefer, and it slices arithmetically, exactly like fixed-size.</div></details>
+<details class="quiz"><summary>Why isn't fixed-size's mid-word cut count safe to assume shrinks as chunk_size grows?</summary><div>The cut count only depends on where chunk_size happens to land relative to word boundaries in that specific passage — Section 07's chart shows it bouncing between 0 and 4 with no consistent trend as size increases from 20 to 80.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new 30-character passage: "The cat sat on the soft mat." Split it with fixed-size chunking at chunk_size=10, and with recursive chunking at the same size using separators ["\n\n","\n"," ",""]. List the chunks each method produces and count how many boundaries cut a word for each.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Fixed-size at N=10: "The cat sa", "t on the s", "oft mat." — 3 chunks (10, 10, 8 chars). Both internal boundaries land inside a word: "sat"→"sa"/"t" and "soft"→"s"/"oft" — 2 of 2 cuts. Recursive at N=10: splitting on " " gives parts ["The","cat","sat","on","the","soft","mat."]; merging back up to 10 characters (re-inserting the space) gives "The cat sat" (11 chars) — too long, so it backs off to "The cat" (7) then "sat" starts the next chunk: "The cat" (7), "sat on the" (10), "soft mat." (9) — 0 of 2 boundaries cut a word, since both fall at spaces.</div>
+</details>
+<p>Teach-back: explain why recursive chunking's chunk boundaries in this exercise don't line up with fixed-size's at all, even though both target the same chunk_size.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Fixed-size and recursive chunking</h3><ul><li><b>Fixed-size:</b> slice every N characters, no exceptions — safety is arithmetic coincidence</li><li><b>Recursive:</b> prefer "\n\n", then "\n", then " ", fall back to raw characters only for an oversized unbroken run</li><li><b>Core relation:</b> recursive's safety margin disappears exactly where fixed-size's does — on a single token longer than chunk_size</li></ul></div>
+<div><h3>Memorable example</h3><p>The same 146-character passage, same chunk_size=42, same 4-chunk count: fixed-size cuts "45" and "premium" in half (2 of 3 boundaries); recursive cuts neither (0 of 3), because every one of its boundaries lands on a dropped space or paragraph break instead.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is recursive chunking usually preferred over fixed-size in production?</summary><div>It's nearly free to implement and meaningfully reduces mid-word/mid-number cuts on ordinary prose by preferring existing separators, only degrading to fixed-size's behavior on separator-free runs.</div></details>
+<details class="quiz"><summary>Mathematical: derive fixed-size chunking's chunk count formula.</summary><div>chunk_count = ⌈docLen / chunk_size⌉ — every chunk except possibly the last is exactly chunk_size characters; the last holds the remainder.</div></details>
+<details class="quiz"><summary>Coding: implement the merge-and-recurse step of a recursive splitter.</summary><div>Split the text on the current separator, then greedily merge consecutive parts (re-inserting the separator) while the merged length stays within chunk_size; when a single part alone exceeds chunk_size, recurse into just that part using the next separator in the list.</div></details>
+<details class="quiz"><summary>Debugging: a recursive splitter is producing suspiciously many small chunks. What do you check?</summary><div>Whether the content contains long separator-free runs (URLs, hashes, minified code) that keep forcing raw-character fallback splits, or whether the separator list itself is mismatched to the content type (a prose-tuned list applied to code, for instance).</div></details>
+<details class="quiz"><summary>System design: how would you choose between fixed-size and recursive for a new corpus?</summary><div>Profile the corpus for long separator-free runs. If they're rare, recursive is a strictly better default at negligible extra cost. If the content genuinely lacks useful separators throughout (fixed-width records, certain binary-adjacent formats), recursive's extra logic buys nothing over fixed-size.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.langchain.com/oss/python/integrations/splitters"><b>Text splitters — LangChain</b><br><span>Names CharacterTextSplitter and RecursiveCharacterTextSplitter as first-class abstractions, with chunk_size as a documented parameter — the current replacement for a now-redirected older LangChain docs URL.</span></a>
+<a href="https://raw.githubusercontent.com/langchain-ai/langchain/master/libs/text-splitters/langchain_text_splitters/character.py"><b>character.py — LangChain source</b><br><span>Confirms RecursiveCharacterTextSplitter's actual default separator order, ["\n\n","\n"," ",""], read directly from source rather than assumed.</span></a>
+<a href="https://www.pinecone.io/learn/chunking-strategies/"><b>Chunking Strategies for LLM Applications — Pinecone</b><br><span>Names fixed-size chunking as its own labeled strategy with the same speed-versus-content-awareness trade-off taught here.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 COMPLETE · MODULE 07 · 2/10</span>
+<h3>Two mechanical methods down. Linguistic splitting starts next.</h3>
+<p>Before moving on, work through Section 20's exercise and confirm you can trace both algorithms by hand. Concept 03 moves past raw characters entirely: sentence segmentation, paragraph boundaries, and structural markers from the source document itself.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="module-07-concept-01.html">← Back to Concept 01</a>
+</div>
+<p class="fine-print">Module 07 at 2 of 10 concepts. Next concept: Sentence, paragraph and structural chunking.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 07 · Concept 02 · Active</p>
+<a href="module-07-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>
