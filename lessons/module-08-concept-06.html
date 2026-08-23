@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 02's own pipeline called pool_mean() as its fourth stage but never showed what it computed, or named it as one choice among real alternatives. This concept names three real pooling strategies -- mean, CLS-token, and last-token -- computes what mean pooling actually produced on Concept 02's own four contextualized vectors for 'The order shipped late,' and proves that once a vector is L2-normalized to unit length, a plain dot product already equals cosine similarity, closing a gap Module 04 Concept 03 only flagged as a risk. Sentence-BERT's own ablation shows mean pooling beating CLS-token pooling by 0.82 points and max pooling by 17.52 points on STS-benchmark.">
+<title>Pooling, embedding dimensions and normalization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 06</p>
+<h1>One sequence, many tokens.<br><em>One vector, by choice.</em></h1>
+<p class="lesson-lead">Concept 02's own pipeline called a function named pool_mean() as its fourth stage but never showed what it actually computed, or said it was one choice among real alternatives. This concept names three real pooling strategies -- mean pooling (average every token), CLS-token pooling (use one dedicated trained position), and last-token pooling (use the final position, valid only under causal attention) -- and computes, for the first time, what mean pooling actually produced on Concept 02's own four contextualized vectors for "The order shipped late," against what the other two strategies would have produced on the identical input. It also proves a fact Module 04 Concept 03 only flagged as a risk: once a vector is L2-normalized to unit length, a plain dot product already equals cosine similarity -- no separate division needed. Anisotropy (Concept 07) and instruction prefixes (Concept 08) are named forward only.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth concept of Module 08 -- what "pool" in Concept 02's own pipeline actually computes</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's contextualized vectors (reused unchanged); Module 04 Concept 02's normalization; Module 04 Concept 03's cosine/dot product (and its own flagged risk); Module 04 Concept 09's storage-cost formula</b></div>
+<div><span>BEGINNER GOAL</span><b>Define mean/CLS/last-token pooling and explain in one sentence why normalizing first makes dot product equal cosine</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Collapsing many tokens into one vector, on purpose</h2>
+</div>
+<p>Concept 02 called a "pool" stage and moved on. This concept asks what that stage actually does, and shows it's a real, consequential choice -- not a formality.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three real strategies, one deliberate choice</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Pooling collapses a SEQUENCE of contextualized token vectors into ONE fixed-size vector. Three real named strategies: mean pooling (average every token), CLS-token pooling (one dedicated trained position), last-token pooling (the final position -- only valid under causal/decoder-only attention).</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Anisotropy and embedding-space pathologies (Concept 07); embedding-model instructions and query/document prefixes (Concept 08) -- both named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> mean averages everyone; CLS lets one trained spokesperson speak for the group; last-token lets whoever spoke last, having heard everyone else, give the final word.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A named stage that was never actually shown</h3>
+<p>Concept 02's own pipeline called pool_mean() as its fourth stage but never showed what it computed or said why THAT choice over any other. Every concept since (03-05) silently assumed "the one final vector" already existed. The averaging arithmetic itself isn't new -- Module 07 already used it twice -- what's new here is naming it as one deliberate choice among real alternatives.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>What "pool" actually produced, for the first time</h3>
+<p>Reusing Concept 02's own four contextualized vectors for "The order shipped late": the=(1.1029,1.1812), order=(1.7468,1.2292), shipped=(1.6010,1.7274), late=(1.0859,1.8722). Mean pooling actually outputs <b>(1.3842, 1.5025)</b>. First-token pooling (an illustrative CLS stand-in only -- this toy model has no real trained CLS position) would output "the" unchanged: (1.1029, 1.1812). Last-token pooling would output "late" unchanged: (1.0859, 1.8722).</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0806-b03-title">
+<strong class="concept-visual-title" id="c0806-b03-title">VISUAL · THREE STRATEGIES, ONE INPUT, THREE DIFFERENT OUTPUTS</strong>
+<svg class="vector-plane" viewBox="0 0 320 260" role="img" aria-labelledby="c0806-svg-title-b c0806-svg-desc-b">
+<title id="c0806-svg-title-b">A 2D coordinate plane showing the four input token vectors and the three pooled outputs</title>
+<desc id="c0806-svg-desc-b">Four small arrows for the, order, shipped and late. Mean pooling's output sits near the middle of the four. First-token pooling's output coincides with "the." Last-token pooling's output coincides with "late."</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<line x1="20" y1="230" x2="300" y2="230" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="40" y1="10" x2="40" y2="250" stroke="#c9cdb9" stroke-width="1"/>
+<text x="292" y="226" text-anchor="end" font-size="7">+x</text>
+<text x="44" y="18" font-size="7">+y</text>
+<line x1="40" y1="230" x2="150.29" y2="112.12" stroke="#5b6b64" stroke-width="1.5" stroke-dasharray="2 2"/>
+<text x="152" y="112" font-size="7" fill="#5b6b64">the</text>
+<line x1="40" y1="230" x2="214.68" y2="107.08" stroke="#5b6b64" stroke-width="1.5" stroke-dasharray="2 2"/>
+<text x="218" y="105" font-size="7" fill="#5b6b64">order</text>
+<line x1="40" y1="230" x2="200.10" y2="57.26" stroke="#5b6b64" stroke-width="1.5" stroke-dasharray="2 2"/>
+<text x="204" y="57" font-size="7" fill="#5b6b64">shipped</text>
+<line x1="40" y1="230" x2="148.59" y2="42.78" stroke="#5b6b64" stroke-width="1.5" stroke-dasharray="2 2"/>
+<text x="152" y="42" font-size="7" fill="#5b6b64">late</text>
+<circle cx="178.42" cy="79.75" r="4" fill="#2f6f5c"/>
+<text x="184" y="82" font-size="7.5" font-weight="700" fill="#2f6f5c">MEAN (1.3842, 1.5025)</text>
+<circle cx="150.29" cy="112.12" r="4" fill="#b3543a"/>
+<text x="120" y="130" font-size="7.5" font-weight="700" fill="#b3543a">FIRST = "the"</text>
+<circle cx="148.59" cy="42.78" r="4" fill="#b8860b"/>
+<text x="90" y="35" font-size="7.5" font-weight="700" fill="#b8860b">LAST = "late"</text>
+<circle cx="40" cy="230" r="2.5" fill="#14241f"/>
+</g>
+</svg>
+<figcaption>Same four inputs, three genuinely different outputs -- mean sits between them; first and last coincide exactly with their own source token.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>How far apart the three outputs actually land</h3>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Cosine</th><th>Euclidean</th></tr></thead>
+<tbody>
+<tr><td>MEAN vs. FIRST ("the")</td><td>0.999977</td><td>0.427007</td></tr>
+<tr><td>MEAN vs. LAST ("late")</td><td>0.976152</td><td>0.475006</td></tr>
+<tr><td>FIRST vs. LAST</td><td>0.974674</td><td>0.691209</td></tr>
+</tbody>
+</table>
+<p>FIRST and LAST diverge from each other the most of any pair -- proof that pooling choice genuinely changes the vector, not just cosmetically. MEAN sits almost exactly on FIRST and only slightly farther from LAST.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The last step inside the embedding model</h3>
+<div class="scroll-flow">
+<span>Contextualized tokens (Concept 02)</span><i>→</i>
+<span class="hot">Pool — mean / CLS / last-token (this concept)</span><i>→</i>
+<span>Normalize (this concept)</span><i>→</i>
+<span>One fixed-size vector</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Pooling changes WHICH information survives, not the dimension</h3>
+<div class="distinction-table" role="table" aria-label="Pooling distinguished from dimension and from normalization">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Pooling vs. embedding dimension</span><span role="cell">Pooling collapses the SEQUENCE/token axis; dimension is fixed by the encoder's own hidden size, untouched by which pooling strategy runs</span></div>
+<div role="row"><span role="cell">Pooling vs. normalization</span><span role="cell">Two separate, sequential steps -- pool first (many vectors → one), normalize after (rescale that one vector to unit length)</span></div>
+<div role="row"><span role="cell">Last-token pooling vs. mean/CLS pooling</span><span role="cell">Requires causal/decoder-only attention (only the final position saw everything); mean/CLS require bidirectional encoders</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"CLS-token pooling always works well."</b><p>False without dedicated training -- Sentence-BERT's own ablation: mean beats CLS by 0.82 points and max by 17.52 points on STS-benchmark.</p></div>
+<div><b>"Bigger embedding dimension is free, or always better."</b><p>False -- storage and compute cost scale linearly with it; OpenAI's own docs describe shortening it as "trading off some accuracy."</p></div>
+<div><b>"Pooling changes the vector's dimension."</b><p>False -- dimension is fixed by the encoder's hidden size; pooling only collapses the token axis.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Pooling and dimension are baked in, not swappable</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Whichever embedding model the Oracle RAG project chooses fixes BOTH its pooling strategy and output dimension</b><p>Not swappable after the fact without retraining -- directly sets the Oracle VECTOR column's width and storage budget (Module 10, named forward only).</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 · CONCEPT 06 ACTIVE (6/11)</b><p>Concept 07 (anisotropy) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define all three pooling strategies</b><p>Mean, CLS-token, last-token -- precisely, not by example alone.</p></div>
+<div><b>Explain why last-token pooling needs causal attention specifically</b><p>Only the final position has attended to the whole sequence; under bidirectional attention, picking "last" would be arbitrary.</p></div>
+<div><b>Prove why normalizing first makes dot product equal cosine</b><p>For unit vectors, cosine = dot/(1×1) = dot -- no separate division needed.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does mean pooling's arithmetic feel familiar from earlier modules?</li>
+<li>Which two pooled outputs diverge from each other the most, and why does that prove pooling choice matters?</li>
+<li>Why doesn't pooling strategy change an embedding's dimension?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 6 of 11</h3>
+<p>This concept named the pooling and normalization steps precisely. Concept 07, "Anisotropy and embedding-space pathologies," names a deeper problem with the resulting vector space itself -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 06 is active.</b> Module 08 is at 6 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-05.html">← Back to Concept 05</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Collapsing many tokens into one vector, on purpose</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>What "pool" actually computed</b><small>Mean = (1.3842, 1.5025), shown for the first time.</small></a>
+<a href="#b04"><span>02</span><b>Three genuinely different outputs</b><small>First and last diverge the most of any pair.</small></a>
+<a href="#s10"><span>03</span><b>Normalize first, dot equals cosine</b><small>0.976152 = 0.976152, to 6 decimal places.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full verified matrix, the storage-cost table, and The Pooling Bench lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 02's pool_mean() call is finally shown → three real strategies produce three real different outputs on the same input → normalizing first makes a plain dot product equal cosine similarity → dimension trades storage/compute for capacity, independent of pooling → Module 08 at 6 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Pooling, embedding dimensions and normalization" deep dive</b><em>The full verified matrix, the storage-cost table, and The Pooling Bench lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The question Concept 02 left completely open</h2></div></header>
+<p>Concept 02's own pipeline named a "pool" stage and called pool_mean() but never showed what it actually computed, or said mean pooling was one choice among real alternatives. This concept answers both questions.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Mean, CLS-token and last-token pooling</h3><p>Precisely, with a real production enum backing each name.</p></article>
+<article class="info-card"><span>STATE</span><h3>The embedding-dimension trade-off</h3><p>Storage/compute cost scales linearly; capacity usually, not always, improves with it.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Normalization makes dot product equal cosine</h3><p>On this lesson's own already-verified numbers.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Not anisotropy (Concept 07), not instruction prefixes (Concept 08).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-02.html">Concept 02</a> -- the four contextualized vectors and its own unexplained pool() call, cited directly.</b></li>
+<li><b>Module 07 Concepts 01 and 08 -- mean-pooling arithmetic already used, reused not re-derived.</b></li>
+<li><b><a href="module-04-concept-02.html">Module 04 Concept 02</a> -- normalization/unit-vector definition, cited.</b></li>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a> -- cosine/dot product, plus its own flagged risk ("a real ranking bug if embeddings aren't already normalized to equal length") this concept resolves.</b></li>
+<li><b><a href="module-04-concept-09.html">Module 04 Concept 09</a> -- O(n×d) storage/compute cost, cited.</b></li>
+<li><b>Explicitly out of scope:</b> anisotropy and embedding-space pathologies (Concept 07); embedding-model instructions and query/document prefixes (Concept 08).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>How a group's opinions become one verdict</h2></div></header>
+<p>Average everyone's opinion (mean). Let one designated, specially-trained spokesperson speak for the group (CLS). Let whoever spoke last, having heard everyone else, give the final word (last-token -- valid only when speaking order actually restricts who heard what).</p>
+<div class="callout warning"><b>Analogy boundary</b>The spokesperson picture explains why CLS pooling needs someone to actually train that position for the job. It doesn't explain the causal-attention requirement precisely -- Section 09 states that.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Mean pooling</td><td>Average every contextualized token vector</td><td>mean = (1/N)·Σvᵢ</td></tr>
+<tr><td>CLS-token pooling</td><td>Use one dedicated, trained position's vector as the whole-sequence embedding</td><td>output = v_CLS</td></tr>
+<tr><td>Last-token pooling</td><td>Use the final position's vector -- valid only under causal/decoder-only attention</td><td>output = v_N</td></tr>
+<tr><td>Embedding dimension</td><td>The encoder's own hidden size -- fixed regardless of pooling strategy</td><td>d</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Pool, then normalize -- two sequential steps</h2></div></header>
+<p>Take Concept 02's 4 contextualized vectors, apply each pooling formula, get one fixed-size vector per strategy. Dimension (2, illustratively; 384/768/1536/3072 for real models) is set by the encoder's own hidden size and untouched by which pooling strategy runs -- pooling reduces the sequence axis only.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Token strip → collapse → one output</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>4 contextualized tokens (Concept 02)</b><small>the, order, shipped, late</small></div>
+<div class="diagram-node"><b>Pool — 3 strategies, 3 outputs</b><small>Mean / CLS-illustrative / last-token</small></div>
+<div class="diagram-node"><b>Normalize (this concept)</b><small>Dot product becomes cosine</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The final step inside the embedding model</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span>Parsing</span><i>↓</i><span>Chunks</span><i>↓</i><span class="hot">Embedding model — contextualize (C02) → pool (this concept) → normalize (this concept)</span><i>↓</i><span>Vectors</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why normalizing first makes dot product equal cosine</h2></div></header>
+<div class="equation">mean = (1/N)·Σvᵢ — cited from Module 07 Concept 01, reused<br>For unit vectors u,v (‖u‖=‖v‖=1): cosine(u,v) = dot(u,v)/(‖u‖·‖v‖) = dot(u,v)/(1·1) = dot(u,v)</div>
+<p>Composing Module 04 Concept 02's normalization with Module 04 Concept 03's cosine/dot-product formula -- not re-deriving either. Last-token pooling requires causal attention specifically because only the final position has attended to the whole sequence; under bidirectional attention every position already sees everything, so picking "last" would be arbitrary.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>What pooling produced, and the normalization proof</h2></div></header>
+<p><b>Part 1 -- three strategies, one input.</b> Reusing Concept 02's own vectors, norms ‖the‖=1.616051, ‖order‖=2.135941, ‖shipped‖=2.355231, ‖late‖=2.164327. MEAN = (1.384150, 1.502500), ‖mean‖=2.042885. FIRST (illustrative CLS stand-in only) = the = (1.102900,1.181200). LAST = late = (1.085900,1.872200).</p>
+<table class="worked-table">
+<thead><tr><th>Strategy</th><th>vs. the</th><th>vs. order</th><th>vs. shipped</th><th>vs. late</th></tr></thead>
+<tbody>
+<tr><td>MEAN (cos / eucl)</td><td>0.999977 / 0.427007</td><td>0.977363 / 0.454101</td><td>0.999995 / 0.312416</td><td>0.976152 / 0.475006</td></tr>
+<tr><td>FIRST (cos / eucl)</td><td>1.000000 / 0.000000</td><td>0.978761 / 0.645687</td><td>0.999993 / 0.739214</td><td>0.974674 / 0.691209</td></tr>
+<tr><td>LAST (cos / eucl)</td><td>0.974674 / 0.691209</td><td>0.908127 / 0.922083</td><td>0.975493 / 0.535065</td><td>1.000000 / 0.000000</td></tr>
+</tbody>
+</table>
+<p>FIRST and LAST diverge from each other the most of any pair (Euclidean 0.691209). MEAN's gap to LAST (0.475006) is 52.04% larger, relative, than MEAN's own closest-token gap to "shipped" (0.312416).</p>
+<p><b>Honesty guard:</b> this 2D toy example only demonstrates the arithmetic of each strategy; it understates real-world divergence. The real production stakes are Sentence-BERT's own Table 6 ablation on STS-benchmark: mean pooling (87.44 Spearman) beats CLS-token pooling (86.62) by 0.82 points and max pooling (69.92) by 17.52 points, specifically under the semantic-similarity objective. This toy model's "FIRST" is NOT a real trained CLS vector -- only an illustration of the selection rule.</p>
+<p><b>Part 2 -- normalization makes dot product equal cosine.</b> m_hat = mean/‖mean‖ = (0.677547, 0.735480), ‖m_hat‖=1.000000. late_hat = late/‖late‖ = (0.501726, 0.865026), ‖late_hat‖=1.000000. dot(m_hat, late_hat) = <b>0.976152</b> = cosine(mean, late) = <b>0.976152</b> -- identical to 6 decimal places, no division step in the dot product. The same equivalence holds for FIRST vs. LATE (dot of normalized = 0.974674 = cosine = 0.974674).</p>
+<p><b>Part 3 -- what embedding dimension trades off</b> (storage at float32 = 4 bytes/dimension, for a corpus of 1,000,000 chunks, reusing Module 04 Concept 09's O(n×d) formula): 384 dim (all-MiniLM-L6-v2) → 1.536 GB. 768 dim (BERT-base) → 3.072 GB. 1536 dim (OpenAI text-embedding-3-small/ada-002) → 6.144 GB. 3072 dim (OpenAI text-embedding-3-large, native) → 12.288 GB. Pooling collapses the sequence axis, not the feature axis -- output dimension equals the encoder's own hidden size regardless of pooling strategy. OpenAI's separate `dimensions` API parameter truncates the already-pooled vector afterward -- a distinct, later knob, not a fourth pooling strategy.</p>
+<p><b>Verification method:</b> every number above was computed twice, independently, with no shared code -- once in Node.js and once in Python -- and matched exactly on every integer/byte/GB figure and to 6 decimal places on every cosine/Euclidean/normalized-vector figure. The four base contextualized vectors are Concept 02's own already-verified numbers, reused unchanged.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>BERT-family sentence-embedding models</h3><p>Use mean pooling by default -- cite Sentence-BERT's own ablation directly.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A library offering 6 real pooling_mode options</h3><p>sentence-transformers' own Pooling class -- picking correctly matters, it isn't cosmetic.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming an untuned CLS vector behaves like a good similarity vector</h3><p>Cite the 87.44-vs-86.62-vs-69.92 ablation directly.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Pooling and normalization, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def mean_pool(vectors):
+    n = len(vectors)
+    return (sum(v[0] for v in vectors) / n, sum(v[1] for v in vectors) / n)
+
+def cls_pool(vectors):
+    # Illustrative stand-in for a dedicated, trained CLS position.
+    return vectors[0]
+
+def last_token_pool(vectors):
+    # Valid only under causal/decoder-only attention.
+    return vectors[-1]
+
+def norm(v):
+    return math.sqrt(v[0]**2 + v[1]**2)
+
+def l2_normalize(v):
+    n = norm(v)
+    return (v[0] / n, v[1] / n)
+
+def dot(u, v):
+    return u[0]*v[0] + u[1]*v[1]
+
+the, order, shipped, late = (1.1029,1.1812), (1.7468,1.2292), (1.6010,1.7274), (1.0859,1.8722)
+mean = mean_pool([the, order, shipped, late])
+assert round(mean[0], 4) == 1.3842 and round(mean[1], 4) == 1.5025
+
+m_hat, late_hat = l2_normalize(mean), l2_normalize(late)
+assert round(norm(m_hat), 6) == 1.0
+assert round(dot(m_hat, late_hat), 6) == 0.976152
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The real pooling enum, the ablation, and the dimension trade-off</h2></div></header>
+<p><a href="https://www.sbert.net/docs/package_reference/sentence_transformer/modules.html">sentence-transformers' Pooling and Normalize classes</a> confirm the real pooling_mode enum (cls/max/mean/mean_sqrt_len_tokens/weightedmean/lasttoken, defaulting to mean) and that L2-normalizing "have unit length" is exactly the mechanism this concept proves makes dot product equal cosine. <a href="https://arxiv.org/abs/1908.10084">Sentence-BERT (Reimers &amp; Gurevych, 2019)</a>, Table 6, gives the real STS-benchmark ablation: mean=87.44, CLS=86.62, max=69.92 Spearman correlation. <a href="https://huggingface.co/intfloat/e5-mistral-7b-instruct">e5-mistral-7b-instruct's model card</a> shows real last_token_pool() code -- a genuine decoder-only embedding model using last-token pooling. <a href="https://platform.openai.com/docs/guides/embeddings">OpenAI's embeddings guide</a> confirms text-embedding-3-small defaults to 1536 dimensions and text-embedding-3-large to 3072, with a `dimensions` parameter that trades accuracy for size.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Pooling Bench</h2></div></header>
+<div class="lab">
+<p>Choose a pooling strategy and watch which tokens survive into the final vector. Toggle normalization to see a plain dot product become cosine similarity, live.</p>
+<div class="lab-actions" role="group" aria-label="Choose the pooling strategy">
+<button type="button" class="secondary active" data-pool="mean">Mean pooling (all 4 tokens)</button>
+<button type="button" class="secondary" data-pool="first">First-token / CLS-illustrative (only "the")</button>
+<button type="button" class="secondary" data-pool="last">Last-token (only "late")</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Normalize before comparing">
+<button type="button" class="secondary" data-normalize="off">Raw vectors</button>
+<button type="button" class="secondary" data-normalize="on">L2-normalize first</button>
+</div>
+<div class="rank-chip-row" id="poolChips_0806"></div>
+<div class="norm-readout" id="poolOutput_0806"></div>
+<div class="norm-readout" id="poolReadout_0806"></div>
+<div class="callout" id="poolVerdict_0806" aria-live="polite"></div>
+<div class="callout warning">This toy bidirectional 2D encoder has no real trained CLS position -- "First-token" here demonstrates CLS-token pooling's SELECTION RULE only (pick one designated position, discard the rest), not a genuinely trained CLS vector. The real production stakes: mean pooling beats CLS-token pooling by 0.82 points and max pooling by 17.52 points on STS-benchmark Spearman correlation (Section 13).</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Mean vs. CLS vs. last-token</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Strategy</th><th>Architecture requirement</th><th>Training requirement</th></tr></thead>
+<tbody>
+<tr><td>Mean pooling</td><td>Bidirectional or causal</td><td>None -- works out of the box</td></tr>
+<tr><td>CLS-token pooling</td><td>Bidirectional, dedicated position</td><td>Needs a dedicated training objective to be useful (cite ablation)</td></tr>
+<tr><td>Last-token pooling</td><td>Causal/decoder-only specifically</td><td>Intrinsic to causal pretraining -- the final position already saw everything</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>NAIVE CLS POOLING ON AN UNTUNED ENCODER</span><h3>Poor STS correlation</h3><p>Cite the 87.44-vs-86.62 ablation gap directly.</p></article>
+<article class="info-card"><span>DIMENSION MISMATCHED TO BUDGET</span><h3>Real cost blowup</h3><p>Cite the GB storage table -- 384 to 3072 dimensions spans an 8× storage difference.</p></article>
+<article class="info-card"><span>CONFUSING THE `dimensions` PARAMETER WITH POOLING</span><h3>It truncates AFTER pooling</h3><p>Not a fourth pooling strategy -- a separate, later knob.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Pooling changes the embedding's dimension</td><td>False -- dimension is the encoder's own hidden size, untouched by pooling strategy.</td></tr>
+<tr><td>CLS pooling is always available and always good</td><td>False -- needs specific training; cite the ablation.</td></tr>
+<tr><td>Normalizing then taking cosine similarity double-divides</td><td>False -- once normalized, plain dot product already equals cosine, no extra division.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Storage/index memory cost scales linearly with dimension (cite Module 04 Concept 09's O(n×d)); every downstream similarity computation's compute cost also scales with dimension.</li>
+<li>Pooling strategy is baked into a pretrained model's own training and cannot be swapped post-hoc without a real quality hit (cite the ablation again for the size of that hit).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define mean, CLS-token and last-token pooling.</summary><div>Mean: average every contextualized token vector. CLS-token: use one dedicated, trained position's vector. Last-token: use the final position's vector, valid only under causal attention.</div></details>
+<details class="quiz"><summary>Why does last-token pooling need causal attention specifically?</summary><div>Only the final position has attended to the whole sequence under causal masking. Under bidirectional attention every position already sees everything, so picking "last" specifically would be arbitrary.</div></details>
+<details class="quiz"><summary>Why does normalizing first make dot product equal cosine similarity?</summary><div>Cosine similarity is dot(u,v)/(‖u‖·‖v‖). If both vectors already have unit length (‖u‖=‖v‖=1), the denominator is 1, so cosine collapses to the plain dot product.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different toy encoder contextualizes "Refund denied yesterday" into refund=(0.80,1.20), denied=(1.50,0.90), yesterday=(0.40,1.80). Compute mean pooling's output, and compare it (cosine and Euclidean) against last-token pooling's output ("yesterday" unchanged).</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Mean = (0.900000, 1.300000), ‖mean‖=1.581139. Last-token = yesterday = (0.40, 1.80) unchanged, ‖yesterday‖=1.843909. cosine(mean, yesterday) = 0.926092, Euclidean = 0.707107. For contrast, cosine(mean, refund) = 0.999846, Euclidean = 0.141421 -- mean sits far closer to "refund" than to "yesterday" here, the opposite pattern from the main example, since this input's own token spread differs.</div>
+</details>
+<p>Teach-back: why does mean pooling sit closer to a DIFFERENT token in this exercise than in the main worked example, even though the pooling formula itself didn't change?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Pooling, dimensions and normalization</h3><ul><li><b>3 strategies:</b> mean / CLS-token / last-token</li><li><b>Proof:</b> normalize first, dot product already equals cosine</li><li><b>Real ablation:</b> mean 87.44 vs. CLS 86.62 vs. max 69.92 (STS-benchmark)</li></ul></div>
+<div><h3>Memorable example</h3><p>Concept 02's own pool_mean() call finally shows its output: (1.3842, 1.5025). First-token and last-token pooling diverge from each other the most of any pair -- proof the choice was never cosmetic.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does pooling choice actually matter?</summary><div>Different strategies genuinely produce different vectors from the same input -- Section 10's own table shows first-token and last-token diverging by Euclidean 0.691209, and Sentence-BERT's real ablation shows a 0.82-to-17.52-point STS-benchmark gap depending on the strategy.</div></details>
+<details class="quiz"><summary>Mathematical: prove dot equals cosine for unit vectors.</summary><div>cosine(u,v) = dot(u,v)/(‖u‖·‖v‖). If ‖u‖=‖v‖=1, the denominator is 1, so cosine(u,v) = dot(u,v) exactly.</div></details>
+<details class="quiz"><summary>Coding: implement mean/CLS/last-token pooling plus L2 normalization.</summary><div>Section 12 gives the full from-scratch implementation, with asserts reproducing this concept's own Section 10 numbers.</div></details>
+<details class="quiz"><summary>Debugging: a retriever's STS-style eval scores are mysteriously low. What should you check?</summary><div>Whether CLS-token pooling is being used on an encoder that was never fine-tuned with a dedicated CLS training objective -- an untuned CLS vector performs far worse than mean pooling on semantic-similarity tasks.</div></details>
+<details class="quiz"><summary>System design: how would you choose an embedding model's dimension for a fixed storage budget?</summary><div>Compute the storage cost at corpus scale (bytes/vector × corpus size, Module 04 Concept 09's O(n×d)) for each candidate dimension, then pick the largest dimension that fits the budget -- checking whether a smaller dimension's real capacity loss (cite the ablation-style evidence for the specific model family) is acceptable for the task.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.sbert.net/docs/package_reference/sentence_transformer/modules.html"><b>sentence-transformers — Pooling and Normalize modules</b><br><span>Confirms the real pooling_mode enum and the L2-normalization mechanism this concept proves makes dot product equal cosine.</span></a>
+<a href="https://arxiv.org/abs/1908.10084"><b>Reimers &amp; Gurevych — Sentence-BERT (arXiv:1908.10084)</b><br><span>Table 6's real STS-benchmark ablation: mean 87.44 vs. CLS 86.62 vs. max 69.92 Spearman correlation.</span></a>
+<a href="https://huggingface.co/intfloat/e5-mistral-7b-instruct"><b>e5-mistral-7b-instruct model card</b><br><span>Real last_token_pool() code -- a genuine decoder-only embedding model using last-token pooling.</span></a>
+<a href="https://platform.openai.com/docs/guides/embeddings"><b>OpenAI — Embeddings guide</b><br><span>Confirms 1536/3072-dimension defaults and the dimensions parameter's accuracy-for-size trade-off.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 06 COMPLETE · MODULE 08 · 6/11</span>
+<h3>One sequence, many tokens. One vector, by choice.</h3>
+<p>You can now define mean/CLS-token/last-token pooling precisely, prove why normalizing first makes dot product equal cosine similarity, and state what embedding dimension actually trades off. Concept 07, "Anisotropy and embedding-space pathologies," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Pooling Bench ↑</a>
+</div>
+<p class="fine-print">Module 08 at 6 of 11 concepts. Next concept: anisotropy and embedding-space pathologies.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 06 · Complete</p>
+<a href="module-08-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 06-09 each named a real property of an embedding model in isolation -- dimension/storage cost, anisotropy, prefixes, and the three model categories. None of them chose a model. This concept gives the actual four-step funnel: language filter, domain filter, storage-budget filter, then MTEB benchmark rank. A bilingual, jargon-dense, 2,000,000-chunk legal-tech corpus with a 10 GB budget eliminates 1536 dim (12.288 GB) and 3072 dim (24.576 GB) outright, leaving only 384 dim (3.072 GB) and 768 dim (6.144 GB) to rank on MTEB's real leaderboard.">
+<title>Embedding-model selection — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 10 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 10</p>
+<h1>Four filters.<br><em>One real pick.</em></h1>
+<p class="lesson-lead">Concepts 06-09 each named a real property of an embedding model in isolation -- dimension and storage cost, anisotropy, instruction prefixes, and the three model categories (general-purpose, multilingual, domain-specific). None of them actually chose a model for a real corpus. This concept gives the missing process: a four-step funnel -- filter by language mix, filter by domain, filter by storage budget, then rank whatever survives on MTEB, the real 58-dataset, 112-language benchmark practitioners actually use. A legal-tech company's bilingual, jargon-dense, 2,000,000-chunk corpus with a 10 GB storage cap eliminates two of four candidate dimensions outright -- 1536 dimensions costs 12.288 GB, 3072 costs 24.576 GB, both over budget -- leaving only 384 (3.072 GB) and 768 (6.144 GB) to rank on the real leaderboard.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth concept of Module 08 -- the first to synthesize Concepts 06-09's isolated properties into an actual selection process</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's dimension/storage-cost table (reused directly); Concept 09's three model categories; Module 04 Concept 09's O(n×d) storage cost (cited via Concept 06 at one remove)</b></div>
+<div><span>BEGINNER GOAL</span><b>Define the four-step funnel (language → domain → budget → benchmark rank) and compute a budget filter for a new corpus size</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Four properties, one decision</h2>
+</div>
+<p>Concepts 06 through 09 each named a real property in isolation. This concept combines them into the actual process for picking one model for one real corpus.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A four-step funnel, not four separate facts</h3>
+<div class="mental-compare">
+<div><span>1 · LANGUAGE FILTER</span><p>The corpus's language mix rules whole categories in or out -- reuses Concept 09's own general/multilingual/domain-specific names.</p></div>
+<div><span>2 · DOMAIN FILTER</span><p>Jargon density narrows further toward a domain-tuned model, or an honest compromise when no perfect match exists.</p></div>
+<div><span>3 · BUDGET FILTER</span><p>Concept 06's storage formula, scaled to the corpus's real chunk count, eliminates dimensions that simply do not fit.</p></div>
+<div><span>4 · BENCHMARK RANK</span><p>MTEB ranks whatever survives the first three filters -- the real, cited, publicly browsable leaderboard, not a guess.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> naming a property (Concepts 06-09) is not the same as choosing a model for a real corpus -- this funnel is the missing step.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Nobody has actually chosen a model yet</h3>
+<p>Every property named so far -- pooling and dimension, anisotropy, prefixes, the three model categories -- needs to be combined into one concrete decision before any real embedding happens. A team cannot ship with "we know embedding models have dimensions" as an answer; they need the actual dimension, for their actual corpus, under their actual budget.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A bilingual, jargon-dense, 2,000,000-chunk corpus with a 10 GB cap</h3>
+<p>A legal-tech company's support corpus is bilingual (English + Spanish), dense with legal jargon, has 2,000,000 chunks, and has a hard 10 GB storage cap. <b>Step 1 (language):</b> bilingual rules out a purely monolingual model -- Concept 09's "multilingual" category. <b>Step 2 (domain):</b> legal jargon points further toward "domain-specific," or the best available compromise. <b>Step 3 (budget):</b> at float32 storage (4 bytes/dimension) across 2,000,000 chunks, 384 dim costs <b>3.072 GB</b>, 768 dim costs <b>6.144 GB</b> -- both fit. 1536 dim costs <b>12.288 GB</b> and 3072 dim costs <b>24.576 GB</b> -- both exceed the budget and are eliminated. <b>Step 4 (rank):</b> the two survivors get ranked on MTEB's real leaderboard, filtered to English/Spanish and retrieval tasks -- no score is invented here; that ranking happens on the live leaderboard, not in this lesson.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0810-b03-title">
+<strong class="concept-visual-title" id="c0810-b03-title">VISUAL · DIMENSION VS. STORAGE COST AT 2,000,000 CHUNKS</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0810-svg-title-b c0810-svg-desc-b">
+<title id="c0810-svg-title-b">A coordinate plane plotting four candidate embedding dimensions against their fixed storage cost, with a 10 GB budget line</title>
+<desc id="c0810-svg-desc-b">X-axis: dimension (384, 768, 1536, 3072). Y-axis: storage cost in GB for 2,000,000 chunks. A dashed line marks the 10 GB budget. The 384 and 768 points sit below the line and are colored green; the 1536 and 3072 points sit above it and are colored grey.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<line x1="34" y1="20" x2="34" y2="176" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="34" y1="176" x2="316" y2="176" stroke="#c9cdb9" stroke-width="1"/>
+<text x="6" y="16" font-size="7.5">GB (n=2,000,000)</text>
+<text x="262" y="192" font-size="7.5">DIMENSION</text>
+<line x1="34" y1="116" x2="316" y2="116" stroke="#b3543a" stroke-width="1.6" stroke-dasharray="4 3"/>
+<text x="240" y="112" font-size="7.5" fill="#b3543a">10 GB BUDGET</text>
+<circle cx="80" cy="157.6" r="5" fill="#2f6f5c"/>
+<text x="59" y="172" font-size="7">384d · 3.072 GB</text>
+<circle cx="150" cy="139.1" r="5" fill="#2f6f5c"/>
+<text x="124" y="130" font-size="7">768d · 6.144 GB</text>
+<circle cx="220" cy="102.3" r="5" fill="#5b6b64"/>
+<text x="188" y="93" font-size="7">1536d · 12.288 GB</text>
+<circle cx="290" cy="28.5" r="5" fill="#5b6b64"/>
+<text x="242" y="24" font-size="7">3072d · 24.576 GB</text>
+</g>
+</svg>
+<figcaption>Green points fit the 10 GB budget; grey points are eliminated before any benchmark ranking even runs.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The four filters, named plainly</h3>
+<p>Language filter narrows the category (general-purpose / multilingual / domain-specific). Domain filter narrows further, or names the honest compromise when no single model covers both language and domain perfectly. Budget filter applies Concept 06's byte-cost formula at the corpus's real chunk count and removes any dimension that would not fit. Benchmark rank takes whatever survives the first three filters and orders it on MTEB, filtered to the corpus's actual languages and task type.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A choice made once, offline, before any request</h3>
+<div class="scroll-flow">
+<span>Language filter → domain filter → budget filter → MTEB rank (this concept)</span><i>→</i>
+<span class="hot">Every downstream embedding uses that one choice</span><i>→</i>
+<span>Concept 11 — versioning, drift and migration, unopened</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>A decision process, not a fifth isolated property</h3>
+<div class="distinction-table" role="table" aria-label="This concept distinguished from Concepts 06-09 and from a benchmark-score-only view">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">This concept vs. Concepts 06-09</span><span role="cell">A synthesis that ends in one concrete pick, vs. properties named in isolation with no decision attached</span></div>
+<div role="row"><span role="cell">MTEB score vs. actual production fit</span><span role="cell">The top-ranked model overall is not necessarily top-ranked for your language, domain and budget</span></div>
+<div role="row"><span role="cell">Budget filter vs. benchmark rank</span><span role="cell">The budget filter eliminates candidates outright; MTEB only ranks whatever is left after that</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The top MTEB model is always the right pick."</b><p>False -- ignores budget and latency entirely, and can produce an index too large to afford.</p></div>
+<div><b>"Bigger dimension is always better."</b><p>False -- reuses Concept 06's own correction; bigger dimension costs more storage and compute for a capacity gain that may not matter.</p></div>
+<div><b>"One model can always cover every language and domain at once."</b><p>False -- Step 2's honest compromise; a perfectly matched multilingual-and-domain-tuned model may simply not exist yet.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>One upstream choice, corpus-wide consequences</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's own real model-choice decision, made once, with corpus-wide consequences</b><p>Every embedding in the index reflects this single funnel run -- not swappable later without re-embedding the whole corpus (Concept 11, named forward only).</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 · CONCEPT 10 ACTIVE (10/11)</b><p>Concept 11 (versioning, drift and migration) closes the module, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define the four filter steps</b><p>Language, domain, budget, benchmark rank -- in that order, each one narrowing what's left.</p></div>
+<div><b>Explain why MTEB is the real tie-break tool</b><p>Rather than a fixed number this lesson could hardcode -- leaderboard standings change as new models are submitted.</p></div>
+<div><b>Compute a budget filter for a new corpus size</b><p>bytes = n × d × 4, scaled to any n, same formula Concept 06 already gave.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does the budget filter eliminate candidates before MTEB ever gets consulted?</li>
+<li>Why doesn't this lesson name a specific model's current MTEB score?</li>
+<li>What happens to the funnel when a corpus has no storage-budget constraint at all?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 10 of 11</h3>
+<p>This concept combined Concepts 06-09's isolated properties into one real four-step funnel, worked fully on a bilingual, jargon-dense, 2,000,000-chunk corpus. Concept 11, "Versioning, drift and migration," is next -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 10 is active.</b> Module 08 is at 10 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-09.html">← Back to Concept 09</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Four properties, one decision</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>3.072 / 6.144 / 12.288 / 24.576 GB</b><small>Four dimensions, one corpus size, one budget line.</small></a>
+<a href="#s10"><span>02</span><b>Language → domain → budget → rank</b><small>The full four-step funnel, worked in order.</small></a>
+<a href="#s13"><span>03</span><b>MTEB: 58 datasets, 112 languages</b><small>The real benchmark that ranks whatever survives.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full worked example, from-scratch code, and The Selection Funnel lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> Concepts 06-09 each named an isolated property → language and domain filters narrow the category using Concept 09's own names → the budget filter applies Concept 06's storage formula at real corpus scale and eliminates candidates outright → MTEB ranks whatever survives → Module 08 at 10 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Embedding-model selection" deep dive</b><em>The full worked example, from-scratch code, and The Selection Funnel lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first synthesis, not the ninth property</h2></div></header>
+<p>Concepts 06 through 09 each named a real property of embedding models in isolation: dimension and storage cost, anisotropy, instruction prefixes, and the three model categories. This concept is the first to combine them into an actual decision process that ends in one concrete pick for one real corpus.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>The four-step funnel</h3><p>Language filter, domain filter, storage-budget filter, MTEB benchmark rank -- in that order.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>The budget filter</h3><p>Reusing Concept 06's byte=n×d×4 formula at a new corpus size, n=2,000,000.</p></article>
+<article class="info-card"><span>NAME</span><h3>MTEB as the real ranking tool</h3><p>58 datasets, 112 languages, a live public leaderboard -- not a number this lesson invents.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Not a specific current leaderboard score for any named model; not versioning/drift/migration (Concept 11).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-06.html">Concept 06</a> -- the dimension/storage-cost table, reused directly, not re-derived.</b></li>
+<li><b><a href="module-08-concept-07.html">Concept 07</a> -- anisotropy, named here only as a property, not a selection axis.</b></li>
+<li><b><a href="module-08-concept-08.html">Concept 08</a> -- the instruction/prefix convention, named here only as a property.</b></li>
+<li><b><a href="module-08-concept-09.html">Concept 09</a> -- the three model categories, reused as the categories being chosen among.</b></li>
+<li><b><a href="module-04-concept-09.html">Module 04 Concept 09</a> -- O(n×d) storage/compute cost, cited via Concept 06 at one remove.</b></li>
+<li><b>Explicitly out of scope:</b> Module 04 Concept 03's cosine similarity -- this concept computes no new similarity or vector geometry, only a budget/filter decision. Also out of scope: versioning, drift and migration (Concept 11).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A shopper with a language requirement, a specialty requirement and a fixed budget</h2></div></header>
+<p>A shopper narrows a catalog before checking reviews: first by which language the product ships in, then by whether it fits a specialty need, then by whether it fits the budget at all -- only after all three filters does checking reviews (MTEB) on what's left make sense. Checking reviews first, on the whole catalog, wastes time on options that were never affordable or never in the right language to begin with.</p>
+<div class="callout warning"><b>Analogy boundary</b>The shopping picture explains WHY the funnel runs in this order. It doesn't capture MTEB's actual task/dataset structure -- Section 13 states that precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Selection framework</td><td>A fixed, ordered sequence of filters that narrows a set of candidate embedding models down to one concrete pick for one real corpus</td><td>—</td></tr>
+<tr><td>Budget filter</td><td>Eliminates any candidate dimension whose storage cost at the corpus's real chunk count exceeds a fixed cap</td><td>bytes = n × d × 4</td></tr>
+<tr><td>Benchmark tie-break</td><td>Ranking the candidates that survive every prior filter on a real, standardized, publicly verifiable leaderboard</td><td>—</td></tr>
+<tr><td>Budget-surviving candidate</td><td>A dimension whose fixed storage cost at the corpus's chunk count is at or under the budget cap</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The four-step funnel, walked in order</h2></div></header>
+<p>Step 1, language: the corpus's real language mix rules whole categories out -- a bilingual corpus rules out a purely monolingual model, reusing Concept 09's own category names without re-arguing why (Concept 09 already showed the negative-cosine consequence of skipping this filter). Step 2, domain: jargon density narrows further toward a domain-specific candidate, or names the honest compromise when no perfectly matched multilingual-and-domain-tuned model exists. Step 3, budget: Concept 06's exact per-dimension byte cost, bytes = n × d × 4, applied at the corpus's real chunk count, eliminates any dimension that would not fit -- this step needs no benchmark data at all, only arithmetic. Step 4, benchmark rank: MTEB ranks whatever survives Steps 1-3, filtered to the corpus's actual languages and task type, and the practitioner picks the higher-scoring survivor.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Four steps in sequence, ending one concept short</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Language → domain → budget → MTEB rank (this concept)</b><small>Made once, offline</small></div>
+<div class="diagram-node"><b>Step 1-2: category narrowed</b><small>Reuses Concept 09's names</small></div>
+<div class="diagram-node"><b>Step 3: candidates eliminated by arithmetic</b><small>Reuses Concept 06's formula</small></div>
+<div class="diagram-node"><b>Step 4: real leaderboard rank</b><small>MTEB -- then Concept 11, named forward only</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>An offline, pre-pipeline decision node</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Run the funnel — language / domain / budget / MTEB rank (this concept)</span><i>↓</i><span>Tokenize → contextualize → pool → normalize</span><i>↓</i><span>Every embedding uses that one choice</span>
+</div>
+<p>Same framing as Concept 09's own architecture section, now shown as the actual decision node rather than a placeholder naming categories with no process attached.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>No new formula -- Concept 06's own byte cost, scaled</h2></div></header>
+<div class="equation">bytes = n × d × 4 (float32, 4 bytes/dimension) — Concept 06's formula, cited unchanged, itself citing Module 04 Concept 09's O(n×d)</div>
+<p>This concept introduces no new mathematics, mirroring Concept 09's own Section 09 pattern. It applies Concept 06's exact byte-cost formula to a new corpus size, n = 2,000,000, rather than Concept 06's own n = 1,000,000.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full legal-tech funnel, four steps</h2></div></header>
+<p><b>Scenario.</b> A legal-tech company's customer-support corpus is bilingual (English + Spanish), dense with legal jargon, has 2,000,000 chunks, and has a hard storage budget cap of 10 GB for the embedding index (float32 storage, 4 bytes/dimension).</p>
+<p><b>Step 1 -- language filter.</b> Bilingual (English + Spanish) requires a model from Concept 09's "multilingual" category -- a general English-only or purely monolingual-domain model is eliminated here, reusing Concept 09's own category names, not re-arguing why.</p>
+<p><b>Step 2 -- domain filter.</b> Legal jargon density additionally points toward Concept 09's "domain-specific" category, or at minimum a candidate that scores well on MTEB's retrieval-style tasks for legal or general text. A perfectly matched multilingual-legal-tuned model may not exist -- the framework's honest output here is "narrow toward the best available compromise," not a guaranteed perfect match.</p>
+<p><b>Step 3 -- storage/budget filter.</b> Applying Concept 06's exact per-dimension byte cost (bytes = n × d × 4) to n = 2,000,000 chunks: 384 dim → 2,000,000 × 384 × 4 = 3,072,000,000 bytes = <b>3.072 GB</b> (fits). 768 dim → 2,000,000 × 768 × 4 = 6,144,000,000 bytes = <b>6.144 GB</b> (fits). 1536 dim → 2,000,000 × 1536 × 4 = 12,288,000,000 bytes = <b>12.288 GB</b> (exceeds -- eliminated). 3072 dim → 2,000,000 × 3072 × 4 = 24,576,000,000 bytes = <b>24.576 GB</b> (exceeds -- eliminated). Every one of these four values is exactly double Concept 06's own 1,000,000-chunk figures (1.536 / 3.072 / 6.144 / 12.288 GB), the expected, checkable consequence of doubling n in a formula linear in n.</p>
+<p><b>Step 4 -- rank the survivors.</b> 384 dim and 768 dim rank on MTEB's real, cited leaderboard, filtered to English, Spanish, and retrieval / bitext-mining tasks. No specific current MTEB score is asserted for any named model here -- leaderboard standings change over time as new models are submitted, and a stale point-in-time claim would be worse than no claim. The framework's contribution is the four-step procedure and the fully computed budget filter, not a fabricated leaderboard score.</p>
+<p><b>Verification method:</b> the four budget values were computed via a Node.js loop over the four dimensions, and independently re-computed via a second, structurally different script writing each value as a separate hand-written statement and asserting equality with exactly double Concept 06's cached 1,000,000-chunk figures -- both passes matched on every value.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>The worked scenario itself</h3><p>Bilingual, jargon-dense, 2,000,000 chunks, 10 GB cap -- all four filters engage and narrow to two survivors.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A corpus with no budget constraint at all</h3><p>The funnel collapses to just language filter → domain filter → MTEB rank -- Step 3 simply has nothing to eliminate.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Picking the single highest MTEB score, ignoring the budget filter</h3><p>Produces an index too large to actually afford -- the score was never checked against the constraint that mattered most.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The funnel, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES CONCEPT 06'S BYTE-COST ARITHMETIC UNCHANGED</span>
+<pre><code>def storage_gb(n_chunks, dim):
+    return (n_chunks * dim * 4) / 1e9
+
+def funnel(languages, domain, budget_gb, n_chunks):
+    dims = [384, 768, 1536, 3072]
+    survivors = [d for d in dims if storage_gb(n_chunks, d) <= budget_gb]
+    multilingual = languages > 1
+    specialized = domain == "specialized"
+    if multilingual and specialized:
+        category = ("Multilingual + domain-specific -- rare combination, "
+                     "check MTEB's task-specific leaderboard filters or "
+                     "plan a routed/ensemble approach")
+    elif multilingual:
+        category = "Multilingual"
+    elif specialized:
+        category = "Domain-specific"
+    else:
+        category = "General-purpose"
+    return category, survivors
+
+category, survivors = funnel(languages=2, domain="specialized",
+                              budget_gb=10, n_chunks=2_000_000)
+
+assert round(storage_gb(2_000_000, 384), 3) == 3.072
+assert round(storage_gb(2_000_000, 768), 3) == 6.144
+assert round(storage_gb(2_000_000, 1536), 3) == 12.288
+assert round(storage_gb(2_000_000, 3072), 3) == 24.576
+assert survivors == [384, 768]
+assert category.startswith("Multilingual + domain-specific")
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>MTEB, plus the models it ranks</h2></div></header>
+<p><a href="https://arxiv.org/abs/2210.07316">MTEB (Muennighoff, Tazi, Magne &amp; Reimers)</a> spans 8 embedding tasks covering 58 datasets and 112 languages, benchmarking 33 models at publication -- open-source, with a public leaderboard. The <a href="https://huggingface.co/spaces/mteb/leaderboard">live MTEB leaderboard</a> is the real tool a practitioner filters by language and task in Step 4, not a number this lesson could hardcode. The candidates being ranked are the same models named by Concepts 06 and 09: <a href="https://platform.openai.com/docs/guides/embeddings">all-MiniLM-L6-v2, BERT-base, and OpenAI's text-embedding-3-small/large</a> anchor the 384/768/1536/3072-dimension rows; <a href="https://arxiv.org/abs/2007.01852">LaBSE</a>, BGE-M3, MedCPT and CodeRetriever anchor the multilingual and domain-specific categories Step 1 and Step 2 filter toward.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Selection Funnel</h2></div></header>
+<div class="lab">
+<p>Toggle the language mix and domain, then drag the budget slider -- watch which dimensions survive, and which category the funnel recommends. Corpus size is fixed at 2,000,000 chunks, matching Section 10's worked example exactly.</p>
+<div class="lab-actions" role="group" aria-label="Language mix">
+<button type="button" class="secondary active" data-language="single">Single language</button>
+<button type="button" class="secondary" data-language="multi">Multiple languages</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Domain">
+<button type="button" class="secondary active" data-domain="general">General vocabulary</button>
+<button type="button" class="secondary" data-domain="specialized">Specialized jargon</button>
+</div>
+<div class="lab-controls">
+<div class="control"><label for="budgetSlider_0810">Storage budget: <output id="budgetOut_0810">10 GB</output></label>
+<input type="range" id="budgetSlider_0810" min="1" max="30" step="0.5" value="10"></div>
+</div>
+<svg class="vector-plane" viewBox="0 0 340 210" role="img" aria-labelledby="c0810-svg-title-lab c0810-svg-desc-lab">
+<title id="c0810-svg-title-lab">A coordinate plane plotting each candidate dimension against its fixed storage cost for 2,000,000 chunks, with a movable budget line</title>
+<desc id="c0810-svg-desc-lab">Four points at 384, 768, 1536 and 3072 dimensions on the x-axis, each at its fixed GB cost on the y-axis. A dashed horizontal line marks the current budget slider value; points at or below the line are colored green, points above are colored grey.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<line x1="34" y1="20" x2="34" y2="176" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="34" y1="176" x2="316" y2="176" stroke="#c9cdb9" stroke-width="1"/>
+<text x="6" y="16" font-size="7.5">GB (n=2,000,000)</text>
+<text x="262" y="192" font-size="7.5">DIMENSION</text>
+<line id="budgetLine_0810" x1="34" y1="116" x2="316" y2="116" stroke="#b3543a" stroke-width="1.6" stroke-dasharray="4 3"/>
+<text id="budgetLineLabel_0810" x="234" y="112" font-size="7.5" fill="#b3543a">10.0 GB BUDGET</text>
+<circle id="pt384_0810" cx="80" cy="157.6" r="5" fill="#2f6f5c"/>
+<text x="59" y="172" font-size="7">384d · 3.072 GB</text>
+<circle id="pt768_0810" cx="150" cy="139.1" r="5" fill="#2f6f5c"/>
+<text x="124" y="130" font-size="7">768d · 6.144 GB</text>
+<circle id="pt1536_0810" cx="220" cy="102.3" r="5" fill="#5b6b64"/>
+<text x="188" y="93" font-size="7">1536d · 12.288 GB</text>
+<circle id="pt3072_0810" cx="290" cy="28.5" r="5" fill="#5b6b64"/>
+<text x="242" y="24" font-size="7">3072d · 24.576 GB</text>
+</g>
+</svg>
+<table class="worked-table" id="funnelTable_0810">
+<thead><tr><th>Dimension</th><th>Fixed cost @ 2,000,000 chunks</th><th>Fits current budget?</th></tr></thead>
+<tbody>
+<tr data-dim="384"><td>384 (all-MiniLM-L6-v2)</td><td>3.072 GB</td><td class="funnel-status">—</td></tr>
+<tr data-dim="768"><td>768 (BERT-base)</td><td>6.144 GB</td><td class="funnel-status">—</td></tr>
+<tr data-dim="1536"><td>1536 (OpenAI text-embedding-3-small / ada-002)</td><td>12.288 GB</td><td class="funnel-status">—</td></tr>
+<tr data-dim="3072"><td>3072 (OpenAI text-embedding-3-large)</td><td>24.576 GB</td><td class="funnel-status">—</td></tr>
+</tbody>
+</table>
+<div class="norm-readout" id="funnelReadout_0810"></div>
+<div class="callout" id="funnelVerdict_0810" aria-live="polite"></div>
+<div class="callout warning">This lab demonstrates the filtering mechanic on Concept 06's already-verified storage formula (bytes = n×d×4) at a fixed corpus size of 2,000,000 chunks -- it does not query the live MTEB leaderboard. Ranking the budget-surviving candidates on the real leaderboard (Section 13/24's cited MTEB references) is the step a practitioner performs outside this lab.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Built directly on top of Concept 09's table</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>What Concept 09 gave</th><th>What this concept adds</th></tr></thead>
+<tbody>
+<tr><td>Three named categories: general-purpose, multilingual, domain-specific</td><td>A process for choosing among them -- language and domain filters, applied in order</td></tr>
+<tr><td>No storage/budget axis at all</td><td>Concept 06's byte-cost formula, scaled to the corpus's real chunk count, as an outright elimination filter</td></tr>
+<tr><td>No real comparative ranking mechanism</td><td>MTEB, cited and named, as the actual tie-break tool for whatever survives</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SCORE ALONE</span><h3>Picking by benchmark score alone</h3><p>Ignores the budget filter entirely -- can produce an index too large to actually afford.</p></article>
+<article class="info-card"><span>BUDGET ALONE</span><h3>Picking by budget alone</h3><p>Ignores language/domain mismatch, silently degrading retrieval as Concept 09 already quantified with real negative-cosine numbers.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The highest MTEB score always wins</td><td>False -- budget and latency matter too, and the score was never checked against them.</td></tr>
+<tr><td>Bigger dimension is always better</td><td>False -- reuses Concept 06's own correction; capacity gains cost real storage and compute.</td></tr>
+<tr><td>One model always covers every language and domain combination</td><td>False -- Step 2's honest compromise framing; a perfect match may simply not exist yet.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>This is a one-time, corpus-wide decision -- every embedding in the index reflects this single funnel run.</li>
+<li>Changing the model later means re-embedding everything, forward-referenced to Concept 11's versioning/drift/migration concept by name only, no detail given here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the four filter steps in order.</summary><div>Language filter, domain filter, storage-budget filter, MTEB benchmark rank -- each one narrows what the next step has to consider.</div></details>
+<details class="quiz"><summary>Why is MTEB the real tie-break tool, rather than a fixed number this lesson could hardcode?</summary><div>Leaderboard standings change over time as new models are submitted -- asserting a specific current rank would go stale, which is exactly why the framework names MTEB as a live, filterable tool rather than a fixed score.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A monolingual English medical corpus needs an embedding model. The corpus has 500,000 chunks and a 2 GB storage budget. Run the funnel: which category does Step 1 + Step 2 point toward, and which dimensions survive Step 3?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Step 1: a single language (English) does not require the "multilingual" category. Step 2: medical jargon density points toward "domain-specific" (a model like MedCPT). Step 3: at 500,000 chunks, storage cost is exactly a quarter of the lesson's own 2,000,000-chunk figures -- 384 dim = 0.768 GB, 768 dim = 1.536 GB, 1536 dim = 3.072 GB, 3072 dim = 6.144 GB. Against a 2 GB budget, 384 dim and 768 dim survive; 1536 dim and 3072 dim are eliminated. Step 4 would then rank those two survivors on MTEB's biomedical-retrieval-filtered leaderboard.</div>
+</details>
+<p>Teach-back: why does a smaller corpus (500,000 vs. 2,000,000 chunks) let more dimensions survive the same-sized budget, without anything about the model itself changing?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Embedding-model selection</h3><ul><li><b>The funnel:</b> language filter → domain filter → budget filter → MTEB rank</li><li><b>Worked numbers:</b> 3.072 / 6.144 / 12.288 / 24.576 GB at n=2,000,000, budget 10 GB</li><li><b>Real benchmark:</b> MTEB -- 58 datasets, 112 languages, a live public leaderboard</li></ul></div>
+<div><h3>Memorable example</h3><p>A bilingual, jargon-dense, 2,000,000-chunk legal-tech corpus with a 10 GB cap eliminates two of four candidate dimensions by arithmetic alone, before any benchmark is even consulted.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why use MTEB instead of just trusting a vendor's marketing claim?</summary><div>MTEB is a standardized, open, multi-task, multi-language benchmark with a public leaderboard -- it lets a practitioner compare candidates on the same tasks and datasets, rather than trusting a vendor's own selectively chosen numbers.</div></details>
+<details class="quiz"><summary>Mathematical: verify the budget filter arithmetic for n=2,000,000.</summary><div>bytes = n × d × 4. For d=384: 2,000,000×384×4=3,072,000,000 bytes=3.072 GB. For d=768: 6,144,000,000 bytes=6.144 GB. For d=1536: 12,288,000,000 bytes=12.288 GB. For d=3072: 24,576,000,000 bytes=24.576 GB -- each exactly double Concept 06's own 1,000,000-chunk figures.</div></details>
+<details class="quiz"><summary>Coding: implement the funnel.</summary><div>Section 12 gives the full from-scratch implementation -- a storage_gb() helper reusing Concept 06's arithmetic unchanged, and a funnel() function returning a category label and the list of budget-surviving dimensions.</div></details>
+<details class="quiz"><summary>Debugging: a chosen model scores well on MTEB overall but poorly for the actual corpus. What's the first thing to check?</summary><div>Whether the corpus's actual language, domain and task type actually match what MTEB measured for that model -- an overall-strong score can still hide a weak result on the specific language/task slice that matters for this corpus.</div></details>
+<details class="quiz"><summary>System design: design a selection process for a corpus spanning three languages and two domains.</summary><div>Run the same four-step funnel: Step 1 requires a multilingual category covering all three languages; Step 2 checks whether any single model is tuned for both domains, and if not, names that as the honest compromise (or considers a routed/ensemble approach per two domains); Step 3 applies the budget filter at the corpus's real chunk count; Step 4 ranks survivors on MTEB filtered to all three languages and the relevant task types.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2210.07316"><b>Muennighoff, Tazi, Magne &amp; Reimers — MTEB: Massive Text Embedding Benchmark (arXiv:2210.07316)</b><br><span>8 embedding tasks, 58 datasets, 112 languages, 33 models benchmarked at publication -- open-source with a public leaderboard.</span></a>
+<a href="https://huggingface.co/spaces/mteb/leaderboard"><b>MTEB Leaderboard — Hugging Face Space</b><br><span>The real, live, publicly browsable leaderboard, filterable by language and task -- the actual tool used in Step 4.</span></a>
+<a href="https://platform.openai.com/docs/guides/embeddings"><b>OpenAI — Embeddings guide</b><br><span>Confirms the 1536/3072-dimension defaults feeding this concept's storage-budget filter, reused from Concept 06.</span></a>
+<a href="https://arxiv.org/abs/2007.01852"><b>Feng, Yang, Cer et al. — LaBSE (arXiv:2007.01852)</b><br><span>Reused by name from Concept 09 as the real multilingual-category example Step 1's filter selects toward.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 10 COMPLETE · MODULE 08 · 10/11</span>
+<h3>Four filters. One real pick.</h3>
+<p>You can now run the four-step selection funnel end to end -- language filter, domain filter, storage-budget filter, MTEB benchmark rank -- and compute the budget filter for any corpus size using Concept 06's own formula. Concept 11, "Versioning, drift and migration," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Selection Funnel ↑</a>
+</div>
+<p class="fine-print">Module 08 at 10 of 11 concepts. Next concept: versioning, drift and migration.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 10 · Complete</p>
+<a href="module-08-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>

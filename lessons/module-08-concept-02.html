@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 01 named what an embedding is and explicitly declined to say how one gets produced. This concept walks the real forward pass: tokenize, look up token embeddings, contextualize via a bidirectional transformer encoder's real per-token-pair softmax attention, pool. On 'The order shipped late,' the function word 'the' moves farthest under contextualization (1.4748) while the dominant content word 'shipped' moves least (0.2634), attending 72.67% to itself -- and cosine(shipped,late) rises from 0.8159 to 0.9755, geometric proof the encoder pulls related words together.">
+<title>Text-to-vector semantic representation — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 02</p>
+<h1>Concept 01 named the object.<br><em>Here's how it actually gets made.</em></h1>
+<p class="lesson-lead">Concept 01 defined an embedding and explicitly deferred both HOW it's produced and HOW it's trained. This concept opens the first deferral: the real forward-pass pipeline an already-trained embedding model runs at inference time. Tokenize, look up a per-token embedding, run a bidirectional transformer encoder's real self-attention over every token against every other token, pool the results into one fixed-size vector. On "The order shipped late," the payoff is concrete: "the," a function word with the weakest signal of its own, moves the FARTHEST under contextualization -- while "shipped," the sentence's dominant content word, moves the LEAST, because it attends 72.67% to itself. And cosine similarity between "shipped" and "late" rises from 0.8159 to 0.9755 -- geometric proof the encoder pulls the two words describing the same event closer together, something no per-word-in-isolation embedding could ever do.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second concept of Module 08 -- opens Concept 01's first deferral (HOW text becomes a vector)</b></div>
+<div><span>PREREQUISITE</span><b>Module 02's tokenization, transformer block, and self-attention concepts; Module 04's dot product/cosine/distance/softmax (all cited, reused unchanged); Module 07 Concept 08's toy contextualize() stand-in, now superseded</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the four forward-pass stages in order and explain why a function word can move farther than a content word</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Real, content-specific weights -- not a fixed blend</h2>
+</div>
+<p>Concept 01 named the object and deferred everything about how it's produced. This concept opens exactly that deferral: the four-stage forward pass a trained embedding model runs, using real per-token-pair attention weights instead of any fixed formula.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Four stages: tokenize, embed, contextualize, pool</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>The deterministic forward-pass pipeline an already-trained embedding model runs at inference time: tokenize → look up token embeddings → contextualize via a transformer encoder → pool → one vector.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>How those parameters got learned (Concept 04); which pooling strategy to use (Concept 06); whether queries and documents get embedded differently (Concept 03).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> contextualization uses a separate, content-dependent weight for every token pair -- not one fixed global blend.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 01 deferred this on purpose</h3>
+<p>Concept 01 named the object (v=f(x), θ learned) but explicitly declined to open the mechanism producing v: "this concept does not derive that training procedure... here only the OUTCOME and the CONTRAST matter." This concept opens exactly that deferral -- and closes RAG Module 07 Concept 08's own explicit simplification: its toy contextualize(t)=base(t)+0.5·doc_mean was a stylized stand-in for the real mechanism, now shown for the first time with actual per-token-pair weights.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>"The order shipped late" -- a function word moves farther than the content word</h3>
+<p>Four tokens, four illustrative 2D base vectors. Under real contextualization, "shipped" (the sentence's dominant content word) moves LEAST (Euclidean distance 0.2634) because it attends 72.67% to itself. "the" (a function word with the weakest signal of its own) moves FARTHEST (1.4748), spreading its attention almost evenly across all four tokens.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0802-b03-title">
+<strong class="concept-visual-title" id="c0802-b03-title">VISUAL · SHIPPED'S ATTENTION, MOSTLY TO ITSELF</strong>
+<svg class="vector-plane" viewBox="0 0 460 170" role="img" aria-labelledby="c0802-svg-title-b c0802-svg-desc-b">
+<title id="c0802-svg-title-b">Four arcs from the token shipped to each token in the sentence, weighted by attention score</title>
+<desc id="c0802-svg-desc-b">A center node labeled shipped with four arcs to the, order, shipped itself, and late. The self-loop to shipped is thickest at 72.67 percent. The arc to late is next at 14.09 percent, then order at 12.49 percent, then the at 0.74 percent, the thinnest.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<circle cx="230" cy="90" r="34" fill="#5ee6c3" fill-opacity="0.5" stroke="#14241f" stroke-width="1.5"/>
+<text x="230" y="94" text-anchor="middle" font-weight="700">shipped</text>
+<text x="230" y="60" text-anchor="middle" font-size="7.5" font-weight="700">self: 72.67%</text>
+<line x1="230" y1="56" x2="230" y2="24" stroke="#14241f" stroke-width="3"/>
+<text x="230" y="18" text-anchor="middle" font-size="7.5">late: 14.09%</text>
+<line x1="196" y1="90" x2="80" y2="90" stroke="#14241f" stroke-width="2"/>
+<text x="80" y="86" font-size="7.5">order: 12.49%</text>
+<line x1="230" y1="124" x2="230" y2="156" stroke="#14241f" stroke-width="1"/>
+<text x="230" y="164" text-anchor="middle" font-size="7.5">the: 0.74% (thinnest)</text>
+</g>
+</svg>
+<figcaption>Line thickness tracks attention weight. "Shipped" barely looks outward -- it already carries strong content signal on its own.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Four stages, three already taught elsewhere</h3>
+<table class="compare-table">
+<thead><tr><th>Stage</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>Tokenization</td><td>Module 02 Concept 02, cited, not re-taught</td></tr>
+<tr><td>Token-embedding lookup</td><td>A learned table, one row per token ID</td></tr>
+<tr><td>Transformer encoder (self-attention + feed-forward)</td><td>Module 02 Concepts 03-04, formula reused unchanged, bidirectional here (no causal mask)</td></tr>
+<tr><td>Pooling</td><td>Named forward only -- Concept 06's job</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The embedding model's own internals, opened for the first time</h3>
+<div class="scroll-flow">
+<span>Chunk (Module 07 output)</span><i>→</i>
+<span>Tokenizer</span><i>→</i>
+<span>Token embedding lookup</span><i>→</i>
+<span class="hot">Transformer encoder, bidirectional</span><i>→</i>
+<span>Pooling (Concept 06)</span><i>→</i>
+<span>ONE embedding vector (Concept 01's object)</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Token vs. text, real vs. toy, bidirectional vs. causal</h3>
+<div class="distinction-table" role="table" aria-label="Token embeddings distinguished from text embeddings, real attention from Concept 08's toy stand-in, and bidirectional from causal masking">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Token embedding vs. text embedding</span><span role="cell">One vector per token, pre-context, vs. one vector for the whole input, post-pooling</span></div>
+<div role="row"><span role="cell">Real per-token-pair softmax weights vs. Concept 08's toy contextualize()</span><span role="cell">Same word "contextualize," genuinely different mechanism -- learned, content-specific weights vs. one fixed hand-picked blend</span></div>
+<div role="row"><span role="cell">Bidirectional encoder attention vs. causal/decoder attention</span><span role="cell">Same formula, different mask -- a text-embedding encoder typically sees the whole input at once</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Token embeddings are already the final vector."</b><p>False -- they're pre-context and one-per-token, not one-per-input.</p></div>
+<div><b>"Contextualization means every word gets the same fixed blend with the rest of the sentence."</b><p>False -- that was Concept 08's own explicitly-labeled simplification. Real weights are content-specific, per token pair.</p></div>
+<div><b>"Since this uses self-attention it must be the same causal mechanism Module 02 walked through."</b><p>False -- real text-embedding encoders are typically bidirectional, with no causal mask.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>What's actually inside a real embedding call</h3>
+<div class="project-map">
+<div><span>THE ACTUAL EMBEDDING CALL</span><b>This concept is what happens inside model.encode(chunk_text)</b><p>Before a vector ever lands in Module 10's VECTOR column.</p></div>
+<div><span>WHY QUERIES AND DOCUMENTS AREN'T DIFFERENT YET</span><b>This concept treats one piece of text uniformly</b><p>Concept 03 is where that symmetry breaks.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Recite the four stages in order</b><p>Tokenize, embed, contextualize (transformer encoder), pool.</p></div>
+<div><b>State the token-vs-text-embedding distinction</b><p>One per token, pre-context, vs. one per input, post-pooling.</p></div>
+<div><b>Explain precisely what changed versus Concept 08's toy contextualize()</b><p>Real, learned, per-token-pair weights instead of one fixed global blend.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does "the" move farther than "shipped" under contextualization?</li>
+<li>Why is a text-embedding encoder typically bidirectional rather than causal?</li>
+<li>Why isn't a token embedding, by itself, already a usable text embedding?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 2 of 11</h3>
+<p>This concept walked one piece of text through the forward pass. Concept 03, "Bi-encoders and asymmetric query embeddings versus document embeddings," is the first to consider a query and a document together.</p>
+<div class="beginner-memory"><b>Concept 02 is active.</b> Module 08 is at 2 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-01.html">← Back to Concept 01</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A function word moves more than a content word</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>"The" moves farthest</b><small>1.4748 vs. "shipped"'s 0.2634.</small></a>
+<a href="#b04"><span>02</span><b>Four stages, mostly cited</b><small>Only contextualization is new content here.</small></a>
+<a href="#b06"><span>03</span><b>Real weights, not a fixed blend</b><small>Supersedes Concept 08's own toy stand-in.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full attention derivation, from-scratch code, and the Sharpness Dial lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> Concept 01 defers HOW an embedding is made → tokenize/embed cited from Module 02 → real bidirectional self-attention contextualizes every token against every other → "shipped" self-attends 72.67%, "the" spreads thin → cosine(shipped,late) rises 0.8159→0.9755 → pool (Concept 06, named only) → Module 08 at 2 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Text-to-vector semantic representation" deep dive</b><em>The full attention derivation, from-scratch code, and the Sharpness Dial lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Opening Concept 01's own deferral</h2></div></header>
+<p>Concept 01 named the object and declined to say how one gets made. This concept opens exactly that deferral, four stages at a time.</p>
+<div class="flow">
+<div class="flow-node">Chunk</div>
+<div class="flow-node">Tokenizer</div>
+<div class="flow-node">Token embedding lookup</div>
+<div class="flow-node hot">Transformer encoder</div>
+<div class="flow-node">Pooling (Concept 06)</div>
+<div class="flow-node">Vector</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Each of the four stages</h3><p>Tokenize, embed, contextualize, pool.</p></article>
+<article class="info-card"><span>STATE</span><h3>The token-vs-text-embedding distinction</h3><p>One per token, pre-context, vs. one per input, post-pooling.</p></article>
+<article class="info-card"><span>STATE</span><h3>The bidirectional-vs-causal distinction</h3><p>Same formula, different mask.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Pooling strategies (Concept 06), bi-encoders/asymmetry (Concept 03), contrastive training (Concept 04) -- named forward only.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 01's v=f(x), θ learned, reused directly.</b> This concept decomposes f(x) into its four real stages.</li>
+<li><b>Module 02 Concepts 02-04 (tokenization, transformer block, self-attention), cited, formula reused unchanged.</b> Cashes in Concept 04's own forward reference that embedding models use the same self-attention mechanism, "only the masking differs."</li>
+<li><b>Module 04 Concepts 03/04/06 (dot product/cosine, Euclidean distance, softmax+temperature), reused unchanged.</b> No new formula introduced for any of these.</li>
+<li><b>Module 07 Concept 08's toy contextualize(), named and superseded.</b> This concept describes the real mechanism that function was always simplifying.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A dictionary entry versus a word read in its sentence</h2></div></header>
+<p>A word read alone from a dictionary entry is ambiguous -- "bank" could be a riverbank or a financial institution. The same word read inside one specific sentence is disambiguated by its neighbors.</p>
+<div class="callout warning"><b>Analogy boundary</b>The dictionary picture explains WHY context matters. It doesn't state the actual attention-weight arithmetic -- Section 09 gives that precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Tokenize</td><td>Split input text into a sequence of tokens</td><td>tokenize(x) = [t1..tn]</td></tr>
+<tr><td>Token embedding lookup</td><td>A learned table mapping each token to a pre-context vector</td><td>E[t_i] = e_i</td></tr>
+<tr><td>Contextualization</td><td>Self-attention producing a context-aware vector per token</td><td>Attention(Q,K,V) = softmax(QK^T/√d_k)V → h_i</td></tr>
+<tr><td>Pooling</td><td>An unspecified function combining all token vectors into one</td><td>pool({h1..hn}) = v (Concept 06)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>"The order shipped late," traced through all four stages</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>TOKENIZE + EMBED</span><p>Four whole-word tokens (the, order, shipped, late), each looked up as a pre-context 2D illustrative vector.</p></div>
+<div class="lane"><span>CONTEXTUALIZE + POOL</span><p>Real scaled dot-product attention over all four tokens against each other, then mean-pooled into one final vector -- full numbers in Section 10.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>"Shipped" attends mostly to itself</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Hub diagram showing shipped as the center node with four weighted connections to the tokens in the sentence">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>shipped</b><small>Self-weight 0.7267 -- the strongest self-reference of any token</small></div>
+<div class="diagram-node"><b>late</b><small>Weight 0.1409</small></div>
+<div class="diagram-node"><b>order</b><small>Weight 0.1249</small></div>
+<div class="diagram-node"><b>the</b><small>Weight 0.0074 -- the thinnest connection</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The embedding model's own internals, expanded</h2></div></header>
+<div class="pipeline-preview">
+<span>Chunk (Module 07)</span><i>↓</i><span>Tokenizer (M02C02)</span><i>↓</i><span>Token embedding lookup</span><i>↓</i><span class="hot">Transformer encoder, bidirectional (M02C03/04)</span><i>↓</i><span>Pooling (Concept 06)</span><i>↓</i><span>ONE embedding vector</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Attention(Q,K,V), Q=K=V, a stated simplification</h2></div></header>
+<div class="equation">Attention(Q,K,V) = softmax(QK^T/√d_k)V, with Q=K=V= the token's own base embedding (a real encoder projects each through separate learned W_Q/W_K/W_V matrices first -- simplified away here to expose the aggregation mechanism)</div>
+<p>No new formula is introduced beyond Module 02 Concept 04's own attention formula and Module 04's dot-product/softmax/Euclidean-distance/cosine machinery -- all reused unchanged. Only pool(·) remains a named-but-undefined function, Concept 06's job.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full six-step trace</h2></div></header>
+<p>Sentence: "The order shipped late." Toy 2D token embeddings (illustrative, not real published values): the=(0.10,0.10), order=(2.00,0.40), shipped=(1.80,1.90), late=(0.30,2.10). d_k=2, scale=√2.</p>
+<p><b>Step 1 -- scaled dot-product scores</b> (Module 04 Concept 03's dot product, reused unchanged, divided by √2):</p>
+<table class="worked-table">
+<thead><tr><th>Row</th><th>vs. the</th><th>vs. order</th><th>vs. shipped</th><th>vs. late</th></tr></thead>
+<tbody>
+<tr><td>the</td><td>0.0141</td><td>0.1697</td><td>0.2616</td><td>0.1697</td></tr>
+<tr><td>order</td><td>0.1697</td><td>2.9416</td><td>3.0830</td><td>1.0182</td></tr>
+<tr><td>shipped</td><td>0.2616</td><td>3.0830</td><td>4.8437</td><td>3.2032</td></tr>
+<tr><td>late</td><td>0.1697</td><td>1.0182</td><td>3.2032</td><td>3.1820</td></tr>
+</tbody>
+</table>
+<p><b>Step 2 -- softmax weights</b> (Module 04 Concept 06, reused unchanged, rows sum to exactly 1.0000): the=[0.2166,0.2530,0.2774,0.2530]; order=[0.0265,0.4236,0.4880,0.0619]; shipped=[0.0074,0.1249,0.7267,0.1409]; late=[0.0225,0.0526,0.4674,0.4576].</p>
+<p><b>Step 3 -- contextualized vectors:</b> the=(1.1029,1.1812), order=(1.7468,1.2292), shipped=(1.6010,1.7274), late=(1.0859,1.8722).</p>
+<p><b>Step 4 -- movement</b> (Euclidean distance, Module 04 Concept 04, reused unchanged): the=<b>1.4748</b>, order=0.8670, shipped=<b>0.2634</b>, late=0.8183. "The" moves farthest; "shipped" moves least, attending 72.67% to itself.</p>
+<p><b>Step 5 -- cosine proof</b> (Module 04 Concept 03, reused unchanged): cosine(base shipped, base late) = 0.8159 rises to cosine(contextualized shipped, contextualized late) = <b>0.9755</b> -- the encoder measurably pulls the two words describing the same late-shipping event closer together.</p>
+<p><b>Step 6 -- pooling</b> (named forward only -- a single unweighted mean used here purely to reach a visible endpoint, not a recommendation): mean-pooled final vector = (1.3842, 1.5025) -- one fixed-size vector, Concept 01's own object, produced end to end for the first time in the Atlas.</p>
+<p>A second, shorter verified example ("Payment failed twice") for the transfer exercise: scores for "failed" = [2.0365, 3.6204, 2.1496], weights = [0.1430, 0.6969, 0.1601] (sum 1.0000), contextualized "failed" = (1.3936, 1.3981).</p>
+<p>VERIFICATION: every number above was computed via a Node.js script, then independently re-derived a second time via a differently-structured script (raw exp/softmax, no shared helpers), and a third time via an explicit brute-force nested loop printing each weight×vector contribution term before summing -- all three matched to 4 decimal places, with every softmax row confirmed to sum to exactly 1.000000.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A real sentence-transformer .encode() call on ordinary prose</h3><p>Runs exactly this four-stage pipeline internally, in one line.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>An input longer than the encoder's own max sequence length</h3><p>Silently truncated before pooling ever runs -- named forward to Module 02 Concept 07's context-window concept, now applied to an embedding model's own input limit.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating a raw token embedding as a usable text embedding</h3><p>It's pre-context and one-per-token -- not what a retrieval system compares.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Attention and mean pooling, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES MODULE 02 CONCEPT 04'S OWN FORMULA</span>
+<pre><code>import math
+
+def tokenize(text):
+    """Whitespace tokenizer -- explicitly simpler than real BPE (Module 02
+    Concept 02's job); kept simple to isolate contextualization."""
+    return text.lower().rstrip(".").split()
+
+EMBED = {"the": (0.10, 0.10), "order": (2.00, 0.40),
+         "shipped": (1.80, 1.90), "late": (0.30, 2.10)}
+
+def dot(u, v):
+    return u[0] * v[0] + u[1] * v[1]
+
+def softmax(xs):
+    m = max(xs)
+    exps = [math.exp(x - m) for x in xs]
+    s = sum(exps)
+    return [e / s for e in exps]
+
+def attention_contextualize(tokens, embed, d_k=2):
+    scale = math.sqrt(d_k)
+    out = {}
+    for ti in tokens:
+        scores = [dot(embed[ti], embed[tj]) / scale for tj in tokens]
+        weights = softmax(scores)
+        cx = sum(w * embed[tj][0] for w, tj in zip(weights, tokens))
+        cy = sum(w * embed[tj][1] for w, tj in zip(weights, tokens))
+        out[ti] = (cx, cy)
+    return out
+
+def pool_mean(vectors):
+    n = len(vectors)
+    return (sum(v[0] for v in vectors) / n, sum(v[1] for v in vectors) / n)
+
+tokens = tokenize("The order shipped late.")
+contextualized = attention_contextualize(tokens, EMBED)
+assert round(contextualized["shipped"][0], 4) == 1.6010
+assert round(contextualized["shipped"][1], 4) == 1.7274
+pooled = pool_mean(list(contextualized.values()))
+assert round(pooled[0], 4) == 1.3842
+assert round(pooled[1], 4) == 1.5025
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The real one-line call, and the bidirectional-encoder grounding</h2></div></header>
+<p><a href="https://www.sbert.net/docs/quickstart.html">SBERT's quickstart docs</a> show the real one-line <code>model.encode(sentences)</code> call that wraps exactly this concept's pipeline (tokenize → transformer encoder → pooling → fixed-size vector). <a href="https://arxiv.org/abs/1810.04805">The BERT paper</a> grounds the bidirectional transformer encoder architecture -- the no-causal-mask distinction this concept draws against Module 02's own causal/decoder walkthrough. <a href="https://arxiv.org/abs/1908.10084">The Sentence-BERT paper</a> is cited only for its Section 3 architecture description (a BERT/RoBERTa encoder plus a pooling operation) -- its siamese/bi-encoder structure and contrastive training objective are explicitly Concepts 03-04's territory, not covered here.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Sharpness Dial</h2></div></header>
+<div class="lab">
+<p>Pick a token, then drag the temperature dial. Watch its attention weights sharpen toward a near one-hot selection at low temperature, or flatten toward a uniform blend at high temperature -- with the untouched default (T=1) sitting in between.</p>
+<div class="lab-actions" role="group" aria-label="Choose a token">
+<button type="button" class="secondary" data-token="the">the</button>
+<button type="button" class="secondary" data-token="order">order</button>
+<button type="button" class="secondary active" data-token="shipped">shipped</button>
+<button type="button" class="secondary" data-token="late">late</button>
+</div>
+<div class="lab-controls">
+<div class="control"><label for="sharpnessTemp_0802">Softmax temperature (T): <output id="sharpnessTempOut_0802">1.00</output></label>
+<input type="range" id="sharpnessTemp_0802" min="0.25" max="4" step="0.05" value="1"></div>
+</div>
+<div class="prob-bars" id="sharpnessBars_0802"></div>
+<div class="norm-readout" id="sharpnessReadout_0802"></div>
+<div class="callout" id="sharpnessVerdict_0802"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Real attention versus Concept 08's toy stand-in</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Concept 08's toy contextualize()</td><td>Simple, fast intuition that "contextualization exists"</td><td>One fixed 50/50 blend for every token, regardless of content</td></tr>
+<tr><td>Real per-token-pair softmax attention (this concept)</td><td>Content-specific, learned weights -- explains WHY production embeddings are unevenly shaped by their actual neighbors</td><td>Requires the full QKV/softmax machinery, not a one-line formula</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>TOKEN EMBEDDINGS AS TEXT EMBEDDINGS</span><h3>Comparing pre-pooling vectors directly</h3><p>Produces dimension/shape mismatches or nonsensical downstream similarity scores.</p></article>
+<article class="info-card"><span>ASSUMED CAUSAL MASKING</span><h3>Wrongly assuming an encoder is causal</h3><p>Silently discards half the true context if implemented that way in error.</p></article>
+<article class="info-card"><span>UNTOKENIZED RAW TEXT</span><h3>Feeding raw text into code expecting a fixed-size vector</h3><p>Skips the entire pipeline this concept just walked through.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Token embeddings are already the final vector</td><td>False -- pre-context and one-per-token, not one-per-input.</td></tr>
+<tr><td>Contextualization means a fixed blend for every word</td><td>False -- that was Concept 08's own explicitly-labeled simplification.</td></tr>
+<tr><td>This must be the same causal mechanism Module 02 walked through</td><td>False -- real text-embedding encoders are typically bidirectional.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>The tokenizer and encoder must be the exact same trained artifact pair -- a mismatched tokenizer produces token IDs the encoder was never trained on, silently.</li>
+<li>Encoder max-sequence-length truncates long chunks before pooling ever runs, reinforcing why Module 07's chunking discipline exists.</li>
+<li>Batching multiple texts through one encoder call improves throughput (named only).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why does "the" move farther than "shipped" under contextualization?</summary><div>"The" has no dominant neighbor to lock onto, so its attention spreads nearly evenly across all four tokens, pulling its contextualized position noticeably away from its base position. "Shipped" attends 72.67% to itself, so its contextualized position stays close to where it started.</div></details>
+<details class="quiz"><summary>Why is a text-embedding encoder typically bidirectional rather than causal?</summary><div>A text embedding is meant to summarize a whole, already-complete input -- there's no reason to hide later tokens from earlier ones the way a causal/decoder model must during generation.</div></details>
+<details class="quiz"><summary>Why isn't a token embedding, by itself, already a usable text embedding?</summary><div>It's pre-context (produced before contextualization) and one-per-token -- a retrieval system needs one fixed-size vector per chunk or query, which requires pooling across all the contextualized token vectors first.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Sentence: "Payment failed twice." Toy vectors: payment=(1.5,0.3), failed=(1.6,1.6), twice=(0.4,1.5). Using the same Attention(Q,K,V) formula (Q=K=V=own base vector, d_k=2, scale=√2), compute the attention weights for "failed" and its resulting contextualized vector.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Scaled scores for "failed" against payment/failed/twice: 2.0365, 3.6204, 2.1496. Softmax weights: 0.1430, 0.6969, 0.1601 (sum 1.0000). Contextualized "failed" = 0.1430×(1.5,0.3) + 0.6969×(1.6,1.6) + 0.1601×(0.4,1.5) = (1.3936, 1.3981).</div>
+</details>
+<p>Teach-back: explain in your own words why "failed" ends up closer to its own base position than "the" does in the main worked example.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Text-to-vector semantic representation</h3><ul><li><b>Four stages:</b> tokenize, embed lookup, contextualize (transformer encoder), pool</li><li><b>Mechanism note:</b> per-token-pair learned weights, not a fixed global blend</li><li><b>Headline numbers:</b> shipped self-weight 0.7267 / moved 0.2634 vs. the moved 1.4748; cosine(shipped,late) 0.8159→0.9755</li></ul></div>
+<div><h3>Memorable example</h3><p>"The" moves the farthest of any token in the sentence -- not because it's unimportant, but because it has no dominant neighbor to lock its attention onto.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't a token embedding yet a text embedding?</summary><div>A token embedding is produced before contextualization and exists one-per-token; a text embedding is one fixed-size vector for the whole input, produced only after pooling across all the contextualized token vectors.</div></details>
+<details class="quiz"><summary>Mathematical: state the Attention(Q,K,V) formula and what the Q=K=V simplification means here.</summary><div>Attention(Q,K,V) = softmax(QK^T/√d_k)V. Q=K=V=the token's own base embedding is a stated simplification -- a real encoder first projects each token through separate learned W_Q/W_K/W_V matrices before running the same formula.</div></details>
+<details class="quiz"><summary>Coding: implement attention_contextualize() and pool_mean().</summary><div>attention_contextualize computes scaled dot-product scores, softmaxes them per token, and takes the weighted sum of all base vectors; pool_mean averages the resulting contextualized vectors -- Section 12 gives the full from-scratch implementation with matching asserts.</div></details>
+<details class="quiz"><summary>Debugging: a "semantic search" demo returns near-identical scores for very different sentences. What's the first thing to check?</summary><div>Whether pooling is actually running at all, or whether raw token embeddings are being compared directly -- comparing the wrong-shaped, pre-context vectors can produce collapsed, near-identical similarity scores regardless of actual meaning.</div></details>
+<details class="quiz"><summary>System design: how would you verify a vendor's embedding endpoint is actually bidirectional and not silently truncating long inputs?</summary><div>Feed it a long input exceeding a suspected max-sequence-length and check whether content near the end still influences the resulting vector; feed it a sentence where later words disambiguate earlier ones and confirm the earlier words' contribution actually shifts -- a causal-only or truncating implementation would fail one of these checks.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.sbert.net/docs/quickstart.html"><b>Quickstart — Sentence-Transformers (SBERT)</b><br><span>The real one-line model.encode() call wrapping this concept's four-stage pipeline.</span></a>
+<a href="https://arxiv.org/abs/1810.04805"><b>BERT: Pre-training of Deep Bidirectional Transformers — Devlin et al., 2018</b><br><span>Grounds the bidirectional transformer encoder architecture cited in Sections 04 and 06.</span></a>
+<a href="https://arxiv.org/abs/1908.10084"><b>Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks — Reimers &amp; Gurevych, 2019</b><br><span>Cited only for its Section 3 architecture description (encoder + pooling) -- its siamese structure and training objective are Concepts 03-04's territory.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 02 COMPLETE · MODULE 08 · 2/11</span>
+<h3>Concept 01's deferral, opened. One piece of text, one vector, end to end.</h3>
+<p>You can now name the four forward-pass stages, explain why a function word can move farther than a content word under contextualization, and state precisely what changed versus Concept 08's own toy stand-in. Concept 03 is next: bi-encoders and asymmetric query embeddings versus document embeddings.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Sharpness Dial ↑</a>
+</div>
+<p class="fine-print">Module 08 at 2 of 11 concepts. Next concept: bi-encoders and asymmetric query embeddings versus document embeddings.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 02 · Complete</p>
+<a href="module-08-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

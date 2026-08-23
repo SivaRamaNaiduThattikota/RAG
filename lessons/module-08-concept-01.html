@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 07 leaned on informal, hand-built toy vector models the whole way through -- hand-picked topic axes, bag-of-words counts -- without ever naming what an embedding formally is. This concept does: an embedding is a learned dense vector representation, positioned so geometric proximity approximates semantic similarity. On a 5-word vocabulary, a hand-built one-hot model ties every pair at cosine 0.0000, always; an illustrative learned-style model gives kitten-cat=0.9945 and car-truck=0.9903, with every nearest-neighbor answer semantically sensible. Same words, same cosine formula -- only the source of the coordinates changed.">
+<title>What is an embedding? — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 01</p>
+<h1>Module 07 used the mechanism<br><em>without ever naming it. Here it is.</em></h1>
+<p class="lesson-lead">Six different Module 07 concepts hand-built a small vocabulary, hand-picked coordinates, and ran cosine similarity over the result -- without ever saying what that mechanism actually was, or why geometric proximity should mean anything semantically. An embedding is a learned dense vector representation of an input, positioned in a continuous space so that geometric proximity approximates semantic similarity. The word that matters most in that sentence is "learned" -- every one of Module 07's own vectors was hand-assigned, not learned, and this concept makes that distinction numeric on a 5-word vocabulary: a hand-built one-hot model ties every pair at exactly cosine 0.0000, always. A learned-style model instead gives kitten-cat=0.9945 and car-truck=0.9903 -- and every single nearest-neighbor answer is the semantically sensible one.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Opening concept of Module 08 ("Embeddings & representation learning") -- Module 07 is fully complete (10/10) and pushed</b></div>
+<div><span>PREREQUISITE</span><b>Module 04's cosine similarity/dot product (cited, unchanged); Module 07's own toy vector models (Concepts 01/04/05/07/08/09, reused by name as the hand-built contrast case)</b></div>
+<div><span>BEGINNER GOAL</span><b>State the formal definition and explain why "learned, not hand-built" is the one fact this concept exists to establish</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Learned, not hand-built</h2>
+</div>
+<p>Module 07 used hand-built toy vector models the whole way through without ever naming the mechanism. This concept names it, and draws the one distinction that actually matters: an embedding's coordinates come from training, not typing.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A vector whose coordinates came from training, not typing</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>An embedding is a learned dense vector representation of an input (word, chunk, query -- anything), positioned in a continuous space so geometric proximity approximates semantic similarity.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>How text actually becomes a vector mechanically (Concept 02), bi-encoders/asymmetric query-vs-document embeddings (Concept 03), contrastive training (Concept 04), pooling (Concept 06) -- all named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> "learned, not hand-built" is the one fact this concept exists to establish.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Module 07 leaned on the mechanism without naming it</h3>
+<p>Module 07 (Concepts 01, 04, 05, 07, 08, 09, by name) used informal toy vector models the whole way through -- hand-picked topic axes, bag-of-words counts -- without ever saying what an embedding formally is or why its geometry should mean anything. Module 05 Concept 11 already proved lexical/exact-term matching hits a hard wall at vocabulary mismatch: a fixed, hand-built representation has no way to generalize past exact wording. This concept names the general fix: don't hand-build the representation, learn it.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Same three words, same formula, one number versus three</h3>
+<p>Three words (cat, dog, car). Hand-built one-hot model: cosine(cat,dog) = cosine(cat,car) = cosine(dog,car) = <b>0.0000</b>, every pair, always. Illustrative learned-style model (verified, not real published word2vec numbers): cosine(cat,dog) = <b>0.9272</b>, cosine(cat,car) = <b>0.1564</b>, cosine(dog,car) = <b>0.5150</b>. Same words, same cosine formula (Module 04 Concept 03, unchanged) -- only the source of the coordinates differs.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0801-b03-title">
+<strong class="concept-visual-title" id="c0801-b03-title">VISUAL · HAND-BUILT VS. LEARNED, SAME THREE WORDS</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c0801-svg-title-b c0801-svg-desc-b">
+<title id="c0801-svg-title-b">Two panels showing cat, dog and car as unit vectors under two different representation schemes</title>
+<desc id="c0801-svg-desc-b">Left panel, hand-built one-hot: three vectors at arbitrary fixed right angles, every pairwise cosine labeled 0.0000. Right panel, learned illustrative: three vectors at 14, 36 and 95 degrees, with cosine cat-dog 0.9272, cat-car 0.1564 and dog-car 0.5150 labeled on connecting arcs.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<text x="10" y="16" font-weight="700">HAND-BUILT (one-hot)</text>
+<line x1="60" y1="90" x2="140" y2="90" stroke="#ff7957" stroke-width="1.5"/>
+<line x1="60" y1="90" x2="60" y2="30" stroke="#ff7957" stroke-width="1.5"/>
+<line x1="60" y1="90" x2="20" y2="130" stroke="#ff7957" stroke-width="1.5"/>
+<text x="145" y="93" font-size="7.5">cat</text>
+<text x="55" y="25" font-size="7.5">dog</text>
+<text x="10" y="140" font-size="7.5">car</text>
+<text x="10" y="165" font-weight="700">every pair: cosine = 0.0000</text>
+<text x="250" y="16" font-weight="700">LEARNED (illustrative)</text>
+<line x1="270" y1="150" x2="410" y2="128" stroke="#3fae86" stroke-width="1.5"/>
+<line x1="270" y1="150" x2="352" y2="61" stroke="#3fae86" stroke-width="1.5"/>
+<line x1="270" y1="150" x2="270" y2="20" stroke="#3fae86" stroke-width="1.5"/>
+<text x="412" y="130" font-size="7.5">cat (14°)</text>
+<text x="355" y="60" font-size="7.5">dog (36°)</text>
+<text x="255" y="18" font-size="7.5">car (95°)</text>
+<text x="250" y="170" font-size="7.5">cat-dog=0.9272 · cat-car=0.1564 · dog-car=0.5150</text>
+</g>
+</svg>
+<figcaption>The one-hot panel can never produce anything but 0.0000 -- the assignment rule never looked at meaning. The learned panel's numbers track it, because its coordinates came from a process that did.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Outcome and contrast only -- not the training procedure itself</h3>
+<p>An embedding is a vector in a fixed-size space (dimension set by the model, named forward to Concept 06) whose coordinates are set by a training procedure that optimizes some objective over data -- not typed in by a person. This concept does not derive that training procedure; Concept 04 (contrastive learning) does. Here only the OUTCOME (learned coordinates) and the CONTRAST (versus hand-built) matter.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>From a decided chunk to a real embedding, at scale</h3>
+<div class="scroll-flow">
+<span>Module 07 — chunks (a text unit decided)</span><i>→</i>
+<span class="hot">Concept 01 — what an embedding is</span><i>→</i>
+<span>Concepts 02-11 — how text actually becomes one, at real scale</span><i>→</i>
+<span>Module 09 — vector indexes</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What vs. how, and proximity vs. meaning</h3>
+<div class="distinction-table" role="table" aria-label="Learned embeddings distinguished from hand-built vectors, from Concept 02's mechanism, and from a guarantee of meaning">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Learned embedding vs. every Module 07 toy vector model</span><span role="cell">Hand-assigned coordinates vs. fit-from-data coordinates</span></div>
+<div role="row"><span role="cell">This concept's WHAT vs. Concept 02's HOW</span><span role="cell">This concept defines the object; Concept 02 walks through the actual text-to-vector mechanism</span></div>
+<div role="row"><span role="cell">Geometric proximity vs. semantic similarity</span><span role="cell">Proximity (Module 04's cosine/dot-product machinery) is only an APPROXIMATION of similarity, not a guarantee -- named forward to Concept 07's anisotropy/pathologies</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A hand-built vector with enough dimensions is basically an embedding."</b><p>False -- dimensionality isn't the distinguishing property; the SOURCE of the coordinates is.</p></div>
+<div><b>"Geometric closeness always means semantically similar."</b><p>False in general -- it's an approximation the training objective aims for, not a guarantee (Concept 07 covers where it breaks).</p></div>
+<div><b>"Embeddings replace cosine similarity/dot products with something new."</b><p>False -- Module 04's exact same formulas apply unchanged; only what's being compared is new.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>THE REAL VECTOR COLUMN</span><b>Embeddings become the vector column type Module 10 designs schema around</b><p>A real, fixed dimensionality, not an ad hoc toy vocabulary.</p></div>
+<div><span>WHAT PRODUCTION NEVER SHIPS</span><b>Every one of Module 07's hand-built toy models</b><p>A real embedding model (Concepts 02+) replaces every one of them at build time.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Recite the formal definition</b><p>A learned dense vector representation, positioned so geometric proximity approximates semantic similarity.</p></div>
+<div><b>Explain why one-hot vectors can never encode meaning</b><p>Regardless of how many words are added -- the assignment rule never looked at meaning, so the geometry can't encode it either.</p></div>
+<div><b>State which module already gave the geometry, and which still owes the "how"</b><p>Module 04 gave cosine/dot products. Module 08 Concepts 02+ give the actual text-to-vector mechanism.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a one-hot vector give exactly 0.0000 for every distinct pair, no matter how many words exist?</li>
+<li>Why is "learned" the operative word here, not "vector" or "dense"?</li>
+<li>What do Module 04's cosine/dot-product formulas need to change to work with real embeddings?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 08 OPENS — 1 of 11</h3>
+<p>This concept named what an embedding is. Concept 02 opens the actual mechanism: how a real embedding model turns text into one of these vectors end to end.</p>
+<div class="beginner-memory"><b>Module 08 is open.</b> 1 of 11 concepts built.</div>
+<a class="button primary" href="module-07-concept-10.html">← Back to Concept 10</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Naming the mechanism Module 07 already used</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Same words, same formula</b><small>0.0000 always vs. 0.9272/0.1564/0.5150.</small></a>
+<a href="#b04"><span>02</span><b>Outcome, not training procedure</b><small>The coordinates came from fitting, not typing.</small></a>
+<a href="#b06"><span>03</span><b>Proximity ≠ meaning, guaranteed</b><small>Only an approximation -- Concept 07 covers where it breaks.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full 5-word matrix, from-scratch code, and the Nearest-Neighbor Flip lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> Module 07 used hand-built toy vectors throughout, unnamed → this concept names the mechanism → a one-hot model ties every pair at 0.0000 → a learned-style model gives a fully sensible ranking → Module 08 open, 1 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "What is an embedding?" deep dive</b><em>The full 5-word matrix, from-scratch code, and the Nearest-Neighbor Flip lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From decided chunks to a real embedding, at scale</h2></div></header>
+<p>Module 07's chunking decisions produced text units. This concept is the first of Module 08's eleven to say what happens to one of those units on the way into a vector -- what the destination object actually is, before Concepts 02-11 build the real mechanism.</p>
+<div class="flow">
+<div class="flow-node">Module 07 — chunking decisions</div>
+<div class="flow-node hot">Concept 01 — what an embedding is</div>
+<div class="flow-node">Concepts 02-11 — how, at scale</div>
+<div class="flow-node">Module 09 — vector indexes</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>The formal definition</h3><p>A learned dense vector representation, positioned so geometric proximity approximates semantic similarity.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Learned vs. hand-built, on the same vocabulary</h3><p>Same words, same cosine formula -- only the coordinate source differs.</p></article>
+<article class="info-card"><span>STATE</span><h3>Proximity is an approximation, not equality</h3><p>Geometric closeness tracks meaning; it doesn't guarantee it.</p></article>
+<article class="info-card"><span>MAP</span><h3>Where this sits relative to Modules 04 and 07</h3><p>Module 04 gave the geometry already. Module 07 used the mechanism informally, already. This concept names it.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 04 Concept 03's cosine similarity/dot product, cited, not re-derived.</b> Applied here unchanged.</li>
+<li><b>Module 07 Concepts 01/04/05/07/08/09's own toy vector models, reused by name.</b> The hand-built contrast case throughout this concept.</li>
+<li><b>Module 05 Concept 11's vocabulary-mismatch finding.</b> Motivates why a fixed/hand-built representation fails to generalize.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A phrasebook versus a translator who learned by immersion</h2></div></header>
+<p>A translator handed a fixed phrasebook can only ever say what's already in it -- someone else decided every entry in advance. A translator who learned the language by immersion has an internal sense of which words are "close" in meaning that came from exposure, not a rulebook.</p>
+<div class="callout warning"><b>Analogy boundary</b>The phrasebook picture explains the SOURCE of the coordinates. It doesn't explain the training mechanics that produce a learned representation -- Concept 04 gives those.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Embedding</td><td>A function mapping an input x to a vector v in a fixed-size space</td><td>v = f(x), v ∈ R^d</td></tr>
+<tr><td>Embedding dimension</td><td>The fixed size of that vector space, set per model</td><td>d (named forward to Concept 06)</td></tr>
+<tr><td>Learned parameters</td><td>The coordinates of v are outputs of a fitted function, not manual assignment</td><td>f has parameters θ, fit to data</td></tr>
+<tr><td>Geometric proximity</td><td>Module 04's cosine similarity/distance, applied to embeddings unchanged</td><td>cosine(v_a, v_b)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two lanes: who assigns the coordinates</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>HAND-BUILT LANE</span><p>A person or a fixed rule assigns each item's vector directly -- one-hot, hand-picked topic axes, bag-of-word counts.</p></div>
+<div class="lane"><span>LEARNED LANE</span><p>A model's parameters are fit against data by a training objective so the resulting vector positions correlate with a target notion of similarity -- the objective itself is Concept 04's job, not derived here.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One vocabulary, two representation schemes</h2></div></header>
+<div class="diagram-scroll" tabindex="0" aria-label="Hub diagram showing a 5-word vocabulary with hand-built and learned representations as two contrasting surrounding nodes">
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>5-word vocabulary</b><small>kitten, cat, dog, car, truck</small></div>
+<div class="diagram-node"><b>Hand-built (one-hot)</b><small>Every distinct pair: cosine = 0.0000</small></div>
+<div class="diagram-node"><b>Learned (illustrative)</b><small>Highest observed: kitten-cat = 0.9945</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where "what an embedding is" sits in the pipeline</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents → Chunks (Module 07, done)</span><i>↓</i><span class="hot">Embedding model — this concept: WHAT one is</span><i>↓</i><span>Vectors</span><i>↓</i><span>Retrieval (Module 09+)</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>v = f(x), θ learned -- no new formula, a new object</h2></div></header>
+<div class="equation">Embedding: v = f(x), f's parameters θ learned (fit to data)<br>Hand-built: v = g(x), g manually specified<br>cosine(v_a, v_b) -- unchanged from Module 04 Concept 03</div>
+<p>No new formula is introduced here -- only a new kind of object (v, with learned coordinates) being plugged into an old formula.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full 5-word, 10-pair matrix</h2></div></header>
+<p>Vocabulary: kitten, cat, dog, car, truck. Hand-built one-hot (R^5): each word a unique standard basis vector -- cosine(any two distinct words) = 0/(1×1) = exactly 0.0000, for all 10 pairs, by construction (two distinct standard basis vectors have zero dot product by definition).</p>
+<p>Learned-style (illustrative 2D unit vectors, NOT real published word2vec/GloVe numbers -- an explicitly labeled simplified stand-in, in the same spirit as Module 07 Concept 01's own illustrative topic vectors): kitten=8°, cat=14°, dog=36°, car=95°, truck=103°.</p>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Cosine</th></tr></thead>
+<tbody>
+<tr><td>kitten–cat</td><td>0.9945</td></tr>
+<tr><td>kitten–dog</td><td>0.8829</td></tr>
+<tr><td>kitten–car</td><td>0.0523</td></tr>
+<tr><td>kitten–truck</td><td>−0.0872</td></tr>
+<tr><td>cat–dog</td><td>0.9272</td></tr>
+<tr><td>cat–car</td><td>0.1564</td></tr>
+<tr><td>cat–truck</td><td>0.0175</td></tr>
+<tr><td>dog–car</td><td>0.5150</td></tr>
+<tr><td>dog–truck</td><td>0.3907</td></tr>
+<tr><td>car–truck</td><td>0.9903</td></tr>
+</tbody>
+</table>
+<p>Nearest neighbor by cosine, per word: kitten→cat (0.9945), cat→kitten (0.9945), dog→cat (0.9272), car→truck (0.9903), truck→car (0.9903) -- every nearest-neighbor answer is semantically sensible, and the two clusters {kitten,cat,dog} vs. {car,truck} separate cleanly (all cross-cluster cosines ≤0.5150, all within-cluster cosines ≥0.8829). kitten–truck even goes slightly negative (−0.0872): geometric proximity can express dissimilarity, not just weaker similarity, once vectors aren't restricted to hand-built non-negative basis vectors.</p>
+<p>VERIFICATION: computed once via an explicit 2D dot-product/norm cosine function applied to unit vectors at each angle, then independently cross-checked via a second, differently-coded formula applying the trigonometric angle-difference identity cos(θ_a − θ_b) directly on the raw angles, bypassing vector construction entirely -- every one of the 10 pairs matched to 4-5 decimal places between the two methods. The one-hot model's 0.0000 result was confirmed the same way, and is also algebraically guaranteed.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A genuinely trained sentence-embedding model</h3><p>Retrieves paraphrased queries correctly -- the exact case Module 05 Concept 11 and Module 07 Concept 10 both showed lexical matching failing.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A model trained on a very different domain than the corpus</h3><p>Named forward to Concept 09 (multilingual and domain embedding models).</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating any fixed numeric vector as an embedding</h3><p>A database ID or a one-hot flag is a vector, not an embedding, unless its coordinates came from a learning process.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>One-hot vs. learned, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES MODULE 04'S OWN COSINE FORMULA</span>
+<pre><code>import math
+
+def cosine(u, v):
+    dot = sum(a * b for a, b in zip(u, v))
+    nu = math.sqrt(sum(a * a for a in u))
+    nv = math.sqrt(sum(a * a for a in v))
+    return dot / (nu * nv) if nu and nv else 0.0
+
+def one_hot(index, dim=5):
+    v = [0] * dim
+    v[index] = 1
+    return v
+
+def learned_vec(angle_deg):
+    r = math.radians(angle_deg)
+    return [math.cos(r), math.sin(r)]
+
+ANGLES = {"kitten": 8, "cat": 14, "dog": 36, "car": 95, "truck": 103}
+ONEHOT = {"kitten": 0, "cat": 1, "dog": 2, "car": 3, "truck": 4}
+
+assert round(cosine(one_hot(ONEHOT["cat"]), one_hot(ONEHOT["dog"])), 4) == 0.0
+assert round(cosine(learned_vec(ANGLES["kitten"]), learned_vec(ANGLES["cat"])), 4) == 0.9945
+assert round(cosine(learned_vec(ANGLES["car"]), learned_vec(ANGLES["truck"])), 4) == 0.9903
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The formal source, the historical grounding, and the practitioner statement</h2></div></header>
+<p><a href="https://en.wikipedia.org/wiki/Word_embedding">Wikipedia's Word embedding page</a> gives the general formal definition this concept generalizes from words to any embedded input (chunk, query, document). <a href="https://arxiv.org/abs/1301.3781">The original word2vec paper (Mikolov et al., 2013)</a> is cited by name only as historical grounding for "learned, not hand-built" -- its vectors are fit from a training objective over a corpus, not assigned by a person. <a href="https://www.tensorflow.org/text/guide/word_embeddings">TensorFlow's word-embeddings guide</a> states plainly that embedding coordinates are "learned during training" and are dense, versus a hand-built/one-hot sparse vector.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Nearest-Neighbor Flip</h2></div></header>
+<div class="lab">
+<p>Pick a word, then flip the representation. Watch the ranking snap from a 4-way tie to a clean, sensible order with nothing else changed.</p>
+<div class="lab-actions" role="group" aria-label="Choose a word">
+<button type="button" class="secondary" data-word="kitten">kitten</button>
+<button type="button" class="secondary active" data-word="cat">cat</button>
+<button type="button" class="secondary" data-word="dog">dog</button>
+<button type="button" class="secondary" data-word="car">car</button>
+<button type="button" class="secondary" data-word="truck">truck</button>
+</div>
+<div class="dim-toggle" role="group" aria-label="Choose a representation" style="margin-top:10px">
+<button type="button" class="secondary active" data-rep="learned">Learned</button>
+<button type="button" class="secondary" data-rep="onehot">Hand-built (one-hot)</button>
+</div>
+<div class="rank-chip-row" id="nnFlipChips_0801"></div>
+<div class="norm-readout" id="nnFlipReadout_0801"></div>
+<div class="callout" id="nnFlipVerdict_0801"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Hand-built versus learned</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Hand-built representations</td><td>Interpretable dimensions, zero training cost</td><td>Zero generalization past exact structure</td></tr>
+<tr><td>Learned embeddings</td><td>Generalizes to unseen wording/inputs</td><td>Uninterpretable dimensions, real training cost (named forward to Module 19)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISTAKING ANY VECTOR FOR AN EMBEDDING</span><h3>A vector isn't an embedding just because it's a vector</h3><p>Unless its coordinates came from a learning process.</p></article>
+<article class="info-card"><span>ASSUMING EXACT PROXIMITY</span><h3>Treating geometric closeness as a guarantee, not an approximation</h3><p>Named forward to Concept 07's anisotropy and embedding-space pathologies.</p></article>
+<article class="info-card"><span>FORGETTING A HAND-BUILT AXIS WAS HAND-BUILT</span><h3>Once it "looks like" a real embedding in a demo</h3><p>The source of the coordinates doesn't change just because the demo looks convincing.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A hand-built vector with enough dimensions is basically an embedding</td><td>False -- the source of the coordinates is the distinguishing property, not dimensionality.</td></tr>
+<tr><td>Geometric closeness always means semantically similar</td><td>False in general -- an approximation the training objective aims for, not a guarantee.</td></tr>
+<tr><td>Embeddings replace cosine similarity with something new</td><td>False -- Module 04's exact same formulas apply unchanged.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Real embedding models are trained artifacts with a version and a fixed dimensionality that downstream schema/index code must match exactly (named forward to Concept 11's versioning/drift and Module 10's schema design).</li>
+<li>Swapping embedding models means every stored vector becomes incomparable to new queries until the whole corpus is re-embedded.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can one-hot vectors never encode meaning, regardless of dimension count?</summary><div>The assignment rule never looked at what the words mean -- each word just gets a unique, orthogonal basis vector. Adding more dimensions only adds more orthogonal directions; it never introduces the semantic signal the rule was never designed to capture.</div></details>
+<details class="quiz"><summary>Why is "learned" the operative word here, not "vector" or "dense"?</summary><div>A vector can be hand-built and still dense (this concept's own learned-style 2D example is dense too). What actually determines whether something is an embedding is whether its coordinates came from a training process fit to data, versus being manually assigned.</div></details>
+<details class="quiz"><summary>What do Module 04's cosine/dot-product formulas need to change to work with real embeddings?</summary><div>Nothing -- the exact same formulas apply unchanged. Only the object being plugged into them is new (a vector with learned, rather than hand-assigned, coordinates).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A new 4-word vocabulary: apple, orange, hammer, wrench. Reason qualitatively about where each word should sit on a single angular axis (fruits close together, tools close together, the two clusters far apart), then assign your own illustrative angles and compute one pairwise cosine by hand using Module 04's formula.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>A reasonable assignment: apple=10°, orange=20°, hammer=90°, wrench=100° -- mirroring this concept's own kitten/cat/car/truck spacing (small angle gaps within a cluster, a large gap between clusters). cosine(apple,orange) = cos(10°) ≈ 0.9848 (very close, same cluster); cosine(hammer,wrench) = cos(10°) ≈ 0.9848 (same gap, same cluster); cosine(apple,hammer) = cos(80°) ≈ 0.1736 (large angle, different clusters) -- computed the same way as Section 10's own matrix, using cos(θ_a − θ_b) directly on the assigned angles.</div>
+</details>
+<p>Teach-back: explain why assigning angles "by feel" in this exercise is still fundamentally different from a real embedding model, even though the resulting numbers look sensible.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>What is an embedding?</h3><ul><li><b>Definition:</b> a learned dense vector representation, positioned so geometric proximity approximates semantic similarity</li><li><b>Mechanism note:</b> coordinates come from training, not typing</li><li><b>Headline numbers:</b> 0.0000 always (one-hot) vs. 0.9945/0.9903 highest observed (learned-style)</li></ul></div>
+<div><h3>Memorable example</h3><p>Same cosine formula, same words -- only the source of the numbers changed, and that's the whole concept.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what makes a vector an embedding rather than just a vector?</summary><div>Whether its coordinates were produced by a training process fit to data (an embedding) versus manually assigned by a person or a fixed rule (just a vector) -- dimensionality and density are not the distinguishing property.</div></details>
+<details class="quiz"><summary>Mathematical: state the formal v=f(x) vs. g(x) contrast.</summary><div>An embedding is v = f(x) where f's parameters θ are learned (fit to data). A hand-built representation is v = g(x) where g's mapping is manually specified. The same downstream formulas (cosine, dot product) apply to both -- only the source of f versus g differs.</div></details>
+<details class="quiz"><summary>Coding: implement the one-hot vs. learned cosine comparison.</summary><div>A shared cosine(u,v) helper, an one_hot(index, dim) generator producing orthogonal basis vectors, and a learned_vec(angle) generator producing unit vectors from an angle -- Section 12 gives the full from-scratch implementation with matching asserts.</div></details>
+<details class="quiz"><summary>Debugging: a "semantic search" demo behaves like exact-match. What's the first thing to check?</summary><div>Whether the representation is actually learned, or secretly one-hot/keyword-based underneath a semantic-sounding name -- a hand-built representation ties everything that doesn't share an exact token, exactly like this concept's own one-hot result.</div></details>
+<details class="quiz"><summary>System design: how would you verify a vendor's "embedding model" is actually learned and not a dressed-up keyword index?</summary><div>Feed it two texts with no shared vocabulary but identical meaning (a paraphrase pair) and check the similarity score is meaningfully above zero -- a hand-built/keyword-based system will score it at or near zero, the same failure mode this concept's own one-hot model demonstrates.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Word_embedding"><b>Word embedding — Wikipedia</b><br><span>General formal definition, generalized here from words to any embedded input.</span></a>
+<a href="https://arxiv.org/abs/1301.3781"><b>Efficient Estimation of Word Representations in Vector Space — Mikolov et al., 2013</b><br><span>The original word2vec paper, cited by name as historical grounding for "learned, not hand-built."</span></a>
+<a href="https://www.tensorflow.org/text/guide/word_embeddings"><b>Word embeddings — TensorFlow</b><br><span>States plainly that embedding coordinates are learned during training, not hand-engineered.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 COMPLETE · MODULE 08 OPEN — 1/11</span>
+<h3>Module 07 used the mechanism. This concept named it.</h3>
+<p>You can now state the formal definition of an embedding and explain, numerically, why "learned, not hand-built" is the one distinction that matters. Concept 02, "Text-to-vector semantic representation," opens the actual mechanism next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Nearest-Neighbor Flip ↑</a>
+</div>
+<p class="fine-print">Module 08 is open (1/11). Next concept: text-to-vector semantic representation.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 01 · Complete</p>
+<a href="module-07-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

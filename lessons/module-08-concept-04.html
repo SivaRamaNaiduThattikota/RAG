@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Contrastive learning grounds Module 04 Concept 08's InfoNCE-style loss in real cosine similarity for the first time. An illustrative pre-training query starts with the WRONG document ranked first (cos to the irrelevant doc 0.3663 > cos to the relevant doc -0.0409); 4 illustrative pull/push steps flip the ranking correct by step 1 and drop the loss from 0.9174 to 0.1840 nats at tau=1 -- and from 8.1460 nats to effectively zero at the real production tau=0.05 (sentence-transformers' MultipleNegativesRankingLoss default, scale=20).">
+<title>Contrastive learning objectives — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 04 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 04</p>
+<h1>Pull toward the right answer.<br><em>Push away from the wrong ones.</em></h1>
+<p class="lesson-lead">Module 04 Concept 08 already built the full InfoNCE-style contrastive loss -- on abstract, unitless scores, with sim(q,d) left as an unfilled placeholder. This concept fills that placeholder in with what it has actually meant since Module 04 Concept 03: cosine similarity between real embedding vectors, the same doc1Vec, doc2Vec and q1Vec Concepts 02-03 already built and verified. For the first time in the course, a query vector actually moves in 2D space, pulled toward its relevant document and pushed away from an irrelevant one -- and the loss the InfoNCE formula assigns falls as it moves.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth concept of Module 08 -- where M04C08's loss formula meets Concepts 02-03's real vectors</b></div>
+<div><span>PREREQUISITE</span><b>Module 04 Concept 08's InfoNCE-style loss (cited, not re-derived); Module 04 Concept 03's cosine similarity; Concepts 02-03's doc1Vec, doc2Vec, q1Vec</b></div>
+<div><span>BEGINNER GOAL</span><b>State the grounded loss and explain in one sentence why its shape rewards separation -- without deriving a gradient</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The same loss, finally grounded in real vectors</h2>
+</div>
+<p>Module 04 Concept 08 proved the InfoNCE-style loss is Concept 07's cross-entropy with a one-hot positive. It never touched a real embedding vector. Concepts 02-03 built real vectors but never trained anything. This concept is where those two deferrals finally meet.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Pull toward the match, push away from the rest</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Contrastive learning is the training-time mechanism that pulls a query's embedding TOWARD its known-relevant document's embedding and PUSHES it away from irrelevant documents' embeddings -- computed via Module 04 Concept 03's cosine similarity, plugged into Module 04 Concept 08's already-built InfoNCE-style cross-entropy loss (cited directly here, not re-derived).</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Which negatives to use, or hard-negative mining (Concept 05); the real backprop/gradient mechanics that actually move a shared encoder's weights (Module 09/24, forward reference only).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> pull toward the right answer, push away from the wrong ones -- using the cosine similarity you already know, and a loss formula you've already seen.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Untrained, a cosine score can come out backwards</h3>
+<p>Without training, nothing guarantees a relevant document scores higher than an irrelevant one. The worked example below starts from exactly that failure: an illustrative "before training" query vector lands at cosine −0.0409 to the relevant document but cosine 0.3663 to an irrelevant one -- the wrong document would rank first. Contrastive learning exists to fix exactly this, for every query an encoder will ever see, not just one hand-built example.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Four steps: wrong ranking to correct, loss falling the whole way</h3>
+<p>Take an illustrative "before training" query vector q0 = (0.10, −0.10) -- hand-picked, not run through Concept 02's real attention pipeline the way doc1Vec, doc2Vec and q1Vec were, so it's flagged honestly as a stand-in for what an under-trained encoder might output. Nudge it 4 times toward Concept 03's frozen doc1Vec = (1.3842, 1.5025) (the relevant document, "The order shipped late") and away from doc2Vec = (−0.4077, −0.9372) (the irrelevant document, "Refund policy updated"). By step 1 the ranking has already flipped correct, and by step 4 cosine to the relevant document has risen to 0.8969 while cosine to the irrelevant one has fallen to −0.7023.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0804-b03-title">
+<strong class="concept-visual-title" id="c0804-b03-title">VISUAL · THE QUERY VECTOR PULLED TOWARD DOC1, PUSHED AWAY FROM DOC2</strong>
+<svg class="vector-plane" viewBox="0 0 320 300" role="img" aria-labelledby="c0804-svg-title-b03 c0804-svg-desc-b03">
+<title id="c0804-svg-title-b03">A 2D coordinate plane showing the query vector before and after 4 illustrative training steps</title>
+<desc id="c0804-svg-desc-b03">Four arrows from the origin: doc1 at 1.3842, 1.5025 pointing up and to the right, doc2 at negative 0.4077, negative 0.9372 pointing down and to the left, q0 before training at 0.10, negative 0.10 pointing slightly down and right, and q4 after 4 steps at 0.2421, 0.0934, rotated noticeably toward doc1's direction and away from doc2's.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="195" x2="300" y2="195" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="130" y1="20" x2="130" y2="280" stroke="#c9cdb9" stroke-width="1"/>
+<text x="292" y="191" text-anchor="end" font-size="8">+x</text>
+<text x="134" y="28" font-size="8">+y</text>
+<line x1="130" y1="195" x2="240.7" y2="74.8" stroke="#2f6f5c" stroke-width="2.5" marker-end="url(#arr0804bGreen)"/>
+<text x="200" y="70" font-size="8" fill="#2f6f5c">doc1 (1.3842, 1.5025) — relevant</text>
+<line x1="130" y1="195" x2="97.4" y2="270" stroke="#b3543a" stroke-width="2.5" marker-end="url(#arr0804bRed)"/>
+<text x="20" y="285" font-size="8" fill="#b3543a">doc2 (−0.4077, −0.9372) — irrelevant</text>
+<line x1="130" y1="195" x2="138" y2="203" stroke="#5b6b64" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="60" y="220" font-size="8" fill="#5b6b64">q0 before (0.10, −0.10)</text>
+<line x1="130" y1="195" x2="149.4" y2="187.5" stroke="#14241f" stroke-width="2.5" marker-end="url(#arr0804bInk)"/>
+<text x="153" y="178" font-size="8">q4 after 4 steps (0.2421, 0.0934)</text>
+<circle cx="130" cy="195" r="2.5" fill="#14241f"/>
+<defs>
+<marker id="arr0804bGreen" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f6f5c"/></marker>
+<marker id="arr0804bRed" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b3543a"/></marker>
+<marker id="arr0804bInk" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#14241f"/></marker>
+</defs>
+</g>
+</svg>
+<figcaption>q0 (dashed, before) sits closer in angle to doc2 than to doc1 -- the wrong ranking. After 4 illustrative pull/push steps, q4 (solid) has rotated toward doc1's direction and away from doc2's. Axes are illustrative 2D pooled-vector space, not to a fixed numeric scale.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The step-by-step numbers</h3>
+<table class="worked-table">
+<thead><tr><th>Step t</th><th>Query vector q_t</th><th>cos to doc1 (pos)</th><th>cos to doc2 (neg)</th><th>Loss at τ=1 (nats)</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>(0.1000, −0.1000)</td><td>−0.0409</td><td>0.3663</td><td>0.9174</td></tr>
+<tr><td>1</td><td>(0.1355, −0.0516)</td><td>0.3713</td><td>−0.0462</td><td>0.5060</td></tr>
+<tr><td>2</td><td>(0.1710, −0.0033)</td><td>0.6633</td><td>−0.3812</td><td>0.3015</td></tr>
+<tr><td>3</td><td>(0.2066, 0.0451)</td><td>0.8188</td><td>−0.5852</td><td>0.2196</td></tr>
+<tr><td>4</td><td>(0.2421, 0.0934)</td><td>0.8969</td><td>−0.7023</td><td>0.1840</td></tr>
+</tbody>
+</table>
+<p>Every row: cosine to the relevant document rises, cosine to the irrelevant document falls, and the loss falls -- monotonically, all the way down. The ranking is already wrong-to-correct by step 1.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where contrastive training sits</h3>
+<div class="scroll-flow">
+<span>Labeled (query, relevant-doc) pairs</span><i>→</i>
+<span class="hot">Concept 02's encoder</span><i>→</i>
+<span>Embeddings</span><i>→</i>
+<span class="hot">M04C03's cosine</span><i>→</i>
+<span class="hot">M04C08's InfoNCE loss</span><i>→</i>
+<span>Weight update (shared encoder, Module 09/24)</span><i>→</i>
+<span>Repeat, many batches</span><i>→</i>
+<span>The "already good" vectors Concepts 01-03 quietly assumed</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Training-time loss vs. inference-time ranking vs. which negatives vs. real weight updates</h3>
+<div class="distinction-table" role="table" aria-label="Contrastive loss distinguished from ranking, negative selection, weight updates, and this lesson's own proxy">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Contrastive loss (this concept) vs. ranking function (M04C08)</span><span role="cell">Training-time, grounded in real cosine values, vs. inference-time -- cited, not retaught</span></div>
+<div role="row"><span role="cell">This concept vs. which negatives to pick (Concept 05)</span><span role="cell">This concept grounds sim(q,d); Concept 05 covers what makes a negative good, forward-named only</span></div>
+<div role="row"><span role="cell">This lesson's vector nudges vs. actual weight updates (Module 09/24)</span><span role="cell">An illustrative proxy for the pull/push DIRECTION only -- not the real gradient on shared encoder weights</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"This is a brand-new loss I haven't seen."</b><p>False -- it's Module 04 Concept 08's InfoNCE cross-entropy loss, with sim(q,d) finally filled in as real cosine similarity.</p></div>
+<div><b>"Training only needs to pull the positive closer."</b><p>False -- the same softmax denominator falls just as much from pushing the negative's similarity down; both directions shrink the loss together.</p></div>
+<div><b>"This lesson's step-by-step vector nudges ARE the real gradient."</b><p>False -- real training updates a shared encoder's weights via backprop (Module 09/24). The nudges here are a teaching proxy for the pull/push DIRECTION only.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Fine-tuning the embedding model in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Fine-tuning an embedding model uses exactly (query, relevant-chunk) pairs as positives</b><p>Other chunks already in the same training batch become free in-batch negatives -- M04C08's own term, cited not re-derived.</p></div>
+<div><span>WHY IT MATTERS</span><b>Training nudges the SHARED encoder's weights until held-out queries' cosine similarities separate correctly too</b><p>Not built here: the actual training loop (Module 09/24) or negative-selection strategy (Concept 05).</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>State the grounded InfoNCE-style loss</b><p>sim(q,d) = cos(f(q), f(d)), plugged into Module 04 Concept 08's cross-entropy loss -- cited directly, not re-derived.</p></div>
+<div><b>Explain why the loss's shape rewards separation</b><p>Raising the positive's similarity AND lowering the negative's similarity both shrink the same softmax denominator, moving probability mass toward the positive at once.</p></div>
+<div><b>Explain why this lesson's steps are a proxy, not the real gradient</b><p>Real training updates a shared encoder's weights via backprop over many batches (Module 09/24) -- these steps only illustrate the DIRECTION.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Write the grounded loss's sim(q,d) term. What formula fills it in, and where was that formula first defined?</li>
+<li>In the step table, why does the loss keep falling even after the ranking is already correct at step 1?</li>
+<li>Why can't this lesson's q0→q4 nudges be the literal gradient of the loss with respect to q?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 4 of 11</h3>
+<p>This concept showed that pulling toward a positive and pushing away from a negative lowers a real, grounded loss -- but it never asked which negative is worth pushing away from. Concept 05, "Positive pairs, negatives and hard negatives," picks that question up next; what makes a good negative is explicitly not covered here.</p>
+<div class="beginner-memory"><b>Concept 04 is active.</b> Module 08 is at 4 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-03.html">← Back to Concept 03</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two deferrals meet: an abstract loss, and real vectors</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b02"><span>01</span><b>−0.0409 vs. 0.3663</b><small>Before training, the wrong document ranks first.</small></a>
+<a href="#b04"><span>02</span><b>4 steps, loss 0.9174 → 0.1840</b><small>Both cosines move; the loss falls monotonically.</small></a>
+<a href="#b06"><span>03</span><b>A proxy, not a gradient</b><small>Real training updates shared encoder weights (Module 09/24).</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full triple-verified table, the real τ=0.05 callout, and The Pull-Push Trainer lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> M04C08's InfoNCE loss left sim(q,d) unfilled → this concept fills it with M04C03's real cosine on Concepts 02-03's own vectors → an illustrative query starts wrongly ranked → 4 pull/push steps flip it correct and drop the loss → the real production temperature (τ=0.05) makes that same gap collapse far more sharply → Module 08 at 4 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Contrastive learning objectives" deep dive</b><em>The full triple-verified pull-push table, the real production temperature, and The Pull-Push Trainer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Two deferrals, cashed in at once</h2></div></header>
+<p>Module 04 Concept 08 built the full InfoNCE-style contrastive loss entirely on abstract, unitless scores (z = [2.0, 1.0, 0.1]), with sim(q,d) left as an unfilled placeholder and the embedding model itself only ever a forward reference. It proved that loss equals Concept 07's cross-entropy with a one-hot positive -- a fact this concept reuses, not re-proves. Concepts 02-03, meanwhile, built real pooled embedding vectors (doc1Vec, doc2Vec, q1Vec) but never trained anything with them. This concept is the first to fill M04C08's sim(q,d) in with what it has actually meant since Concept 03: cos(f(q), f(d)), computed on those real vectors.</p>
+<div class="flow">
+<div class="flow-node">M04C08's loss</div>
+<div class="flow-node">sim(q,d) left abstract</div>
+<div class="flow-node hot">This concept fills it in</div>
+<div class="flow-node">cos(f(q), f(d))</div>
+<div class="flow-node">Real vectors (M08C02-03)</div>
+<div class="flow-node hot">A query moves, live</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>STATE</span><h3>The grounded InfoNCE-style formula</h3><p>sim(q,d) = cos(f(q), f(d)), substituted directly into <a href="module-04-concept-08.html#s09">Module 04 Concept 08 Section 09</a>'s loss.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Why the loss shape rewards separation</h3><p>Conceptually, without deriving a gradient -- raising cos_pos and lowering cos_neg both shrink the same softmax denominator.</p></article>
+<article class="info-card"><span>NAME</span><h3>The real production name-equivalence chain</h3><p>InfoNCE = SimCSE loss = cross-entropy-with-in-batch-negatives = sentence-transformers' MultipleNegativesRankingLoss default config.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Not negative-selection depth (Concept 05), not a literal dL/dq derivation, not ranking-function mechanics or temperature/softmax mechanics (all cited via M04C08).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-04-concept-08.html#s05">Module 04 Concept 08, Section 05/09</a> -- the loss formula, cited directly, not re-derived.</b> L(q,d⁺,D⁻) = −log( exp(sim(q,d⁺)/τ) / Σ_{d∈{d⁺}∪D⁻} exp(sim(q,d)/τ) ), already proved equal to Concept 07's cross-entropy with a one-hot positive.</li>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a> -- cosine similarity.</b> The function this concept substitutes for sim(q,d).</li>
+<li><b><a href="module-08-concept-02.html">Module 08 Concept 02</a> and <a href="module-08-concept-03.html">Concept 03</a> -- real embedding vectors.</b> doc1Vec = (1.3842, 1.5025), doc2Vec = (−0.4077, −0.9372), q1Vec = (1.1292, 1.2708), reused unchanged.</li>
+<li><b><a href="module-04-concept-06.html">Module 04 Concept 06</a> -- temperature and softmax, cited.</b> Backs the τ=1 vs. τ=0.05 contrast in Section 10.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A tug-of-war over one query's position</h2></div></header>
+<p>Picture every document sitting at a fixed spot on a plane. A rope pulls the query toward its one true match's spot; identical ropes push it away from every wrong document's spot at the same time. Training is repeated tug-of-war, over and over, until the query stands near its match and far from the rest.</p>
+<div class="callout warning"><b>Analogy boundary</b>The ropes explain the SHAPE of the pull and the push. They don't capture the softmax's weighting of multiple negatives at once, or the real gradient math -- Section 09 states precisely what is and isn't derived here.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Grounded contrastive loss (this concept)</td><td>M04C08's InfoNCE-style loss with sim(q,d) filled in as real cosine similarity</td><td>L(q,d⁺,D⁻) = −log( exp(cos(f(q),f(d⁺))/τ) / Σ exp(cos(f(q),f(d))/τ) )</td></tr>
+<tr><td>Positive / negative</td><td>Cited from M04C08 directly, not redefined</td><td>d⁺ known-relevant, D⁻ known-irrelevant</td></tr>
+<tr><td>Temperature vs. scale</td><td>Inverse of each other</td><td>τ = 1 / scale</td></tr>
+<tr><td>Name-equivalence set (real production identity)</td><td>Four names for the identical default configuration, per sentence-transformers' own documentation</td><td>InfoNCE = SimCSE loss = cross-entropy w/ in-batch negatives = MultipleNegativesRankingLoss default</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tracing q0 → q4, with the proxy caveat inline</h2></div></header>
+<p>q_t = q0 + t·α·û, where û is the unit direction from doc2Vec toward doc1Vec, and α = 0.06. This IS an illustrative teaching proxy for the DIRECTION the loss's gradient would push a query embedding -- it is NOT a literal derivation of ∂L/∂q, which is out of scope here.</p>
+<p>Direction: doc1Vec − doc2Vec = (1.7919, 2.4397), magnitude 3.0271, unit direction û ≈ (0.5920, 0.8060) -- reused from Concept 03's own frozen vectors, not recomputed from Concept 02's attention pipeline.</p>
+<p>At each step, cos_pos = cos(q_t, doc1Vec) rises and cos_neg = cos(q_t, doc2Vec) falls (proxy caveat repeated: this is the direction the loss encourages, not the literal gradient) -- see Section 10's full table.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The full 5-step trail, plotted</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0804-s07-title">
+<strong class="concept-visual-title" id="c0804-s07-title">VISUAL · ALL 5 PULL-PUSH STEPS, PLOTTED AGAINST THE FROZEN DOCUMENTS</strong>
+<svg class="vector-plane" viewBox="0 0 320 300" role="img" aria-labelledby="c0804-svg-title-s07 c0804-svg-desc-s07">
+<title id="c0804-svg-title-s07">A 2D coordinate plane plotting all 5 illustrative pull-push steps against the two frozen document vectors</title>
+<desc id="c0804-svg-desc-s07">Two large arrows from the origin: doc1 at 1.3842, 1.5025 pointing up and to the right, doc2 at negative 0.4077, negative 0.9372 pointing down and to the left. A short trail of 5 small points near the origin traces the query vector from step 0 through step 4, curving slightly toward doc1's direction and away from doc2's with each step.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="195" x2="300" y2="195" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="130" y1="20" x2="130" y2="280" stroke="#c9cdb9" stroke-width="1"/>
+<text x="292" y="191" text-anchor="end" font-size="8">+x</text>
+<text x="134" y="28" font-size="8">+y</text>
+<line x1="130" y1="195" x2="240.7" y2="74.8" stroke="#2f6f5c" stroke-width="2.5" marker-end="url(#arr0804sGreen)"/>
+<text x="200" y="70" font-size="8" fill="#2f6f5c">doc1 (relevant)</text>
+<line x1="130" y1="195" x2="97.4" y2="270" stroke="#b3543a" stroke-width="2.5" marker-end="url(#arr0804sRed)"/>
+<text x="20" y="285" font-size="8" fill="#b3543a">doc2 (irrelevant)</text>
+<polyline points="138,203 140.84,199.13 143.68,195.26 146.53,191.39 149.37,187.53" fill="none" stroke="#14241f" stroke-width="2" marker-end="url(#arr0804sInk)"/>
+<circle cx="138" cy="203" r="2.5" fill="#5b6b64"/>
+<circle cx="140.84" cy="199.13" r="2" fill="#14241f"/>
+<circle cx="143.68" cy="195.26" r="2" fill="#14241f"/>
+<circle cx="146.53" cy="191.39" r="2" fill="#14241f"/>
+<circle cx="149.37" cy="187.53" r="2.5" fill="#14241f"/>
+<text x="95" y="215" font-size="8" fill="#5b6b64">q0 (t=0, before)</text>
+<text x="153" y="182" font-size="8">q4 (t=4, after)</text>
+<circle cx="130" cy="195" r="2.5" fill="#14241f"/>
+<defs>
+<marker id="arr0804sGreen" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f6f5c"/></marker>
+<marker id="arr0804sRed" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b3543a"/></marker>
+<marker id="arr0804sInk" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#14241f"/></marker>
+</defs>
+</g>
+</svg>
+<figcaption>All 5 steps sit close together near the origin relative to the far larger doc1/doc2 vectors, but the trail's angle steadily closes toward doc1 and opens away from doc2 -- exactly the direction Section 10's table quantifies. Axes are illustrative 2D pooled-vector space, not to a fixed numeric scale.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Training-time pipeline vs. the established inference-time lanes</h2></div></header>
+<div class="pipeline-preview">
+<span>Labeled (query, relevant-doc) pairs</span><i>↓</i><span class="hot">Encoder (M08C02)</span><i>↓</i><span>Cosine (M04C03)</span><i>↓</i><span class="hot">InfoNCE loss (M04C08, grounded here)</span><i>↓</i><span>Weight update (Module 09/24)</span><i>↓</i><span>Repeat</span>
+</div>
+<p>Contrast with Concept 03's already-established INFERENCE-time offline/online lanes (documents embedded once, offline; a query embedded synchronously, compared with cosine) -- this concept's loss belongs only to the training-time pipeline above, and never runs at inference time.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The grounded formula, and why its shape rewards separation</h2></div></header>
+<div class="equation">L(q,d⁺,D⁻) = −log( exp(cos(f(q),f(d⁺))/τ) / Σ_{d∈{d⁺}∪D⁻} exp(cos(f(q),f(d))/τ) ) — sim(q,d) from M04C08 filled in as cos(f(q),f(d))</div>
+<p>Numerator/denominator argument, tied to the verified numbers: raising cos_pos grows the numerator directly; lowering cos_neg shrinks one term of the denominator. Both moves at once push probability mass toward the positive faster than either alone -- concretely, from t=0 to t=4, cos_pos rises 0.8562 (−0.0409 → 0.8969) while cos_neg falls 1.0686 (0.3663 → −0.7023), and the loss falls 0.7334 nats (0.9174 → 0.1840) at τ=1.</p>
+<p>Scale/temperature identity: τ = 1/scale. Deriving ∂L/∂q -- the real gradient a training step would follow -- is explicitly out of scope; Section 06's proxy formula only illustrates the direction, not the calculus.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full triple-verified pull-push table</h2></div></header>
+<p>Frozen inputs, reused directly from Concept 03 (not recomputed): doc1Vec = (1.3842, 1.5025) -- relevant, "The order shipped late." doc2Vec = (−0.4077, −0.9372) -- irrelevant, "Refund policy updated." Direction doc1Vec − doc2Vec = (1.7919, 2.4397), magnitude 3.0271, unit direction ≈ (0.5920, 0.8060).</p>
+<p>Illustrative starting vector (hand-picked, NOT run through Concept 02's attention pipeline the way doc1Vec/doc2Vec/q1Vec were -- flagged honestly, since Concept 02's own base token vectors were themselves hand-picked to already be semantically sensible, per Concept 01's own disclaimer, leaving no natural way to produce a genuinely bad vector from that exact pipeline): q0 = (0.10, −0.10). Steps: q_t = q0 + t·0.06·û, an illustrative proxy for the pull/push DIRECTION only (Section 06).</p>
+<table class="worked-table">
+<thead><tr><th>t</th><th>q_t</th><th>cos_pos</th><th>cos_neg</th><th>prob_pos (τ=1)</th><th>Loss τ=1 (nats)</th><th>Ranking</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>(0.1000, −0.1000)</td><td>−0.0409</td><td>0.3663</td><td>0.3996</td><td>0.9174</td><td>WRONG — doc2 ranks first</td></tr>
+<tr><td>1</td><td>(0.1355, −0.0516)</td><td>0.3713</td><td>−0.0462</td><td>0.6029</td><td>0.5060</td><td>CORRECT — doc1 ranks first</td></tr>
+<tr><td>2</td><td>(0.1710, −0.0033)</td><td>0.6633</td><td>−0.3812</td><td>0.7397</td><td>0.3015</td><td>CORRECT</td></tr>
+<tr><td>3</td><td>(0.2066, 0.0451)</td><td>0.8188</td><td>−0.5852</td><td>0.8028</td><td>0.2196</td><td>CORRECT</td></tr>
+<tr><td>4</td><td>(0.2421, 0.0934)</td><td>0.8969</td><td>−0.7023</td><td>0.8319</td><td>0.1840</td><td>CORRECT</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Real production temperature (τ=0.05)</b>sentence-transformers' MultipleNegativesRankingLoss default is scale=20, i.e. τ=0.05 -- BELOW the entire 0.10-to-5.00 range M04C08's own lab explored. At t=0, loss(τ=0.05) = 8.1460 nats (prob_pos ≈ 0.03%) -- a catastrophic loss for the wrong-ranking state. At t=4, loss(τ=0.05) ≈ 1.29×10⁻¹⁴ nats (prob_pos rounds to 1.0000000000) -- effectively zero. The same cosine gap that only swung the τ=1 loss from 0.9174 to 0.1840 collapses far more dramatically at the real production temperature.</div>
+<p>Connection back to Concept 03: q1Vec = (1.1292, 1.2708), Concept 03's own real, attention-derived query vector for "order late," sits at cos_pos = 0.9998, cos_neg = −0.9504 -- essentially the direction this toy sequence was heading toward. This frames q1Vec as what enough real training steps would eventually produce, without claiming q4 numerically equals q1Vec.</p>
+<p><b>Verification method:</b> three independently-structured scripts were cross-checked to 4 decimal places on every cos_pos/cos_neg/loss value across all 5 steps (both τ=1 and the τ=0.05 callout at t=0/t=4) and both transfer-exercise points (Section 20/21) -- a Node.js script using shared helper functions, a second Node.js script with no shared helpers and a different loop style, and an independent Python 3.12 script with its own from-scratch arithmetic. All three matched exactly to 4 decimal places; one earlier manual side-calculation using an already-rounded intermediate vector produced a harmless 4th-decimal artifact in cos_neg at t=4, traced and corrected by recomputing from full float precision.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Fine-tuning a domain-specific embedding model on labeled query-document pairs</h3><p>Each (query, relevant-chunk) pair becomes a positive; the loss pulls the query toward it and pushes it away from negatives in the same batch.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Only one negative available</h3><p>The loss reduces to a 2-outcome cross-entropy -- exactly the case this concept's own worked example uses. Cross-referencing M04C08's own boundary case, not re-derived.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming more negatives always helps without limit</h3><p>Named as a risk in M04C08 (false negatives grow more likely as batch size grows) -- cross-referenced only, not re-taught here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Grounding sim(q,d) in real cosine similarity</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES CONCEPT 03'S embed_bi_encoder AND cosine UNCHANGED</span>
+<pre><code>import math
+
+def dot(u, v):
+    return u[0] * v[0] + u[1] * v[1]
+
+def norm(u):
+    return math.sqrt(dot(u, u))
+
+def cosine(u, v):
+    return dot(u, v) / (norm(u) * norm(v))
+
+def unit(u):
+    n = norm(u)
+    return (u[0] / n, u[1] / n)
+
+# Frozen -- Concept 03's own pooled vectors, reused unchanged.
+doc1Vec = (1.3842, 1.5025)
+doc2Vec = (-0.4077, -0.9372)
+
+direction = (doc1Vec[0] - doc2Vec[0], doc1Vec[1] - doc2Vec[1])
+u_hat = unit(direction)
+alpha = 0.06
+q0 = (0.10, -0.10)
+
+def query_at_step(t):
+    return (q0[0] + t * alpha * u_hat[0], q0[1] + t * alpha * u_hat[1])
+
+def infonce_loss(cos_pos, cos_neg, tau):
+    """M04C08 Section 05/09's loss, sim(q,d) grounded as real cosine,
+    reduced to one positive and one negative."""
+    e_pos = math.exp(cos_pos / tau)
+    e_neg = math.exp(cos_neg / tau)
+    return -math.log(e_pos / (e_pos + e_neg))
+
+q_t0 = query_at_step(0)
+q_t4 = query_at_step(4)
+cos_pos_0, cos_neg_0 = cosine(q_t0, doc1Vec), cosine(q_t0, doc2Vec)
+cos_pos_4, cos_neg_4 = cosine(q_t4, doc1Vec), cosine(q_t4, doc2Vec)
+
+assert round(cos_pos_0, 4) == -0.0409 and round(cos_neg_0, 4) == 0.3663
+assert round(cos_pos_4, 4) == 0.8969 and round(cos_neg_4, 4) == -0.7023
+assert round(infonce_loss(cos_pos_0, cos_neg_0, 1), 4) == 0.9174
+assert round(infonce_loss(cos_pos_4, cos_neg_4, 1), 4) == 0.1840
+assert round(infonce_loss(cos_pos_0, cos_neg_0, 0.05), 4) == 8.1460
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>One real production loss, four names</h2></div></header>
+<p><a href="https://www.sbert.net/docs/package_reference/sentence_transformer/losses.html#multiplenegativesrankingloss">sentence-transformers' MultipleNegativesRankingLoss documentation</a> confirms, by direct inspection, that its default similarity function is cosine similarity (<code>similarity_fct=cos_sim</code>) and its default scale is 20.0. Its own docstring states verbatim: "In some literature, the scaling parameter is referred to as temperature, which is the inverse of the scale. In short: scale = 1 / temperature, so scale=20.0 is equivalent to temperature=0.05." It also states: "The default configuration is also known as the InfoNCE loss, SimCSE loss, cross-entropy loss with in-batch negatives, or simply in-batch negatives loss." That single sentence independently confirms both that a real production loss uses cosine similarity as sim(q,d) -- exactly this concept's grounding move -- and the real τ=0.05 value used in Section 10's production-temperature callout. <a href="https://arxiv.org/abs/2104.08821">SimCSE (Gao, Yao &amp; Chen, 2021)</a> is named only, per that same equivalence claim -- no SimCSE-specific number is used here. Brief cross-reference: DPR's in-batch-negative training recipe is already cited in <a href="module-04-concept-08.html">Module 04 Concept 08</a>, not re-taught here.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Pull-Push Trainer</h2></div></header>
+<div class="lab">
+<p>doc1Vec and doc2Vec are frozen, precomputed arrows -- "PRECOMPUTED -- FROZEN," reprising Concept 03's own frozen-document language. Step through the query vector's 4 illustrative pull-push moves and watch it redraw live.</p>
+<div class="lab-actions" role="group" aria-label="Choose the pull-push step">
+<button type="button" class="secondary active" data-step="0">Step 0 (before)</button>
+<button type="button" class="secondary" data-step="1">Step 1</button>
+<button type="button" class="secondary" data-step="2">Step 2</button>
+<button type="button" class="secondary" data-step="3">Step 3</button>
+<button type="button" class="secondary" data-step="4">Step 4 (after)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose the temperature">
+<button type="button" class="secondary active" data-tau="1">τ=1</button>
+<button type="button" class="secondary" data-tau="0.05">τ=0.05 (real production default)</button>
+</div>
+<svg class="vector-plane" viewBox="0 0 320 300" role="img" aria-labelledby="c0804-svg-title-lab c0804-svg-desc-lab">
+<title id="c0804-svg-title-lab">A live 2D coordinate plane redrawing the query vector at the selected pull-push step</title>
+<desc id="c0804-svg-desc-lab">Two frozen arrows for doc1 and doc2, plus one live arrow for the query vector that moves toward doc1 and away from doc2 as the step buttons are pressed.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="195" x2="300" y2="195" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="130" y1="20" x2="130" y2="280" stroke="#c9cdb9" stroke-width="1"/>
+<text x="292" y="191" text-anchor="end" font-size="8">+x</text>
+<text x="134" y="28" font-size="8">+y</text>
+<line x1="130" y1="195" x2="240.7" y2="74.8" stroke="#2f6f5c" stroke-width="2.5" marker-end="url(#arr0804lGreen)"/>
+<text x="200" y="70" font-size="8" fill="#2f6f5c">doc1 — PRECOMPUTED, FROZEN</text>
+<line x1="130" y1="195" x2="97.4" y2="270" stroke="#b3543a" stroke-width="2.5" marker-end="url(#arr0804lRed)"/>
+<text x="20" y="285" font-size="8" fill="#b3543a">doc2 — PRECOMPUTED, FROZEN</text>
+<line id="liveQueryLine_0804" x1="130" y1="195" x2="138" y2="203" stroke="#b8860b" stroke-width="3" marker-end="url(#arr0804lLive)"/>
+<circle id="liveQueryDot_0804" cx="138" cy="203" r="3.5" fill="#14241f"/>
+<text id="liveQueryLabel_0804" x="146" y="195" font-size="8" font-weight="700">q0 (0.1000, −0.1000)</text>
+<circle cx="130" cy="195" r="2.5" fill="#14241f"/>
+<defs>
+<marker id="arr0804lGreen" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f6f5c"/></marker>
+<marker id="arr0804lRed" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b3543a"/></marker>
+<marker id="arr0804lLive" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b8860b"/></marker>
+</defs>
+</g>
+</svg>
+<div class="norm-readout" id="stepReadout_0804"></div>
+<div class="prob-bars" id="pullPushBars_0804"></div>
+<div class="callout" id="rankingVerdict_0804"></div>
+<div class="callout" id="pullPushVerdict_0804"></div>
+<div class="callout warning"><b>Honesty guard</b>This lab moves the query vector as an illustrative PROXY for the DIRECTION the InfoNCE loss encourages -- it is not real gradient descent on shared encoder weights. That real training loop is Module 09/24's job, not this lesson's.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Grounded loss vs. abstract loss vs. triplet loss</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>This concept's real-vector-grounded loss</td><td>Uses actual cosine similarity between real embeddings -- directly reflects what training touches</td><td>The identical math as M04C08's abstract-score loss, just at a different concreteness</td></tr>
+<tr><td>M04C08's abstract-score loss</td><td>Isolates the loss's shape from any specific embedding model</td><td>Never shows sim(q,d) filled in with a real number</td></tr>
+<tr><td>Triplet loss (named in M04C08, not retaught)</td><td>A simpler margin-based alternative family</td><td>Compares one negative at a time, not a full softmax over many at once</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNDER-TRAINED / MISCALIBRATED ENCODER</span><h3>A wrong-ranking failure, expanded from b02's hook</h3><p>At t=0, cos_pos=−0.0409 sits below cos_neg=0.3663 -- the irrelevant document would rank first. Contrastive training exists precisely to correct this, for every query, not just this hand-built one.</p></article>
+<article class="info-card"><span>MISMATCHED TEMPERATURE</span><h3>Too sharp vs. too flat for the data's real separation needs</h3><p>Kept at a conceptual level here since gradients are out of scope -- the τ=0.05 vs. τ=1 contrast in Section 10 shows how dramatically the same cosine gap can collapse depending on temperature.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>This is a brand-new loss</td><td>False -- it's M04C08's InfoNCE cross-entropy with sim(q,d) finally filled in as real cosine similarity.</td></tr>
+<tr><td>Training only needs to pull the positive closer</td><td>False -- pushing the negative down shrinks the same softmax denominator just as much; both directions act together.</td></tr>
+<tr><td>This lesson's vector nudges are the real gradient</td><td>False -- they're a teaching proxy for the pull/push DIRECTION; real training updates shared weights via backprop (Module 09/24).</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Shared weights, not per-query vectors, and a consequential temperature choice</h2></div></header>
+<ul>
+<li>Real training updates the SHARED encoder's weights, not any one query's vector by hand -- every query and document that passes through the encoder is affected by the same update.</li>
+<li>Fine-tuning cost and time are forward-referenced to Module 24 -- not built here.</li>
+<li>Temperature/scale is a real, consequential hyperparameter: the same cosine gap that moves the τ=1 loss from 0.9174 to 0.1840 collapses to near-zero at the real production τ=0.05, directly shaping how sharply the model is pushed to separate positives from negatives.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Write the grounded InfoNCE-style loss with sim(q,d) filled in as cosine similarity.</summary><div>L(q,d⁺,D⁻) = −log( exp(cos(f(q),f(d⁺))/τ) / Σ_{d∈{d⁺}∪D⁻} exp(cos(f(q),f(d))/τ) ), citing Module 04 Concept 08 Section 05/09 for the loss itself.</div></details>
+<details class="quiz"><summary>Why does the loss's numerator/denominator shape reward moving cos_pos up AND cos_neg down at once?</summary><div>Raising cos_pos grows the numerator directly, while lowering cos_neg shrinks one term of the shared denominator -- both moves push probability mass toward the positive simultaneously, which is why the loss falls faster than either move alone would produce.</div></details>
+<details class="quiz"><summary>Why are this lesson's illustrative pull-push steps a proxy, not the real gradient?</summary><div>Real training computes ∂L/∂(encoder weights) via backprop and updates a SHARED encoder over many batches (Module 09/24) -- this lesson's q0→q4 steps only illustrate the direction the loss encourages a query to move in, without deriving that calculus.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>New illustrative starting vector q0′ = (−0.20, 0.40), same frozen doc1Vec/doc2Vec, same direction and α = 0.06. Compute cos_pos, cos_neg, and the InfoNCE loss at τ=1 for t=0 and t=3.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>t=0: q=(−0.2000, 0.4000), cos_pos=0.3548, cos_neg=−0.6418, loss(τ=1)=0.3142 nats. t=3: q=(−0.0934, 0.5451), cos_pos=0.6104, cos_neg=−0.8364, loss(τ=1)=0.2113 nats.</div>
+</details>
+<p>Teach-back: this transfer example starts already correctly ranked at t=0 (cos_pos 0.3548 > cos_neg −0.6418), unlike the main example. Why might that be, given q0′ and q0 are both hand-picked illustrative starting points?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Contrastive learning objectives</h3><ul><li><b>Grounded formula:</b> L(q,d⁺,D⁻) with sim(q,d)=cos(f(q),f(d)), citing M04C08 directly</li><li><b>Real name-equivalence:</b> InfoNCE = SimCSE loss = cross-entropy w/ in-batch negatives = MultipleNegativesRankingLoss default</li><li><b>Headline numbers:</b> loss 0.9174→0.1840 nats at τ=1; 8.1460→~0 at τ=0.05; ranking flips wrong→correct by step 1</li></ul></div>
+<div><h3>Memorable example</h3><p>The irrelevant document started out ranked first. Four illustrative pull-push steps later, it wasn't -- and the real production temperature makes that gap collapse even harder.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why ground sim(q,d) in cosine similarity now, and not back in Module 04 Concept 08?</summary><div>Concept 08 built the loss's SHAPE before any embedding model existed in the course -- it deliberately used abstract scores so the loss could be proved equal to cross-entropy without depending on a specific model. This concept can ground sim(q,d) in real cosine similarity only because Concepts 02-03 have, by now, actually built real embedding vectors to compute it on.</div></details>
+<details class="quiz"><summary>Mathematical: write the grounded formula and name all four of its real equivalent names.</summary><div>L(q,d⁺,D⁻) = −log( exp(cos(f(q),f(d⁺))/τ) / Σ exp(cos(f(q),f(d))/τ) ). Per sentence-transformers' own documentation, its default configuration is also known as the InfoNCE loss, the SimCSE loss, cross-entropy loss with in-batch negatives, and MultipleNegativesRankingLoss's default config.</div></details>
+<details class="quiz"><summary>Coding: implement the loss over the pull-push steps.</summary><div>Section 12 gives the full implementation -- query_at_step(t) reuses Concept 03's frozen doc1Vec/doc2Vec to compute q_t, cosine() grounds sim(q,d), and infonce_loss() applies M04C08's formula with exactly one positive and one negative.</div></details>
+<details class="quiz"><summary>Debugging: a retrieval system's ranking looks random after a "fine-tune." What's the first loss-side thing to check?</summary><div>Whether the temperature/scale used in training matches what the loss function expects, and whether positives and negatives were correctly labeled per batch -- a wrong temperature or corrupted positive/negative labeling can make the loss optimize toward a direction that doesn't correspond to real relevance at all.</div></details>
+<details class="quiz"><summary>System design: how would you tell, from outside, whether a vendor's embedding model was contrastively trained at all?</summary><div>Check whether cosine similarity reliably separates known relevant pairs from known irrelevant ones on a held-out labeled set -- a model that was never contrastively trained has no reason for that separation to hold, even if it produces reasonable-looking vectors.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/1807.03748"><b>van den Oord, Li &amp; Vinyals — Representation Learning with Contrastive Predictive Coding (arXiv:1807.03748)</b><br><span>Reused intentionally, not by oversight -- Module 04 Concept 08 already cited this for the same InfoNCE formula; this concept cites it again because it is directly applying that SAME formula to real embedding vectors for the first time, not a different one.</span></a>
+<a href="https://www.sbert.net/docs/package_reference/sentence_transformer/losses.html#multiplenegativesrankingloss"><b>sentence-transformers — MultipleNegativesRankingLoss documentation</b><br><span>Confirms cos_sim as the default similarity function and scale=20.0 (τ=0.05) as the default, and states this configuration is "also known as the InfoNCE loss, SimCSE loss, cross-entropy loss with in-batch negatives" -- the source for Section 10's real production-temperature callout.</span></a>
+<a href="https://arxiv.org/abs/2104.08821"><b>Gao, Yao &amp; Chen — SimCSE: Simple Contrastive Learning of Sentence Embeddings (arXiv:2104.08821)</b><br><span>Named only, per the sbert.net documentation's own equivalence claim -- no SimCSE-specific number is used here.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 04 COMPLETE · MODULE 08 · 4/11</span>
+<h3>The loss formula and the real vectors finally meet.</h3>
+<p>You can now state the grounded InfoNCE-style loss with sim(q,d) as real cosine similarity, explain in one sentence why its shape rewards separation, and explain why this lesson's illustrative steps are a proxy, not the real gradient. Concept 05 is next: positive pairs, negatives and hard negatives.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Pull-Push Trainer ↑</a>
+</div>
+<p class="fine-print">Module 08 at 4 of 11 concepts. Next concept: positive pairs, negatives and hard negatives.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 04 · Complete</p>
+<a href="module-08-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 01-08 all implicitly assumed the embedding model is a general-purpose, English-trained encoder. This concept names two real deviations: multilingual models, trained so translation-equivalent text lands in the SAME shared vector space (LaBSE: 83.7% vs. 65.5% Tatoeba bi-text retrieval across 112 languages), and domain-specific models, fine-tuned so in-domain jargon gets a real learned position instead of collapsing to noise (MedCPT beats GPT-3-sized cpt-text-XL on biomedical retrieval). A Spanish query against an English document scores 0.999354 under a multilingual model but -0.306189 under an English-only one -- negative, worse than unrelated.">
+<title>Multilingual and domain embedding models — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 09</p>
+<h1>Not every model.<br><em>Speaks every language, or every domain.</em></h1>
+<p class="lesson-lead">Concepts 01-08 all implicitly assumed the embedding model is a general-purpose, English-trained encoder. This concept names the first real deviation from that assumption: multilingual embedding models, trained so semantically equivalent text in different languages lands in the SAME shared vector space -- no translation step required. A Spanish support query against an English knowledge-base document scores 0.999354 under a real multilingual training recipe, but -0.306189 -- negative, worse than unrelated -- under an English-only model that never learned to place Spanish text anywhere coherent. The second deviation is domain-specific models: fine-tuned on narrow-domain text so jargon like "novation" gets a real, learned position instead of collapsing toward an unrelated common-vocabulary neighbor. LaBSE's real numbers (83.7% vs. 65.5% Tatoeba bi-text retrieval across 112 languages) and MedCPT's (beating a GPT-3-sized model on biomedical retrieval) ground both claims in production evidence, not toy geometry alone.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth concept of Module 08 -- the first to break the single-general-English-model assumption</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's embedding definition; Concept 04's contrastive-objective mechanism (reused for the fine-tuning story); Module 04 Concept 03's cosine similarity (cited, no new formula)</b></div>
+<div><span>BEGINNER GOAL</span><b>Define multilingual and domain-specific embedding models, and explain why an English-only model's Spanish-query cosine goes negative</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Not every model speaks every language, or every domain</h2>
+</div>
+<p>Every concept since Concept 01 quietly assumed a general-purpose, English-trained encoder. This concept names the two real ways that assumption can fail.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Two real deviations from "general-purpose English encoder"</h3>
+<div class="mental-compare">
+<div><span>MULTILINGUAL MODELS</span><p>Trained so semantically equivalent text in different languages lands in the SAME shared vector space -- no translation step required.</p></div>
+<div><span>DOMAIN-SPECIFIC MODELS</span><p>Fine-tuned on narrow-domain text (legal, medical, code) so in-domain jargon gets a real, learned position instead of collapsing toward noise.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a model's training data has a language mix and a domain mix -- production text that doesn't match either one degrades retrieval, in two different ways.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Every real model was trained on SOME specific mix</h3>
+<p>No embedding model is trained on every language and every domain equally. When production text falls outside the mix a model actually learned, retrieval degrades -- multilingual mismatch and domain-jargon mismatch are the two concrete, well-documented ways this happens.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A Spanish query, and a legal term, under two models each</h3>
+<p>Spanish query "¿cuánto cuesta el envío?" against an English document ("Standard shipping costs $5.99."): a multilingual model scores cosine <b>0.999354</b>; an English-only model scores <b>-0.306189</b> -- negative, worse than unrelated. Legal term "novation" against a true contract clause: a domain-tuned model scores <b>0.995797</b>; a general model scores <b>-0.003623</b> -- essentially orthogonal, meaning nothing.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0809-b03-title">
+<strong class="concept-visual-title" id="c0809-b03-title">VISUAL · SHARED SPACE VS. NO SPACE AT ALL</strong>
+<svg class="vector-plane" viewBox="0 0 320 170" role="img" aria-labelledby="c0809-svg-title-b c0809-svg-desc-b">
+<title id="c0809-svg-title-b">Two coordinate planes showing a Spanish query landing near or far from an English document depending on the model</title>
+<desc id="c0809-svg-desc-b">Left plane: multilingual model's Spanish query arrow points nearly the same direction as the English document arrow. Right plane: English-only model's Spanish query arrow points in a mostly opposite direction.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<line x1="20" y1="85" x2="140" y2="85" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="80" y1="20" x2="80" y2="150" stroke="#c9cdb9" stroke-width="1"/>
+<text x="10" y="16" font-weight="700">MULTILINGUAL (cos 0.999354)</text>
+<line x1="80" y1="85" x2="129.6" y2="24.6" stroke="#2f6f5c" stroke-width="2"/>
+<line x1="80" y1="85" x2="132.5" y2="26.4" stroke="#b3543a" stroke-width="1.6" stroke-dasharray="2 2"/>
+<text x="10" y="160" font-size="7">D_doc (dark) and Spanish query (dashed) — nearly the same direction</text>
+<line x1="220" y1="85" x2="300" y2="85" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="260" y1="20" x2="260" y2="150" stroke="#c9cdb9" stroke-width="1"/>
+<text x="180" y="16" font-weight="700">ENGLISH-ONLY (cos −0.306189)</text>
+<line x1="260" y1="85" x2="309.6" y2="24.6" stroke="#2f6f5c" stroke-width="2"/>
+<line x1="260" y1="85" x2="240" y2="115" stroke="#b3543a" stroke-width="1.6" stroke-dasharray="2 2"/>
+<text x="200" y="160" font-size="7">D_doc (dark) and Spanish query (dashed) — mostly opposite</text>
+</g>
+</svg>
+<figcaption>Same document, same query text -- only the model's training language mix changed, and the geometry changed completely.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Alignment training vs. no alignment training</h3>
+<p>Multilingual models like LaBSE are trained with objectives (masked language modeling, translation-language modeling, translation-ranking) that explicitly pull translation-equivalent sentences together in vector space. An English-only model was never shown that pull -- Spanish subwords combine into whatever direction the pooling arithmetic happens to produce, with no guarantee it relates to the English meaning at all.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A choice made once, offline, before any request</h3>
+<div class="scroll-flow">
+<span>Choose model: general / multilingual / domain-tuned</span><i>→</i>
+<span class="hot">Every downstream embedding uses that one choice (this concept)</span><i>→</i>
+<span>Concept 10 — the actual selection framework, unopened</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Alignment vs. translation, and a training-time vs. request-time choice</h3>
+<div class="distinction-table" role="table" aria-label="Multilingual alignment distinguished from translation, and from Concept 08's prefix mechanism">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Multilingual alignment vs. machine translation</span><span role="cell">No text is translated -- languages are geometrically aligned into one shared space</span></div>
+<div role="row"><span role="cell">This concept vs. Concept 08's prefix</span><span role="cell">A trained-weights choice made once, offline, vs. a literal string prepended every single request</span></div>
+<div role="row"><span role="cell">"Trained on multiple languages" vs. "trained so languages share one space"</span><span role="cell">Not automatically the same thing -- alignment is a deliberate training objective, not a side effect of exposure</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A multilingual model is basically a built-in translator."</b><p>False -- no text is translated. The model geometrically aligns meanings into one shared space.</p></div>
+<div><b>"A bigger general-purpose model always beats a smaller domain-tuned one."</b><p>False -- MedCPT beats a GPT-3-sized general model on biomedical retrieval.</p></div>
+<div><b>"If the cosine score isn't literally negative, the mismatch is probably fine."</b><p>False -- MedCPT's real gain is comparative, not about catastrophic negative scores; a merely mediocre score can still mean a real, costly mismatch.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>One upstream choice, corpus-wide consequences</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Model choice is a single configuration decision determining every downstream retrieval outcome</b><p>For the Oracle RAG project's real language and domain mix -- not swappable later without re-embedding the whole corpus (Concept 11, named forward only).</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 · CONCEPT 09 ACTIVE (9/11)</b><p>Concept 10 (embedding-model selection) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define multilingual and domain-specific embedding models</b><p>One sentence each -- shared cross-lingual space; jargon given a real learned position.</p></div>
+<div><b>Explain why the English-only model's Spanish-query cosine went negative</b><p>Untrained-language tokens combine into whatever direction pooling happens to produce, with no guarantee of relating to the true meaning.</p></div>
+<div><b>Name one real model of each type</b><p>LaBSE or BGE-M3 (multilingual); MedCPT or CodeRetriever (domain-specific).</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is multilingual alignment not the same thing as machine translation?</li>
+<li>Why is this concept's model choice a training-time decision, unlike Concept 08's prefix?</li>
+<li>Why doesn't a merely mediocre (not negative) cosine score guarantee a mismatch is harmless?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 9 of 11</h3>
+<p>This concept named multilingual and domain-specific models as two real deviations from a general-purpose encoder. Concept 10, "Embedding-model selection," is next -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 09 is active.</b> Module 08 is at 9 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-08.html">← Back to Concept 08</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Not every model speaks every language, or every domain</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>0.999354 vs. −0.306189</b><small>Multilingual vs. English-only, same Spanish query.</small></a>
+<a href="#b04"><span>02</span><b>Alignment training, not translation</b><small>Translation-equivalent text pulled into one shared space.</small></a>
+<a href="#s10"><span>03</span><b>LaBSE and MedCPT's real numbers</b><small>83.7% vs. 65.5%; beats a GPT-3-sized general model.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Both worked scenarios in full, four real cited models, and The Shared-Space Switch lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Every prior concept assumed a general-purpose English encoder → a multilingual model aligns translation-equivalent text into one shared space, an English-only model doesn't → a domain-tuned model gives jargon a real learned position, a general model maps it toward noise → real production numbers (LaBSE, MedCPT) confirm both effects at scale → Module 08 at 9 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Multilingual and domain embedding models" deep dive</b><em>Both worked scenarios in full, four real cited models, and The Shared-Space Switch lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The assumption nobody named until now</h2></div></header>
+<p>Concepts 01-08 all implicitly assumed the embedding model is a general-purpose, English-trained encoder. This concept names two real ways that assumption fails: multilingual mismatch and domain-jargon mismatch.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Multilingual and domain-specific models</h3><p>Precisely, with real named examples of each.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>The two training mechanisms</h3><p>Alignment objectives (multilingual) vs. in-domain fine-tuning (domain-specific).</p></article>
+<article class="info-card"><span>QUANTIFY</span><h3>Both worked contrasts</h3><p>0.999354 vs. -0.306189; 0.995797 vs. -0.003623.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Not the model-selection framework (Concept 10); not versioning/drift (Concept 11).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-01.html">Concept 01</a> -- the embedding definition, cited.</b></li>
+<li><b><a href="module-08-concept-04.html">Concept 04</a> -- the contrastive-objective mechanism, reused by name for the fine-tuning story, not re-derived.</b></li>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a> -- cosine similarity, cited only. No new formula in this concept.</b></li>
+<li><b>Explicitly out of scope:</b> embedding-model selection (Concept 10); versioning, drift and migration (Concept 11).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A bilingual interpreter vs. a monolingual reader</h2></div></header>
+<p>A bilingual interpreter recognizes that a Spanish sentence and its English paraphrase mean the same thing. A monolingual English reader confronted with Spanish text has no such recognition at all. A specialist reading a jargon-dense legal report understands "novation" precisely; a generalist may only recognize the surface-similar but unrelated word "innovation."</p>
+<div class="callout warning"><b>Analogy boundary</b>The human picture explains WHY the contrast exists. It doesn't capture the actual MLM/TLM/contrastive-fine-tuning training mechanics -- Section 06 states those precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Multilingual embedding model</td><td>Trained so semantically equivalent text in different languages lands in the same shared vector space</td><td>—</td></tr>
+<tr><td>Shared / cross-lingual vector space</td><td>A single space where translation-equivalent sentences sit close together, regardless of source language</td><td>—</td></tr>
+<tr><td>Domain-specific embedding model</td><td>Fine-tuned on narrow-domain text so in-domain jargon gets a real, learned position</td><td>—</td></tr>
+<tr><td>Out-of-distribution term</td><td>A term rare or absent in a model's training data, which may collapse toward an unrelated common-vocabulary neighbor</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Alignment training, and in-domain contrastive fine-tuning</h2></div></header>
+<p>LaBSE's recipe combines masked language modeling, translation-language modeling, translation-ranking, and additive-margin softmax to explicitly pull translation-equivalent sentences together, cited at the recipe level, not re-derived. MedCPT and CodeRetriever both fine-tune on in-domain query-document pairs using a contrastive objective -- the same InfoNCE-style mechanism Concept 04 already named, just applied to biomedical or code pairs instead of general text.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two branches from one training decision</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Training data + objective (this concept)</b><small>Made once, offline</small></div>
+<div class="diagram-node"><b>Multilingual: many languages, aligned</b><small>LaBSE, BGE-M3</small></div>
+<div class="diagram-node"><b>Domain-specific: one domain, specialized</b><small>MedCPT, CodeRetriever</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>An offline, pre-pipeline decision</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Choose model — general / multilingual / domain-tuned (this concept)</span><i>↓</i><span>Tokenize → contextualize → pool → normalize</span><i>↓</i><span>Every embedding uses that one choice</span>
+</div>
+<p>Contrasted with Concept 08's own prefix step, which is a per-request textual choice -- this concept's choice is made once, offline, before any request-time pipeline runs.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>No new formula -- the same cosine, two new scenarios</h2></div></header>
+<div class="equation">cosine(a,b) = dot(a,b) / (‖a‖·‖b‖) — Module 04 Concept 03, cited unchanged</div>
+<p>This concept introduces no new mathematics. It applies the identical cosine formula every prior Module 08 concept has used to two new scenarios where the underlying vectors themselves -- not the formula -- change with the model's training data.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two scenarios, two models each</h2></div></header>
+<p><b>Part 1 -- cross-lingual scenario.</b> Spanish query "¿cuánto cuesta el envío?" against English document "Standard shipping costs $5.99." D_doc = (0.62, 0.78) (same under either model, since it's English). Multilingual model: Q_multi = (0.65, 0.76) -- cos(Q_multi, D_doc) = <b>0.999354</b>. English-only model (illustrative stand-in for untrained-language tokens combining incoherently): Q_mono = (0.20, -0.30) -- cos(Q_mono, D_doc) = <b>-0.306189</b>, negative, worse than unrelated.</p>
+<p><b>Part 2 -- domain-jargon scenario.</b> Term "novation" against a true contract-clause vector D_legal = (0.75, 0.45). Domain-tuned model: V_domain = (0.71, 0.52) -- cos(V_domain, D_legal) = <b>0.995797</b>. General model (illustrative stand-in for falling back toward "novelty/innovation"): V_general = (-0.49, 0.81) -- cos(V_general, D_legal) = <b>-0.003623</b>, essentially orthogonal.</p>
+<p><b>Part 3 -- real evidence.</b> LaBSE: 83.7% bi-text retrieval accuracy across 112 languages on Tatoeba, versus 65.5% for the prior baseline (Artetxe &amp; Schwenk 2019) -- a real +18.2 percentage-point jump. MedCPT: state-of-the-art on six biomedical IR tasks, beating "much larger models such as GPT-3-sized cpt-text-XL." BGE-M3 supports 100+ languages up to 8,192 tokens; CodeRetriever reaches new state-of-the-art across eleven domain/language-specific code-search tasks in six programming languages.</p>
+<p><b>Verification method:</b> all four cosines were computed via a cos(a,b)=dot(a,b)/(‖a‖‖b‖) helper function, then independently re-computed via separately-written manual dot()/norm() calls -- both passes produced identical results to 6 decimal places on every value.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A multilingual support-ticket RAG system</h3><p>Users query in their own language against a knowledge base written in another.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A bilingual corpus needing cross-lingual matching only sometimes</h3><p>Most queries and documents already match language -- the alignment only matters for the minority that don't.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Embedding a jargon-heavy corpus with a general model</h3><p>And assuming a returned, non-error cosine score means retrieval is fine.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The same cosine, reproducing both scenarios</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES MODULE 04 CONCEPT 03'S cosine() UNCHANGED</span>
+<pre><code>import math
+
+def dot(a, b):
+    return a[0]*b[0] + a[1]*b[1]
+
+def norm(a):
+    return math.sqrt(dot(a, a))
+
+def cosine(a, b):
+    return dot(a, b) / (norm(a) * norm(b))
+
+d_doc, q_multi, q_mono = (0.62,0.78), (0.65,0.76), (0.20,-0.30)
+assert round(cosine(q_multi, d_doc), 6) == 0.999354
+assert round(cosine(q_mono, d_doc), 6) == -0.306189
+
+d_legal, v_domain, v_general = (0.75,0.45), (0.71,0.52), (-0.49,0.81)
+assert round(cosine(v_domain, d_legal), 6) == 0.995797
+assert round(cosine(v_general, d_legal), 6) == -0.003623
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Four real, verified models</h2></div></header>
+<p><a href="https://arxiv.org/abs/2007.01852">LaBSE (Feng, Yang, Cer et al.)</a> achieves 83.7% bi-text retrieval accuracy across 112 languages on Tatoeba, versus 65.5% for the prior baseline, and is publicly released for 109+ languages. <a href="https://arxiv.org/abs/2402.03216">BGE-M3 (Chen, Xiao, Zhang et al.)</a> provides uniform support for over 100 working languages and handles documents up to 8,192 tokens. <a href="https://arxiv.org/abs/2307.00589">MedCPT (Jin, Kim, Chen et al.)</a>, trained on 255 million PubMed user click logs, sets new state-of-the-art on six biomedical IR tasks, outperforming much larger models. <a href="https://arxiv.org/abs/2201.10866">CodeRetriever (Microsoft)</a> learns function-level code semantic representations via large-scale contrastive pretraining, evaluated on eleven domain/language-specific code-search tasks across six programming languages.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Shared-Space Switch</h2></div></header>
+<div class="lab">
+<p>Choose a scenario and a model, and watch the arrow -- and the cosine -- move.</p>
+<div class="lab-actions" role="group" aria-label="Choose the scenario">
+<button type="button" class="secondary active" data-scenario="crosslingual">Cross-lingual query</button>
+<button type="button" class="secondary" data-scenario="domain">Domain jargon term</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose the model">
+<button type="button" class="secondary" data-model="general">General-purpose</button>
+<button type="button" class="secondary active" data-model="specialized">Specialized</button>
+</div>
+<svg class="vector-plane" viewBox="0 0 320 260" role="img" aria-labelledby="c0809-svg-title-lab c0809-svg-desc-lab">
+<title id="c0809-svg-title-lab">A live 2D coordinate plane showing the fixed target vector and the currently selected candidate vector</title>
+<desc id="c0809-svg-desc-lab">A dark arrow for the scenario's fixed target, and a colored arrow for the currently selected model's candidate embedding.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="220" x2="300" y2="220" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="160" y1="20" x2="160" y2="250" stroke="#c9cdb9" stroke-width="1"/>
+<line id="targetArrow_0809" x1="160" y1="220" x2="221.6" y2="115.6" stroke="#14241f" stroke-width="2.5"/>
+<line id="candidateArrow_0809" x1="160" y1="220" x2="222.75" y2="106.4" stroke="#b8860b" stroke-width="2.5"/>
+<circle cx="160" cy="220" r="2.5" fill="#14241f"/>
+</g>
+</svg>
+<div class="norm-readout" id="switchReadout_0809"></div>
+<div class="callout" id="switchVerdict_0809" aria-live="polite"></div>
+<div class="callout warning">All vectors here are illustrative 2D toy coordinates chosen to demonstrate the qualitative shared-space-vs-isolated-space and domain-tuned-vs-general contrast. The real, quantified evidence is Section 10 Part 3's cited LaBSE/BGE-M3/MedCPT/CodeRetriever numbers, not this toy geometry.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>General-purpose vs. multilingual vs. domain-specific</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Model type</th><th>Optimizes for</th><th>Wins when</th></tr></thead>
+<tbody>
+<tr><td>General-purpose</td><td>Broad, single-language coverage</td><td>Corpus and queries are all in one language, general vocabulary</td></tr>
+<tr><td>Multilingual</td><td>Cross-lingual alignment</td><td>Queries and documents span multiple languages</td></tr>
+<tr><td>Domain-specific</td><td>In-domain jargon and structure</td><td>Corpus is dense with specialized terminology (legal, medical, code)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SYMPTOM</span><h3>Non-English or jargon-heavy queries return irrelevant or no results</h3><p>While same-language, general-vocabulary queries work fine.</p></article>
+<article class="info-card"><span>DIAGNOSTIC</span><h3>Check the deployed model's training mix</h3><p>Against the corpus's actual language and domain mix -- a mismatch is the likely cause.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A multilingual model is basically a translator</td><td>False -- no text is translated, meanings are geometrically aligned.</td></tr>
+<tr><td>A bigger general model always beats a smaller domain model</td><td>False -- MedCPT beats a GPT-3-sized general model in its own domain.</td></tr>
+<tr><td>Domain fine-tuning always needs a huge new corpus from scratch</td><td>False -- fine-tuning needs far less data than pretraining from scratch.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Model choice is made once but has corpus-wide consequences -- every embedding in the index reflects that single upstream decision.</li>
+<li>Changing the model later means re-embedding the whole corpus, forward-referenced to Concept 11's versioning/drift/migration concept by name only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define multilingual and domain-specific embedding models.</summary><div>Multilingual: trained so semantically equivalent text in different languages lands in the same shared vector space. Domain-specific: fine-tuned on narrow-domain text so in-domain jargon gets a real, learned position instead of collapsing toward noise.</div></details>
+<details class="quiz"><summary>Why does the English-only model's Spanish-query cosine go negative?</summary><div>Untrained-language subword tokens combine into whatever direction the pooling arithmetic happens to produce, with no guarantee that direction relates to the true English meaning at all.</div></details>
+<details class="quiz"><summary>Name one real model of each type.</summary><div>LaBSE or BGE-M3 for multilingual; MedCPT or CodeRetriever for domain-specific.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A French-language medical query is run against an English, general-purpose (non-medical) corpus. Two mismatches are stacked at once: language and domain. Which one do you expect to hurt retrieval more, and why -- without yet using Concept 10's own selection framework to decide what to actually do about it?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Both mismatches independently degrade retrieval, and neither one being present would still leave the other biting -- French-against-English (no shared space) risks a near-orthogonal-or-negative score as in Part 1, while medical jargon against a general corpus risks the same noise-collapse as Part 2's "novation" example. Since both are stacked here, the safest assumption is that retrieval quality is at least as degraded as the worse of the two individual mismatches, and likely worse -- a general-purpose, English-only model resolves neither problem.</div>
+</details>
+<p>Teach-back: why can't fixing only the language mismatch (switching to a multilingual model) fully resolve this specific query's problem?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Multilingual and domain embedding models</h3><ul><li><b>Definitions:</b> shared cross-lingual space; jargon given a real learned position</li><li><b>Real numbers:</b> LaBSE 83.7% vs. 65.5%; MedCPT beats a GPT-3-sized general model</li><li><b>Headline contrast:</b> 0.999354 vs. -0.306189 (same query, different model)</li></ul></div>
+<div><h3>Memorable example</h3><p>The identical Spanish query scores almost perfectly under a multilingual model and negatively -- worse than unrelated -- under an English-only one. Same text, same document, only the model's training changed.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't a multilingual model just a built-in translator?</summary><div>Translation converts text from one language into another; a multilingual embedding model never converts anything -- it geometrically aligns meanings from different languages into one shared vector space, so cosine similarity works directly across languages without any intermediate translated text.</div></details>
+<details class="quiz"><summary>Mathematical: what formula does this concept use, and is it new?</summary><div>The identical cosine similarity formula from Module 04 Concept 03, cos(a,b)=dot(a,b)/(‖a‖‖b‖) -- no new mathematics is introduced; only the underlying vectors change with the model's training data.</div></details>
+<details class="quiz"><summary>Coding: implement and verify both worked scenarios.</summary><div>Section 12 gives the full from-scratch implementation, reusing Module 04 Concept 03's cosine() unchanged, with asserts reproducing all four Section 10 values.</div></details>
+<details class="quiz"><summary>Debugging: non-English queries against an English corpus return poor results. What's the first thing to check?</summary><div>Whether the deployed embedding model was actually trained with a cross-lingual alignment objective (like LaBSE's MLM+TLM+translation-ranking recipe) -- a model merely exposed to multiple languages during pretraining, without that specific objective, may still fail to align them.</div></details>
+<details class="quiz"><summary>System design: how would you support a corpus spanning three languages and one specialized domain?</summary><div>Evaluate whether a single multilingual, domain-adapted model exists or can be fine-tuned for the specific combination, versus running separate per-language or per-domain models with a routing layer -- this decision itself belongs to Concept 10's selection framework, named forward only here.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2007.01852"><b>Feng, Yang, Cer et al. — Language-agnostic BERT Sentence Embedding / LaBSE (arXiv:2007.01852)</b><br><span>83.7% bi-text retrieval accuracy across 112 languages on Tatoeba, versus 65.5% for the prior baseline.</span></a>
+<a href="https://arxiv.org/abs/2402.03216"><b>Chen, Xiao, Zhang et al. — BGE-M3 (arXiv:2402.03216)</b><br><span>Uniform support for 100+ working languages, documents up to 8,192 tokens.</span></a>
+<a href="https://arxiv.org/abs/2307.00589"><b>Jin, Kim, Chen et al. — MedCPT (arXiv:2307.00589)</b><br><span>Trained on 255 million PubMed click logs; state-of-the-art on six biomedical IR tasks, beating much larger models.</span></a>
+<a href="https://arxiv.org/abs/2201.10866"><b>CodeRetriever — Microsoft (arXiv:2201.10866)</b><br><span>Function-level code semantic representations via contrastive pretraining, state-of-the-art on eleven code-search tasks.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 09 COMPLETE · MODULE 08 · 9/11</span>
+<h3>Not every model speaks every language, or every domain.</h3>
+<p>You can now define multilingual and domain-specific embedding models precisely, explain why an English-only model's cross-lingual cosine can go negative, and name real production models of each type. Concept 10, "Embedding-model selection," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Shared-Space Switch ↑</a>
+</div>
+<p class="fine-print">Module 08 at 9 of 11 concepts. Next concept: embedding-model selection.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 09 · Complete</p>
+<a href="module-08-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

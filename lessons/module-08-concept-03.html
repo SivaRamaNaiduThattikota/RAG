@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A bi-encoder embeds a query and a document SEPARATELY, through the exact same encoder from Concept 02, meeting only at Module 04 Concept 03's cosine similarity. Query 'order late' vs. Concept 02's own document 'The order shipped late': cosine 0.9998. Against a new irrelevant document 'Refund policy updated': cosine -0.9504. A cross-encoder, named forward only, instead embeds both jointly in one pass -- SBERT's own numbers show why that doesn't scale: ~50 million pairwise computations (~65 hours) to find the closest pair among 10,000 sentences, cut to ~5 seconds with a bi-encoder's precomputed embeddings.">
+<title>Bi-encoders and asymmetric query embeddings versus document embeddings — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 03</p>
+<h1>Same encoder, two separate calls.<br><em>They only ever meet at cosine.</em></h1>
+<p class="lesson-lead">Concept 02 walked one piece of text through a real four-stage forward pass. This concept is the first to put two texts through it: a query and a document, each embedded completely independently, with zero attention computed between a query token and a document token. That independence -- and the single similarity score where the two vectors finally meet -- is what a bi-encoder is. A cross-encoder, named forward only to Module 16, instead reads both texts jointly in one pass. This concept also previews, without teaching the full mechanics yet, that some real models change the QUERY'S input text before embedding it -- a small prepended string, the same mechanical move Module 07 Concept 09 already proved shifts a vector.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third concept of Module 08 -- the first to embed two texts and compare them</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's four-stage forward pass, reused twice; Module 04 Concept 03's cosine similarity; Module 07 Concept 09's contextual-header precedent</b></div>
+<div><span>BEGINNER GOAL</span><b>Name what stays separate vs. shared in a bi-encoder, and why a cross-encoder's score can't be precomputed</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two forward passes, one similarity score</h2>
+</div>
+<p>Concept 02's b08 named this exact moment: "this concept treats one piece of text uniformly -- Concept 03 is where that symmetry breaks." Here it breaks: a query and a document, embedded separately by the same encoder, meeting only at cosine.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Separate calls, one score at the end</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>A bi-encoder embeds a query and a document SEPARATELY, through the exact same encoder from Concept 02, meeting only at Module 04 Concept 03's cosine similarity. A cross-encoder (named forward only, Module 16 Concept 09) instead embeds them JOINTLY in one pass, letting every query token attend to every document token directly.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Contrastive training -- HOW the encoder's parameters get learned (Concept 04); pooling strategy (Concept 06); the full mechanics of which real prefixes exist and why (Concept 08).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> same encoder, two separate calls, one similarity score at the end -- that's a bi-encoder.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Retrieval compares one query against many documents</h3>
+<p>A cross-encoder's joint pass can't be precomputed -- it needs both texts present at the same time, so scoring an entire corpus against one query would mean re-running the whole encoder once per document, every single query. Sentence-BERT's own abstract states the real cost of that: finding the closest pair among just 10,000 sentences needs "about 50 million inference computations (~65 hours)" with a BERT cross-encoder, cut to "about 5 seconds" once a bi-encoder's embeddings are precomputed and compared with cosine similarity.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>"Order late" finds "The order shipped late," not "Refund policy updated"</h3>
+<p>Query "order late" and Concept 02's own document "The order shipped late" are embedded completely independently, using the identical four-stage pipeline -- and land at cosine 0.9998. The same query against a new, unrelated document "Refund policy updated" lands at cosine -0.9504. Neither document's vector was ever computed WITH the query present.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0803-b03-title">
+<strong class="concept-visual-title" id="c0803-b03-title">VISUAL · TWO LANES CONVERGING AT ONE SCORE</strong>
+<div class="scroll-flow">
+<span>Query text "order late"</span><i>→</i>
+<span class="hot">Concept 02's encoder</span><i>→</i>
+<span>Query vector</span>
+</div>
+<div class="scroll-flow">
+<span>Document text (embedded offline, Module 09)</span><i>→</i>
+<span class="hot">Concept 02's encoder (same function)</span><i>→</i>
+<span>Document vector</span>
+</div>
+<div class="scroll-flow">
+<span>Query vector + Document vector</span><i>→</i>
+<span class="hot">cosine similarity (M04C03)</span><i>→</i>
+<span>0.9998 (relevant doc) / −0.9504 (irrelevant doc)</span>
+</div>
+<figcaption>Two independent lanes, same encoder run twice, meeting only at the cosine step. A cross-encoder (named forward only, Module 16) would instead run one joint pass across both texts at once -- no separate vectors, no precomputation.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two independent passes, one comparison</h3>
+<table class="compare-table">
+<thead><tr><th>Stage</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><td>Query forward pass</td><td>Concept 02's 4 stages, run on query tokens only</td></tr>
+<tr><td>Document forward pass</td><td>The same 4 stages, run on document tokens only, precomputed offline (Module 09)</td></tr>
+<tr><td>Comparison</td><td>Module 04 Concept 03's cosine -- the ONLY interaction between the two</td></tr>
+<tr><td>Cross-encoder alternative (named forward only)</td><td>One joint pass with cross-attention between all query+document tokens, outputs one score directly -- not run here</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Offline lane, online lane</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Concept 02's encoder</span><i>→</i>
+<span class="hot">Document vectors, stored (Module 09)</span>
+</div>
+<div class="scroll-flow">
+<span>Query</span><i>→</i>
+<span>SAME encoder</span><i>→</i>
+<span>Query vector</span><i>→</i>
+<span class="hot">cosine vs. every stored document vector</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Bi- vs. cross-encoder, same vs. different model, preview vs. full mechanics</h3>
+<div class="distinction-table" role="table" aria-label="Bi-encoder distinguished from cross-encoder, from a second model, and from Concept 08's full prefix mechanics">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Bi-encoder vs. cross-encoder</span><span role="cell">Separate passes with no cross-attention vs. one joint pass with full cross-attention</span></div>
+<div role="row"><span role="cell">Same encoder vs. different encoder</span><span role="cell">It is the SAME function called twice -- asymmetry lives in the INPUT TEXT via a prefix, not a second model</span></div>
+<div role="row"><span role="cell">This concept's prefix preview vs. Concept 08's full mechanics</span><span role="cell">Here: the mechanical fact that prepending text changes the vector. Concept 08: which real prefixes exist and why they were chosen</span></div>
+</div>
+<p>Callback: Module 07 Concept 09 already proved that prepending a literal contextual header before embedding measurably shifts a chunk's resulting vector (cosine 0.6644 → 0.9759, +46.89%). The query-prefix toggle in this concept's lab is the SAME mechanical move -- prepend text before tokenization -- applied to the query side for a different purpose.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A bi-encoder must be two different models."</b><p>False -- it's the same encoder, called twice, on different input text.</p></div>
+<div><b>"Cross-encoders are just slower bi-encoders."</b><p>False -- they're structurally different. A cross-encoder produces no separate, precomputable vectors at all.</p></div>
+<div><b>"The query prefix is one exotic model's quirk."</b><p>False -- E5 and BGE use two genuinely different real conventions (Section 13), which is why Concept 08 exists as its own topic.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>The moment a stored vector meets a fresh one</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>This is the exact moment a precomputed document vector (Module 10's VECTOR column) gets compared against a freshly embedded query vector at request time</b><p>The property that makes building a vector index (Module 09) worthwhile at all.</p></div>
+<div><span>WHY IT MATTERS</span><b>Documents get embedded once, offline, in bulk</b><p>Queries get embedded synchronously, one at a time, on every request -- a real latency-budget asymmetry (Section 18).</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Recite what's separate vs. shared in a bi-encoder</b><p>The encoder function is shared (identical weights, called twice); the two forward passes and their input tokens are separate; only the final cosine step ever combines them.</p></div>
+<div><b>Explain why a cross-encoder's score can't be precomputed</b><p>It needs both texts present in the same forward pass -- there's no per-document vector to store ahead of time.</p></div>
+<div><b>State what an asymmetric prefix changes and doesn't change</b><p>Changes the input text fed to the encoder; the encoder itself stays identical.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can a bi-encoder's document vectors be computed overnight, in bulk, before any query exists?</li>
+<li>What's the one and only place a query vector and a document vector ever interact?</li>
+<li>If E5 prepends "query: " to queries and "passage: " to passages, is that two models or one?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 3 of 11</h3>
+<p>This concept showed that separate embed-then-compare works -- Concept 04, "Contrastive learning objectives," explains HOW the encoder's parameters get trained so that trick actually produces useful, discriminative scores. That training question is explicitly not covered here.</p>
+<div class="beginner-memory"><b>Concept 03 is active.</b> Module 08 is at 3 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-02.html">← Back to Concept 02</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">The document vector never moves -- only the query does</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>0.9998 vs. −0.9504</b><small>Same query, relevant vs. irrelevant document.</small></a>
+<a href="#b04"><span>02</span><b>Two passes, one comparison</b><small>Cosine is the only place they meet.</small></a>
+<a href="#b06"><span>03</span><b>Same encoder, different input text</b><small>Not a second model -- a prefix.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full worked example, SBERT's real numbers, and the Precomputed Shelf lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Concept 02's b08 deferred this exact symmetry-break → query and document each run Concept 02's 4-stage pipeline independently → the two vectors meet only at M04C03's cosine → 0.9998 relevant vs. −0.9504 irrelevant → a prefix changes the input text, not the encoder → Module 08 at 3 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Bi-encoders and asymmetric query embeddings" deep dive</b><em>The full worked example, SBERT's real numbers, and the Precomputed Shelf lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Two deferrals, cashed in at once</h2></div></header>
+<p>Concept 02's b08 named this exact moment: "this concept treats one piece of text uniformly -- Concept 03 is where that symmetry breaks." Module 08 Concept 01's own dependency list also deferred "bi-encoders/asymmetric query-vs-document embeddings" to this concept by name. Both deferrals open here.</p>
+<div class="flow">
+<div class="flow-node">Query text</div>
+<div class="flow-node hot">Concept 02's encoder</div>
+<div class="flow-node">Query vector</div>
+</div>
+<div class="flow">
+<div class="flow-node">Document text</div>
+<div class="flow-node hot">Concept 02's encoder (same function)</div>
+<div class="flow-node">Document vector</div>
+</div>
+<div class="flow">
+<div class="flow-node">Query vector</div>
+<div class="flow-node">Document vector</div>
+<div class="flow-node hot">Cosine similarity (M04C03)</div>
+</div>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Bi-encoder vs. cross-encoder, structurally</h3><p>Separate passes with no cross-attention vs. one joint pass with full cross-attention.</p></article>
+<article class="info-card"><span>STATE</span><h3>What stays identical vs. what differs</h3><p>The encoder function stays identical; the calls are separate and there's no cross-attention between them.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>Not contrastive training (Concept 04), not pooling choice (Concept 06), not full prefix mechanics (Concept 08), not cross-encoder's own build-out (Module 16 Concept 09).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 02's 4-stage forward pass, reused twice.</b> Tokenize, embed, contextualize, pool -- run independently on a query and on a document.</li>
+<li><b>Module 04 Concept 03's cosine, cashing in its own forward reference.</b> Its ledger summary explicitly forward-referenced "dense retrieval will use on embeddings later (Module 08-09)" -- this is the first concept to cash that in.</li>
+<li><b>Module 07 Concept 09's contextual-header precedent, reused as a structural analogy.</b> Prepending text before embedding measurably shifts a vector (cosine 0.6644 → 0.9759, +46.89%) -- the query-prefix preview here is the same move, applied to the query side.</li>
+<li><b>Module 08 Concept 01's own explicit deferral, quoted.</b> "bi-encoders/asymmetric query-vs-document embeddings" was named as Concept 03's job from the start.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Two clerks, reading separately vs. discussing together</h2></div></header>
+<p>A bi-encoder is like two clerks each reading their own copy of a note separately, then comparing summaries afterward. A cross-encoder is like two clerks discussing the same note together in one room before giving a single verdict.</p>
+<div class="callout warning"><b>Analogy boundary</b>The clerks explain the SHAPE of the difference -- separate reads vs. a joint discussion. They don't state the actual arithmetic; Section 10 gives that precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Bi-encoder</td><td>An encoder applied independently to each of two texts, compared only after both are pooled into vectors</td><td>sim(q,d) = cos(f(q), f(d))</td></tr>
+<tr><td>Cross-encoder</td><td>An encoder applied jointly to a concatenated pair, producing one score directly (named only)</td><td>score(q,d) = g([q;d])</td></tr>
+<tr><td>Symmetric embedding model</td><td>Same input convention for both query and document text</td><td>no prefix on either side</td></tr>
+<tr><td>Asymmetric embedding model</td><td>Query-side and/or document-side text gets a different literal prefix before tokenization</td><td>e.g. "query: " / "passage: "</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Two independent passes, traced</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>QUERY FORWARD PASS</span><p>Concept 02's 4 stages, run on query tokens only, at request time.</p></div>
+<div class="lane"><span>DOCUMENT FORWARD PASS</span><p>The same 4 stages, run on document tokens only, precomputed offline (Module 09), stored ahead of any query.</p></div>
+</div>
+<p>Note: "order" and "late" land at DIFFERENT contextualized positions depending on which sequence they belong to -- order-in-document (1.7468, 1.2292) vs. order-in-query (1.7833, 0.6167), Euclidean distance 0.6136; late-in-document (1.0859, 1.8722) vs. late-in-query (0.4752, 1.9248), Euclidean distance 0.6130. A bi-encoder can't reuse a token's document-side contextualized vector for the query side -- the query needs its own separate forward pass.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two vectors, one cosine, plotted</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0803-s07-title">
+<strong class="concept-visual-title" id="c0803-s07-title">VISUAL · QUERY AND DOCUMENT VECTORS ON THE SAME 2D PLANE</strong>
+<svg class="vector-plane" viewBox="0 0 320 320" role="img" aria-labelledby="c0803-svg-title-s07 c0803-svg-desc-s07">
+<title id="c0803-svg-title-s07">A 2D coordinate plane plotting the pooled query and document vectors as arrows from the origin</title>
+<desc id="c0803-svg-desc-s07">Four arrows from the origin: q1 at 1.1292, 1.2708 for the plain query, doc1 at 1.3842, 1.5025 for the relevant document nearly overlapping q1's direction, and doc2 at negative 0.4077, negative 0.9372 for the irrelevant document pointing almost the opposite way. The angle between q1 and doc1 is nearly zero. The angle between q1 and doc2 is close to 180 degrees.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="300" x2="300" y2="300" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="160" y1="20" x2="160" y2="300" stroke="#c9cdb9" stroke-width="1"/>
+<text x="292" y="296" text-anchor="end" font-size="8">+x</text>
+<text x="164" y="28" font-size="8">+y</text>
+<line x1="160" y1="300" x2="272" y2="173" stroke="#2f6f5c" stroke-width="2.5" marker-end="url(#arr0803)"/>
+<text x="276" y="168" font-size="8" fill="#2f6f5c">q1 (1.1292, 1.2708)</text>
+<line x1="160" y1="300" x2="298" y2="150" stroke="#14241f" stroke-width="2" stroke-dasharray="1 0"/>
+<text x="230" y="140" font-size="8">doc1 (1.3842, 1.5025)</text>
+<line x1="160" y1="300" x2="119" y2="393" stroke="#b3543a" stroke-width="2"/>
+<text x="60" y="300" font-size="8" fill="#b3543a">doc2 (−0.4077, −0.9372)</text>
+<circle cx="160" cy="300" r="2.5" fill="#14241f"/>
+<defs><marker id="arr0803" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f6f5c"/></marker></defs>
+</g>
+</svg>
+<figcaption>q1 and doc1 point in nearly the same direction (cosine 0.9998, angle near 0°); doc2 points almost opposite (cosine −0.9504, angle near 180°). Axes are illustrative 2D pooled-vector space, not to a fixed numeric scale.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Offline and online lanes, expanded</h2></div></header>
+<div class="pipeline-preview">
+<span>Documents</span><i>↓</i><span class="hot">Concept 02's encoder</span><i>↓</i><span>Document vectors, stored (Module 09/10)</span>
+</div>
+<div class="pipeline-preview">
+<span>Query (at request time)</span><i>↓</i><span class="hot">SAME encoder</span><i>↓</i><span>Query vector</span><i>↓</i><span>Cosine vs. every stored document vector</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>sim(q,d) = cos(f(q), f(d)), f applied twice</h2></div></header>
+<div class="equation">sim(q,d) = cos(f(q), f(d)), where f is the SAME function -- Concept 02's tokenize → embed → contextualize → pool pipeline -- applied independently to each side</div>
+<div class="equation">score(q,d) = g([q;d]) -- a cross-encoder processing the concatenated sequence jointly (named, not derived)</div>
+<p>No new formula is introduced beyond Module 04 Concept 03's own cosine and Concept 02's Attention(Q,K,V), both reused unchanged. The only new fact is WHERE the two independently-produced vectors interact: once, at cos(·,·), and nowhere else.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Two documents, two query forms, one comparison</h2></div></header>
+<p>Base 2D token vectors (illustrative, not real published values, same disclaimer as Concept 02): the=(0.10,0.10), order=(2.00,0.40), shipped=(1.80,1.90), late=(0.30,2.10) -- all four reused unchanged from Concept 02. New tokens: a low-signal prefix "query:"=(0.05,0.05); an irrelevant-document vocabulary refund=(-1.60,0.50), policy=(-0.40,-1.50), updated=(0.60,-1.70). d_k=2, scale=√2, exactly as Concept 02.</p>
+<p><b>Document 1</b> (relevant, "The order shipped late," frozen/precomputed, re-verified from Concept 02): the ctx=(1.1029,1.1812) weights=[.2166,.2530,.2774,.2530]; order ctx=(1.7468,1.2292) weights=[.0265,.4236,.4880,.0619]; shipped ctx=(1.6010,1.7274) weights=[.0074,.1249,.7267,.1409]; late ctx=(1.0859,1.8722) weights=[.0225,.0526,.4674,.4576]. Pooled <b>doc1Vec = (1.3842, 1.5025)</b>.</p>
+<p><b>Query, no prefix</b> ("order late," 2 tokens): order ctx=(1.7833,0.6167) weights=[.8725 self, .1275 to late]; late ctx=(0.4752,1.9248) weights=[.1031 to order, .8969 self]. Pooled <b>q1Vec = (1.1292, 1.2708)</b>.</p>
+<p><b>Query, with prefix</b> ("query: order late," 3 tokens): "query:" ctx=(0.8029,0.8714) weights=[.3155,.3422,.3422]; order ctx=(1.7005,0.5897) weights=[.0477,.8309,.1214]; late ctx=(0.4586,1.8518) weights=[.0389,.0990,.8620]. Pooled <b>q2Vec = (0.9874, 1.1043)</b>.</p>
+<p><b>Document 2</b> (irrelevant, "Refund policy updated," frozen/precomputed): refund ctx=(-1.3973,0.2102) weights=[.8584 self,.1089,.0327]; policy ctx=(-0.0525,-1.4284) weights=[.0801,.4762 self,.4437]; updated ctx=(0.2266,-1.5935) weights=[.0181,.3335,.6484 self]. Pooled <b>doc2Vec = (-0.4077, -0.9372)</b>.</p>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Cosine</th><th>Reading</th></tr></thead>
+<tbody>
+<tr><td>q1 (no prefix) vs. doc1</td><td><b>0.9998</b></td><td>Relevant match, plain query</td></tr>
+<tr><td>q1 (no prefix) vs. doc2</td><td><b>−0.9504</b></td><td>Irrelevant, discrimination gap 1.9503</td></tr>
+<tr><td>q2 (prefixed) vs. doc1</td><td><b>0.9999</b></td><td>Relevant match, prefixed query</td></tr>
+<tr><td>q2 (prefixed) vs. doc2</td><td><b>−0.9495</b></td><td>Irrelevant, discrimination gap 1.9494</td></tr>
+<tr><td>q1 vs. q2</td><td><b>1.0000</b></td><td>Same rounded direction, tiny magnitude difference</td></tr>
+<tr><td>Euclidean(q1Vec, q2Vec)</td><td><b>0.2187</b></td><td>The prefix measurably moves the pooled query vector</td></tr>
+</tbody>
+</table>
+<p>Reading: the prefix shifts both raw scores slightly, purely because it changed the INPUT TOKEN SEQUENCE fed to the identical encoder -- but in this toy example it doesn't flip the ranking; doc1 wins both ways. It's also the same reason "order" and "late" land at different contextualized positions inside a 2-token query vs. a 4-token document (Section 06) -- a bi-encoder can't shortcut the query's own forward pass.</p>
+<p><b>Real-model number</b> (quoted, not computed): Sentence-BERT's own abstract (arXiv:1908.10084) states finding the closest pair among 10,000 sentences needs "about 50 million inference computations (~65 hours)" with a BERT cross-encoder, cut to "about 5 seconds" with a bi-encoder (SBERT) plus cosine similarity. Check: C(10000,2) = 10000×9999/2 = 49,995,000, which rounds to "about 50 million" -- the paper's own figure is internally consistent.</p>
+<p><b>Transfer-exercise numbers</b> (new query "shipped order," 2 tokens, reusing existing shipped/order base vectors): shipped ctx=(1.8293,1.6799) weights=[.8533 self,.1467]; order ctx=(1.8929,1.2029) weights=[.5353,.4647 self]. Pooled=(1.8611,1.4414); cosine to doc1=0.9860; cosine to doc2=−0.8769.</p>
+<p>VERIFICATION: every pooled vector and cosine above was computed via a Node.js script using shared dot/softmax/contextualize/pool helper functions, independently re-derived a second time via a differently-structured Node.js script using explicit nested for-loops with no shared helpers, and a third time via an independent Python 3.12 script with its own from-scratch math -- all three matched to 4 decimal places on every number. The transfer-exercise numbers were separately verified via two independently-structured Node.js scripts, also matching to 4 decimal places. The SBERT combinatorial figure was checked with a one-line computation of 10000×9999/2.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A production retrieval system precomputing millions of document vectors overnight</h3><p>Then embedding each incoming query once at request time, comparing against the stored set with cosine.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A corpus small enough to score entirely with a cross-encoder</h3><p>Named forward to Module 16 Concept 08, "Candidate generation versus reranking" -- feasible only when the document count stays small.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Feeding a real E5/BGE-style prefix to a symmetric model never trained on that convention</h3><p>Previewing, not teaching, Concept 08's territory -- an untrained model has no reason to benefit from a prefix it never saw during training.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The same pipeline, called twice, compared once</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES CONCEPT 02'S EXACT FUNCTIONS UNCHANGED</span>
+<pre><code>import math
+
+def tokenize(text):
+    return text.lower().rstrip(".").split()
+
+def dot(u, v):
+    return u[0] * v[0] + u[1] * v[1]
+
+def softmax(xs):
+    m = max(xs)
+    exps = [math.exp(x - m) for x in xs]
+    s = sum(exps)
+    return [e / s for e in exps]
+
+def attention_contextualize(tokens, embed, d_k=2):
+    scale = math.sqrt(d_k)
+    out = {}
+    for ti in tokens:
+        scores = [dot(embed[ti], embed[tj]) / scale for tj in tokens]
+        weights = softmax(scores)
+        cx = sum(w * embed[tj][0] for w, tj in zip(weights, tokens))
+        cy = sum(w * embed[tj][1] for w, tj in zip(weights, tokens))
+        out[ti] = (cx, cy)
+    return out
+
+def pool_mean(vectors):
+    n = len(vectors)
+    return (sum(v[0] for v in vectors) / n, sum(v[1] for v in vectors) / n)
+
+def embed_bi_encoder(text, embed):
+    """Thin wrapper -- just calls Concept 02's pipeline. No shared attention
+    step ever runs between two separate embed_bi_encoder() calls."""
+    tokens = tokenize(text)
+    contextualized = attention_contextualize(tokens, embed)
+    return pool_mean(list(contextualized.values()))
+
+def cosine(u, v):
+    dp = dot(u, v)
+    nu = math.sqrt(dot(u, u))
+    nv = math.sqrt(dot(v, v))
+    return dp / (nu * nv)
+
+DOC_EMBED = {"the": (0.10, 0.10), "order": (2.00, 0.40),
+             "shipped": (1.80, 1.90), "late": (0.30, 2.10)}
+QUERY_EMBED = {"order": (2.00, 0.40), "late": (0.30, 2.10)}
+IRRELEVANT_EMBED = {"refund": (-1.60, 0.50), "policy": (-0.40, -1.50),
+                     "updated": (0.60, -1.70)}
+
+doc1Vec = embed_bi_encoder("The order shipped late.", DOC_EMBED)
+q1Vec = embed_bi_encoder("order late", QUERY_EMBED)
+doc2Vec = embed_bi_encoder("refund policy updated", IRRELEVANT_EMBED)
+
+assert round(doc1Vec[0], 4) == 1.3842 and round(doc1Vec[1], 4) == 1.5025
+assert round(q1Vec[0], 4) == 1.1292 and round(q1Vec[1], 4) == 1.2708
+assert round(doc2Vec[0], 4) == -0.4077 and round(doc2Vec[1], 4) == -0.9372
+assert round(cosine(q1Vec, doc1Vec), 4) == 0.9998
+assert round(cosine(q1Vec, doc2Vec), 4) == -0.9504
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real siamese structure, and two real asymmetric conventions</h2></div></header>
+<p><a href="https://arxiv.org/abs/1908.10084">Sentence-BERT's abstract</a> is cited here for a different part of the same paper Concept 02 used (which drew only on Section 3's architecture description): the abstract's own siamese/bi-encoder structure claim and its cross-encoder-cost figure -- finding the closest pair among 10,000 sentences needs "about 50 million inference computations (~65 hours)" with BERT, cut to "about 5 seconds" with SBERT's "siamese and triplet network structures" plus cosine similarity. <a href="https://huggingface.co/intfloat/e5-base">E5-base's model card</a> shows the real asymmetric-prefix convention: its usage examples prepend "query: " to the search query and "passage: " to every candidate passage before calling the same encoder. <a href="https://huggingface.co/BAAI/bge-large-en-v1.5">BGE-large-en-v1.5's model card</a> shows a genuinely different real convention: its usage examples prepend the instruction "Represent this sentence for searching relevant passages: " to queries ONLY -- passages get no prefix at all. Two real models, two different asymmetric rules -- proof the pattern is model-specific, not one fixed convention (full mechanics deferred to Concept 08).</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Precomputed Shelf</h2></div></header>
+<div class="lab">
+<p>Two documents are embedded once, below, and frozen -- "PRECOMPUTED AT INDEX TIME." Toggle the query's own form and watch only the query side rebuild.</p>
+<div class="lab-actions" role="group" aria-label="Choose the query form">
+<button type="button" class="secondary active" data-mode="plain">"order late"</button>
+<button type="button" class="secondary" data-mode="prefixed">"query: order late"</button>
+</div>
+<div class="norm-readout" id="queryReadout_0803"></div>
+<div class="example-grid">
+<article class="info-card"><span>PRECOMPUTED -- FROZEN AT INDEX TIME</span><h3>"The order shipped late"</h3><p>Pooled vector (1.3842, 1.5025) -- Concept 02's own document, embedded once, offline, before this query existed.</p></article>
+<article class="info-card"><span>PRECOMPUTED -- FROZEN AT INDEX TIME</span><h3>"Refund policy updated"</h3><p>Pooled vector (−0.4077, −0.9372) -- an unrelated document, embedded the same way, once.</p></article>
+</div>
+<div class="prob-bars" id="matchBars_0803"></div>
+<div class="callout" id="matchVerdict_0803"></div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Bi-encoder versus cross-encoder trade-off</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Strength</th><th>Weakness</th></tr></thead>
+<tbody>
+<tr><td>Bi-encoder (this concept)</td><td>Document vectors precomputable and stored; comparing against millions of them is fast cosine math</td><td>No cross-attention signal between query and document tokens</td></tr>
+<tr><td>Cross-encoder (named forward, Module 16 Concept 09)</td><td>Real cross-attention between every query/document token pair, typically more accurate</td><td>Can't be precomputed -- both texts must be present in the same pass</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISMATCHED CHECKPOINTS</span><h3>Using different encoder checkpoints for query vs. document</h3><p>Breaks the "same function" assumption entirely -- the two vector spaces are no longer comparable.</p></article>
+<article class="info-card"><span>WRONG OR ONE-SIDED PREFIX</span><h3>Feeding a real model's expected prefix to only one side, or the wrong prefix</h3><p>Mechanically changes the token sequence and hence the vector in an untrained, unpredictable way -- Concept 08 covers the correct convention per model.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A bi-encoder must be two different models</td><td>False -- same encoder, called twice, on different input text.</td></tr>
+<tr><td>Cross-encoders are just slower bi-encoders</td><td>False -- structurally different, no separate precomputable vectors.</td></tr>
+<tr><td>The query prefix is one exotic model's quirk</td><td>False -- E5 and BGE use two genuinely different real conventions.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>A real latency-budget asymmetry</h2></div></header>
+<ul>
+<li>Precomputing document embeddings is a one-time or incremental (Module 06 Concept 09) batch job -- it can run overnight, in bulk, with no user waiting.</li>
+<li>Query embedding must happen synchronously, on every request -- there's no way to precompute a query nobody has typed yet.</li>
+<li>SBERT's own figures make the scale of this concrete: ~65 hours of cross-encoder computation to search 10,000 sentences once, vs. ~5 seconds with a bi-encoder's precomputed embeddings -- the same asymmetry, at corpus scale.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why can't a cross-encoder's score be precomputed?</summary><div>It needs both the query and the document tokens present in the same forward pass, with cross-attention between them -- there's no per-document vector that exists independently of a specific query, so nothing can be stored ahead of time.</div></details>
+<details class="quiz"><summary>What changes and what stays the same when a query prefix is added?</summary><div>The input TEXT changes (an extra token like "query: " is prepended before tokenization), which changes the token sequence and therefore the pooled vector. The encoder itself -- its weights, its architecture -- stays exactly the same.</div></details>
+<details class="quiz"><summary>Why did "order" and "late" get different contextualized vectors in the query vs. the document?</summary><div>Because contextualization depends on every other token in the same sequence -- "order" in a 2-token query only has "late" to attend to, while "order" in the 4-token document also has "the" and "shipped" nearby, producing a different weighted blend each time.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>New query: "shipped order" (2 tokens), reusing the existing base vectors shipped=(1.80,1.90) and order=(2.00,0.40). Using the same Attention(Q,K,V) formula (Q=K=V=own base vector, d_k=2, scale=√2), compute the attention weights for each token, the pooled query vector, and its cosine similarity against both doc1Vec (1.3842, 1.5025) and doc2Vec (−0.4077, −0.9372).</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>shipped ctx=(1.8293,1.6799), weights=[0.8533 self, 0.1467 to order]. order ctx=(1.8929,1.2029), weights=[0.5353 to shipped, 0.4647 self]. Pooled = (1.8611, 1.4414). Cosine to doc1 = 0.9860. Cosine to doc2 = −0.8769.</div>
+</details>
+<p>Teach-back: explain why this query's cosine to doc1 (0.9860) is slightly lower than the main example's (0.9998).</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Bi-encoders and asymmetric query/document embeddings</h3><ul><li><b>Bi-encoder:</b> same encoder, two separate calls, meet only at cosine</li><li><b>Cross-encoder:</b> named forward only -- one joint pass, no separate vectors</li><li><b>Headline numbers:</b> 0.9998 relevant vs. −0.9504 irrelevant; SBERT's 65 hours → 5 seconds</li></ul></div>
+<div><h3>Memorable example</h3><p>The document vector never moved across the whole lab -- only the query did.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why can bi-encoder document vectors be precomputed but not cross-encoder scores?</summary><div>A bi-encoder produces one vector per document independently of any query, so it can be computed and stored ahead of time. A cross-encoder's score is a function of the query AND the document together -- it doesn't exist until both are known, so nothing can be precomputed.</div></details>
+<details class="quiz"><summary>Mathematical: write sim(q,d)=cos(f(q),f(d)) and state what f is.</summary><div>f is Concept 02's four-stage forward pass -- tokenize, embed, contextualize, pool -- applied independently to the query text and to the document text. The two resulting vectors are compared with Module 04 Concept 03's cosine similarity.</div></details>
+<details class="quiz"><summary>Coding: implement embed_bi_encoder and call it on two independent token lists.</summary><div>embed_bi_encoder(text, embed) tokenizes, runs attention_contextualize, and pool_means the result -- Section 12 gives the full implementation, called once on a query string and once on a document string with no shared attention step between the two calls.</div></details>
+<details class="quiz"><summary>Debugging: a retrieval system's scores look randomly shuffled after a model upgrade. What's the first thing to check?</summary><div>Whether the query side and document side are using a matching prefix convention -- an upgrade that introduces or changes an expected prefix on only one side will silently shift vectors in an untrained, unpredictable direction.</div></details>
+<details class="quiz"><summary>System design: how would you verify a vendor's embedding endpoint is actually a bi-encoder and not secretly cross-encoding?</summary><div>Send a batch of query+passage pairs and check whether embedding a document ever changes when paired with a different query -- a true bi-encoder's document vector is fixed regardless of which query it's later compared against; a hidden cross-encoder's score would depend on the pairing itself.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/1908.10084"><b>Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks — Reimers &amp; Gurevych, 2019</b><br><span>Cited here for the abstract's siamese/bi-encoder structure claim and its cross-encoder-cost figure (~50 million computations / ~65 hours vs. ~5 seconds) -- a different part of the same paper Concept 02 cited for Section 3's architecture only.</span></a>
+<a href="https://huggingface.co/intfloat/e5-base"><b>intfloat/e5-base — Hugging Face model card</b><br><span>The real "query: " / "passage: " paired asymmetric-prefix convention.</span></a>
+<a href="https://huggingface.co/BAAI/bge-large-en-v1.5"><b>BAAI/bge-large-en-v1.5 — Hugging Face model card</b><br><span>A genuinely different real convention: a query-only instruction prefix, no prefix on passages.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 03 COMPLETE · MODULE 08 · 3/11</span>
+<h3>Two texts, two independent passes, one comparison.</h3>
+<p>You can now name what's separate vs. shared in a bi-encoder, explain in one sentence why a cross-encoder's score can't be precomputed, and state what an asymmetric prefix changes (the input text) and doesn't change (the encoder itself). Concept 04 is next: contrastive learning objectives.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open the Precomputed Shelf ↑</a>
+</div>
+<p class="fine-print">Module 08 at 3 of 11 concepts. Next concept: contrastive learning objectives.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 03 · Complete</p>
+<a href="module-08-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

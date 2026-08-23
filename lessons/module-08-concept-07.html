@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 01-06 all silently assumed cosine similarity behaves the same way everywhere in the embedding space. This concept names the real pathology that breaks that assumption: anisotropy -- real trained embedding spaces often cluster in a narrow cone rather than spreading uniformly, so four semantically unrelated toy words (pizza, orbit, cello, tax) at close angles show a mean pairwise cosine of 0.990608, versus -0.333333 for the same idea spread evenly. Proves algebraically and numerically that Concept 06's normalization cannot fix this -- cosine similarity was already blind to each vector's own length before normalizing ever ran.">
+<title>Anisotropy and embedding-space pathologies — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 07</p>
+<h1>Unrelated words.<br><em>A suspiciously narrow cone.</em></h1>
+<p class="lesson-lead">Concepts 01-06 all silently assumed cosine similarity behaves the same way everywhere in the embedding space -- every cosine number computed so far was taken at face value. This concept names the real pathology that breaks that assumption: anisotropy. Real trained embedding spaces are often NOT spread uniformly over the unit hypersphere -- they cluster in a narrow cone, so even semantically unrelated texts can show an artificially high baseline cosine. Four illustrative, completely unrelated words -- pizza, orbit, cello, tax -- placed at close angles show a mean pairwise cosine of 0.990608, despite sharing no meaning at all. Spread the same idea evenly instead, and the mean drops to -0.333333. Concept 06's normalization cannot fix this: cosine similarity was already blind to each vector's own length before normalizing ever ran, proved here both algebraically and to 10 decimal places.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh concept of Module 08 -- a property of the whole embedding space, not a pipeline step</b></div>
+<div><span>PREREQUISITE</span><b>Concept 06's normalization proof (dot equals cosine for unit vectors); Module 04 Concept 03's cosine/dot-product formula and its own forward reference to Module 08-09</b></div>
+<div><span>BEGINNER GOAL</span><b>Define anisotropy and explain in one sentence why normalizing cannot fix it</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Is the whole embedding space well-behaved?</h2>
+</div>
+<p>Every cosine number computed since Concept 01 was taken at face value. This concept asks whether the space those numbers live in is itself well-behaved -- and shows, concretely, that it often isn't.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A narrow cone, not a uniform sphere</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Anisotropy: real embedding spaces often cluster in a narrow cone rather than spreading uniformly over the unit hypersphere, so even unrelated texts can show an artificially high baseline cosine similarity.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Embedding-model instructions and query/document prefixes (Concept 08); embedding-model selection (Concept 10) -- both named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a raised baseline cosine among unrelated words isn't meaning -- it's the shape of the space.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Every prior cosine number was taken at face value</h3>
+<p>Concepts 01-06 computed real cosine values (0.9755, a 0.6644 tie, a full pooling cross-table) and treated each one as direct evidence of similarity. This concept doesn't contradict any of those specific claims -- it asks a new question none of them raised: is the whole space those numbers live in actually well-behaved?</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Four unrelated words, one suspiciously narrow cone</h3>
+<p>Four illustrative, completely unrelated words -- pizza, orbit, cello, tax -- placed at close angles (20°-33°) with arbitrary, irrelevant magnitudes. All six pairwise cosines land above 0.97, mean <b>0.990608</b> -- despite the four words sharing no meaning whatsoever. Spread the identical idea evenly instead (north/east/south/west), and the mean drops to <b>-0.333333</b>.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0807-b03-title">
+<strong class="concept-visual-title" id="c0807-b03-title">VISUAL · A NARROW CONE VS. AN EVEN SPREAD</strong>
+<svg class="vector-plane" viewBox="0 0 320 170" role="img" aria-labelledby="c0807-svg-title-b c0807-svg-desc-b">
+<title id="c0807-svg-title-b">Two coordinate planes: four unrelated words clustered in a narrow cone, and four directions spread evenly</title>
+<desc id="c0807-svg-desc-b">Left plane: pizza, orbit, cello and tax all point in nearly the same direction. Right plane: north, east, south and west point in four different directions, evenly spread.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<line x1="20" y1="85" x2="140" y2="85" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="80" y1="20" x2="80" y2="150" stroke="#c9cdb9" stroke-width="1"/>
+<text x="10" y="16" font-weight="700">ANISOTROPIC (mean 0.990608)</text>
+<line x1="80" y1="85" x2="103.36" y2="47.62" stroke="#2f6f5c" stroke-width="1.6"/>
+<line x1="80" y1="85" x2="126.88" y2="26.17" stroke="#b3543a" stroke-width="1.6"/>
+<line x1="80" y1="85" x2="157.43" y2="9.73" stroke="#b8860b" stroke-width="1.6" transform="translate(-30,0)"/>
+<line x1="80" y1="85" x2="176.12" y2="-28.37" stroke="#5b6b64" stroke-width="1.6" transform="translate(-70,25)"/>
+<text x="10" y="160" font-size="7">cello / pizza / tax / orbit — all nearly the same direction</text>
+<line x1="220" y1="85" x2="300" y2="85" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="260" y1="20" x2="260" y2="150" stroke="#c9cdb9" stroke-width="1"/>
+<text x="180" y="16" font-weight="700">ISOTROPIC (mean −0.333333)</text>
+<line x1="260" y1="85" x2="260" y2="35" stroke="#2f6f5c" stroke-width="1.6"/>
+<line x1="260" y1="85" x2="300" y2="85" stroke="#b3543a" stroke-width="1.6"/>
+<line x1="260" y1="85" x2="260" y2="135" stroke="#b8860b" stroke-width="1.6"/>
+<line x1="260" y1="85" x2="220" y2="85" stroke="#5b6b64" stroke-width="1.6"/>
+<text x="200" y="160" font-size="7">north / east / south / west — four different directions</text>
+</g>
+</svg>
+<figcaption>Same number of directions, same idea -- the left cone's tight clustering is exactly what produces a misleadingly high baseline cosine.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Six pairwise cosines, one revealing mean</h3>
+<table class="worked-table">
+<thead><tr><th>Pair</th><th>Cosine</th></tr></thead>
+<tbody>
+<tr><td>pizza · orbit</td><td>0.990268</td></tr>
+<tr><td>pizza · cello</td><td>0.996195</td></tr>
+<tr><td>pizza · tax</td><td>0.997564</td></tr>
+<tr><td>orbit · cello</td><td>0.974370</td></tr>
+<tr><td>orbit · tax</td><td>0.997564</td></tr>
+<tr><td>cello · tax</td><td>0.987688</td></tr>
+</tbody>
+</table>
+<p>Mean = <b>0.990608</b>. Every single pair among four totally unrelated words scores above 0.97 -- this is anisotropy's concrete cost: an artificially inflated baseline that has nothing to do with meaning.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>A property of the space, not a pipeline step</h3>
+<div class="scroll-flow">
+<span>Contextualize → pool → normalize (Concept 06)</span><i>→</i>
+<span class="hot">The resulting SPACE may still be anisotropic (this concept)</span><i>→</i>
+<span>Retrieval compares cosine similarities inside that space</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Anisotropy vs. normalization -- proved, not just asserted</h3>
+<div class="distinction-table" role="table" aria-label="Anisotropy distinguished from normalization, and from a broken model">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Anisotropy vs. normalization (Concept 06)</span><span role="cell">A property of which DIRECTIONS the whole space uses vs. a per-vector LENGTH rescaling -- normalizing cannot touch it, proved in Section 09/10</span></div>
+<div role="row"><span role="cell">Anisotropic vs. "broken" model</span><span role="cell">A common, measurable, correctable property -- not a defect that invalidates the model</span></div>
+<div role="row"><span role="cell">This concept vs. Concepts 01-06's own cosine numbers</span><span role="cell">Doesn't contradict any specific prior claim -- asks a new question about the space as a whole</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"If my vectors are all normalized, cosine similarity is safely comparable everywhere in the space."</b><p>False -- Section 09/10's proof: normalizing cannot change anisotropy at all.</p></div>
+<div><b>"An anisotropic space means the embedding model is broken."</b><p>False -- it's common and measurable; real fixes (BERT-flow, BERT-whitening) exist precisely because it's fixable.</p></div>
+<div><b>"A fixed cosine threshold like 0.75 works the same across any embedding model."</b><p>False -- anisotropy undermines the portability of any fixed absolute threshold across models or domains.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>A fixed cutoff is not automatically portable</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A rule like "treat cosine below 0.75 as irrelevant" isn't safely portable across models or domains</b><p>Check the model's own baseline/self-similarity first -- not solved here, named forward.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 · CONCEPT 07 ACTIVE (7/11)</b><p>Concept 08 (instruction prefixes) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define anisotropy in one sentence</b><p>Real embedding directions often cluster in a narrow cone rather than spreading uniformly over the hypersphere.</p></div>
+<div><b>Explain why normalizing cannot fix it</b><p>Cosine similarity is already invariant to each vector's own length before you ever normalize -- normalizing changes length, not direction.</p></div>
+<div><b>Name one real remediation technique</b><p>BERT-flow (a learned normalizing flow) or BERT-whitening (a closed-form linear transform).</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a narrow cone inflate the baseline cosine among unrelated words?</li>
+<li>Why does the algebra guarantee normalizing can't change cosine similarity at all?</li>
+<li>Why is a moderately-anisotropic, contrastively fine-tuned model not automatically as urgent a problem as a raw, untuned encoder?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 7 of 11</h3>
+<p>This concept named anisotropy and proved normalization can't fix it. Concept 08, "Embedding-model instructions and query/document prefixes," is next -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 07 is active.</b> Module 08 is at 7 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-06.html">← Back to Concept 06</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Is the whole embedding space well-behaved?</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>0.990608 among unrelated words</b><small>A narrow cone inflates the baseline.</small></a>
+<a href="#b04"><span>02</span><b>−0.333333 spread evenly</b><small>The same idea, isotropic contrast.</small></a>
+<a href="#s09"><span>03</span><b>Normalizing can't fix it</b><small>0.9902680687, identical before and after, to 10 decimals.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full proof, real remediation techniques, and The Anisotropy Cone Widener lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Every prior cosine number was taken at face value → four unrelated words in a narrow cone reveal a suspiciously high baseline → the same idea spread evenly reveals what unrelated should actually look like → Concept 06's normalization is algebraically incapable of fixing this → real techniques (BERT-flow, BERT-whitening) exist because it's a real, correctable property → Module 08 at 7 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Anisotropy and embedding-space pathologies" deep dive</b><em>The full proof, real remediation techniques, and The Anisotropy Cone Widener lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The assumption nobody checked</h2></div></header>
+<p>Concepts 01-06 all silently assumed cosine similarity behaves the same way everywhere in the embedding space. This concept names the real pathology that breaks that assumption: anisotropy.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Anisotropy and isotropy precisely</h3><p>A property of directions, not magnitudes.</p></article>
+<article class="info-card"><span>MEASURE</span><h3>A baseline-cosine inflation</h3><p>Among unrelated toy words, verified two independent ways.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Normalization cannot fix it</h3><p>Algebraically and to 10 decimal places.</p></article>
+<article class="info-card"><span>NAME</span><h3>Two real remediation techniques</h3><p>BERT-flow and BERT-whitening, without teaching their internals in full.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-06.html">Concept 06</a> -- the normalization/dot-equals-cosine proof, cited directly, not re-derived.</b></li>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a> -- cosine/dot product, and its own forward reference to Module 08-09.</b></li>
+<li><b><a href="module-04-concept-02.html">Module 04 Concept 02</a> -- norm/unit-vector definition, cited.</b></li>
+<li><b>Explicitly out of scope:</b> embedding-model instructions and query/document prefixes (Concept 08); embedding-model selection (Concept 10).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A flashlight beam, not a floodlight</h2></div></header>
+<p>Real trained embedding directions often cluster inside a narrow beam of the hypersphere rather than spreading over the whole sphere. Two unrelated ideas can still point almost the same way inside that beam.</p>
+<div class="callout warning"><b>Analogy boundary</b>The flashlight picture explains that this clustering happens. It doesn't explain WHY training produces it -- that mechanism is out of scope here.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Isotropy</td><td>The directions of a vector population spread uniformly over the unit hypersphere</td><td>—</td></tr>
+<tr><td>Anisotropy</td><td>The directions do NOT spread uniformly -- they cluster</td><td>—</td></tr>
+<tr><td>Self-similarity / baseline cosine</td><td>Ethayarajh's term for the measurable symptom -- mean cosine among unrelated items</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Building the narrow-cone example, then the isotropic contrast</h2></div></header>
+<p>Pick four unrelated-word toy vectors at close angles (20°-33°), compute all six pairwise cosines, compute the mean (0.990608). Then spread the identical idea evenly (north/east/south/west) and recompute the mean (-0.333333) -- the contrast is the whole demonstration.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>A narrow band vs. a full-circle spread</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Anisotropic — narrow cone</b><small>Mean cosine 0.990608 among unrelated words</small></div>
+<div class="diagram-node"><b>Isotropic — even spread</b><small>Mean cosine −0.333333</small></div>
+<div class="diagram-node"><b>Normalization (Concept 06)</b><small>Cannot move a vector between these two states</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>A property of the encoder's whole output space</h2></div></header>
+<div class="pipeline-preview">
+<span>Contextualize</span><i>↓</i><span>Pool</span><i>↓</i><span>Normalize (Concept 06)</span><i>↓</i><span class="hot">Resulting space may still be anisotropic — a property diagnosed on the whole output, this concept</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Why normalizing cannot change cosine similarity at all</h2></div></header>
+<div class="equation">cosine(u,v) = dot(u,v) / (‖u‖·‖v‖)<br>Let û = u/‖u‖: cosine(û,v) = dot(û,v)/(‖û‖·‖v‖) = (dot(u,v)/‖u‖)/(1·‖v‖) = dot(u,v)/(‖u‖·‖v‖) = cosine(u,v)</div>
+<p>The two expressions are algebraically IDENTICAL, not merely close -- cosine similarity was already invariant to each vector's own length before normalizing ever ran. For genuinely random unit vectors in d dimensions, E[cosine between two independent random unit vectors] = 0, with the fluctuation shrinking as dimension grows (cited qualitatively as background, not derived here) -- this 2D 4-point illustration is a simplified stand-in for that higher-dimensional fact.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Three parts: the cone, the contrast, and the proof</h2></div></header>
+<p><b>Part 1 -- the anisotropic narrow cone.</b> Four unrelated illustrative words at close angles, arbitrary irrelevant magnitudes: cello=20°,1.1; pizza=25°,1.4; tax=29°,1.8; orbit=33°,2.1. All six pairwise cosines: pizza·orbit=0.990268, pizza·cello=0.996195, pizza·tax=0.997564, orbit·cello=0.974370, orbit·tax=0.997564, cello·tax=0.987688. Mean = <b>0.990608</b>. Framing: these four words share no semantic relationship whatsoever, yet a naive reading of "cosine similarity" would suggest they're almost identical.</p>
+<p><b>Part 2 -- the isotropic contrast.</b> Four unit vectors at 0°/90°/180°/270° (north/east/south/west). Pairwise cosines: north·east=0, north·south=−1, north·west=0, east·south=0, east·west=−1, south·west=0. Mean = <b>−0.333333</b>. Under genuine isotropy, unrelated directions are just as likely to be perpendicular or opposite as aligned, so the baseline sits near zero or negative -- nothing like Part 1's 0.990608.</p>
+<p><b>Part 3 -- normalization cannot fix anisotropy.</b> Numeric check on pizza vs. orbit: cosine BEFORE normalizing = 0.9902680687. pizza_hat = pizza/‖pizza‖, orbit_hat = orbit/‖orbit‖ (both ‖·‖=1.0000000000). dot(pizza_hat, orbit_hat) AFTER normalizing = <b>0.9902680687</b> -- identical to 10 decimal places, exactly as the algebra predicts.</p>
+<p><b>Verification method:</b> every Part 1/2 cosine was computed twice by two algebraically independent routes -- the standard dot-product/norm formula applied to (x,y) coordinates, and the pure trigonometric identity cosine = cos(angle_a − angle_b), which uses no dot product or norm at all -- matching to 6 decimal places on every value. The Part 3 identity was verified to 10 decimal places with no floating-point drift.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Diagnosing a retriever whose scores all cluster high</h3><p>Cosine scores clustering in 0.85-0.99 regardless of true relevance -- a real anisotropy symptom.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Contrastively fine-tuned models</h3><p>Concepts 04-05's own objectives measurably reduce anisotropy -- the fix isn't equally urgent everywhere.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating a moderately-anisotropic, well-tuned model as broken</h3><p>Degree matters, not just presence.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The cone, the contrast, and the normalization proof, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def to_vec(angle_deg, mag):
+    r = math.radians(angle_deg)
+    return (mag * math.cos(r), mag * math.sin(r))
+
+def dot(u, v):
+    return u[0]*v[0] + u[1]*v[1]
+
+def norm(u):
+    return math.sqrt(dot(u, u))
+
+def cosine(u, v):
+    return dot(u, v) / (norm(u) * norm(v))
+
+def normalize(u):
+    n = norm(u)
+    return (u[0]/n, u[1]/n)
+
+cello, pizza, tax, orbit = to_vec(20,1.1), to_vec(25,1.4), to_vec(29,1.8), to_vec(33,2.1)
+pairs = [(pizza,orbit),(pizza,cello),(pizza,tax),(orbit,cello),(orbit,tax),(cello,tax)]
+mean_cos = sum(cosine(a,b) for a,b in pairs) / len(pairs)
+assert round(mean_cos, 6) == 0.990608
+
+pizza_hat, orbit_hat = normalize(pizza), normalize(orbit)
+assert round(cosine(pizza, orbit), 10) == round(dot(pizza_hat, orbit_hat), 10)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>The real papers naming and fixing this</h2></div></header>
+<p><a href="https://arxiv.org/abs/1909.00512">Ethayarajh (2019), "How Contextual are Contextualized Word Representations?"</a> defines and measures anisotropy in BERT/ELMo/GPT-2 representations via self-similarity -- the primary citation for the phenomenon's definition and measurement. <a href="https://arxiv.org/abs/2011.05864">Li, Zhou, He, Wang, Yang &amp; Li (2020), the BERT-flow paper</a>, shows BERT induces a non-smooth anisotropic sentence space and proposes normalizing flows to map it toward an isotropic Gaussian. <a href="https://arxiv.org/abs/2103.15316">Su, Cao, Liu &amp; Ou (2021), the BERT-whitening paper</a>, names anisotropy as "a critical bottleneck" and shows a classical whitening transform improves isotropy competitively with BERT-flow while also reducing dimensionality -- connecting back to Concept 06's own storage-cost table.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Anisotropy Cone Widener</h2></div></header>
+<div class="lab">
+<p>Widen the cone the four unrelated words sit in, and watch the mean pairwise cosine move from near-1.0 toward negative. Toggle normalization to confirm the number never changes.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgConeWidth_0807">Cone width: <output id="wgConeWidthOut_0807">13°</output></label>
+<input type="range" id="wgConeWidth_0807" min="0" max="260" step="1" value="13"></div>
+</div>
+<div class="lab-actions" role="group" aria-label="Normalize before comparing" style="margin-top:12px">
+<button type="button" class="secondary active" data-normalize="off">Raw vectors</button>
+<button type="button" class="secondary" data-normalize="on">L2-normalize first</button>
+</div>
+<svg class="vector-plane" viewBox="0 0 320 260" role="img" aria-labelledby="c0807-svg-title-lab c0807-svg-desc-lab">
+<title id="c0807-svg-title-lab">A live 2D coordinate plane redrawing four word vectors as the cone width slider moves</title>
+<desc id="c0807-svg-desc-lab">Four arrows from the origin, converging into a narrow cone at low widths and spreading out at high widths.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="220" x2="300" y2="220" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="160" y1="20" x2="160" y2="250" stroke="#c9cdb9" stroke-width="1"/>
+<line id="arrowCello_0807" x1="160" y1="220" x2="193.37" y2="182.38" stroke="#2f6f5c" stroke-width="2"/>
+<line id="arrowPizza_0807" x1="160" y1="220" x2="226.88" y2="160.83" stroke="#b3543a" stroke-width="2"/>
+<line id="arrowTax_0807" x1="160" y1="220" x2="257.43" y2="132.73" stroke="#b8860b" stroke-width="2"/>
+<line id="arrowOrbit_0807" x1="160" y1="220" x2="276.12" y2="105.63" stroke="#5b6b64" stroke-width="2"/>
+<circle cx="160" cy="220" r="2.5" fill="#14241f"/>
+</g>
+</svg>
+<div class="norm-readout" id="wgConeReadout_0807"></div>
+<div class="callout" id="wgConeVerdict_0807" aria-live="polite"></div>
+<div class="callout warning">This 2D illustrative cone is a simplified, low-dimensional stand-in for a real high-dimensional trained encoder's direction distribution. The real, citable evidence is Ethayarajh's self-similarity measurements and the BERT-flow/BERT-whitening papers' own anisotropy diagnoses (Section 13), not this toy geometry.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>No fix vs. two real remediation techniques</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Approach</th><th>Mechanism</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td>No fix (raw anisotropic space)</td><td>—</td><td>Fragile fixed thresholds, inflated baselines</td></tr>
+<tr><td>BERT-flow</td><td>A learned, non-linear normalizing flow</td><td>Needs unsupervised training data</td></tr>
+<tr><td>BERT-whitening</td><td>A closed-form linear transform</td><td>No training loop needed; also reduces dimensionality</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SYMPTOM</span><h3>Nearly all cosine scores cluster in a narrow high band</h3><p>Regardless of true relevance -- making any fixed threshold fragile.</p></article>
+<article class="info-card"><span>DIAGNOSTIC</span><h3>Measure the baseline cosine</h3><p>Across a large random sample of unrelated corpus item pairs -- far from 0 is the anisotropy signal.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Normalizing fixes everything</td><td>False -- Section 09/10's proof.</td></tr>
+<tr><td>An anisotropic space means the model is broken or useless</td><td>False -- a common, measurable, correctable property.</td></tr>
+<tr><td>You must always apply BERT-flow</td><td>False -- contrastively fine-tuned models are often already much less anisotropic.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Anisotropy undermines the portability of any fixed absolute cosine threshold across models or domains -- a "0.75 = relevant" rule tuned on one encoder won't transfer.</li>
+<li>It does not necessarily break relative ranking as long as true matches stay measurably closer than distractors, but a narrow high baseline shrinks the discriminative margin, making top-k cutoffs more fragile near ties.</li>
+<li>Whitening/flow post-processing adds a small, one-time preprocessing cost, not a per-query cost.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define anisotropy and isotropy.</summary><div>Isotropy: a vector population's directions spread uniformly over the unit hypersphere. Anisotropy: they don't -- they cluster.</div></details>
+<details class="quiz"><summary>Why can't normalizing fix anisotropy?</summary><div>Cosine similarity is already invariant to each vector's own length -- cosine(û,v)=cosine(u,v) algebraically, for any u. Normalizing only rescales length; anisotropy is about direction.</div></details>
+<details class="quiz"><summary>Name one real remediation technique.</summary><div>BERT-flow (a learned normalizing flow) or BERT-whitening (a closed-form linear transform).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Four fresh, illustrative unrelated words -- "lantern," "quartz," "ferry," "algebra" -- placed at angles 40°, 44°, 48°, 52° with magnitudes 1.2, 1.5, 1.0, 1.7. Compute the mean pairwise cosine, and state whether normalizing first would change your answer.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>All four angles sit within a 12° band, so every pairwise cosine will again land above 0.97, and the mean will again sit close to 1.0 -- the exact value depends only on the angle differences (4°, 8°, 12° apart pairs), never on the arbitrary magnitudes. Normalizing first would NOT change the answer at all, by the same algebraic identity proved in Section 09 -- cosine similarity never depended on vector length in the first place.</div>
+</details>
+<p>Teach-back: explain, in your own words, why anisotropy is a different problem from unequal vector length.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Anisotropy</h3><ul><li><b>Definition:</b> embedding directions cluster in a narrow cone instead of spreading uniformly</li><li><b>Proof:</b> normalizing cannot fix it -- cosine is already length-invariant</li><li><b>Real fixes:</b> BERT-flow (learned), BERT-whitening (closed-form)</li></ul></div>
+<div><h3>Memorable example</h3><p>Pizza, orbit, cello and tax share no meaning at all -- yet their mean pairwise cosine is 0.990608. Spread the same idea evenly, and it drops to -0.333333.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does anisotropy matter for retrieval?</summary><div>It inflates the baseline cosine among unrelated items, making any fixed absolute threshold unreliable and shrinking the discriminative margin between true matches and distractors.</div></details>
+<details class="quiz"><summary>Mathematical: prove normalization can't fix anisotropy.</summary><div>cosine(u,v)=dot(u,v)/(‖u‖‖v‖). Substituting û=u/‖u‖ gives cosine(û,v)=dot(u,v)/(‖u‖‖v‖)=cosine(u,v) exactly -- the normalized and unnormalized cosines are algebraically identical, so rescaling length changes nothing about direction-based similarity.</div></details>
+<details class="quiz"><summary>Coding: implement the cone example and the normalization-invariance assertion.</summary><div>Section 12 gives the full from-scratch implementation, with an assert confirming the normalized and unnormalized cosine match exactly.</div></details>
+<details class="quiz"><summary>Debugging: a retriever's cosine scores are all suspiciously high, even for irrelevant results. What do you check?</summary><div>Measure the mean/baseline cosine across a large random sample of unrelated corpus item pairs -- if it's far from 0, that's the anisotropy signal, not a data or relevance-labeling bug.</div></details>
+<details class="quiz"><summary>System design: how would you choose between BERT-flow and BERT-whitening for a production corpus?</summary><div>Prefer BERT-whitening when you want a fast, closed-form fix with no training loop and a bonus dimensionality reduction; prefer BERT-flow when a more flexible, learned transform is worth the cost of an unsupervised training pass on your own corpus.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/1909.00512"><b>Ethayarajh — How Contextual are Contextualized Word Representations? (arXiv:1909.00512)</b><br><span>Defines and measures anisotropy in BERT/ELMo/GPT-2 via self-similarity -- the primary source for this concept's definition.</span></a>
+<a href="https://arxiv.org/abs/2011.05864"><b>Li, Zhou, He, Wang, Yang &amp; Li — On the Sentence Embeddings from Pre-trained Language Models / BERT-flow (arXiv:2011.05864)</b><br><span>Shows BERT induces an anisotropic sentence space and proposes a learned normalizing flow to fix it.</span></a>
+<a href="https://arxiv.org/abs/2103.15316"><b>Su, Cao, Liu &amp; Ou — Whitening Sentence Representations for Better Semantics and Faster Retrieval / BERT-whitening (arXiv:2103.15316)</b><br><span>A closed-form linear whitening transform, competitive with BERT-flow, with a dimensionality-reduction bonus.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 07 COMPLETE · MODULE 08 · 7/11</span>
+<h3>Unrelated words. A suspiciously narrow cone.</h3>
+<p>You can now define anisotropy precisely, prove why normalization cannot fix it, and name two real remediation techniques. Concept 08, "Embedding-model instructions and query/document prefixes," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Anisotropy Cone Widener ↑</a>
+</div>
+<p class="fine-print">Module 08 at 7 of 11 concepts. Next concept: embedding-model instructions and query/document prefixes.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 07 · Complete</p>
+<a href="module-08-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

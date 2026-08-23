@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 10 built a real four-step funnel and picked one model for one corpus. This closing concept of Module 08 (11/11) names what happens after that pick ships: VERSIONING (tag every stored vector with the model that produced it, because two independently-trained models' spaces have no guaranteed relationship even at matching dimension -- a 130-degree rotation on Concept 01's own 5-word model produces a constant, meaningless -0.6428 cross-model cosine for every word), DRIFT (a corpus's real language mix can move -- 5.0% Spanish at launch to 37.5% twelve months later, nothing about the model changing), and MIGRATION (re-embedding the corpus under a new model, the concrete cost behind Concept 09's own forward reference -- a versioned, blue-green migration peaks at old+new coexisting, 9.216 GB against a 2,000,000-chunk/384d-to-768d move, 50% more than an instant cutover would need).">
+<title>Versioning, drift and migration — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-11.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 11 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 11</p>
+<h1>The pick ships.<br><em>Then time passes.</em></h1>
+<p class="lesson-lead">Concept 10 ran a real four-step funnel and made one concrete pick for one real corpus. This closing concept of Module 08 introduces no new formula, similarity metric or technique -- it names three operational realities that start the moment that pick ships. VERSIONING: tag every stored vector with the model that produced it, because two independently-trained models' spaces have no guaranteed geometric relationship to each other at all, even at matching dimension. DRIFT: a corpus's real language and domain mix can shift after deployment, quietly eroding the fit of a model chosen for yesterday's corpus. MIGRATION: the concrete, expensive act of re-embedding an existing corpus under a new model -- and why the version tag from step one is exactly what makes that migration safe to run incrementally instead of all at once.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eleventh and final concept of Module 08 -- closes the module (11/11) with the operational aftermath of Concepts 01-10</b></div>
+<div><span>PREREQUISITE</span><b>Concept 09's forward-referenced re-embedding line; Concept 07's anisotropy (contrast); Concept 06/10's byte-cost formula (reused additively); Module 04 Concept 03's cosine formula (reused unchanged)</b></div>
+<div><span>BEGINNER GOAL</span><b>Define versioning, drift and migration; explain why matching dimension isn't sufficient for comparability; compute peak storage during an incremental migration</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One umbrella, three named realities</h2>
+</div>
+<p>No new fix, formula or technique here -- only what happens after Concept 10's one-time choice ships and the system keeps running.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Versioning, drift, migration -- one umbrella, three realities</h3>
+<div class="mental-compare">
+<div><span>1 · VERSIONING</span><p>Tag every stored vector with the model/version that produced it -- the prevention step.</p></div>
+<div><span>2 · DRIFT</span><p>A corpus's real composition can shift after deployment, eroding a model's original fit.</p></div>
+<div><span>3 · MIGRATION</span><p>Re-embed the corpus under a new model and re-index it -- the expensive step the tag makes safe to do gradually.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> this closes the module with no new fix -- only the three names for what happens after Concept 10's pick ships.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 09 already warned you -- this is where that warning gets a process</h3>
+<p>Concept 09's own production-implications line said it plainly: "changing the model later means re-embedding the whole corpus." That line was forward-referenced by name only, with no detail given. This concept is where that consequence stops being a warning and becomes an actual process -- how to tag vectors so a swap is even detectable, how to notice a corpus quietly drifting away from the assumptions the original model was chosen under, and how to run the re-embedding itself without a hard, all-at-once cutover.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three short vignettes, one per reality</h3>
+<p><b>Versioning.</b> Take Concept 01's own 5-word toy model -- kitten, cat, dog, car, truck -- and build a second, independently-parameterized "Model B" by rotating every one of Model A's vectors by a fixed 130 degrees. Within each model, relationships stay exactly as Concept 01 found them (cos(cat,dog)=0.9272 in both). But compare the <i>same word's</i> vector across the two models and every single word gives the identical number: cos = -0.6428, regardless of meaning -- because it is just cos(130°). A real number comes out of the formula. It carries zero semantic guarantee.</p>
+<p><b>Drift.</b> A support corpus launches at 9,500 English + 500 Spanish documents (5.0% Spanish). Twelve months later, after a market expansion, it holds 12,500 English + 7,500 Spanish (37.5% Spanish) -- a 7.5x relative increase in the minority-language share, with nothing about the embedding model itself changing.</p>
+<p><b>Migration.</b> Concept 10's own 2,000,000-chunk scenario: the old 384-dimension index costs 3.072 GB, the new 768-dimension index costs 6.144 GB. Run as a blue-green migration -- old index kept live while the new one re-embeds in the background -- peak storage is old+new coexisting at once: <b>9.216 GB</b>, 50% more than an instant cutover would have needed.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0811-b03-title">
+<strong class="concept-visual-title" id="c0811-b03-title">VISUAL · TWO INDEPENDENTLY-PARAMETERIZED MODELS, SAME VOCABULARY</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0811-svg-title-b c0811-svg-desc-b">
+<title id="c0811-svg-title-b">Two unit circles plotting the same three words as vectors in two different embedding models, Model B rotated 130 degrees from Model A</title>
+<desc id="c0811-svg-desc-b">Left circle: Model A, with kitten, dog and truck plotted at their Concept 01 angles of 8, 36 and 103 degrees. Right circle: Model B, an independently-parameterized model on the identical vocabulary, with the same three words plotted at those angles plus a fixed 130 degrees -- 138, 166 and 233 degrees. Within each circle the three vectors keep the same angular spacing; across the two circles the same word points in an unrelated direction.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<circle cx="88" cy="104" r="62" fill="none" stroke="#c9cdb9" stroke-width="1"/>
+<circle cx="252" cy="104" r="62" fill="none" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="26" y1="104" x2="150" y2="104" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="88" y1="42" x2="88" y2="166" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="190" y1="104" x2="314" y2="104" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="252" y1="42" x2="252" y2="166" stroke="#c9cdb9" stroke-width="1"/>
+<text x="52" y="30" font-size="8">MODEL A</text>
+<text x="216" y="30" font-size="8">MODEL B (A + 130°)</text>
+<line x1="88" y1="104" x2="149.4" y2="95.4" stroke="#2f6f5c" stroke-width="1.8"/>
+<circle cx="149.4" cy="95.4" r="4" fill="#2f6f5c"/>
+<text x="152" y="90" fill="#2f6f5c">kitten · 8°</text>
+<line x1="88" y1="104" x2="138.2" y2="67.6" stroke="#b3543a" stroke-width="1.8"/>
+<circle cx="138.2" cy="67.6" r="4" fill="#b3543a"/>
+<text x="140" y="62" fill="#b3543a">dog · 36°</text>
+<line x1="88" y1="104" x2="74.1" y2="43.6" stroke="#3a5f95" stroke-width="1.8"/>
+<circle cx="74.1" cy="43.6" r="4" fill="#3a5f95"/>
+<text x="16" y="40" fill="#3a5f95">truck · 103°</text>
+<line x1="252" y1="104" x2="205.9" y2="62.5" stroke="#2f6f5c" stroke-width="1.8"/>
+<circle cx="205.9" cy="62.5" r="4" fill="#2f6f5c"/>
+<text x="156" y="58" fill="#2f6f5c">kitten · 138°</text>
+<line x1="252" y1="104" x2="191.8" y2="89.0" stroke="#b3543a" stroke-width="1.8"/>
+<circle cx="191.8" cy="89.0" r="4" fill="#b3543a"/>
+<text x="150" y="97" fill="#b3543a">dog · 166°</text>
+<line x1="252" y1="104" x2="214.7" y2="153.5" stroke="#3a5f95" stroke-width="1.8"/>
+<circle cx="214.7" cy="153.5" r="4" fill="#3a5f95"/>
+<text x="196" y="168" fill="#3a5f95">truck · 233°</text>
+</g>
+</svg>
+<figcaption>Same three words, same angular spacing within each model (dog is 28° from kitten in both). Across the two models, every word's vector points in a direction the other model never chose -- cos(kitten_A, kitten_B) = cos(dog_A, dog_B) = cos(truck_A, truck_B) = cos(130°) = <b>-0.6428</b>, constant regardless of meaning.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Tag, monitor, re-embed</h3>
+<p>Versioning attaches a model/version tag to every vector at write time, so nothing ever mixes vectors from two different models silently. Drift is monitored by comparing the corpus's current real composition against the assumptions the original funnel (Concept 10, Step 1) was run under -- same language-mix question, asked again later, not a new technique. Migration re-embeds the corpus in batches under the new model, writes those batches into a second, separately-tagged index, and keeps serving the old index until the new one is ready -- then cuts over.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The loop that starts after Concept 10's one-time choice</h3>
+<div class="scroll-flow">
+<span>Concept 10's funnel (one-time choice)</span><i>→</i>
+<span>Time passes, new documents keep arriving</span><i>→</i>
+<span>Version tag on every embed call</span><i>→</i>
+<span>Drift monitored against original funnel assumptions</span><i>→</i>
+<span>Migration triggered</span><i>→</i>
+<span class="hot">Old + new indexes coexist</span><i>→</i>
+<span>Cutover</span><i>→</i>
+<span>Module 09 (vector indexes), unopened</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Not the same as anisotropy, and not the same as ML's "concept drift"</h3>
+<div class="distinction-table" role="table" aria-label="This concept's terms distinguished from Concept 07's anisotropy and from general concept drift">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Cross-model incomparability (here) vs. anisotropy (Concept 07)</span><span role="cell">Anisotropy is one model's own internal directional bias. This is zero guaranteed relationship between two separate models' entire bases -- a different, worse problem.</span></div>
+<div role="row"><span role="cell">Drift (here) vs. general "concept drift"</span><span role="cell">Here, drift means a corpus's real composition moving relative to an embedding model's original fit -- cited by analogy to the general ML term only, never reusing ML Atlas's own classification-threshold numbers.</span></div>
+<div role="row"><span role="cell">Versioning vs. migration</span><span role="cell">Versioning is the tag -- pure prevention. Migration is the actual re-embedding work. The tag is what makes the work safe to run a little at a time.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Matching dimension means the vectors are comparable."</b><p>False -- Model A and Model B above share zero dimension mismatch and still produce a meaningless -0.6428 for every word.</p></div>
+<div><b>"Drift means the old embeddings became wrong."</b><p>False -- they're still internally self-consistent. Only the funnel's original language/domain assumptions went stale.</p></div>
+<div><b>"Migration has to be an instant cutover."</b><p>False -- Qdrant's own real blue-green pattern keeps the old index live and searchable throughout re-embedding.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>A schema decision made on day one, not retrofitted</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's embedding table needs a model_version column from day one</b><p>A future model upgrade reuses that column to run a zero-downtime, tag-gated migration instead of a risky one-shot rebuild.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 COMPLETE (11/11)</b><p>Module 09 (vector indexes and ANN mechanics) is named forward only, not covered here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define the three terms</b><p>Versioning (the tag), drift (corpus composition moving), migration (the re-embedding work itself).</p></div>
+<div><b>Explain why matching dimension isn't sufficient</b><p>Two models sharing a dimension have no guaranteed relationship between their spaces -- the rotation proof above shows a best-case, cleanest-possible example of how bad it gets.</p></div>
+<div><b>Compute peak storage during an incremental migration</b><p>Peak = old-index bytes + new-index bytes, for a given n/d pair -- Concept 06/10's formula, added rather than replaced.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a shared dimension between two models guarantee nothing about comparability?</li>
+<li>Why is drift not a sign that the old embeddings are "wrong"?</li>
+<li>Why does the version tag from step one make an incremental migration safe to run?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 08 COMPLETE (11/11)</h3>
+<p>This concept closed the module by naming the three operational realities that follow Concept 10's one-time model pick: versioning, drift and migration -- no new fix, just what happens after deployment. Module 09, "Vector indexes and vector databases," opens next with "Exact vector similarity search" -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 11 is active.</b> Module 08 is complete at 11 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-10.html">← Back to Concept 10</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One umbrella, three realities</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>-0.6428, constant for every word</b><small>The rotation proof: two models, same dimension, zero shared meaning.</small></a>
+<a href="#s10"><span>02</span><b>5.0% → 37.5% Spanish</b><small>A corpus's real composition drifting after launch, 10,000 → 20,000 docs.</small></a>
+<a href="#s14"><span>03</span><b>9.216 GB peak, +50% over cutover</b><small>The Migration Ledger lab -- stepped batch migration, safe vs. unsafe search.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full three-part worked example, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 11 path:</b> Concept 10's funnel makes one pick → versioning tags every vector with its model → drift is monitored against that funnel's original assumptions → migration re-embeds incrementally, old and new indexes coexisting → cutover → MODULE 08 COMPLETE (11/11) → Module 09, named forward only.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Versioning, drift and migration" deep dive</b><em>The full three-part worked example, from-scratch code, and The Migration Ledger lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>A closing synthesis, not a ninth property</h2></div></header>
+<p>Concepts 01 through 10 built up embeddings, compared them, and finally chose one model for one real corpus. This concept introduces no new fix, formula or technique -- it names the three operational consequences of running that choice in production over time: versioning, drift and migration.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Versioning, drift, migration</h3><p>The tag, the corpus-composition shift, and the re-embedding work -- in that relationship.</p></article>
+<article class="info-card"><span>PROVE</span><h3>Cross-model incomparability</h3><p>A rotation-based proof on Concept 01's own vocabulary: constant, meaningless -0.6428 across every word.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>Incremental-migration peak storage</h3><p>old-index bytes + new-index bytes, for a given n/d pair.</p></article>
+<article class="info-card"><span>STATE</span><h3>The versioning → safe-migration link</h3><p>Why the tag from step one is what makes an incremental migration possible at all.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-09.html">Concept 09</a> -- its own production-implications line, "changing the model later means re-embedding the whole corpus," opened here directly rather than re-derived.</b></li>
+<li><b><a href="module-08-concept-07.html">Concept 07</a> -- anisotropy, contrasted explicitly: one model's own internal distortion vs. zero guaranteed relationship between two separate models.</b></li>
+<li><b><a href="module-08-concept-06.html">Concept 06</a> / <a href="module-08-concept-10.html">Concept 10</a> -- the byte-cost formula, reused additively (peak = old + new), not re-derived.</b></li>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a> -- the cosine similarity formula, reused unchanged to show it still returns a real number with no defined meaning across two different models.</b></li>
+<li><b>Explicitly out of scope:</b> Module 09's vector-index and ANN mechanics -- named forward only, not opened here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A library that replaces its entire cataloging scheme</h2></div></header>
+<p>A library switches from one call-number system to another. Old call numbers and new call numbers both "look like" codes -- similar length, similar structure -- but a shelf position under the old scheme means nothing under the new one. You cannot compare an old call number to a new one and learn anything about where a book actually sits; you have to know which scheme produced it first.</p>
+<div class="callout warning"><b>Analogy boundary</b>This captures the incompatibility idea -- codes that look alike but carry no shared meaning. It does not capture real embedding-space geometry (dimensions, angles, learned structure); Section 05's notation and Section 10's rotation proof carry the actual mechanism.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Versioning</td><td>Tagging every stored vector with the identifier of the model/version that produced it, at write time</td><td>model_version</td></tr>
+<tr><td>Drift</td><td>A corpus's real language/domain composition changing after deployment, relative to the assumptions an embedding model was originally chosen under</td><td>—</td></tr>
+<tr><td>Migration</td><td>Re-embedding an existing corpus under a new model and re-indexing it</td><td>—</td></tr>
+<tr><td>Incremental migration</td><td>Migrating in batches while the old, still-tagged index remains live and searchable throughout</td><td>—</td></tr>
+<tr><td>Peak storage during coexistence</td><td>The combined storage cost of the old index and the new index while both remain live, before cutover</td><td>peak = bytes_old + bytes_new</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Tag → monitor → decide → re-embed → route → retire</h2></div></header>
+<p>A version tag is attached to every vector at write time, naming the exact model that produced it -- the real mechanism here mirrors Qdrant's own "named vectors," separate, uniquely-labeled vector spaces held per record rather than untagged vectors mixed together. Drift is monitored by periodically comparing the corpus's current real composition against Concept 10's original funnel inputs -- the same language-mix and domain-jargon questions, asked again later. Once drift (or a better model becoming available) triggers a migration decision, the corpus is re-embedded in batches under the new model and written into a second, separately-tagged index. Queries are routed by tag so nothing ever mixes vectors from two different models. Once every batch is migrated, the old index is retired.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The post-deployment loop, ending one module short of ANN mechanics</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Versioning → drift detection → migration decision (this concept)</b><small>The post-deployment loop</small></div>
+<div class="diagram-node"><b>Tag on write</b><small>model_version, per vector</small></div>
+<div class="diagram-node"><b>Incremental re-embed + reindex</b><small>Old + new coexist, gated by tag</small></div>
+<div class="diagram-node"><b>Cutover → Module 09</b><small>Vector indexes/ANN, unopened</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The loop that runs after the pipeline ships</h2></div></header>
+<div class="pipeline-preview">
+<span>Concept 10's funnel — one-time choice, offline</span><i>↓</i><span class="hot">Post-deployment loop: tag → monitor drift → decide → migrate incrementally → cutover</span><i>↓</i><span>Module 09 — vector indexes, unopened</span>
+</div>
+<p>Same framing as Concept 10's own architecture section, now showing the loop that starts once the pipeline is already live, rather than the one-time decision that built it.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>No new formula -- Concept 06/10's byte cost, added; Module 04's cosine, unchanged</h2></div></header>
+<div class="equation">peak_bytes = (n × d_old × 4) + (n × d_new × 4) — Concept 06/10's formula, reused additively for migration</div>
+<p>This concept introduces no new mathematics, mirroring Concept 10's own Section 09 pattern. For migration, Concept 06/10's per-index byte-cost formula is reused unchanged and simply added across the old and new index. For versioning, Module 04 Concept 03's cosine formula is reused completely unchanged -- it still accepts any two vectors and returns a real number. The formula itself has no way to know, and no way to warn you, when u and v came from two different models with no defined relationship.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Three parts: versioning, drift, migration</h2></div></header>
+<h3>Part 1 — versioning: cross-model incomparability, even at matching dimension</h3>
+<p>Reuse Concept 01's exact 5-word, 2D unit-vector model -- kitten (8°), cat (14°), dog (36°), car (95°), truck (103°), "Model A." Build a second, independently-parameterized "Model B" on the identical vocabulary by applying a fixed 130-degree rotation to every one of Model A's vectors -- the cleanest possible hypothetical relationship two independently-trained spaces could have. Real independently-trained models have no such clean structure at all, so this is a best-case lower bound on how bad cross-model comparison gets.</p>
+<p><b>Within each model</b>, relationships are preserved exactly as Concept 01 found them: cos(cat, dog) = 0.9272 in both Model A and Model B; cos(car, truck) = 0.9903 in both. <b>Across models</b>, comparing the <i>same word's</i> vector from Model A against Model B: cos(kitten_A, kitten_B) = cos(cat_A, cat_B) = cos(dog_A, dog_B) = cos(car_A, car_B) = cos(truck_A, truck_B) = <b>-0.6428</b>, exactly, for every single word regardless of meaning -- because it is mathematically just cos(130°). The formula still runs and returns a real number; that number carries zero semantic guarantee, driven entirely by an arbitrary rotation nobody chose on purpose.</p>
+<div class="callout"><b>Verification method</b>Computed via two structurally different Node.js scripts -- (1) building each Model-B angle as Model-A's angle + 130 before taking cos/sin, and (2) building each Model-B vector by applying an explicit 2×2 rotation matrix to the already-built Model-A vector. Both independently produced identical results to 4+ decimal places (within-model 0.9271838545667874 / 0.9902680687415705; cross-model -0.6427876096865393 through -0.6428876...96, all rounding to -0.6428).</div>
+<h3>Part 2 — drift: a corpus's real composition, moving</h3>
+<p>At launch, a support corpus has 9,500 English + 500 Spanish documents (10,000 total) -- Spanish share = 500/10,000 = <b>5.0%</b>. Over the next 12 months, a market expansion adds 3,000 more English and 7,000 more Spanish documents, bringing totals to 12,500 English + 7,500 Spanish = 20,000 documents -- Spanish share is now 7,500/20,000 = <b>37.5%</b>. That is a 32.5-percentage-point absolute increase and a 7.5× relative increase in the minority-language share, with nothing about the embedding model itself changing -- only the corpus's real composition moving relative to whatever the language filter (Concept 10, Step 1) assumed when the model was first chosen.</p>
+<div class="callout"><b>Verification method</b>Computed via a Node.js script dividing es/(en+es) at both timestamps and the ratio between them; hand-checked (500/10,000 = 0.05 exactly; 7,500/20,000 = 0.375 exactly; 0.375/0.05 = 7.5 exactly).</div>
+<h3>Part 3 — migration: incremental re-embedding's real storage cost</h3>
+<p>Reuse Concept 10's own scenario unchanged: n = 2,000,000 chunks. A 384-dimension index (v1) costs <b>3.072 GB</b>; migrating to a 768-dimension model (v2) costs <b>6.144 GB</b>. Following Qdrant's real blue-green migration pattern -- both collections coexist and stay searchable throughout re-embedding -- <b>peak</b> storage during the incremental migration window is not just the larger of the two, it is old+new coexisting at once: 3.072 + 6.144 = <b>9.216 GB</b>, exactly 50% more than a hypothetical instant new-only cutover (6.144 GB) would have needed. This is the concrete price incremental, versioned migration pays for never requiring downtime.</p>
+<p>A second, larger instance (used in the exercise below): n = 5,000,000 chunks, migrating from 768d to 1536d -- old = 15.36 GB, new = 30.72 GB, peak = <b>46.08 GB</b>.</p>
+<div class="callout"><b>Verification method</b>Computed via a Node.js script applying bytes = n × d × 4 / 1e9 to both dimensions and summing; the two individual 2,000,000-chunk figures were also asserted equal to Concept 10's own already-cached 3.072/6.144 GB values (both matched exactly). The 5,000,000-chunk instance was verified the same way: old = 15.36 GB, new = 30.72 GB, peak = 46.08 GB.</div>
+<figure class="concept-visual" aria-labelledby="c0811-s10-title">
+<strong class="concept-visual-title" id="c0811-s10-title">VISUAL · STORAGE OVER THE INCREMENTAL MIGRATION WINDOW (n=2,000,000, 384d → 768d)</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0811-svg-title-s10 c0811-svg-desc-s10" style="max-width:520px">
+<title id="c0811-svg-title-s10">A timeline chart plotting old-index storage, new-index storage and their combined total across four migration stages</title>
+<desc id="c0811-svg-desc-s10">X-axis: four stages, START, COEXIST, CUTOVER and DONE. Y-axis: storage in GB. The old (v1, 384d) index line stays flat at 3.072 GB through COEXIST then drops to zero at CUTOVER. The new (v2, 768d) index line stays at zero through START then rises to 6.144 GB by COEXIST and stays there. A dashed total line follows the old line's 3.072 GB at START, spikes to a peak of 9.216 GB at COEXIST where both indexes are fully present, then drops to 6.144 GB at CUTOVER, matching the new index alone.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<line x1="34" y1="20" x2="34" y2="176" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="34" y1="176" x2="316" y2="176" stroke="#c9cdb9" stroke-width="1"/>
+<text x="6" y="16" font-size="7.5">GB</text>
+<text x="128" y="192" font-size="7.5">MIGRATION TIMELINE</text>
+<polyline points="64,157.6 148,157.6 232,176 300,176" fill="none" stroke="#2f6f5c" stroke-width="1.8"/>
+<polyline points="64,176 148,139.1 232,139.1 300,139.1" fill="none" stroke="#3a5f95" stroke-width="1.8"/>
+<polyline points="64,157.6 148,120.7 232,139.1 300,139.1" fill="none" stroke="#b3543a" stroke-width="1.6" stroke-dasharray="4 3"/>
+<circle cx="148" cy="120.7" r="4.5" fill="#b3543a"/>
+<text x="150" y="114" fill="#b3543a">PEAK 9.216 GB</text>
+<circle cx="64" cy="157.6" r="3.5" fill="#2f6f5c"/>
+<circle cx="148" cy="157.6" r="3.5" fill="#2f6f5c"/>
+<circle cx="148" cy="139.1" r="3.5" fill="#3a5f95"/>
+<circle cx="232" cy="139.1" r="3.5" fill="#3a5f95"/>
+<circle cx="232" cy="176" r="3.5" fill="#2f6f5c"/>
+<text x="46" y="192" font-size="7">START</text>
+<text x="122" y="18" font-size="7">COEXIST</text>
+<text x="212" y="192" font-size="7">CUTOVER</text>
+<text x="284" y="192" font-size="7">DONE</text>
+<text x="248" y="132" fill="#3a5f95">v2 · 6.144 GB</text>
+<text x="46" y="150" fill="#2f6f5c">v1 · 3.072 GB</text>
+</g>
+</svg>
+<figcaption>Old (v1) and new (v2) indexes both stay fully present through the COEXIST stage -- storage genuinely peaks at 9.216 GB before cutover retires the old index and total storage settles back to 6.144 GB.</figcaption>
+</figure>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A planned quarterly model upgrade</h3><p>Version tag already in place, blue-green migration runs incrementally with zero downtime.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A corpus with negligible drift over years</h3><p>Migration may simply never trigger -- versioning still costs nothing to keep in place, just in case.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Comparing a stale cached query embedding against a freshly re-embedded corpus</h3><p>Without checking the tag, this silently reproduces Part 1's rotation proof in production.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Tagged chunks, safe vs. unsafe search, and the storage arithmetic</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- REUSES CONCEPT 06/10'S BYTE-COST ARITHMETIC, ADDITIVELY</span>
+<pre><code>from dataclasses import dataclass
+
+@dataclass
+class Chunk:
+    id: int
+    text: str
+    embedding: list
+    model_version: str  # e.g. "v1" or "v2"
+
+def cosine(u, v):
+    dot = sum(a * b for a, b in zip(u, v))
+    norm_u = sum(a * a for a in u) ** 0.5
+    norm_v = sum(b * b for b in v) ** 0.5
+    return dot / (norm_u * norm_v)
+
+def search_safe(query_vec, query_version, chunks):
+    # Filters by tag BEFORE scoring -- only same-model vectors get compared.
+    candidates = [c for c in chunks if c.model_version == query_version]
+    scored = [(c, cosine(query_vec, c.embedding)) for c in candidates]
+    return sorted(scored, key=lambda pair: pair[1], reverse=True)
+
+def search_unsafe(query_vec, chunks):
+    # No tag filter -- scores every chunk regardless of which model produced it.
+    scored = [(c, cosine(query_vec, c.embedding)) for c in chunks]
+    return sorted(scored, key=lambda pair: pair[1], reverse=True)
+
+def storage_gb(n_chunks, dim):
+    return (n_chunks * dim * 4) / 1e9
+
+def peak_migration_gb(n_chunks, old_dim, new_dim):
+    return storage_gb(n_chunks, old_dim) + storage_gb(n_chunks, new_dim)
+
+assert round(peak_migration_gb(2_000_000, 384, 768), 3) == 9.216
+assert round(peak_migration_gb(5_000_000, 768, 1536), 2) == 46.08
+
+# The lab's chunk-12 case: an irrelevant chunk still tagged v1 produces a
+# spuriously high score under the unsafe path -- same formula, no shared basis.
+chunk_1_unsafe_score = 0.91    # genuinely relevant, already migrated to v2
+chunk_12_unsafe_score = 0.94   # irrelevant, still v1 -- cross-model artifact
+assert chunk_12_unsafe_score > chunk_1_unsafe_score
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for tagging and migration</h2></div></header>
+<p><a href="https://en.wikipedia.org/wiki/Concept_drift">Concept drift (Wikipedia)</a> defines the general ML term this concept's drift sub-point is named by analogy to only -- no shared numbers with any other course. <a href="https://qdrant.tech/documentation/tutorials-operations/embedding-model-migration/">Qdrant's embedding-model-migration tutorial</a> describes a real blue-green migration: two collections, the old one kept live and searchable while the new one is re-embedded in the background, cutover only once the new collection is complete -- the direct real-world basis for this concept's "incremental, not instant" framing and its peak-storage arithmetic. <a href="https://qdrant.tech/documentation/concepts/vectors/">Qdrant's named-vectors documentation</a> describes separate, uniquely-named vector spaces held per point -- the real mechanism behind keeping an old-model vector and a new-model vector for the same record distinctly labeled instead of mixed together. <a href="https://platform.openai.com/docs/guides/embeddings">OpenAI's embeddings guide</a> states its own code-search example must embed the query "using the same model" before computing cosine similarity against the corpus -- implicit production confirmation that both sides of a cosine comparison must share one model.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Migration Ledger</h2></div></header>
+<div class="lab">
+<p>A 12-chunk Oracle Order Management corpus starts fully tagged v1 (Model A, 384d), against the fixed query <b>"How many days do I have to cancel an order after it ships?"</b> Click through the batch migration and toggle the search mode to see what changes -- and what an unsafe cross-version comparison quietly gets wrong along the way.</p>
+<div class="lab-actions" role="group" aria-label="Batch migration">
+<button type="button" id="migrateBtn_0811">Migrate next batch (3 chunks)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Search mode">
+<button type="button" class="secondary active" data-mode="safe">Version-aware search (safe)</button>
+<button type="button" class="secondary" data-mode="unsafe">Compare across versions anyway (unsafe)</button>
+</div>
+<div class="norm-readout" id="ledgerReadout_0811"></div>
+<table class="worked-table" id="ledgerTable_0811">
+<thead><tr><th>#</th><th>Chunk text</th><th>Version</th><th>Score</th></tr></thead>
+<tbody>
+<tr data-id="1" data-v2="0.91"><td>1</td><td>Orders can be canceled within 14 days of the ship date.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="2" data-v2="0.62"><td>2</td><td>Refund requests are processed within 5-7 business days.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="3" data-v2="0.41"><td>3</td><td>Standard shipping takes 3-5 business days.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="4" data-v2="0.58"><td>4</td><td>Premium members receive free returns.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="5" data-v2="0.87"><td>5</td><td>The grace period begins on the ship date, not the order date.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="6" data-v2="0.55"><td>6</td><td>Damaged items can be exchanged at no cost.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="7" data-v2="0.33"><td>7</td><td>Order status can be tracked via the customer portal.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="8" data-v2="0.79"><td>8</td><td>Cancellation requests must be submitted in writing.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="9" data-v2="0.83"><td>9</td><td>International orders have a 21-day grace period instead of 14.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="10" data-v2="0.47"><td>10</td><td>Gift cards cannot be refunded, only exchanged.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="11" data-v2="0.29"><td>11</td><td>Subscription orders renew automatically every 30 days.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+<tr data-id="12" data-v2="0.18"><td>12</td><td>Warehouse inventory is reconciled nightly.</td><td class="ledger-version">v1</td><td class="ledger-score">—</td></tr>
+</tbody>
+</table>
+<div class="callout" id="ledgerVerdict_0811" aria-live="polite"></div>
+<div class="callout warning">This lab illustrates the tagging/filtering mechanic with hardcoded illustrative scores, not a live model call -- matching the pattern already used in Concept 10's own lab disclaimer.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Instant cutover vs. incremental, versioned migration</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Instant cutover</th><th>Incremental / versioned migration</th></tr></thead>
+<tbody>
+<tr><td>Simple to describe -- swap the whole index at once</td><td>More moving parts -- two indexes, tag-based routing, a cutover step</td></tr>
+<tr><td>A hard, risky, all-at-once moment -- any problem is a full outage</td><td>Qdrant's own real pattern -- old index stays live and searchable throughout</td></tr>
+<tr><td>Storage cost stays at one index's size the whole time</td><td>Temporarily doubles storage during the coexistence window (9.216 GB vs. 6.144 GB in the worked example)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT MIXING</span><h3>Untagged vectors mixed after an ad-hoc model swap</h3><p>Symptom: nonsensical top results, no error thrown -- exactly the lab's unsafe-mode chunk-12 case.</p></article>
+<article class="info-card"><span>UNDETECTED DRIFT</span><h3>No monitoring against the original funnel assumptions</h3><p>Symptom: slow, hard-to-notice retrieval-quality decay, not a hard failure -- easy to miss without a deliberate check.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th><th>Why it feels plausible</th></tr></thead>
+<tbody>
+<tr><td>Matching dimension means the vectors are comparable</td><td>False -- Part 1's rotation proof shares a dimension and still returns a constant, meaningless cosine.</td><td>The cosine formula runs without error on any two same-length vectors, so it looks like it "worked."</td></tr>
+<tr><td>Drift means the old embeddings became wrong</td><td>False -- they're still internally self-consistent; only the funnel's original assumptions went stale.</td><td>"Drift" sounds like decay of the thing itself, not of its fit to a moving target.</td></tr>
+<tr><td>Migration has to be an instant cutover</td><td>False -- Qdrant's own blue-green pattern keeps the old index live throughout re-embedding.</td><td>"Swap the model" sounds like a single atomic action, not a gradual, tag-gated process.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>A full re-embedding is a full-corpus embedding-API bill -- the concrete cost behind Concept 09's own forward-referenced line, "changing the model later means re-embedding the whole corpus."</li>
+<li>Any incremental migration temporarily doubles storage while old and new indexes coexist -- 9.216 GB and 46.08 GB in this concept's two worked instances.</li>
+<li>model_version needs to be a schema decision made on day one, not retrofitted after the first model swap is already underway.</li>
+<li>Drift monitoring is an ongoing observability practice, not a one-time check run once at launch.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the three terms this concept introduces.</summary><div>Versioning (tagging every vector with its producing model), drift (a corpus's real composition shifting after deployment), migration (re-embedding and re-indexing under a new model).</div></details>
+<details class="quiz"><summary>Why isn't a shared dimension sufficient for comparability?</summary><div>Two independently-trained models have no guaranteed geometric relationship between their spaces -- Part 1's rotation proof shows a best-case example where a shared dimension still produces a constant, meaningless cross-model cosine for every word.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A corpus is 10% French at launch and 40% French eighteen months later. The team migrates from a 768-dimension model to a 1536-dimension model at n = 5,000,000 chunks. Compute peak storage during the incremental migration, and say whether the original language filter (Concept 10, Step 1) still holds.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Old index (768d, n=5,000,000): 5,000,000 × 768 × 4 = 15,360,000,000 bytes = 15.36 GB. New index (1536d): 5,000,000 × 1536 × 4 = 30,720,000,000 bytes = 30.72 GB. Peak storage during coexistence = 15.36 + 30.72 = <b>46.08 GB</b>. The original language filter no longer holds cleanly: French moved from a minority share (10%) to a much larger share (40%) of the corpus -- the same shape as this concept's own drift example (Spanish moving from 5.0% to 37.5%) -- so whatever model Step 1 originally selected toward should be re-checked against the corpus's current real composition, not the composition it had when first chosen.</div>
+</details>
+<p>Teach-back: why does a bigger relative shift in a minority language's share (10% → 40%, a 4× increase) matter more for the language filter than the raw percentage-point number alone?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Versioning, drift and migration</h3><ul><li><b>The three terms:</b> versioning (tag) → drift (corpus composition moves) → migration (re-embed + re-index)</li><li><b>Peak storage rule:</b> peak = old-index bytes + new-index bytes, added, not maxed</li><li><b>Memorable example:</b> a 130° rotation between two models gives a constant -0.6428 cross-model cosine, for every word, regardless of meaning</li></ul></div>
+<div><h3>Module 08 complete</h3><p>MODULE 08 COMPLETE (11/11). Module 09, "Vector indexes and vector databases," is named forward only -- opening with exact vector similarity search.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't shared dimension enough to compare two vectors?</summary><div>Dimension is just the length of the array -- it says nothing about which geometric structure produced the values. Two independently-trained models can share a dimension while having no defined relationship between their spaces at all, as the rotation proof shows.</div></details>
+<details class="quiz"><summary>Mathematical: verify a peak-storage figure.</summary><div>peak = n × d_old × 4 + n × d_new × 4. For n=2,000,000, 384d→768d: 3.072 + 6.144 = 9.216 GB. For n=5,000,000, 768d→1536d: 15.36 + 30.72 = 46.08 GB.</div></details>
+<details class="quiz"><summary>Coding: implement the version-filtered search.</summary><div>Section 12 gives the full from-scratch implementation -- search_safe() filters candidates by model_version tag before scoring; search_unsafe() scores every chunk regardless of tag and can rank a stale cross-model artifact first.</div></details>
+<details class="quiz"><summary>Debugging: retrieval quality silently degrades after an undocumented model swap. What's the first thing to check?</summary><div>Whether every vector in the index and every incoming query are tagged with, and filtered by, a consistent model_version -- an undocumented swap without tagging is exactly the lab's unsafe-mode case, a real number with no shared basis winning the top slot.</div></details>
+<details class="quiz"><summary>System design: plan a zero-downtime migration for a 10,000,000-chunk corpus.</summary><div>Tag every existing vector with its current model_version. Stand up a second, separately-tagged index. Re-embed in batches, writing each batch into the new index while the old index stays live and searchable. Route queries by tag throughout. Monitor storage -- both indexes coexist at their combined size until every batch is migrated. Cut over once complete, then retire the old index.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Concept_drift"><b>Concept drift — Wikipedia</b><br><span>The general ML term this concept's drift sub-point is named by analogy to only -- no shared numbers with any other course.</span></a>
+<a href="https://qdrant.tech/documentation/tutorials-operations/embedding-model-migration/"><b>Migrate to a New Embedding Model — Qdrant</b><br><span>Real blue-green migration: old collection kept live and searchable while the new one re-embeds in the background, cutover only once complete -- the basis for this concept's peak-storage arithmetic.</span></a>
+<a href="https://qdrant.tech/documentation/concepts/vectors/"><b>Vectors — Qdrant</b><br><span>Named vectors -- separate, uniquely-labeled vector spaces per point -- the real mechanism behind this concept's versioning/tagging sub-point.</span></a>
+<a href="https://platform.openai.com/docs/guides/embeddings"><b>OpenAI — Embeddings guide</b><br><span>States its own code-search example must embed the query "using the same model" before computing cosine similarity -- production confirmation that both sides of a comparison must share one model.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 08 COMPLETE · 11/11</span>
+<h3>The pick ships. Then time passes.</h3>
+<p>You can now define versioning, drift and migration; explain why matching dimension is never sufficient for cross-model comparability; and compute peak storage during an incremental migration for any corpus size and dimension pair. Module 08 closes here. Module 09, "Vector indexes and vector databases," is next -- named forward only, opening with exact vector similarity search.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Migration Ledger ↑</a>
+</div>
+<p class="fine-print">Module 08 complete at 11 of 11 concepts. Next module: Module 09, vector indexes and vector databases.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 11 · Active</p>
+<a href="module-08-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

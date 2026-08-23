@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 04 proved that pulling toward a positive and pushing away from a negative lowers a real, grounded contrastive loss -- but never asked which negative is worth pushing away from. This concept names three categories precisely: positive pair, easy/random negative, and hard negative -- and proves, on Module 07 Concept 09's own tied Solstice/Cobalt vectors, that a tied hard negative (cosine 0.6644, exactly matching the positive) produces a loss 409,007x larger than an easy negative's loss at the real production temperature (τ=0.05). DPR's own ablation shows one added hard negative lifting Top-5 retrieval accuracy by +17.92% relative -- far more than 120 additional easy negatives.">
+<title>Positive pairs, negatives and hard negatives — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 05</p>
+<h1>Not just <em>a</em> negative.<br><em>The right kind of wrong answer.</em></h1>
+<p class="lesson-lead">Concept 04 proved that pulling toward a positive and pushing away from a negative lowers a real, grounded contrastive loss -- but it never asked which negative is worth pushing away from. This concept names three categories precisely: a positive pair (query plus a document known to be relevant), an easy or random negative (any unrelated document, already trivially far away), and a hard negative (topically or lexically similar to the positive, but not actually relevant). On Module 07 Concept 09's own frozen Solstice/Cobalt vectors, a hard negative tied exactly with the positive at cosine 0.6644 produces a loss 409,007 times larger than an easy negative's loss at the real production temperature -- proof that the same fixed loss formula can teach almost nothing, or almost everything, depending purely on which negative it's handed.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth concept of Module 08 -- what makes a negative worth pushing away from</b></div>
+<div><span>PREREQUISITE</span><b>Concept 04's grounded InfoNCE-style loss (cited, not re-derived); Module 07 Concept 09's frozen Solstice/Cobalt vectors; Module 04 Concept 08's false-negative risk (cited, extended)</b></div>
+<div><span>BEGINNER GOAL</span><b>Define positive pair, easy negative and hard negative, and explain in one sentence why the choice changes what a fixed loss teaches</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The same loss, handed a very different negative</h2>
+</div>
+<p>Concept 04 grounded the loss in real cosine similarity. This concept holds that loss fixed and changes only ONE thing -- which negative gets fed into it -- to show how much that one choice matters.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three categories, precisely defined</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>A positive pair is a query plus a document known to be relevant (from human relevance judgments or naturally paired data, like a resolved support ticket). An easy (or random) negative is any unrelated document, already trivially far away. A hard negative is topically or lexically similar to the positive but NOT actually relevant -- it's what makes the SAME loss formula (Concept 04, cited) actually have something to teach.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>The actual algorithms for mining hard negatives at scale (BM25/ANN mining, Module 24, named forward only); pooling, embedding dimensions and normalization (Concept 06, named forward only).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> an easy negative is already far away; a hard negative is close enough that pushing it away actually teaches something.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A fixed loss can already have nothing left to learn from</h3>
+<p>Concept 04's loss can be computed on real vectors -- but if the negative fed into it is already trivially far away, the loss (and the training signal it carries) is already close to zero, even before training starts. At the real production temperature, an easy negative's loss comes out to 1.69×10⁻⁶ nats -- next to nothing left for gradient descent to correct.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Solstice, Cobalt, and a tie that IS a hard negative</h3>
+<p>Reusing Module 07 Concept 09's own frozen vectors, unchanged: query about Solstice Cloud's refund policy. Positive = S1, Solstice's own refund clause (cosine 0.6644). Hard negative = B1, Cobalt's near-identical refund clause differing only in a numeral this toy model can't see (cosine 0.6644 -- an EXACT tie with the positive). Easy negative = B2, Cobalt's unrelated invoicing clause (cosine 0.0000, trivially far away).</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0805-b03-title">
+<strong class="concept-visual-title" id="c0805-b03-title">VISUAL · POSITIVE, HARD NEGATIVE AND EASY NEGATIVE</strong>
+<svg class="vector-plane" viewBox="0 0 460 130" role="img" aria-labelledby="c0805-svg-title-b c0805-svg-desc-b">
+<title id="c0805-svg-title-b">Three bars showing cosine scores for the positive, hard negative and easy negative</title>
+<desc id="c0805-svg-desc-b">Positive S1 and hard negative B1 both reach 66.44 percent of full bar width, an exact tie. Easy negative B2 reaches zero.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<rect x="40" y="20" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="20" width="119.6" height="16" fill="#2f6f5c" fill-opacity="0.6"/>
+<text x="225" y="32" font-size="7.5">POSITIVE — S1 = 0.6644</text>
+<rect x="40" y="48" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="48" width="119.6" height="16" fill="#b3543a" fill-opacity="0.6"/>
+<text x="225" y="60" font-size="7.5" font-weight="700">HARD NEG — B1 = 0.6644 (TIED)</text>
+<rect x="40" y="76" width="180" height="16" fill="none" stroke="#14241f" stroke-width="1"/>
+<rect x="40" y="76" width="0" height="16" fill="#5b6b64" fill-opacity="0.6"/>
+<text x="225" y="88" font-size="7.5">EASY NEG — B2 = 0.0000</text>
+<text x="40" y="112" font-size="7.5">The hard negative sits exactly where the positive does. The easy negative sits nowhere near either.</text>
+</g>
+</svg>
+<figcaption>Same three cosine values Module 07 Concept 09 already computed and verified -- reused unchanged, not recomputed here.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The same loss, two very different outcomes</h3>
+<table class="worked-table">
+<thead><tr><th>Negative</th><th>cos_pos</th><th>cos_neg</th><th>gap</th><th>Loss at τ=0.05 (nats)</th></tr></thead>
+<tbody>
+<tr><td>B1 (hard, tied)</td><td>0.6644</td><td>0.6644</td><td>0.0000</td><td>0.693147</td></tr>
+<tr><td>B2 (easy)</td><td>0.6644</td><td>0.0000</td><td>0.6644</td><td>1.694707×10⁻⁶</td></tr>
+</tbody>
+</table>
+<p>The tied hard negative produces the textbook worst-case loss (prob_pos exactly 0.5000, maximum uncertainty) at ANY temperature. The easy negative's loss all but vanishes at the real production temperature -- <b>409,007×</b> smaller. Same formula, same positive, only the negative changed.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where negative choice sits</h3>
+<div class="scroll-flow">
+<span>Labeled positive pairs</span><i>→</i>
+<span class="hot">Sample/mine negatives — easy vs. hard (this concept)</span><i>→</i>
+<span>Concept 04's grounded loss</span><i>→</i>
+<span>Weight update (Module 09/24)</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Easy vs. hard vs. false, and where mining fits</h3>
+<div class="distinction-table" role="table" aria-label="Negative categories distinguished from each other, from in-batch sourcing, and from mining algorithms">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Easy/hard negative vs. in-batch negative</span><span role="cell">How separable it already is (easy/hard) vs. WHERE it came from (in-batch, free) -- orthogonal axes</span></div>
+<div role="row"><span role="cell">Hard negative vs. false negative</span><span role="cell">Genuinely irrelevant but similar vs. actually relevant but unlabeled -- confusing them corrupts training</span></div>
+<div role="row"><span role="cell">This concept vs. Concept 04</span><span role="cell">Which negative to pick vs. the loss formula itself, cited not retaught</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"More negatives always beats better negatives."</b><p>False -- DPR's own ablation: 127 in-batch gold negatives alone reach 55.8% Top-5; adding just ONE hard negative lifts that to 65.8% (+17.92% relative). A second added hard negative barely moves it further.</p></div>
+<div><b>"The highest-scoring unlabeled candidate is always a safe negative."</b><p>False -- it might be a false negative: actually relevant, just unlabeled. Mining aggressively for hard negatives specifically raises this risk, since it deliberately searches the exact similarity region a true positive would also occupy.</p></div>
+<div><b>"This lesson teaches how to mine hard negatives."</b><p>False -- it only defines the categories and shows why the choice matters. The actual mining algorithms (BM25/ANN-based) are Module 24's job.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Building a fine-tuning set for the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Positives come from resolved-ticket pairs or relevance judgments</b><p>Hard negatives ideally mined via Module 05's own BM25 over the same corpus -- not randomly sampled chunks.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 · CONCEPT 05 ACTIVE (5/11)</b><p>Concept 06 (pooling, dimensions, normalization) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define all three terms</b><p>Positive pair, easy/random negative, hard negative -- precisely, not by example alone.</p></div>
+<div><b>Explain why a tied hard negative produces the maximum loss</b><p>prob_pos = 0.5000 exactly when cos_pos = cos_neg, the textbook worst case for a 2-outcome decision.</p></div>
+<div><b>State the false-negative risk in one sentence</b><p>Hard-negative mining searches the same similarity region a true positive occupies, raising the odds of mislabeling one as negative.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does an easy negative's loss nearly vanish at the real production temperature?</li>
+<li>Why is a tied cosine score (0.6644 = 0.6644) the textbook worst case for this loss, not just a bad case?</li>
+<li>Why does hard-negative mining specifically raise false-negative risk more than random negative sampling does?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 5 of 11</h3>
+<p>This concept defined which negative is worth pushing away from. Concept 06 turns to pooling, embedding dimensions and normalization -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 05 is active.</b> Module 08 is at 5 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-04.html">← Back to Concept 04</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">The same loss, handed a very different negative</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>A tied hard negative</b><small>0.6644 = 0.6644 -- can't be told apart by this toy model.</small></a>
+<a href="#b04"><span>02</span><b>409,007× the loss</b><small>Same formula, same positive, only the negative changed.</small></a>
+<a href="#s16"><span>03</span><b>DPR's real ablation</b><small>+17.92% Top-5 from one hard negative, not 120 easy ones.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full 8-cell verified matrix, DPR's Table 3, and The Negative Picker lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Concept 04's loss is fixed and grounded → this concept holds it fixed and swaps only the negative → a tied hard negative (0.6644) produces the textbook worst-case loss → an easy negative (0.0000) leaves almost nothing to learn from → DPR's own numbers confirm the stakes at production scale → Module 08 at 5 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Positive pairs, negatives and hard negatives" deep dive</b><em>The full 8-cell verified matrix, DPR's real ablation table, and The Negative Picker lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The question Concept 04 left open</h2></div></header>
+<p>Concept 04 established THAT a contrastive loss needs a positive and negative(s) to pull toward and push away from, but never defined what makes either one good. This concept names three categories precisely -- positive pair, easy/random negative, and hard negative -- and proves, with real numbers, why the CHOICE of negative changes how much a fixed loss formula actually teaches.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>All three terms</h3><p>Positive pair, easy/random negative, hard negative.</p></article>
+<article class="info-card"><span>STATE</span><h3>The gap-vs-loss relationship</h3><p>Tau-invariance at gap=0; near-vanishing loss at large gap under the real production temperature.</p></article>
+<article class="info-card"><span>NAME</span><h3>DPR's Random/BM25/Gold typology</h3><p>The academic origin of "hard negative," cited directly.</p></article>
+<article class="info-card"><span>BOUND</span><h3>What this concept does NOT teach</h3><p>No mining algorithms (Module 24), no pooling/dimensions (Concept 06), no false-negative denoising machinery.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-04.html#s05">Concept 04, Section 05/09</a> -- the grounded loss, cited directly, not re-derived.</b></li>
+<li><b><a href="module-07-concept-09.html">Module 07 Concept 09</a> -- S1/B1/B2 and S1-sharpened vectors, reused unchanged (0.6644, 0.6644, 0.0000, 0.9759).</b></li>
+<li><b><a href="module-04-concept-06.html">Module 04 Concept 06</a> -- temperature, cited.</b></li>
+<li><b><a href="module-04-concept-08.html">Module 04 Concept 08</a> -- false-negative risk under batch size, cited and extended, not re-derived.</b></li>
+<li><b>Explicitly out of scope:</b> hard-negative mining algorithms (Module 24, named forward only); pooling, embedding dimensions and normalization (Concept 06, named forward only).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>The trick option vs. the obviously wrong one</h2></div></header>
+<p>A hard negative is the multiple-choice trick option built to look almost right. An easy negative is the option so obviously wrong that avoiding it teaches nothing at all.</p>
+<div class="callout warning"><b>Analogy boundary</b>The multiple-choice picture explains why hard negatives teach more. It doesn't capture the false-negative risk or the softmax's simultaneous handling of many negatives at once -- Sections 09/16 state those precisely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Positive pair</td><td>A query plus a document known to be relevant (relevance judgments or naturally paired data)</td><td>(q, d⁺)</td></tr>
+<tr><td>Easy / random negative</td><td>Any unrelated document, already trivially far away in similarity</td><td>d⁻ (easy)</td></tr>
+<tr><td>Hard negative</td><td>Topically/lexically similar to the positive, but NOT actually relevant</td><td>d⁻ (hard)</td></tr>
+<tr><td>False negative (risk only)</td><td>Actually relevant, but unlabeled -- extends M04C08's batch-size risk to mining specifically</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Gap drives the loss, regardless of which category produced it</h2></div></header>
+<p>Reducing Concept 04's grounded loss to exactly one positive and one negative (the boundary case Concept 04 Section 11 already named): gap = cos_pos − cos_neg; prob_pos = sigmoid(gap/τ); Loss = softplus(−gap/τ) -- algebraically identical to Concept 04's numerator/denominator form, checked to match on every row below. A hard negative produces a small gap (by definition); an easy negative produces a large one. The loss responds to the GAP, not to either cosine value alone.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Where negative sourcing sits in the pipeline</h2></div></header>
+<div class="pipeline-preview">
+<span>Labeled (query, relevant-doc) pairs</span><i>↓</i><span class="hot">Sample/mine negatives — easy vs. hard (this concept)</span><i>↓</i><span>Encoder (M08C02)</span><i>↓</i><span>Concept 04's grounded loss</span><i>↓</i><span>Weight update (Module 09/24)</span>
+</div>
+<p>Contrasted explicitly against Concept 04's own pipeline-preview, which began at "Encoder" -- this concept inserts a new stage BEFORE it: deciding which negative even reaches the loss.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>One loss, many possible negative sources</h2></div></header>
+<div class="two-lane">
+<div class="lane"><span>IN-BATCH (FREE)</span><p>Other documents already in the same training batch become negatives at no extra cost -- M04C08's own term. Not automatically hard; just whatever happens to share a batch.</p></div>
+<div class="lane"><span>MINED (DELIBERATE)</span><p>A separate retrieval pass (BM25/ANN, Module 24, named forward only) deliberately searches for candidates similar to the positive -- raising both teaching value AND false-negative risk together.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The softplus/sigmoid form, verified against Concept 04's own numerator/denominator argument</h2></div></header>
+<div class="equation">gap = cos_pos − cos_neg<br>prob_pos = sigmoid(gap/τ) = 1/(1+e^(−gap/τ))<br>Loss = −log(prob_pos) = softplus(−gap/τ)</div>
+<p>At gap=0 (a tied hard negative), prob_pos=0.5000 at ANY temperature -- scaling a zero gap changes nothing, so the tied case is tau-invariant. As gap grows (an easier negative), prob_pos→1 and Loss→0 far more sharply at a small τ than at τ=1. Deriving dL/dq remains out of scope, cited from Concept 04, not reopened here.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full verified 2×2 matrix, at both temperatures</h2></div></header>
+<p>All four raw cosine inputs are Module 07 Concept 09's own already-verified numbers, reused unchanged: positive S1 = 0.6644; hard negative B1 = 0.6644 (an exact tie); easy negative B2 = 0.0000; sharpened positive S1+header = 0.9759 (a second real positive value already sitting in the corpus -- not framed as "after training," since the header fix was a non-gradient, structural intervention, not contrastive training).</p>
+<table class="worked-table">
+<thead><tr><th>Positive</th><th>Negative</th><th>gap</th><th>prob_pos (τ=1)</th><th>Loss τ=1 (nats)</th><th>prob_pos (τ=0.05)</th><th>Loss τ=0.05 (nats)</th></tr></thead>
+<tbody>
+<tr><td>S1 (0.6644)</td><td>B1 hard (0.6644)</td><td>0.0000</td><td>0.500000</td><td>0.693147</td><td>0.500000</td><td>0.693147</td></tr>
+<tr><td>S1 (0.6644)</td><td>B2 easy (0.0000)</td><td>0.6644</td><td>0.660248</td><td>0.415140</td><td>0.999998</td><td>1.694707×10⁻⁶</td></tr>
+<tr><td>S1-sharpened (0.9759)</td><td>B1 hard (0.6644)</td><td>0.3115</td><td>0.577251</td><td>0.549477</td><td>0.998034</td><td>1.967515×10⁻³</td></tr>
+<tr><td>S1-sharpened (0.9759)</td><td>B2 easy (0.0000)</td><td>0.9759</td><td>0.726294</td><td>0.319800</td><td>~1.000000</td><td>3.337646×10⁻⁹</td></tr>
+</tbody>
+</table>
+<p><b>Headline ratios at τ=0.05</b> (the real sentence-transformers production default, established in Concept 04): Loss(hard, tied) / Loss(easy, default positive) = 0.693147 / 1.694707×10⁻⁶ = <b>409,007×</b>. Loss(hard, gap=0.3115) / Loss(easy, default positive) = <b>1,161×</b>. The tied hard negative produces the textbook worst-case loss at ANY temperature, while the easy negative's loss all but vanishes at the real production temperature -- essentially no gradient signal left to learn from it.</p>
+<p><b>Real-world grounding</b> (extracted by direct inspection of DPR's own Table 3, NQ dev set, not self-computed): 127 in-batch gold negatives alone reach 55.8/73.0/83.1% Top-5/20/100 retrieval accuracy. The SAME 127 gold negatives plus just ONE additional BM25-mined hard negative reach 65.8/78.0/84.9% -- <b>+17.92%/+6.85%/+2.17% relative</b>. A second added hard negative does not improve further (the paper's own explicit statement).</p>
+<p><b>Verification method:</b> every new number above (gap, prob_pos, Loss, and the two ratio/percentage computations) was computed once in Node.js and once independently in Python 3.12, with no shared code between the two runs, matching to the displayed precision on every row; the four raw cosine inputs are cited unchanged from Module 07 Concept 09's own already-verified figures, not recomputed.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Fine-tuning a support-ticket encoder</h3><p>Resolved-ticket pairs as positives (cite M06C03); BM25-similar-but-different tickets as hard negatives.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Only one negative available</h3><p>Extends Concept 04's own named boundary case -- the loss reduces to a 2-outcome cross-entropy either way.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating the top unlabeled candidate as automatically safe</h3><p>Without checking it isn't a false negative -- exactly the risk hard-negative mining raises most.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The 2×2×τ matrix, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · REUSES CONCEPT 04'S infonce_loss UNCHANGED</span>
+<pre><code>import math
+
+def infonce_loss(cos_pos, cos_neg, tau):
+    e_pos = math.exp(cos_pos / tau)
+    e_neg = math.exp(cos_neg / tau)
+    return -math.log(e_pos / (e_pos + e_neg))
+
+# Frozen -- Module 07 Concept 09's own already-verified cosines.
+S1, B1_HARD, B2_EASY, S1_SHARP = 0.6644, 0.6644, 0.0000, 0.9759
+
+assert round(infonce_loss(S1, B1_HARD, 0.05), 6) == 0.693147
+assert round(infonce_loss(S1, B2_EASY, 0.05), 12) == round(1.694707e-6, 12)
+assert round(infonce_loss(S1_SHARP, B1_HARD, 0.05), 6) == 0.001968
+
+ratio = infonce_loss(S1, B1_HARD, 0.05) / infonce_loss(S1, B2_EASY, 0.05)
+assert round(ratio) == 409007
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where "hard negative" comes from, and the real mining tool</h2></div></header>
+<p><a href="https://arxiv.org/abs/2004.04906">Karpukhin et al. (2020), Dense Passage Retrieval (DPR)</a>, Section 3.2, defines this concept's exact three negative types verbatim: Random / BM25 (their own term for hard negatives) / Gold. Table 3 (NQ dev set) gives the real ablation cited in Section 10: 127 in-batch gold negatives alone reach 55.8/73.0/83.1% Top-5/20/100; adding one BM25 hard negative reaches 65.8/78.0/84.9%; a second does not help further. <a href="https://www.sbert.net/docs/cross_encoder/training_overview.html#hard-negatives-mining">sentence-transformers' hard-negatives-mining docs</a> give this concept's exact soft/easy-vs-hard terminology and name the real <code>mine_hard_negatives()</code> utility. <a href="https://www.sbert.net/docs/package_reference/sentence_transformer/losses.html#multiplenegativesrankingloss">MultipleNegativesRankingLoss documentation</a> (reused from Concept 04) grounds the τ=0.05 production default and the fact that plain in-batch negatives are not automatically hard.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Negative Picker</h2></div></header>
+<div class="lab">
+<p>S1/B1/B2 vectors -- PRECOMPUTED, FROZEN, reused unchanged from Module 07 Concept 09. Choose the negative, the positive, and the temperature independently, and watch the loss respond.</p>
+<div class="lab-actions" role="group" aria-label="Choose the negative">
+<button type="button" class="secondary active" data-negative="hard">Hard negative (B1, 0.6644)</button>
+<button type="button" class="secondary" data-negative="easy">Easy negative (B2, 0.0000)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose the positive">
+<button type="button" class="secondary active" data-positive="default">S1, as indexed (0.6644)</button>
+<button type="button" class="secondary" data-positive="sharpened">S1, with header (0.9759)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose the temperature">
+<button type="button" class="secondary" data-tau="1">τ=1</button>
+<button type="button" class="secondary active" data-tau="0.05">τ=0.05 (real production default)</button>
+</div>
+<div class="rank-chip-row" id="pickerChips_0805"></div>
+<div class="prob-bars" id="pickerBars_0805"></div>
+<div class="norm-readout" id="pickerReadout_0805"></div>
+<div class="callout" id="pickerVerdict_0805" aria-live="polite"></div>
+<div class="callout warning"><b>Honesty guard</b>This lab shows what a fixed loss formula outputs for four already-computed similarity pairs. It does not run BM25 or an ANN index to find these candidates in the first place -- that mining step is Module 24's job, not this lesson's.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Easy, hard, and false negatives</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Type</th><th>Teaching value</th><th>Main risk</th></tr></thead>
+<tbody>
+<tr><td>Easy / random negative</td><td>Low -- loss near zero at production temperature, little left to learn</td><td>None special -- just weak signal</td></tr>
+<tr><td>Hard negative</td><td>High -- small gap keeps the loss meaningful</td><td>Mining for it deliberately searches the region a true positive would occupy</td></tr>
+<tr><td>False negative (risk, not a category to choose)</td><td>Negative -- actually relevant, mislabeled</td><td>Corrupts training; caught by relevance re-checks, not built here</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>TRAINING PLATEAUS EARLY</span><h3>Negatives stayed easy</h3><p>The 409,007× loss-ratio evidence: an easy-negative-only regime leaves almost no gradient signal once cosine gaps are already large.</p></article>
+<article class="info-card"><span>A FALSE NEGATIVE SLIPPED INTO MINING</span><h3>Extends M04C08's batch-size risk to mining specifically</h3><p>Deliberately searching near the positive raises the odds of mislabeling a true match as negative.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>More negatives always beats better negatives</td><td>False -- DPR's own 7-to-127-gold comparison barely moved next to one added hard negative.</td></tr>
+<tr><td>The highest-scoring candidate is always a safe negative</td><td>False -- false-negative risk, especially under deliberate hard-negative mining.</td></tr>
+<tr><td>This lesson teaches how to mine hard negatives</td><td>False -- Module 24's job; this lesson only defines the categories.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>DPR's real production numbers are the stakes: one well-chosen hard negative beats 120 additional easy ones.</li>
+<li>Mining cost (an extra BM25/ANN pass over the corpus) is forward-referenced to Module 19/24, not built here.</li>
+<li>False-negative re-checking on mined candidates is a real production step, not built here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define all three negative-related terms.</summary><div>Positive pair: query plus a known-relevant document. Easy/random negative: any unrelated document, already trivially far away. Hard negative: topically/lexically similar to the positive but not actually relevant.</div></details>
+<details class="quiz"><summary>Why is gap=0 tau-invariant?</summary><div>prob_pos = sigmoid(gap/τ); when gap=0, sigmoid(0/τ)=sigmoid(0)=0.5 regardless of τ, since scaling zero by any temperature still yields zero.</div></details>
+<details class="quiz"><summary>Why does hard-negative mining specifically raise false-negative risk?</summary><div>Mining deliberately searches for candidates similar to the positive -- the exact same similarity region a genuinely relevant, unlabeled document would also occupy.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A third, hypothetical negative candidate B3 scores cosine 0.3000 against the default positive S1 (0.6644). Classify B3 as easy or hard, and compute gap, prob_pos and Loss at both τ=1 and τ=0.05.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>gap = 0.6644 − 0.3000 = 0.3644 -- closer to hard than easy, since B3 sits meaningfully nearer the positive than B2 (0.0000) does. At τ=1: prob_pos=0.590105, Loss=0.527455 nats. At τ=0.05: prob_pos=0.999317, Loss=6.834605×10⁻⁴ nats -- between the tied-hard and easy-default rows in Section 10's table, as its gap sits between theirs.</div>
+</details>
+<p>Teach-back: why does gap, not either raw cosine value alone, determine where B3 falls between the hard and easy extremes?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Positive pairs, negatives and hard negatives</h3><ul><li><b>Definitions:</b> positive pair, easy/random negative, hard negative</li><li><b>Headline ratio:</b> 409,007× -- tied hard negative's loss vs. easy negative's loss at τ=0.05</li><li><b>DPR's real number:</b> +17.92% Top-5 from one hard negative, not 120 easy ones</li></ul></div>
+<div><h3>Memorable example</h3><p>Solstice and Cobalt's refund clauses tie at exactly 0.6644 -- the textbook worst-case loss. Cobalt's invoicing clause sits at 0.0000 -- almost nothing left to learn from. Same loss formula, same positive, only the negative changed.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why do hard negatives teach more than easy ones?</summary><div>A hard negative keeps the gap between positive and negative small, so the loss stays meaningful and gradient signal survives; an easy negative's gap is already large, so the loss collapses toward zero and there's little left to learn from it.</div></details>
+<details class="quiz"><summary>Mathematical: state and verify the softplus/sigmoid form.</summary><div>Loss = softplus(−gap/τ) = −log(sigmoid(gap/τ)), algebraically identical to Concept 04's numerator/denominator cross-entropy form -- verified to match on every row of Section 10's table.</div></details>
+<details class="quiz"><summary>Coding: implement the 2×2×τ matrix.</summary><div>Section 12 gives the full implementation, reusing Concept 04's infonce_loss() unchanged over the four (positive, negative) pairs at both temperatures.</div></details>
+<details class="quiz"><summary>Debugging: a fine-tuned retriever plateaus early. What should you check about its negatives?</summary><div>Whether negatives are staying easy (already well-separated) as training progresses -- if so, the loss has little left to teach, and mining harder negatives (or increasing batch size for more in-batch candidates) is the fix, not more training steps on the same easy negatives.</div></details>
+<details class="quiz"><summary>System design: sketch a hard-negative mining pipeline for a support-ticket RAG corpus.</summary><div>Index the corpus (Module 05's BM25 or an ANN index), retrieve top candidates for each labeled positive, exclude the true positive and any candidate close enough to require a relevance re-check, and feed the remainder in as hard negatives -- the actual algorithm is Module 24's job, forward-referenced here only.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2004.04906"><b>Karpukhin et al. — Dense Passage Retrieval for Open-Domain Question Answering (arXiv:2004.04906)</b><br><span>Section 3.2 defines Random/BM25/Gold negative types verbatim; Table 3 gives the real ablation this concept's Section 10 cites.</span></a>
+<a href="https://www.sbert.net/docs/cross_encoder/training_overview.html#hard-negatives-mining"><b>sentence-transformers — Hard Negatives Mining</b><br><span>Gives this concept's exact soft/easy-vs-hard terminology and names the real mine_hard_negatives() utility.</span></a>
+<a href="https://www.sbert.net/docs/package_reference/sentence_transformer/losses.html#multiplenegativesrankingloss"><b>sentence-transformers — MultipleNegativesRankingLoss documentation</b><br><span>Reused from Concept 04 -- grounds the τ=0.05 production default and the in-batch-negatives-aren't-automatically-hard point.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 05 COMPLETE · MODULE 08 · 5/11</span>
+<h3>Not just a negative. The right kind of wrong answer.</h3>
+<p>You can now define positive pair, easy negative and hard negative precisely, explain why a tied hard negative produces the theoretical maximum loss, and state the false-negative risk hard-negative mining specifically raises. Concept 06, "pooling, embedding dimensions and normalization," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Negative Picker ↑</a>
+</div>
+<p class="fine-print">Module 08 at 5 of 11 concepts. Next concept: pooling, embedding dimensions and normalization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 05 · Complete</p>
+<a href="module-08-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

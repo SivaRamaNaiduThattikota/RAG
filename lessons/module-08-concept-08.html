@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 03 already named E5's 'query:'/'passage:' prefixes and BGE's query-only instruction by title, but never built the mechanism out. This concept closes that loop: a shared bi-encoder run twice, with no cross-attention between the runs, has nothing else telling it which text is a query and which is a document -- unless the text itself carries a role marker. A toy mean-pooling example shows the identical prefix vector is 6.0x more of a 5-token query's pooled vector than of a 40-token passage's, and the real BGE/C-Pack ablation (arXiv:2309.07597) quantifies the cost of dropping the instruction entirely: Retrieval -1.37%, Average -0.88%, while Classification and Clustering are unaffected or even improve.">
+<title>Embedding-model instructions and query/document prefixes — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-08-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 08 · CONCEPT 08</p>
+<h1>Same encoder. Two roles.<br><em>A prefix is how it tells them apart.</em></h1>
+<p class="lesson-lead">Concept 03 already named the mechanism by title -- E5's "query: "/"passage: " prefixes and BGE's query-only instruction -- as the thing that lets one shared bi-encoder still distinguish a query from a document. It never built that out. This concept does: a bi-encoder runs the exact same weights on both sides with no cross-attention between the two runs, so "Where is my order?" encoded as a query and the identical string encoded as a document look IDENTICAL to the model unless the text itself carries a role marker. A toy, honestly-caveated mean-pooling example shows the identical 2-token prefix is exactly 6.0x more of a 5-token query's pooled vector than of a 40-token passage's -- pure arithmetic, verified two independent ways. Real evidence backs the real cost: the BGE/C-Pack paper's own ablation (arXiv:2309.07597) shows dropping the instruction costs Retrieval 1.37% and the C-MTEB average 0.88%, while Classification and Clustering are unaffected or even improve -- and E5's model card states plainly that skipping its prefix convention causes "performance degradation."</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth concept of Module 08 -- deepens the asymmetric-prefixing mechanism Concept 03 named but never built out</b></div>
+<div><span>PREREQUISITE</span><b>Concept 03's bi-encoder/asymmetric prefixing (named, not re-derived); Concept 02's tokenize→contextualize→pool pipeline; Concept 06's mean-pooling formula (reused directly); Module 04 Concept 03's cosine/dot-product formula</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why a shared-weight bi-encoder needs a role marker at all, and why the same prefix mistake hurts a short query more than a long passage</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Why does a shared encoder need to be told what role the text is playing?</h2>
+</div>
+<p>Concept 03 named the mechanism -- "asymmetric prefixing" -- and moved on. This concept stops and asks the question that name deferred: why does a bi-encoder need a role marker at all, and what actually breaks without one?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A label that tells a shared encoder which role the text is playing</h3>
+<div class="mental-compare">
+<div><span>THIS CONCEPT</span><p>Instructions/prefixes: literal text prepended before embedding ("query: ", "passage: ", or a query-only instruction) so one shared encoder can still tell a query apart from a document.</p></div>
+<div><span>NOT THIS CONCEPT</span><p>Multilingual and domain embedding models (Concept 09); embedding-model selection (Concept 10) -- both named forward only.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> one shared encoder can't tell "query" from "document" unless the text itself says so.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>One shared encoder, run twice, with no cross-attention between the runs</h3>
+<p>Concept 03 already established the bi-encoder as one shared encoder run twice -- once over the query, once over the document -- with no cross-attention linking the two runs. From the encoder's point of view, "Where is my order?" run through the query side and "Where is my order?" run through the document side look IDENTICAL, token for token, unless something inside the text itself marks which role it's playing this time.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>E5's paired prefixes vs. BGE's query-only instruction</h3>
+<p>Two real, different, verified answers to the same architectural need. <b>E5</b>'s model card FAQ: "Do I need to add the prefix 'query: ' and 'passage: ' to input texts? Yes, this is how the model is trained, otherwise you will see a performance degradation." Every input gets a role label, on both sides. <b>BGE</b>'s model card instead says the instruction belongs on the query side only: "If you need to search the relevant passages to a query, we suggest to add the instruction to the query... In all cases, no instruction needs to be added to passages." Same underlying need, two different real conventions.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0808-b03-title">
+<strong class="concept-visual-title" id="c0808-b03-title">VISUAL · THE SAME PREFIX MOVES A SHORT QUERY FAR MORE THAN A LONG PASSAGE</strong>
+<svg class="vector-plane" viewBox="0 0 320 170" role="img" aria-labelledby="c0808-svg-title-b c0808-svg-desc-b">
+<title id="c0808-svg-title-b">Two coordinate planes: a 5-token query's pooled vector displaced by a prefix, and a 40-token passage's pooled vector barely displaced by the identical prefix</title>
+<desc id="c0808-svg-desc-b">Left plane: the query's content-only vector and its with-prefix vector are visibly far apart. Right plane: the passage's content-only vector and its with-prefix vector are nearly on top of each other.</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<line x1="20" y1="85" x2="140" y2="85" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="80" y1="20" x2="80" y2="150" stroke="#c9cdb9" stroke-width="1"/>
+<text x="10" y="16" font-weight="700">SHORT QUERY (5 tokens) — displacement 0.281396</text>
+<line x1="80" y1="85" x2="129" y2="78" stroke="#2f6f5c" stroke-width="1.6"/>
+<circle cx="129" cy="78" r="2.5" fill="#2f6f5c"/>
+<line x1="80" y1="85" x2="111" y2="70" stroke="#b3543a" stroke-width="1.6"/>
+<circle cx="111" cy="70" r="2.5" fill="#b3543a"/>
+<line x1="129" y1="78" x2="111" y2="70" stroke="#5b6b64" stroke-width="1" stroke-dasharray="2,2"/>
+<text x="10" y="160" font-size="7">teal = content-only · rust = with prefix (2 of 7 tokens)</text>
+<line x1="220" y1="85" x2="300" y2="85" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="260" y1="20" x2="260" y2="150" stroke="#c9cdb9" stroke-width="1"/>
+<text x="180" y="16" font-weight="700">LONG PASSAGE (40 tokens) — displacement 0.025776</text>
+<line x1="260" y1="85" x2="307.6" y2="75.2" stroke="#2f6f5c" stroke-width="1.6"/>
+<circle cx="307.6" cy="75.2" r="2.5" fill="#2f6f5c"/>
+<line x1="260" y1="85" x2="306.8" y2="76.8" stroke="#b3543a" stroke-width="1.6"/>
+<circle cx="306.8" cy="76.8" r="2.5" fill="#b3543a"/>
+<line x1="307.6" y1="75.2" x2="306.8" y2="76.8" stroke="#5b6b64" stroke-width="1" stroke-dasharray="2,2"/>
+<text x="180" y="160" font-size="7">teal = content-only · rust = with prefix (2 of 42 tokens)</text>
+</g>
+</svg>
+<figcaption>Same 2-token prefix vector, same mean-pooling formula -- the query's marker moves 0.281396, the passage's moves only 0.025776, because the prefix is 28.57% of the query's tokens but only 4.76% of the passage's.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The same prefix vector, weighted very differently by pooling</h3>
+<p>Per Concept 06's mean-pooling formula, a prefix's tokens are just more terms in the average. A 2-token prefix is 2/(2+5) = 28.57% of a 5-token query's total, but only 2/(2+40) = 4.76% of a 40-token passage's -- a ratio of exactly 6.0x, before even asking what direction the prefix vector points.</p>
+<table class="worked-table">
+<thead><tr><th>Text</th><th>Prefix token share</th><th>Displacement</th></tr></thead>
+<tbody>
+<tr><td>Query (5 content tokens)</td><td>2/7 = 28.5714%</td><td>0.281396</td></tr>
+<tr><td>Passage (40 content tokens)</td><td>2/42 = 4.7619%</td><td>0.025776</td></tr>
+</tbody>
+</table>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The prefix step happens first, before anything Concepts 02/06 taught</h3>
+<div class="scroll-flow">
+<span>Tokenize</span><i>→</i>
+<span class="hot">Prepend role prefix (this concept)</span><i>→</i>
+<span>Contextualize -- self-attention (Concept 02)</span><i>→</i>
+<span>Pool (Concept 06)</span><i>→</i>
+<span>Normalize (Concept 06)</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Wrong-side prefix vs. omitted prefix -- two different mistakes</h3>
+<div class="distinction-table" role="table" aria-label="Prefix distinguished from pooling, and wrong-side distinguished from omitted">
+<div role="row"><b role="cell">Pairing</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Wrong-side prefix vs. omitted prefix</span><span role="cell">Applying the other role's prefix (e.g. "passage: " on a live query) vs. applying neither -- different failure modes, only the omitted case has a quantified benchmark (Section 10)</span></div>
+<div role="row"><span role="cell">Prefix vs. Concept 06's pooling</span><span role="cell">A text-level input choice made before tokenizing vs. a vector-level aggregation choice made after contextualizing</span></div>
+<div role="row"><span role="cell">This concept vs. Concept 03's bi-encoder</span><span role="cell">Concept 03 named the mechanism; this concept explains why it's needed and what it costs to get wrong</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Any embedding model needs a prefix."</b><p>False -- Concepts 01-07's toy models, and many real symmetric models, are prefix-free by design.</p></div>
+<div><b>"Adding a prefix always helps every task."</b><p>False -- the BGE ablation (Section 10) shows Classification improving by 0.38% and Clustering by 3.35% WITHOUT the instruction.</p></div>
+<div><b>"E5 and BGE use the same prefix rule."</b><p>False -- E5 prefixes both sides differently; BGE only ever prefixes the query, never the passage.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Query-encoding and document-indexing are usually separate code paths</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A RAG pipeline's query-encoder and its document-indexer are usually different services or functions</b><p>A refactor that touches one without the other can silently apply the wrong prefix on one side.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 08 · CONCEPT 08 ACTIVE (8/11)</b><p>Concept 09 (multilingual and domain embedding models) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define an instruction/prefix in one sentence</b><p>Literal text prepended before embedding so a shared encoder can tell which role -- query or document -- the input is playing.</p></div>
+<div><b>Explain why the same prefix mistake hurts a short query more than a long passage</b><p>Mean pooling weights the prefix by its share of total tokens -- 2 tokens are a much bigger fraction of a 5-token query than of a 40-token passage.</p></div>
+<div><b>Name one model that prefixes only the query and one that prefixes both sides</b><p>BGE prefixes only the query; E5 prefixes both sides with "query: " and "passage: ".</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a shared/symmetric bi-encoder need a role marker at all?</li>
+<li>Why does BGE say passages should never receive an instruction?</li>
+<li>Why is "wrong-side prefix" a different failure mode from "omitted prefix"?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>Module 08 at 8 of 11</h3>
+<p>This concept explained why a bi-encoder needs a role marker and what it costs to get one wrong. Concept 09, "Multilingual and domain embedding models," is next -- named forward only, not covered here.</p>
+<div class="beginner-memory"><b>Concept 08 is active.</b> Module 08 is at 8 of 11 concepts.</div>
+<a class="button primary" href="module-08-concept-07.html">← Back to Concept 07</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Why does a shared encoder need to be told what role the text is playing?</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b04"><span>01</span><b>6.0x token-share ratio</b><small>The identical prefix, weighted very differently.</small></a>
+<a href="#s10"><span>02</span><b>BGE's real ablation table</b><small>Retrieval -1.37%, Average -0.88%.</small></a>
+<a href="#s14"><span>03</span><b>Drag the content-length slider</b><small>Watch the displacement converge as tokens grow.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full derivation, real evidence, and The Prefix Share Slider lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concept 03 named asymmetric prefixing but never built it out → a shared bi-encoder has nothing else to distinguish query from document role → the identical prefix vector is 6.0x more of a short query's pooled vector than a long passage's → BGE's own ablation quantifies what omitting the instruction actually costs, task by task → Module 08 at 8 of 11.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Embedding-model instructions and query/document prefixes" deep dive</b><em>The full derivation, real evidence, and The Prefix Share Slider lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The question Concept 03 named but deferred</h2></div></header>
+<p>Concept 03 named asymmetric prefixing -- E5's "query: "/"passage: " and BGE's query-only instruction -- as the mechanism that lets one shared bi-encoder still tell query text apart from document text. It never explained why that mechanism is necessary, or what happens when it's applied wrong. This concept opens that exact question.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Operational objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Instruction/prefix, precisely</h3><p>Literal text prepended before embedding to mark a role.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Why a shared bi-encoder needs a role marker</h3><p>No cross-attention between the two runs means nothing else distinguishes role.</p></article>
+<article class="info-card"><span>QUANTIFY</span><h3>The token-share asymmetry and the real cost</h3><p>The exact 6.0x ratio, plus BGE's real ablation deltas.</p></article>
+<article class="info-card"><span>NAME</span><h3>Two real, different conventions</h3><p>E5's paired prefixes vs. BGE's query-only instruction.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-08-concept-03.html">Concept 03</a> -- bi-encoder architecture and asymmetric prefixing, cited by name, not re-derived.</b></li>
+<li><b><a href="module-08-concept-02.html">Concept 02</a> -- the tokenize→contextualize (self-attention)→pool pipeline, cited directly.</b></li>
+<li><b><a href="module-08-concept-06.html">Concept 06</a> -- the mean-pooling weighted-average formula, reused directly on this concept's own toy vectors.</b></li>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a> -- cosine/dot-product formula, cited only, not re-derived.</b></li>
+<li><b>Explicitly out of scope:</b> multilingual and domain embedding models (Concept 09); embedding-model selection (Concept 10).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>An interpreter who is told the role before they start</h2></div></header>
+<p>Imagine one interpreter who translates differently depending on whether they're told "this is a question" or "this is an answer" before they begin -- the same interpreter, the same skill, but a different starting instruction changes how they process what follows.</p>
+<div class="callout warning"><b>Analogy boundary</b>The interpreter picture explains the ROLE-MARKING idea -- that telling the same processor which role a text is playing changes its output. It does not explain the actual mechanism (self-attention over the prefix's own tokens, Section 06) -- that's a real neural computation, not a human interpreter's judgment.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Instruction / prefix</td><td>Literal text prepended to an input before tokenizing, marking which role (query or document) the text is playing</td><td>—</td></tr>
+<tr><td>Symmetric prefixing (E5 pattern)</td><td>Both the query side and the document side receive a different, paired prefix</td><td>"query: " / "passage: "</td></tr>
+<tr><td>Asymmetric, query-only prefixing (BGE pattern)</td><td>Only the query side ever receives an instruction; the passage side never does</td><td>—</td></tr>
+<tr><td>Wrong-side prefix</td><td>Applying the other role's prefix to a text -- e.g. "passage: " on a live user query</td><td>—</td></tr>
+<tr><td>Omitted prefix</td><td>Applying neither role's prefix where the model expects one</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The prefix's tokens join the sequence before pooling ever runs</h2></div></header>
+<p>Per Concept 02's pipeline, a prefix's own tokens enter tokenization and self-attention alongside every other token in the text -- meaning the prefix can influence how every OTHER token gets contextualized, not merely contribute one extra term to a later average. Only after that contextualization does Concept 06's pooling step run. This concept's worked example (Section 10) uses a simplified pooling-only toy to build intuition about token-count sensitivity, but the real mechanism behind why prefixes work at all is this self-attention step, not post-hoc averaging.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The prefix tokens join before contextualization, then fork by role</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Prepend role prefix — this concept</b><small>Happens before contextualization, upstream of Concepts 02/06</small></div>
+<div class="diagram-node"><b>Query-side fork</b><small>E5: "query: " · BGE: an instruction · Concept 03's baseline: none</small></div>
+<div class="diagram-node"><b>Document-side fork</b><small>E5: "passage: " · BGE: never · Concept 03's baseline: none</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this step sits in the full pipeline</h2></div></header>
+<div class="pipeline-preview">
+<span class="hot">Tokenize → Prepend role prefix (this concept)</span><i>↓</i><span>Contextualize (Concept 02)</span><i>↓</i><span>Pool (Concept 06)</span><i>↓</i><span>Normalize (Concept 06)</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Deriving the token-share ratio</h2></div></header>
+<div class="equation">Q_with = (k·u_prefix + N·Q_content) / (k+N)<br>Q_with − Q_content = (k/(k+N))·(u_prefix − Q_content)</div>
+<p>With prefix length k=2 tokens: a 5-token query's prefix share is k/(k+N) = 2/7 = 28.5714%; a 40-token passage's share is 2/42 = 4.7619%. The ratio (2/7)/(2/42) = 42/7 = exactly 6.0 -- a clean arithmetic fact of mean pooling and token count alone, independent of what direction the prefix vector actually points.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Part 1: the toy mechanism. Part 2: the real, quantified evidence.</h2></div></header>
+<p><b>Part 1 -- mechanism (illustrative toy, honestly caveated).</b> A query tokenizes to 5 content tokens, a passage to 40; the prefix string itself tokenizes to 2 tokens either way. Toy pooled vectors: Q_content=(0.70, 0.10); D1_content=(0.68, 0.14); u_q=(-0.20, 0.50) (the "query: " prefix's own pooled contribution); u_p=(0.45, -0.35) (the "passage: " prefix's own pooled contribution). Applying Concept 06's mean-pooling formula with the prefix counted as 2 extra tokens: Q_with_prefix = (2·u_q + 5·Q_content)/7 = (0.442857, 0.214286); D1_with_prefix = (2·u_p + 40·D1_content)/42 = (0.669048, 0.116667). Token share: 2/7 = 28.5714% for the query, 2/42 = 4.7619% for the passage -- a ratio of exactly 6.0x. Displacement (Euclidean distance between the with-prefix and content-only vectors): 0.281396 for the query, 0.025776 for the passage -- a ratio of 10.917 here, but that larger number is specific to this toy's choice of u_q and u_p, not a general law; the 6.0x token-share ratio is the universal arithmetic fact.</p>
+<div class="callout warning">This mean-pooling toy is a simplified, untrained stand-in. The real mechanism (Section 06) is that a prefix's tokens enter self-attention alongside every other token BEFORE pooling, changing how everything else gets contextualized -- not merely contributing one more term to a post-hoc average. Part 1 only demonstrates the token-count-sensitivity intuition honestly; it does not reproduce what a real trained encoder does.</div>
+<p><b>Part 2 -- real evidence (BGE/C-Pack, arXiv:2309.07597, Table 3).</b> BGE-finetune (keeps the query-side instruction) scores, by C-MTEB task: Retrieval 71.53, STS 54.98, Pair Classification 78.94, Classification 68.32, Re-rank 65.11, Clustering 48.39, Average 63.96. BGE w.o. Instruct (instruction removed, everything else identical): Retrieval 70.55, STS 53.00, Pair Classification 76.77, Classification 68.58, Re-rank 64.91, Clustering 50.01, Average 63.40. Deltas (w.o.Instruct minus finetune): Retrieval -0.98 (-1.37%), STS -1.98 (-3.60%), Pair Classification -2.17 (-2.75%), Classification +0.26 (+0.38%), Re-rank -0.20 (-0.31%), Clustering +1.62 (+3.35%), Average -0.56 (-0.88%). Retrieval, STS and Pair Classification -- the tasks closest to "does this query match this passage" -- measurably suffer without the instruction; Classification and Clustering, which don't depend on query/passage role at all, are unaffected or even slightly better. E5's own model card FAQ states, without hedging: "Yes, this is how the model is trained, otherwise you will see a performance degradation."</p>
+<p><b>Verification method:</b> Part 1 was computed and cross-checked twice -- direct mean-pooling arithmetic, and the algebraic simplification Q_with − Q_content = (k/(k+N))·(u_prefix − Q_content) -- matching to 6 decimal places. Part 2's two table rows were extracted from the paper's raw HTML table cells, confirmed against the paper's own column headers, with all seven deltas and relative percentages independently recomputed as the exact subtraction of the two rows.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A production RAG query encoder using E5</h3><p>Correctly applying "query: " to every incoming user query before embedding.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>BGE v1.5 without its instruction</h3><p>Its own maintainers call the cost "slight" -- degree matters, not just presence.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Prepending "passage: " to a live user query</h3><p>Or vice versa -- a common outcome when query-encoding and document-encoding code paths get swapped during a refactor.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Extending Concept 06's pool_mean() to accept a prefix</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · NO LIBRARIES</span>
+<pre><code>import math
+
+def pool_mean_with_prefix(content_vec, content_tokens, prefix_vec=None, prefix_tokens=2):
+    if prefix_vec is None:
+        return content_vec
+    cx, cy = content_vec
+    px, py = prefix_vec
+    total = prefix_tokens + content_tokens
+    return ((prefix_tokens*px + content_tokens*cx) / total,
+            (prefix_tokens*py + content_tokens*cy) / total)
+
+def euclid(a, b):
+    return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+
+Q_content, u_q = (0.70, 0.10), (-0.20, 0.50)
+D1_content, u_p = (0.68, 0.14), (0.45, -0.35)
+
+Q_with = pool_mean_with_prefix(Q_content, 5, u_q, 2)
+D1_with = pool_mean_with_prefix(D1_content, 40, u_p, 2)
+assert tuple(round(v, 6) for v in Q_with) == (0.442857, 0.214286)
+assert tuple(round(v, 6) for v in D1_with) == (0.669048, 0.116667)
+
+assert round(euclid(Q_with, Q_content), 6) == 0.281396
+assert round(euclid(D1_with, D1_content), 6) == 0.025776
+
+share_q, share_d = 2/(2+5), 2/(2+40)
+assert round(share_q / share_d, 4) == 6.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Two real production instances of the same idea</h2></div></header>
+<p><a href="https://huggingface.co/intfloat/e5-base-v2/raw/main/README.md">E5-base-v2's model card FAQ</a> states plainly that its "query: "/"passage: " prefixes must be added to both sides or "you will see a performance degradation" -- a paired, symmetric-in-design convention. <a href="https://huggingface.co/BAAI/bge-large-en-v1.5/raw/main/README.md">BGE-large-en-v1.5's model card</a> instead recommends the instruction only on the query side, for short queries, and states explicitly that "no instruction needs to be added to passages" in any case -- a query-only convention. Same underlying architectural need (Concept 03), two different real design choices.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Prefix Share Slider</h2></div></header>
+<div class="lab">
+<p>Drag the content-length slider and watch the identical prefix's pooled contribution shrink as token count grows. Toggle between no prefix, a correct prefix, and a wrong-side prefix to see how much each condition displaces the pooled vector at the current length.</p>
+<div class="lab-controls">
+<div class="control"><label for="wgContentLen_0808">Content length: <output id="wgContentLenOut_0808">5</output> tokens</label>
+<input type="range" id="wgContentLen_0808" min="2" max="60" step="1" value="5"></div>
+</div>
+<div class="lab-actions" role="group" aria-label="Prefix condition" style="margin-top:12px">
+<button type="button" class="secondary" data-prefix="none">No prefix</button>
+<button type="button" class="secondary active" data-prefix="correct">Correct prefix (2 tokens)</button>
+<button type="button" class="secondary" data-prefix="wrong">Wrong-side prefix (2 tokens)</button>
+</div>
+<svg class="vector-plane" viewBox="0 0 320 260" role="img" aria-labelledby="c0808-svg-title-lab c0808-svg-desc-lab">
+<title id="c0808-svg-title-lab">A live 2D coordinate plane showing a fixed content-only marker and a moving with-prefix marker</title>
+<desc id="c0808-svg-desc-lab">Two arrows from the origin: one fixed at the content-only position, one that moves toward or away from it as the content-length slider and prefix toggle change.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<line x1="20" y1="220" x2="300" y2="220" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="160" y1="20" x2="160" y2="250" stroke="#c9cdb9" stroke-width="1"/>
+<line id="displacementLine_0808" x1="265" y1="205" x2="226.43" y2="187.86" stroke="#5b6b64" stroke-width="1" stroke-dasharray="3,3"/>
+<line id="arrowContentOnly_0808" x1="160" y1="220" x2="265" y2="205" stroke="#2f6f5c" stroke-width="2"/>
+<circle id="dotContentOnly_0808" cx="265" cy="205" r="3" fill="#2f6f5c"/>
+<line id="arrowWithPrefix_0808" x1="160" y1="220" x2="226.43" y2="187.86" stroke="#b3543a" stroke-width="2"/>
+<circle id="dotWithPrefix_0808" cx="226.43" cy="187.86" r="3" fill="#b3543a"/>
+<circle cx="160" cy="220" r="2.5" fill="#14241f"/>
+<text x="270" y="204" font-size="8">content-only</text>
+<text x="180" y="182" font-size="8">with prefix</text>
+</g>
+</svg>
+<div class="norm-readout" id="wgPrefixReadout_0808"></div>
+<div class="callout" id="wgPrefixVerdict_0808" aria-live="polite"></div>
+<div class="callout warning">This lab's pooling-only mechanism is a simplified stand-in for real self-attention-based contextualization (Concept 02). The real evidence for actual performance impact is the BGE/C-Pack ablation table and E5's FAQ (Section 13), not this toy geometry.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three real conventions, side by side</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Convention</th><th>Mechanism</th><th>Real cost of dropping it</th></tr></thead>
+<tbody>
+<tr><td>E5 -- paired prefixes</td><td>"query: " and "passage: " on both sides</td><td>Model card: "performance degradation" (no number cited by E5 itself)</td></tr>
+<tr><td>BGE v1.5 -- query-only instruction</td><td>Instruction on the query only, never the passage</td><td>C-Pack Table 3: Retrieval -1.37%, Average -0.88%; Classification/Clustering improve</td></tr>
+<tr><td>No convention (Concept 03's baseline)</td><td>Symmetric encoder, no role marker at all</td><td>Not applicable -- the model was never trained to expect one</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SYMPTOM</span><h3>Queries and documents that should match score lower than expected -- or unrelated documents score suspiciously high</h3><p>Both are consistent with a prefix regression, not necessarily a relevance-labeling bug.</p></article>
+<article class="info-card"><span>DIAGNOSTIC</span><h3>Check the query-encoding and document-encoding code paths</h3><p>Confirm each applies the model's documented prefix correctly and on the correct side.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Any prefix always helps</td><td>False -- BGE's own ablation shows Classification and Clustering unaffected or better without it.</td></tr>
+<tr><td>The prefix is just a label, it doesn't change the math</td><td>False -- Section 09's algebra plus Section 06's self-attention point: the prefix's tokens actively participate in contextualization and pooling.</td></tr>
+<tr><td>All models use the same prefix convention</td><td>False -- E5 pairs both sides differently; BGE only ever prefixes the query.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>A query-encoding service and a document-encoding/indexing service are usually different code paths -- a prefix regression can be introduced silently during a library upgrade or a refactor.</li>
+<li>It's easy to miss because embeddings still compute and still return SOME similarity score, just a degraded one, not an error.</li>
+<li>Ties directly to Section 16's diagnostic: check both code paths whenever retrieval quality drifts without an obvious data change.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Define an instruction/prefix.</summary><div>Literal text prepended to an input before tokenizing, marking which role -- query or document -- the text is playing.</div></details>
+<details class="quiz"><summary>Why does token count change how much a fixed prefix vector matters?</summary><div>Mean pooling weights every token equally by count -- a fixed 2-token prefix is 2/(2+N) of the total, so it's exactly 6.0x more of a 5-token text than of a 40-token text.</div></details>
+<details class="quiz"><summary>Name one model that prefixes only the query and one that prefixes both sides.</summary><div>BGE prefixes only the query (and never the passage); E5 prefixes both sides, "query: " and "passage: ".</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A fresh query/passage pair: a query tokenizes to 8 content tokens; a passage tokenizes to 25 content tokens. The prefix is still 2 tokens on either side. Compute the prefix token share for each side, and predict which one the SAME prefix mistake (wrong-side or omitted) would distort more.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Query share = 2/(2+8) = 2/10 = 20%. Passage share = 2/(2+25) = 2/27 ≈ 7.41%. Ratio ≈ 2.70x -- smaller than the lesson's 6.0x example only because these two token counts are closer together, but the direction is the same: the shorter text (the query) is distorted more by the identical prefix mistake.</div>
+</details>
+<p>Teach-back: explain, in your own words, why BGE recommends passages never receive an instruction while queries sometimes do.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Instructions / prefixes</h3><ul><li><b>Definition:</b> role-marking text prepended before embedding so a shared encoder can tell query from document</li><li><b>E5 FAQ:</b> "otherwise you will see a performance degradation"</li><li><b>BGE ablation:</b> Retrieval -1.37%, Average -0.88% when the instruction is dropped</li></ul></div>
+<div><h3>Mnemonic</h3><p>Prefixes matter more the shorter the text -- a fixed-size role marker is a bigger share of a short query's tokens than of a long passage's.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does a bi-encoder need a prefix at all if it's the same encoder on both sides?</summary><div>With no cross-attention between the query run and the document run, nothing else in the architecture distinguishes the two roles -- the text itself has to carry that signal.</div></details>
+<details class="quiz"><summary>Mathematical: derive the token-share ratio for arbitrary N and prefix length k.</summary><div>Share = k/(k+N). For two texts of length N1 and N2, the ratio of their shares is (k+N2)/(k+N1) -- for k=2, N1=5, N2=40, that's 42/7 = 6.0.</div></details>
+<details class="quiz"><summary>Coding: implement the prefix-aware pool_mean.</summary><div>Section 12 gives the full implementation, with assertions reproducing the exact 2/7, 2/42 shares and the displacement numbers.</div></details>
+<details class="quiz"><summary>Debugging: a retrieval pipeline's scores degraded after a library upgrade. What do you check first?</summary><div>Whether the query-encoding and document-encoding code paths still apply the model's documented prefix correctly and on the correct side -- a silent prefix regression still returns scores, just degraded ones.</div></details>
+<details class="quiz"><summary>System design: how would you unit-test that a production pipeline always applies the correct prefix on the correct side?</summary><div>A test that feeds a known string through both the query-encoder and document-encoder functions and asserts the literal prefixed text (or a hash of it) matches the model's documented convention before tokenization ever runs -- catching a swapped code path independent of any embedding math.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://huggingface.co/intfloat/e5-base-v2/raw/main/README.md"><b>E5-base-v2 model card FAQ (Hugging Face)</b><br><span>"Yes, this is how the model is trained, otherwise you will see a performance degradation" -- the maintainers' direct statement of consequence.</span></a>
+<a href="https://huggingface.co/BAAI/bge-large-en-v1.5/raw/main/README.md"><b>BGE-large-en-v1.5 model card (Hugging Face)</b><br><span>States the instruction belongs on the query side only, and that passages never need one.</span></a>
+<a href="https://arxiv.org/abs/2309.07597"><b>Xiao, Liu, Zhang &amp; Muennighoff — C-Pack: Packed Resources For General Chinese Embeddings (arXiv:2309.07597)</b><br><span>Table 3's "BGE w.o. Instruct" ablation vs. "BGE-finetune" -- the primary quantified evidence for the real cost of omitting the instruction.</span></a>
+<a href="https://arxiv.org/abs/2212.03533"><b>Wang, Yang, Huang, Yang, Majumder &amp; Wei — Text Embeddings by Weakly-Supervised Contrastive Pre-training / E5 (arXiv:2212.03533)</b><br><span>States directly why the prefix convention exists: "we... break the symmetry by adding two prefix identifiers 'query:' and 'passage:'" to handle paraphrases of the query appearing in the target corpus.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 08 COMPLETE · MODULE 08 · 8/11</span>
+<h3>Same encoder. Two roles. A prefix is how it tells them apart.</h3>
+<p>You can now explain why a shared bi-encoder needs a role marker, quantify the token-share asymmetry that makes the same mistake worse for short queries, and name two real, different prefix conventions. Concept 09, "Multilingual and domain embedding models," is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Prefix Share Slider ↑</a>
+</div>
+<p class="fine-print">Module 08 at 8 of 11 concepts. Next concept: multilingual and domain embedding models.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 08 · Concept 08 · Complete</p>
+<a href="module-08-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>
