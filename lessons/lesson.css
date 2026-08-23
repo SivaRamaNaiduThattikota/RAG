@@ -304,3 +304,15 @@ html[data-theme=dark] .pool-cell.in-pool,html[data-theme=dark] .pool-cell.not-re
 html[data-theme=dark] .preset-chip,html[data-theme=dark] .ticket-row{background:#06130f}
 html[data-theme=dark] .vocab-tag.iv{background:#0c1f18}
 @media(max-width:700px){.ticket-row{grid-template-columns:1fr;text-align:left}.ticket-row .ticket-score{text-align:left}}
+.lessons-dropdown{position:relative;display:flex;align-items:center}
+.lessons-dropdown-trigger{background:none;border:0;padding:0;margin:0;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.lessons-dropdown-trigger:hover,.lessons-dropdown-trigger[aria-expanded="true"]{color:var(--green)}
+.lessons-dropdown-trigger:after{content:'';width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translate(-1px,-1px);transition:transform .15s}
+.lessons-dropdown-trigger[aria-expanded="true"]:after{transform:rotate(225deg) translate(-2px,-2px)}
+.lessons-dropdown-panel{position:absolute;top:calc(100% + 20px);right:-14px;width:360px;max-height:60vh;overflow:auto;background:var(--white);border:1px solid var(--line);box-shadow:var(--shadow);z-index:60;padding:6px 0}
+.lessons-dropdown-phase-title{padding:14px 18px 4px;font:11px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--orange)}
+.lessons-dropdown-phase-title:first-child{padding-top:10px}
+.lessons-dropdown-module-title{padding:8px 18px 2px;font:700 12px 'DM Mono',monospace;color:var(--ink)}
+.lessons-dropdown-link{display:block;padding:6px 18px 6px 26px;font-size:12.5px;line-height:1.5;color:var(--muted);text-decoration:none}
+.lessons-dropdown-link:hover,.lessons-dropdown-link:focus-visible{background:var(--paper);color:var(--ink)}
+@media(max-width:980px){.topbar nav .lessons-dropdown{width:100%;border-bottom:1px solid var(--line)}.topbar nav .lessons-dropdown-trigger{width:100%;min-height:48px;padding:10px 14px;font-size:16px;justify-content:space-between}.lessons-dropdown-panel{position:static;top:auto;right:auto;width:100%;max-height:none;box-shadow:none;border:0;border-top:1px solid var(--line);background:var(--paper)}.lessons-dropdown-link{padding:10px 14px 10px 30px;font-size:14px;border-bottom:1px solid var(--line)}}
