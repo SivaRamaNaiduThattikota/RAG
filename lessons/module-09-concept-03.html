@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's third concept builds the first real ANN mechanism end to end: Hierarchical Navigable Small World (HNSW) graphs, from Malkov and Yashunin's own paper (arXiv:1603.09320). A multi-layer proximity graph where search starts at a sparse top layer and greedily descends, following the closest neighbour at each step, until no local improvement remains. A hand-traced 6-point, 2-layer toy graph shows the exact mechanic: starting at A, the search moves to D in the sparse top layer, descends, then moves to C in the dense bottom layer -- and C is confirmed, by brute-force check against all six points, to be the true nearest neighbour. FAISS's own published efSearch table on SIFT1M then shows the algorithm's own internal dial: raising ef_search from 16 to 256 costs a 9.45x latency increase in exchange for 11.80 more recall@1 points (87.40% to 99.20%), all inside one single HNSW index.">
+<title>HNSW graph construction and search — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 03</p>
+<h1>One graph, many layers.<br><em>Search descends, greedily.</em></h1>
+<p class="lesson-lead">Concept 02 named the trade-off -- skip most of the corpus, accept a bounded chance of missing the truth -- without saying how any real index actually chooses what to skip. This concept builds the first real answer end to end: Hierarchical Navigable Small World (HNSW) graphs. A multi-layer structure where search starts at a sparse top layer and greedily follows the closest neighbour at each step, dropping a layer whenever no closer neighbour remains, until the bottom layer's own local minimum is the answer. A hand-traced six-point toy graph makes the mechanic concrete; FAISS's own published benchmark then shows the algorithm's own internal recall/speed dial.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third concept of Module 09 (3/10) -- the module's first real ANN mechanism, after Concept 02's abstract trade-off</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's recall@k/speedup framing (cited); Module 05 Concept 08's recall@k formula (cited verbatim); Module 04 Concept 09's O(n log n) citation (cited)</b></div>
+<div><span>BEGINNER GOAL</span><b>Describe HNSW's layered structure and greedy-descent search rule from memory; trace a small graph by hand; name M, ef_construction and ef_search</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Start high and sparse. Descend toward dense and close.</h2>
+</div>
+<p>Concept 02 named the trade-off in the abstract. This concept gives it a real shape: a graph with layers, and a search rule simple enough to trace by hand.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>HNSW -- a hierarchy of proximity graphs, searched top-down and greedily</h3>
+<div class="mental-compare">
+<div><span>ABSTRACT (Concept 02)</span><p>Some structure narrows the candidates. Mechanism unnamed.</p></div>
+<div><span>HNSW (this concept)</span><p>A multi-layer graph. Each node connects to a handful of nearby nodes. Search starts at a sparse top layer, greedily follows the closest neighbour, and drops a layer whenever no closer neighbour remains -- until the bottom layer's own local minimum is the answer.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> HNSW searches by starting sparse and high, then greedily descending toward dense and close -- following the closest neighbour at every step, one layer at a time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 02 named the trade-off; this is the first real "how"</h3>
+<p>Concept 02 established that every ANN index narrows the candidate set somehow, and put a real number on the resulting recall/speed trade. It deliberately left "somehow" unexplained. HNSW, from Malkov and Yashunin's 2016 paper (arXiv:1603.09320), is the first of this module's three named mechanisms (HNSW, IVF, quantization) to get its own concept, because it is one of the most widely deployed real ANN algorithms in production vector databases today.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Six points, two layers, one greedy trace: A → D → C</h3>
+<p>Six toy 2-D points stand in for embeddings: A=(0,0), B=(3,1), C=(5,1), D=(7,2), E=(9,3), F=(10,4). The dense bottom layer (Layer 0) connects every point to its immediate neighbours in a chain: A–B–C–D–E–F. The sparse top layer (Layer 1) keeps only two of the six points, A and D, joined by one edge. Query Q=(5.2, 1.1). Search always starts at the graph's single fixed entry point, A, in the top layer. Distance from Q: A=5.3151, D=2.0125. D is closer, so the search moves to D. D's only Layer 1 neighbour is A, already worse -- no improvement, so Layer 1 terminates at D and the search descends into Layer 0. At D in Layer 0, D's chain-neighbours are C (0.2236 from Q) and E (4.2485 from Q); C is closer, so the search moves to C. C's chain-neighbours are B (2.2023) and D (2.0125), both farther than C's own 0.2236 -- no improvement, so the bottom layer's own local minimum is reached and the search returns C.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0903-b03-title">
+<strong class="concept-visual-title" id="c0903-b03-title">VISUAL · TWO LAYERS, ONE GREEDY DESCENT</strong>
+<svg class="vector-plane" viewBox="0 0 340 210" role="img" aria-labelledby="c0903-svg-title-b c0903-svg-desc-b">
+<title id="c0903-svg-title-b">A two-layer graph where a greedy search starts at a sparse top layer, descends to a dense bottom layer, and follows the closest neighbour at each step to reach the answer</title>
+<desc id="c0903-svg-desc-b">Top row: the sparse Layer 1, showing only points A and D joined by one edge, with the search path A to D highlighted. Bottom row: the dense Layer 0, showing all six points A through F in a chain, with the search path D to C highlighted, and the query point Q marked near C. C is labelled as the final answer.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<text x="8" y="14" font-size="7">LAYER 1 (SPARSE, 2 OF 6 NODES)</text>
+<circle cx="40" cy="40" r="6" fill="#2f6f5c"/>
+<text x="34" y="58" font-size="7">A (entry)</text>
+<circle cx="180" cy="40" r="6" fill="#b3543a"/>
+<text x="174" y="58" font-size="7">D</text>
+<line x1="40" y1="40" x2="180" y2="40" stroke="#2f6f5c" stroke-width="2"/>
+<text x="90" y="30" font-size="7" fill="#2f6f5c">5.3151 → 2.0125</text>
+<line x1="180" y1="70" x2="180" y2="95" stroke="#8f9481" stroke-width="1" stroke-dasharray="3 2"/>
+<text x="184" y="86" font-size="7">descend</text>
+<text x="8" y="108" font-size="7">LAYER 0 (DENSE, ALL 6 NODES)</text>
+<circle cx="30" cy="150" r="5" fill="#3a5f95"/>
+<text x="24" y="168" font-size="7">A</text>
+<circle cx="80" cy="140" r="5" fill="#3a5f95"/>
+<text x="74" y="128" font-size="7">B 2.2023</text>
+<circle cx="130" cy="132" r="6" fill="#2f6f5c"/>
+<text x="112" y="120" font-size="7" fill="#2f6f5c">C 0.2236 ✓</text>
+<circle cx="180" cy="122" r="6" fill="#b3543a"/>
+<text x="184" y="140" font-size="7" fill="#b3543a">D 2.0125</text>
+<circle cx="230" cy="112" r="5" fill="#3a5f95"/>
+<text x="226" y="100" font-size="7">E 4.2485</text>
+<circle cx="280" cy="102" r="5" fill="#3a5f95"/>
+<text x="276" y="90" font-size="7">F 5.6080</text>
+<line x1="30" y1="150" x2="80" y2="140" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="80" y1="140" x2="130" y2="132" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="130" y1="132" x2="180" y2="122" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="180" y1="122" x2="230" y2="112" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="230" y1="112" x2="280" y2="102" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="180" y1="122" x2="130" y2="132" stroke="#b3543a" stroke-width="2.4"/>
+<circle cx="150" cy="150" r="3" fill="#5a5f52"/>
+<text x="140" y="163" font-size="7">Q</text>
+</g>
+</svg>
+<figcaption>Layer 1 (top): the search starts at entry point A, compares to its only neighbour D, and moves to D since D is closer to Q. Layer 0 (bottom): descending at D, the search compares D's chain-neighbours C and E, moves to C (closer), then checks C's own neighbours B and D -- both farther, so C is the answer. Confirmed by brute-force check against all six points: C really is the true nearest neighbour.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three named parameters, none re-derived at length here</h3>
+<p>HNSW's own paper (Malkov and Yashunin, arXiv:1603.09320) names two construction-time parameters and one search-time parameter. <b>M</b> caps how many graph edges each node keeps per layer (this toy graph uses at most 2, far below any real deployment). <b>ef_construction</b> controls how thorough the search is while the graph is being built -- a higher value builds a better-connected, slower-to-build graph. <b>ef_search</b> controls how many candidates the search keeps active at query time -- this toy trace's greedy walk is the special case ef_search=1 (always move to the single closest neighbour); Section 10's own second worked example shows what happens when ef_search is raised well above 1 on a real corpus.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span>Vectors [Module 08, done]</span><i>→</i>
+<span class="hot">Retrieval [THIS concept -- HNSW graph, one of three named ANN mechanisms]</span><i>→</i>
+<span>Context</span><i>→</i>
+<span>LLM</span><i>→</i>
+<span>Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four terms beginners conflate</h3>
+<div class="distinction-table" role="table" aria-label="Layer, node, edge and entry point distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Layer</span><span role="cell">One full proximity graph over a subset of the corpus. Layer 0 always holds every point; higher layers hold exponentially fewer.</span></div>
+<div role="row"><span role="cell">Node</span><span role="cell">One stored vector, present in Layer 0 and possibly in some higher layers too (this toy graph: only A and D reach Layer 1).</span></div>
+<div role="row"><span role="cell">Edge</span><span role="cell">A stored connection between two nodes in the same layer, capped in count by M. Not a computed distance -- a precomputed link the search walks along.</span></div>
+<div role="row"><span role="cell">Entry point</span><span role="cell">The one fixed node every search starts from, always in the topmost layer. This toy graph's entry point is A.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The search checks every node in a layer before moving on."</b><p>False -- it only ever compares the current node's own edges, moving as soon as a closer neighbour is found. That's what makes it fast: no layer is ever scanned in full.</p></div>
+<div><b>"More layers always means a better index."</b><p>False -- layer count follows from M and the corpus size via the paper's own exponentially-decaying assignment rule; it is not a free dial to crank up.</p></div>
+<div><b>"Greedy descent always finds the true nearest neighbour."</b><p>False -- this toy trace happened to land on the true answer, confirmed by brute-force check, but Concept 02's own recall<100% framing still applies to HNSW in general; a differently-shaped graph can dead-end at the wrong local minimum.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where the Oracle RAG project will eventually meet HNSW</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's own vector-index choice, once Concept 02's crossover point is reached</b><p>HNSW is one of the two named mechanisms (with IVF, Concept 04) the project will eventually pick between.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 3/10</b><p>Concept 04 builds IVF's genuinely different partition-then-search strategy next, for direct contrast.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Describe HNSW's search rule in one sentence</b><p>Start at the entry point in the sparse top layer, greedily move to the closest neighbour, descend a layer whenever no closer neighbour remains, and return the bottom layer's own local minimum.</p></div>
+<div><b>Trace this concept's own toy graph from memory</b><p>A → D in Layer 1 (D closer), descend at D, D → C in Layer 0 (C closer), terminate at C (B and D both farther than C).</p></div>
+<div><b>Name HNSW's three parameters</b><p>M (edges per node per layer), ef_construction (build-time search thoroughness), ef_search (query-time search thoroughness).</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does the search always start in the topmost layer rather than Layer 0?</li>
+<li>In this concept's own toy trace, why does the search terminate at C instead of continuing on to B?</li>
+<li>What does ef_search=1 mean, concretely, in terms of how many neighbours get compared at each step?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 3 OF 10</h3>
+<p>This concept built HNSW's graph-based answer to Concept 02's trade-off. Concept 04, "IVF partitioning," is next: a genuinely different strategy -- partition the corpus into clusters ahead of time, then search only the nearest few at query time -- for direct contrast with HNSW's own graph-descent approach.</p>
+<div class="beginner-memory"><b>Concept 03 is active.</b> Module 09 stands at 3 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-02.html">← Back to Concept 02's abstract trade-off</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One graph, two worked examples</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>A → D → C, by hand</b><small>The beginner-convention headline: a hand-traced six-point toy graph.</small></a>
+<a href="#s10"><span>02</span><b>ef_search as a tunable dial</b><small>FAISS's own published efSearch/latency/recall table on SIFT1M.</small></a>
+<a href="#s14"><span>03</span><b>The Greedy-Descent Tracer</b><small>The lab -- step through the toy graph's own search, one hop at a time.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full construction/search algorithm, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Concept 02's abstract trade-off gets its first real mechanism → HNSW's layered graph and greedy-descent rule → a hand-traced toy graph shows the exact mechanic → FAISS's own real efSearch table shows the algorithm's internal dial → the lab lets you step through the trace yourself.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "HNSW graph construction and search" deep dive</b><em>The full construction/search algorithm, the toy from-scratch code, and The Greedy-Descent Tracer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's third concept -- the first real ANN mechanism</h2></div></header>
+<p>This is the third concept of Module 09, "Vector indexes and vector databases" (3/10), immediately following Concept 02's abstract recall/speed trade-off. HNSW is the first of the module's three named mechanisms (HNSW, IVF, quantization) to be fully built out; Concept 04 (IVF partitioning) builds a genuinely different strategy next, and Concept 06 (recall-latency-memory trade-offs) generalizes across all of them.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>HNSW's layered structure and search rule</h3><p>A hierarchy of proximity graphs, searched top-down via greedy descent to the closest neighbour.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A small graph by hand</h3><p>This concept's own six-point, two-layer toy graph, verified against a brute-force check.</p></article>
+<article class="info-card"><span>NAME</span><h3>M, ef_construction and ef_search</h3><p>HNSW's own three parameters, cited from the real paper (arXiv:1603.09320).</p></article>
+<article class="info-card"><span>APPLY</span><h3>ef_search as a tunable recall/speed dial</h3><p>FAISS's own published efSearch table -- one index, several operating points.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-02.html">Module 09 Concept 02</a></b> -- the abstract recall/speed trade-off this concept gives its first real mechanism, cited unchanged.</li>
+<li><b><a href="module-05-concept-08.html">Module 05 Concept 08</a></b> -- recall@k's sets-based definition, cited verbatim.</li>
+<li><b><a href="module-04-concept-09.html">Module 04 Concept 09</a></b> -- algorithmic complexity notation, cited, not re-derived.</li>
+<li><b>Module 08</b> -- the real embedding vectors this module searches over, cited by reference only.</li>
+<li><b>Explicitly out of scope:</b> IVF partitioning and quantization's own mechanics (Concepts 04-05) -- named forward only, never explained in this concept.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A city map with a highway system above the local streets</h2></div></header>
+<p>Layer 0 is the local street grid -- every address is reachable, but only via short hops between neighbours. Layer 1 (and any higher layers, in a larger real graph) is a sparse highway system connecting only a few hub addresses, letting a search cover large distances in a couple of hops before dropping down onto local streets for the final, precise approach. HNSW's search always enters via the highway system and only descends to local streets once no faster highway hop remains.</p>
+<div class="callout warning"><b>Analogy boundary</b>Real HNSW graphs typically use 2-5 layers with far higher per-node connectivity (M is commonly 12-48) than this toy graph's single extra layer and degree-2 chain. The layer-count and connectivity shown here are deliberately minimal, chosen so the trace in Section 10 can be followed by hand.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Hierarchical Navigable Small World (HNSW) graph</td><td>A multi-layer proximity graph; Layer 0 holds every point, each higher layer holds an exponentially decaying random subset</td><td>—</td></tr>
+<tr><td>Entry point</td><td>The single fixed node every search starts from, always in the topmost non-empty layer</td><td>—</td></tr>
+<tr><td>M (Malkov &amp; Yashunin, arXiv:1603.09320, cited)</td><td>The maximum number of edges kept per node per layer</td><td>M</td></tr>
+<tr><td>ef_construction (cited)</td><td>The search-list size used while inserting new nodes during graph construction -- higher values build a better-connected graph</td><td>ef_construction</td></tr>
+<tr><td>ef_search (cited)</td><td>The search-list size used at query time -- higher values check more candidates per step, raising both recall and latency</td><td>ef_search</td></tr>
+<tr><td>Greedy descent</td><td>Repeatedly move to the current node's closest unvisited neighbour; drop a layer when no neighbour improves on the current node; stop when Layer 0 itself has no improving neighbour</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Construction and search, both from the real paper</h2></div></header>
+<p><b>Construction (cited, not re-derived at proof-level depth).</b> Each new point is inserted starting from the top layer down. The paper's own layer-assignment rule draws the point's maximum layer from an exponentially decaying random distribution, so most points land only in Layer 0, and progressively fewer reach each higher layer -- exactly why this toy graph's Layer 1 keeps only 2 of its 6 points. At each layer the point is inserted, it connects to up to M of its nearest already-inserted neighbours, found via a search using ef_construction as the candidate-list size.</p>
+<p><b>Search (the mechanic this concept's own toy trace demonstrates).</b> Starting at the fixed entry point in the topmost layer, the search greedily moves to whichever neighbour is closest to the query, among the current node's own graph edges only -- never scanning the whole layer. When no neighbour improves on the current node, that layer's local minimum has been reached and the search descends one layer, carrying the current node as the new layer's starting point. This repeats until Layer 0's own local minimum is reached, which becomes the returned answer (or, with ef_search &gt; 1, the top candidates from a small maintained candidate list -- Section 10's own second worked example shows this dial in action).</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>A funnel: sparse and wide-reaching at the top, dense and precise at the bottom</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Greedy descent, layer by layer</b><small>Move to the closest neighbour; drop a layer on no improvement</small></div>
+<div class="diagram-node"><b>Entry point, top layer</b><small>Sparse, exponentially fewer nodes per layer up</small></div>
+<div class="diagram-node"><b>Graph edges, capped by M</b><small>Precomputed at construction time, not recomputed per query</small></div>
+<div class="diagram-node"><b>Layer 0's own local minimum</b><small>Every point present; the search's final answer</small></div>
+</div>
+<p>Contrast directly with Concept 02's own Section 07: there, "some structure" was left deliberately unspecified. Here, the structure is a concrete, navigable graph, and the fan of comparisons at each step is small and fixed (at most M edges), never the whole layer.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Same retrieval slot, one concrete real mechanism</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — stored, O(n·d) space, Module 08 done</span><i>↓</i><span class="hot">Retrieval — HNSW graph descent, sub-linear per query</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Logarithmic search, one cited complexity result</h2></div></header>
+<div class="equation">Search complexity ≈ O(log n) — Malkov &amp; Yashunin's own result (arXiv:1603.09320), following from the layer count itself scaling as O(log n) and each layer's descent taking a bounded number of hops</div>
+<div class="equation">Per-step comparisons ≤ M — the current node's own edge count, never the full layer size n</div>
+<p>Neither equation is re-derived from scratch here; both are cited directly from the paper. This concept's own contribution is the worked trace in Section 10, showing the mechanic these two results describe in the abstract.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>A hand-traced toy graph, then a real tunable dial</h2></div></header>
+<p><b>The toy graph.</b> Six 2-D points: A=(0,0), B=(3,1), C=(5,1), D=(7,2), E=(9,3), F=(10,4). Layer 0 (dense, all six): chain edges A–B, B–C, C–D, D–E, E–F. Layer 1 (sparse, two nodes): A–D. Query Q=(5.2, 1.1), entry point A.</p>
+<table class="worked-table">
+<thead><tr><th>Point</th><th>Coordinates</th><th>Distance to Q</th></tr></thead>
+<tbody>
+<tr><td>A</td><td>(0, 0)</td><td>5.3151</td></tr>
+<tr><td>B</td><td>(3, 1)</td><td>2.2023</td></tr>
+<tr><td>C</td><td>(5, 1)</td><td>0.2236</td></tr>
+<tr><td>D</td><td>(7, 2)</td><td>2.0125</td></tr>
+<tr><td>E</td><td>(9, 3)</td><td>4.2485</td></tr>
+<tr><td>F</td><td>(10, 4)</td><td>5.6080</td></tr>
+</tbody>
+</table>
+<p><b>The trace.</b> Layer 1, at entry point A (5.3151 from Q): A's only Layer 1 neighbour is D (2.0125 from Q), closer -- move to D. At D, D's only Layer 1 neighbour is A, already worse -- no improvement, Layer 1 terminates at D, descend to Layer 0. Layer 0, at D (2.0125 from Q): D's chain-neighbours are C (0.2236) and E (4.2485); C is closer -- move to C. At C (0.2236 from Q): C's chain-neighbours are B (2.2023) and D (2.0125), both farther -- no improvement, Layer 0's own local minimum is reached. <b>The search returns C.</b> A brute-force sort of all six distances confirms C (0.2236) is genuinely the smallest -- the true nearest neighbour among all six points, not merely the graph's local minimum. This trace happened to find the true answer; Concept 02's own recall &lt; 100% framing still holds for HNSW in general, since a differently-shaped graph or a less fortunate entry point can dead-end at the wrong local minimum instead.</p>
+<p><b>ef_search as a tunable dial (FAISS's own published SIFT1M benchmark, bench_hnsw.py, same corpus as Concept 02's own table).</b> This toy trace used the equivalent of ef_search=1 -- always move to the single best neighbour. Real deployments tune ef_search upward to check more candidates per step. FAISS's own published numbers: at ef_search=16, 0.011 ms per query at 87.40% recall@1; at ef_search=256 (16x larger), 0.104 ms per query (a 9.45x latency increase) at 99.20% recall@1 (an 11.80-point recall gain). One single HNSW index, one internal parameter, a real recall/speed dial -- distinct from Concept 02's own cross-index dial (choosing between different named indexes entirely).</p>
+<div class="callout"><b>Verification method</b>The six toy distances were computed with two independently-structured Node.js scripts -- one using a shared <code>dist()</code> helper function, one with fully inline manual arithmetic for each point -- and both produced identical results to the same precision. A third script brute-force-sorted all six distances to confirm C is the true global minimum, not merely a local one. The ef_search ratios (9.45x latency, 11.80 recall points) were each computed two ways (direct division/subtraction, and via intermediate rounding) with matching results.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A million-scale corpus needing sub-millisecond queries</h3><p>HNSW's O(log n) search scales far better than Concept 01's own linear exact search once the corpus is large.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A corpus small enough to fit in one layer</h3><p>If every point lands in Layer 0 only (no higher layers formed), the search degenerates to a single-layer greedy walk with no descent step at all.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Treating greedy descent as guaranteed-correct</h3><p>This concept's own toy trace found the true answer, but that is not a guarantee -- HNSW's own recall is measured, not assumed, exactly as Concept 02 established.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The toy graph's own greedy search, implemented directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN SIX-POINT TRACE EXACTLY</span>
+<pre><code>import math
+
+points = {
+    "A": (0, 0), "B": (3, 1), "C": (5, 1),
+    "D": (7, 2), "E": (9, 3), "F": (10, 4),
+}
+layer1_edges = {"A": ["D"], "D": ["A"]}
+layer0_edges = {
+    "A": ["B"], "B": ["A", "C"], "C": ["B", "D"],
+    "D": ["C", "E"], "E": ["D", "F"], "F": ["E"],
+}
+
+def dist(p, q):
+    return math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
+
+def greedy_descend(entry, edges, query):
+    current = entry
+    while True:
+        current_d = dist(points[current], query)
+        neighbours = edges.get(current, [])
+        better = min(neighbours, key=lambda n: dist(points[n], query), default=None)
+        if better is None or dist(points[better], query) >= current_d:
+            return current  # local minimum -- no improving neighbour
+        current = better
+
+query = (5.2, 1.1)
+top_of_layer1 = greedy_descend("A", layer1_edges, query)   # -> "D"
+answer = greedy_descend(top_of_layer1, layer0_edges, query)  # -> "C"
+
+true_best = min(points, key=lambda k: dist(points[k], query))
+assert answer == true_best == "C"
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for HNSW</h2></div></header>
+<p><a href="https://arxiv.org/abs/1603.09320">"Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs"</a> (Malkov &amp; Yashunin) is the algorithm's own primary source -- the origin of M, ef_construction, ef_search, and the O(log n) search-complexity result cited above. <a href="https://www.pinecone.io/learn/series/faiss/hnsw/">Pinecone's own HNSW explainer</a> gives the practitioner-level walk-through of the same layered, greedy-descent structure, used here as production/ecosystem grounding alongside the paper. <a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors">FAISS's "Indexing 1M vectors" wiki page</a> (already the source for Concept 02's own cross-index table) supplies, further down the same page, its <code>bench_hnsw.py</code> efSearch/latency/recall table -- the source of Section 10's second worked example. HNSW ships as a real, named index type in FAISS (<code>IndexHNSWFlat</code>), and is the primary index type behind several production vector databases (Pinecone, Weaviate, Milvus, Qdrant) named here as real deployments, not re-explained.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Greedy-Descent Tracer</h2></div></header>
+<div class="lab">
+<p>Step through this concept's own six-point, two-layer toy graph, one hop at a time. Each step shows the current node, its distance to the query, and why the search does or doesn't move on.</p>
+<div class="lab-actions" role="group" aria-label="Step through the greedy search">
+<button type="button" class="secondary" id="hnswPrev_0903">← Previous step</button>
+<button type="button" class="secondary active" id="hnswNext_0903">Next step →</button>
+</div>
+<div class="norm-readout" id="hnswReadout_0903">
+<div><span>LAYER</span><b id="hnswLayer_0903">1 (sparse)</b></div>
+<div><span>CURRENT NODE</span><b id="hnswNode_0903">A (entry point)</b></div>
+<div><span>DISTANCE TO Q</span><b id="hnswDist_0903">5.3151</b></div>
+<div><span>STEP</span><b id="hnswStepNum_0903">0 of 4</b></div>
+</div>
+<div class="callout" id="hnswVerdict_0903" aria-live="polite">Search starts at the fixed entry point, A, in the sparse top layer. Click "Next step" to begin the greedy descent.</div>
+<div class="callout warning">This trace uses ef_search=1 -- always moves to the single closest neighbour. Section 10's own FAISS table shows what a larger ef_search does on a real corpus; that dial is not reproduced in this small toy lab.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>HNSW vs. the two families still to come</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>HNSW (this concept)</th><th>Named forward only (Concepts 04-05)</th></tr></thead>
+<tbody>
+<tr><td>Graph-based -- precomputed edges, greedy descent</td><td>IVF: partition-based -- precomputed clusters, search only the nearest few (Concept 04)</td></tr>
+<tr><td>O(log n) search, cited from the paper</td><td>Quantization: compression-based -- fits more vectors in memory/time (Concept 05)</td></tr>
+<tr><td>Three own parameters: M, ef_construction, ef_search</td><td>Each family has its own distinct parameter set and cost profile</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNDER-CONNECTED GRAPH</span><h3>M set too low for the corpus</h3><p>Symptom: greedy descent dead-ends at the wrong local minimum more often than expected, since too few edges exist to route around a bad early move.</p></article>
+<article class="info-card"><span>STATIC ef_search</span><h3>Never tuning ef_search per workload</h3><p>Symptom: an index left at a default ef_search either wastes latency budget (too high) or leaves recall on the table (too low) -- Section 10's own table shows both directions are real, measured costs.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Greedy descent always finds the true nearest neighbour</td><td>False -- it finds a local minimum along the path taken; Section 10's own trace happened to match the true global minimum, confirmed separately by brute force.</td></tr>
+<tr><td>More layers automatically means better recall</td><td>False -- layer count follows from the paper's own random assignment rule tied to M and corpus size, not a free-standing quality knob.</td></tr>
+<tr><td>ef_search only affects speed, not correctness</td><td>False -- Section 10's own FAISS numbers show ef_search moving both latency and recall@1 together, in the same direction.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>ef_search is usually the first dial tuned in production -- raise it until recall clears the product's own bar, watching the latency cost the whole way, per Section 10's own table.</li>
+<li>M and ef_construction are set once at build time and are far more expensive to change than ef_search, since changing them means rebuilding the graph.</li>
+<li>HNSW's own graph must fit in memory for fast traversal -- a real operational constraint that Concept 06 (recall-latency-memory trade-offs) generalizes across all three named ANN families.</li>
+<li>Concept 04's own IVF is the real alternative when memory, not latency, is the binding constraint.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Describe HNSW's search rule from memory.</summary><div>Start at the fixed entry point in the sparse top layer; greedily move to the closest neighbour among the current node's own graph edges; descend a layer when no neighbour improves; stop when Layer 0's own local minimum is reached.</div></details>
+<details class="quiz"><summary>Why does this concept's own toy trace terminate at C rather than continuing to B?</summary><div>Because C's own chain-neighbours, B (2.2023) and D (2.0125), are both farther from the query than C itself (0.2236) -- no improving move remains, so C is the layer's local minimum and the search stops.</div></details>
+<details class="quiz"><summary>What does raising ef_search from 16 to 256 cost and buy, per Section 10's own FAISS numbers?</summary><div>Costs a 9.45x latency increase (0.011 ms to 0.104 ms per query); buys an 11.80-point recall@1 gain (87.40% to 99.20%) -- all inside one single HNSW index, no rebuild required.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A five-point Layer 0 chain, P–Q–R–S–T, has coordinates P=(0,0), Q=(2,0), R=(4,0), S=(6,0), T=(8,0). The search query is at (5, 0), and the greedy descent enters Layer 0 at Q. Trace the greedy descent by hand: which node does the search move to next, and where does it terminate? Confirm your answer with a brute-force distance check across all five points.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Distances to (5,0): P=5, Q=3, R=1, S=1, T=3. At Q (distance 3), Q's chain-neighbours are P (5) and R (1) -- R is closer, move to R. At R (distance 1), R's chain-neighbours are Q (3) and S (1) -- S ties R's own distance, not strictly closer, so no improving move exists and the search terminates at <b>R</b>. A brute-force check shows R and S are exactly tied at distance 1, both true nearest neighbours -- the search returns one valid answer, R, without needing to break the tie.</div>
+</details>
+<p>Teach-back: why does a tie between two equally close neighbours not force the search to keep moving?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>HNSW graph construction and search</h3><ul><li><b>Definition:</b> a multi-layer proximity graph, searched by greedy descent from a sparse top layer to a dense bottom layer</li><li><b>The parameters, cited:</b> M (edges per node per layer), ef_construction (build-time thoroughness), ef_search (query-time thoroughness)</li><li><b>Memorable example:</b> this concept's own six-point toy graph -- A → D (Layer 1) → C (Layer 0), confirmed the true nearest neighbour by brute force.</li></ul></div>
+<div><h3>Module 09 · 3/10</h3><p>Concept 04, "IVF partitioning," is next -- a genuinely different, partition-based ANN strategy.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does HNSW start searching at the top layer instead of Layer 0?</summary><div>The top layer is sparse, so a single hop there can cover a large distance across the embedding space; descending only once no closer neighbour remains means the expensive, fine-grained Layer 0 search starts already close to the answer.</div></details>
+<details class="quiz"><summary>Mathematical: given ef_search=16 at 0.011 ms/87.40% recall and ef_search=256 at 0.104 ms/99.20% recall, compute the latency ratio and recall-point gain.</summary><div>Latency ratio = 0.104 ÷ 0.011 ≈ 9.45x. Recall gain = 99.20% − 87.40% = 11.80 points.</div></details>
+<details class="quiz"><summary>Coding: extend this concept's own greedy_descend function to also return the full path visited.</summary><div>Accumulate each `current` node into a list before reassigning it inside the while loop, and return that list alongside the final answer -- for this concept's own toy graph, the Layer 0 path would be ["D", "C"].</div></details>
+<details class="quiz"><summary>System design: a production HNSW index's recall dropped after a corpus grew 10x. What do you check first?</summary><div>Whether M and ef_construction, both set for the old corpus size, are still adequate -- the paper's own layer-assignment rule ties layer structure to corpus size, so a much larger corpus with unchanged construction parameters can produce a thinner, worse-connected graph than a fresh build would.</div></details>
+<details class="quiz"><summary>Debugging: two runs of the same HNSW index on the same query return different top-1 results. Why might that happen even with no index changes?</summary><div>Concurrent inserts can change edges mid-query in a live index, or ef_search &gt; 1 combined with tied or near-tied distances can make the maintained candidate list's exact contents depend on floating-point comparison order -- Section 21's own tie between R and S shows the same effect at toy scale.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/1603.09320"><b>Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs — Malkov &amp; Yashunin, arXiv:1603.09320</b><br><span>The algorithm's own primary source -- M, ef_construction, ef_search, and the O(log n) search-complexity result.</span></a>
+<a href="https://www.pinecone.io/learn/series/faiss/hnsw/"><b>Hierarchical Navigable Small Worlds (HNSW) — Pinecone</b><br><span>Practitioner-level walk-through of the same layered, greedy-descent structure.</span></a>
+<a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors"><b>Indexing 1M vectors — FAISS wiki</b><br><span>Source of the bench_hnsw.py efSearch/latency/recall table behind Section 10's second worked example.</span></a>
+<a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search"><b>Nearest neighbor search — Wikipedia</b><br><span>The formal definitional backdrop this concept's own toy graph and code instantiate concretely.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 3/10</span>
+<h3>One graph, many layers. Search descends, greedily.</h3>
+<p>You can now describe HNSW's layered structure and greedy-descent search rule from memory; trace a small graph by hand and confirm its answer against a brute-force check; and name M, ef_construction and ef_search, including ef_search's own real recall/speed dial. Concept 04, "IVF partitioning," is next -- a genuinely different, partition-based strategy for direct contrast.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Greedy-Descent Tracer ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 3 of 10 concepts. Next concept: Concept 04, IVF partitioning.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 03 · Complete</p>
+<a href="module-09-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

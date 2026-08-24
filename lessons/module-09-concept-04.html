@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's fourth concept builds a genuinely different real ANN mechanism from Concept 03's graph descent: Inverted File (IVF) partitioning. The corpus is split into nlist clusters ahead of time via k-means-style centroid assignment; at query time, only the nprobe nearest clusters are searched, per FAISS's own Faiss-indexes wiki page, which states the failure case directly: the true nearest neighbour is missed whenever its own cluster isn't among the nprobe selected. A ten-point, three-cluster toy corpus makes this concrete and verified: at nprobe=1, the search returns a candidate 2.4042 away from the query while the true nearest neighbour, sitting 0.4243 away in the second-nearest cluster, is missed entirely -- a real, confirmed recall failure. Raising nprobe to 2 finds it. At nprobe=3 (equal to nlist), IVF degenerates to Concept 01's own exhaustive exact search.">
+<title>IVF partitioning — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 04 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 04</p>
+<h1>Partition first.<br><em>Search locally.</em></h1>
+<p class="lesson-lead">Concept 03 built HNSW's own graph-descent answer to Concept 02's trade-off. This concept builds a genuinely different real strategy: Inverted File (IVF) partitioning. The corpus is split into a fixed number of clusters ahead of time; at query time, only the few clusters nearest the query get searched at all, and the rest of the corpus is never touched. That is the whole idea -- no graph to walk, just a much smaller pile to search exhaustively. A ten-point toy corpus shows exactly where this can go wrong: a real query whose true nearest neighbour sits in the second-nearest cluster, missed entirely if only the single nearest cluster is searched.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth concept of Module 09 (4/10) -- the module's second real ANN mechanism, genuinely different from Concept 03's graph</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's recall@k/speedup framing (cited); Concept 03's HNSW contrast point (cited); k-means centroid assignment, named at reference depth only (Module 11's own future module)</b></div>
+<div><span>BEGINNER GOAL</span><b>Describe IVF's partition-then-probe rule from memory; trace a small clustered corpus by hand; explain why nprobe=nlist degenerates to exact search</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Cluster ahead of time. Probe only a few clusters per query.</h2>
+</div>
+<p>Concept 03 narrowed candidates by walking a graph. This concept narrows candidates by pre-sorting the corpus into piles, then checking only a few of those piles per query.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>IVF -- partition the corpus into clusters, probe only the nearest few</h3>
+<div class="mental-compare">
+<div><span>HNSW (Concept 03)</span><p>One graph, precomputed edges. Search walks the graph, greedily descending toward the query.</p></div>
+<div><span>IVF (this concept)</span><p>The corpus is split into nlist clusters ahead of time, each with a centroid. At query time, only the nprobe clusters whose centroids are nearest the query get searched -- exhaustively, but only within those clusters.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> IVF pre-sorts the corpus into nlist clusters, then at query time exhaustively searches only the nprobe clusters nearest the query -- everything else is never touched.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A second, genuinely different real "how"</h3>
+<p>Concept 03's HNSW narrows candidates via precomputed graph edges and greedy descent. IVF narrows candidates a completely different way: partition first, search locally second. Both are real, widely-deployed answers to Concept 02's own trade-off; neither is a special case of the other. FAISS ships both as separate, real index families (<code>IndexHNSWFlat</code> and <code>IndexIVFFlat</code>), confirmed directly from its own Faiss-indexes wiki page.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>A real miss at nprobe=1, caught at nprobe=2</h3>
+<p>Ten toy 2-D points sit in three clusters, each with a fixed centroid trained once, up front: C1 (three points near the origin), C2 (three points near (5.3,5.3), plus a fourth point at (8,4) added later and assigned to C2 since it was the nearest existing centroid at insert time), and C3 (three points near (10.3,1.3)). Query Q=(8.3, 3.7). Ranking the three centroids by distance to Q: C3 (3.1202) is nearest, C2 (3.3866) second, C1 (8.6488) a distant third. At <b>nprobe=1</b>, only C3's three points are searched, and the best found is C3's own (10,2) at distance 2.4042. But the true global nearest neighbour, confirmed by brute-force check across all ten points, is C2's own (8,4) point -- at distance 0.4243 -- sitting in the <i>second</i>-nearest cluster. nprobe=1 misses it completely. At <b>nprobe=2</b>, C2's cluster is probed too, and (8,4) is found -- the correct answer.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0904-b03-title">
+<strong class="concept-visual-title" id="c0904-b03-title">VISUAL · THREE CLUSTERS, ONE MISSED NEIGHBOUR</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0904-svg-title-b c0904-svg-desc-b">
+<title id="c0904-svg-title-b">Three clusters of points with their centroids, a query point, and a boundary point that the nearest-cluster-only search misses</title>
+<desc id="c0904-svg-desc-b">Three groups of points scattered across the plane, each with a marked centroid. A query point sits near the boundary between the second and third clusters. The nearest centroid's own cluster is probed and returns a distant candidate; the true nearest neighbour, a boundary point belonging to the second-nearest cluster, is marked as missed at nprobe=1 and found at nprobe=2.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<circle cx="30" cy="170" r="3" fill="#8f9481"/><circle cx="40" cy="178" r="3" fill="#8f9481"/><circle cx="34" cy="182" r="3" fill="#8f9481"/>
+<circle cx="34" cy="176" r="4.5" fill="none" stroke="#8f9481" stroke-width="1.2"/>
+<text x="4" y="192" font-size="7">C1 (far, not probed)</text>
+<circle cx="150" cy="70" r="3" fill="#3a5f95"/><circle cx="162" cy="66" r="3" fill="#3a5f95"/><circle cx="146" cy="58" r="3" fill="#3a5f95"/>
+<circle cx="196" cy="96" r="4" fill="#3a5f95" stroke="#14241f" stroke-width="0.6"/>
+<text x="198" y="94" font-size="7" fill="#3a5f95">(8,4) TRUE NN</text>
+<circle cx="153" cy="65" r="5.5" fill="none" stroke="#3a5f95" stroke-width="1.4"/>
+<text x="118" y="46" font-size="7" fill="#3a5f95">C2 centroid (2nd-nearest)</text>
+<circle cx="270" cy="118" r="3" fill="#b3543a"/><circle cx="284" cy="120" r="3" fill="#b3543a"/><circle cx="266" cy="128" r="3" fill="#b3543a"/>
+<circle cx="273" cy="122" r="5.5" fill="none" stroke="#b3543a" stroke-width="1.4"/>
+<text x="222" y="140" font-size="7" fill="#b3543a">C3 centroid (nearest, probed)</text>
+<circle cx="212" cy="98" r="5" fill="#2f6f5c"/>
+<text x="214" y="90" font-size="7" fill="#2f6f5c">QUERY Q</text>
+<line x1="212" y1="98" x2="273" y2="122" stroke="#b3543a" stroke-width="1.4"/>
+<line x1="212" y1="98" x2="153" y2="65" stroke="#3a5f95" stroke-width="1.4" stroke-dasharray="3 2"/>
+<text x="228" y="150" font-size="7" fill="#b3543a">nprobe=1: finds (10,2), d=2.4042 -- MISS</text>
+<text x="118" y="30" font-size="7" fill="#3a5f95">nprobe=2: finds (8,4), d=0.4243 -- HIT</text>
+</g>
+</svg>
+<figcaption>Query Q sits closest to C3's centroid, so nprobe=1 probes only C3 and returns its best point, (10,2), at distance 2.4042. The true nearest neighbour, (8,4), belongs to C2 -- the second-nearest cluster -- and is missed entirely until nprobe rises to 2.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two named parameters, cited from FAISS's own documentation</h3>
+<p>FAISS's own Faiss-indexes wiki page names IVF's two core parameters directly. <b>nlist</b> is the number of clusters the corpus is partitioned into (three, in this concept's own toy example). <b>nprobe</b> is how many of those clusters get searched per query, chosen at query time -- "useful for measuring trade-offs between speed and accuracy," in the page's own words. The page also states the failure case in exactly the shape this concept's own worked example demonstrates: "the failure case appears when the cell of the nearest neighbor of a given query is not selected." Centroid assignment itself uses k-means-style nearest-centroid assignment, named here at reference depth only -- Module 11's own future clustering module owns k-means' full derivation.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span>Vectors [Module 08, done]</span><i>→</i>
+<span class="hot">Retrieval [THIS concept -- IVF partitioning, probing only nprobe of nlist clusters]</span><i>→</i>
+<span>Context</span><i>→</i>
+<span>LLM</span><i>→</i>
+<span>Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four terms beginners conflate</h3>
+<div class="distinction-table" role="table" aria-label="Cluster, centroid, nlist and nprobe distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Cluster (inverted list)</span><span role="cell">A group of stored vectors assigned to the same centroid. This toy example has 3, holding 3, 4 and 3 points.</span></div>
+<div role="row"><span role="cell">Centroid</span><span role="cell">One representative point per cluster, trained once (via k-means-style assignment) and generally not recomputed per insert.</span></div>
+<div role="row"><span role="cell">nlist</span><span role="cell">The total number of clusters the corpus is split into -- a build-time choice. This toy example: nlist=3.</span></div>
+<div role="row"><span role="cell">nprobe</span><span role="cell">How many of the nlist clusters get searched per query -- a query-time choice. nprobe=1 misses the true answer here; nprobe=2 finds it.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The nearest cluster always contains the true nearest neighbour."</b><p>False -- this concept's own worked example shows the true nearest neighbour sitting in the second-nearest cluster, missed entirely at nprobe=1.</p></div>
+<div><b>"IVF and HNSW are two versions of the same idea."</b><p>False -- IVF partitions and searches locally; HNSW walks a graph. Neither is a variant of the other; FAISS ships them as entirely separate index classes.</p></div>
+<div><b>"Raising nprobe to nlist gives you a free speedup with full accuracy."</b><p>False -- at nprobe=nlist, every cluster gets searched, which is exactly Concept 01's own exhaustive exact search again, with zero candidates skipped and zero speedup left.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where the Oracle RAG project will eventually meet IVF</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's own vector-index choice, alongside HNSW (Concept 03)</b><p>IVF is the real alternative when memory footprint, not latency, is the binding constraint -- generalized further in Concept 06.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 4/10</b><p>Concept 05 builds quantization next -- often paired directly with IVF in real systems (FAISS's own IVF-PQ).</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Describe IVF's search rule in one sentence</b><p>Partition the corpus into nlist clusters ahead of time; at query time, exhaustively search only the nprobe clusters whose centroids are nearest the query.</p></div>
+<div><b>Trace this concept's own worked example from memory</b><p>nprobe=1 probes only C3, finds (10,2) at 2.4042, misses the true nearest neighbour (8,4) at 0.4243 sitting in C2; nprobe=2 probes C3 and C2 and finds it.</p></div>
+<div><b>Explain why nprobe=nlist removes IVF's own speedup</b><p>Every cluster gets searched, so nothing is skipped -- identical in effect to Concept 01's own exhaustive exact search.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does nprobe=1 miss the true nearest neighbour in this concept's own worked example?</li>
+<li>What does raising nprobe from 1 to 2 cost, and what does it buy, in this toy example?</li>
+<li>Why are IVF and HNSW described as "genuinely different" rather than as variants of each other?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 4 OF 10</h3>
+<p>This concept built IVF's partition-then-probe strategy as a genuinely different real answer to Concept 02's trade-off. Concept 05, "Product and scalar quantization," is next: a third strategy, compressing vectors themselves so more of them fit in memory and get scored per unit time -- commonly paired directly with this concept's own IVF partitioning in real systems.</p>
+<div class="beginner-memory"><b>Concept 04 is active.</b> Module 09 stands at 4 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-03.html">← Back to Concept 03's graph descent</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One partitioned corpus, a real miss and a real catch</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>0.4243 missed at nprobe=1</b><small>The beginner-convention headline: a real boundary-point miss, caught at nprobe=2.</small></a>
+<a href="#s10"><span>02</span><b>All three nprobe values traced</b><small>Adds nprobe=3 -- IVF collapsing back into exact search.</small></a>
+<a href="#s14"><span>03</span><b>The Cluster Probe Selector</b><small>The lab -- choose nprobe and watch which clusters get searched.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full construction/search algorithm, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> Concept 03's graph-based mechanism gets a genuinely different partner → IVF partitions the corpus into nlist clusters via centroid assignment → nprobe controls how many clusters get searched per query → a ten-point toy corpus shows a real miss at nprobe=1 and a real catch at nprobe=2 → the lab lets you choose nprobe yourself.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "IVF partitioning" deep dive</b><em>The full construction/search algorithm, the toy from-scratch code, and The Cluster Probe Selector lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's fourth concept -- the second real ANN mechanism</h2></div></header>
+<p>This is the fourth concept of Module 09, "Vector indexes and vector databases" (4/10), immediately following Concept 03's HNSW graph. IVF is the second of the module's three named mechanisms (HNSW, IVF, quantization) to be fully built out; Concept 05 (quantization) builds a third, often paired directly with this concept's own IVF, and Concept 06 (recall-latency-memory trade-offs) generalizes across all three.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>IVF's partition-then-probe rule</h3><p>Split the corpus into nlist clusters ahead of time; search only the nprobe nearest clusters per query.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A small clustered corpus by hand</h3><p>This concept's own ten-point, three-cluster toy example, verified against a brute-force check.</p></article>
+<article class="info-card"><span>NAME</span><h3>nlist and nprobe</h3><p>Cited directly from FAISS's own Faiss-indexes wiki page.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>IVF vs. HNSW's graph descent (Concept 03)</h3><p>Two genuinely different real mechanisms, not variants of one another.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-03.html">Module 09 Concept 03</a></b> -- HNSW's own graph-descent mechanism, this concept's direct contrast point, cited unchanged.</li>
+<li><b><a href="module-09-concept-02.html">Module 09 Concept 02</a></b> -- the abstract recall/speed trade-off, cited unchanged.</li>
+<li><b><a href="module-05-concept-08.html">Module 05 Concept 08</a></b> -- recall@k's sets-based definition, cited verbatim.</li>
+<li><b>k-means centroid assignment</b> -- named at reference depth only; Module 11's own future clustering module owns its full derivation.</li>
+<li><b>Explicitly out of scope:</b> product/scalar quantization's own mechanics (Concept 05) -- named forward only, though commonly paired with IVF in real systems (FAISS's own IVF-PQ).</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A warehouse sorted into aisles, checked by aisle</h2></div></header>
+<p>Imagine a warehouse where every item was sorted, once, into one of a fixed number of aisles based on which aisle's own "typical item" it most resembled. Looking for something new means walking straight to the aisle whose typical item looks most similar, and checking every item in that aisle by hand -- fast, since only one aisle gets checked, not the whole warehouse. But if the item you actually want was mis-filed into a neighbouring aisle because its resemblance to that aisle's typical item was a close second, checking only the top aisle misses it entirely. Checking the top two aisles instead of one catches that case, at the cost of checking twice as many items.</p>
+<div class="callout warning"><b>Analogy boundary</b>Real IVF deployments use far more than 3 clusters -- nlist is commonly in the hundreds to tens of thousands, following FAISS's own rule of thumb, nlist ≈ C·√n. This concept's own toy example uses nlist=3 deliberately, so the trace in Section 10 can be followed by hand.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Inverted File (IVF) index</td><td>Partitions the corpus into clusters ahead of time; at query time, searches only the clusters nearest the query</td><td>—</td></tr>
+<tr><td>nlist (FAISS's own Faiss-indexes wiki, cited)</td><td>The total number of clusters (inverted lists) the corpus is partitioned into</td><td>nlist</td></tr>
+<tr><td>nprobe (cited)</td><td>The number of clusters searched per query, chosen at query time</td><td>nprobe</td></tr>
+<tr><td>Coarse quantizer (cited)</td><td>The index (often a Flat index over just the centroids) used to find which clusters are nearest a query</td><td>—</td></tr>
+<tr><td>Failure case (cited verbatim)</td><td>"The failure case appears when the cell of the nearest neighbor of a given query is not selected."</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Construction and search, both cited from FAISS's own documentation</h2></div></header>
+<p><b>Construction.</b> A coarse quantizer trains nlist centroids over a representative sample of the corpus (k-means-style nearest-centroid assignment, named at reference depth only). Every stored vector is then assigned to whichever of those nlist centroids it is nearest to, and stored in that centroid's own inverted list. Centroids are generally fixed once trained -- new vectors inserted later (like this concept's own worked example's fourth C2 point) are assigned to the nearest <i>existing</i> centroid, not used to retrain the centroids themselves.</p>
+<p><b>Search (the mechanic this concept's own worked example demonstrates).</b> The query is compared against all nlist centroids -- a small, cheap comparison, since nlist is far smaller than the corpus. The nprobe nearest centroids are selected, and their inverted lists are searched exhaustively (every vector in those lists gets scored directly, exactly like Concept 01's own brute-force search, just over a far smaller subset). Vectors in any unprobed cluster are never scored at all -- including, potentially, the true nearest neighbour, exactly as FAISS's own page states.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>A coarse filter, then a fine, exhaustive scan</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Probe nprobe of nlist clusters</b><small>Exhaustive within probed clusters, zero outside them</small></div>
+<div class="diagram-node"><b>Query vector</b><small>Compared against all nlist centroids first</small></div>
+<div class="diagram-node"><b>Coarse quantizer picks nprobe clusters</b><small>The cheap, corpus-wide comparison step</small></div>
+<div class="diagram-node"><b>Exhaustive scan inside probed clusters only</b><small>Brute-force search (Concept 01's own mechanism), just over a smaller subset</small></div>
+</div>
+<p>Contrast directly with Concept 03's own Section 07: there, the search walked a graph, one edge-hop at a time, never comparing against a full layer. Here, the search makes one coarse comparison against all nlist centroids, then reverts to Concept 01's own brute-force scan -- but only inside the nprobe clusters selected.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Same retrieval slot, a second concrete real mechanism</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — stored, O(n·d) space, Module 08 done</span><i>↓</i><span class="hot">Retrieval — IVF partition + local exhaustive scan</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Two cited results, neither re-derived</h2></div></header>
+<div class="equation">Fraction of corpus scanned ≈ nprobe ÷ nlist — FAISS's own page notes this is an approximation, since inverted lists are not evenly sized</div>
+<div class="equation">nlist ≈ C·√n — FAISS's own rule-of-thumb sizing formula, balancing centroid-comparison cost against per-cluster scan cost</div>
+<p>Neither equation is new mathematics; both are cited directly from FAISS's own Faiss-indexes wiki page. This concept's own contribution is the worked trace in Section 10, showing exactly how a real query can fall on the wrong side of that approximation.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Ten points, three clusters, three values of nprobe</h2></div></header>
+<p><b>The corpus.</b> C1 (centroid 0.3333, 0.3333): (0,0), (1,0), (0,1). C2 (centroid 5.3333, 5.3333, trained before the fourth point was added): (5,5), (6,5), (5,6), (8,4). C3 (centroid 10.3333, 1.3333): (10,1), (11,1), (10,2). Query Q=(8.3, 3.7).</p>
+<table class="worked-table">
+<thead><tr><th>Point</th><th>Cluster</th><th>Distance to Q</th></tr></thead>
+<tbody>
+<tr><td>(8,4)</td><td>C2</td><td>0.4243</td></tr>
+<tr><td>(10,2)</td><td>C3</td><td>2.4042</td></tr>
+<tr><td>(6,5)</td><td>C2</td><td>2.6420</td></tr>
+<tr><td>(10,1)</td><td>C3</td><td>3.1906</td></tr>
+<tr><td>(5,5)</td><td>C2</td><td>3.5468</td></tr>
+<tr><td>(11,1)</td><td>C3</td><td>3.8184</td></tr>
+<tr><td>(5,6)</td><td>C2</td><td>4.0224</td></tr>
+<tr><td>(1,0)</td><td>C1</td><td>8.1841</td></tr>
+<tr><td>(0,1)</td><td>C1</td><td>8.7281</td></tr>
+<tr><td>(0,0)</td><td>C1</td><td>9.0874</td></tr>
+</tbody>
+</table>
+<p><b>Centroid ranking (the coarse filter).</b> Distance from Q to each fixed centroid: C3=3.1202, C2=3.3866, C1=8.6488. Nearest first: C3, then C2, then C1.</p>
+<p><b>nprobe=1.</b> Only C3's inverted list is scanned: (10,1), (11,1), (10,2). Best found: (10,2) at 2.4042. This is returned as the answer -- but it is not the true nearest neighbour.</p>
+<p><b>nprobe=2.</b> C3's and C2's lists are both scanned: the seven points above C1's row. Best found: (8,4) at 0.4243 -- the true global nearest neighbour, confirmed by the brute-force ranking of all ten points in the table above. <b>nprobe=1 missed it entirely</b>; nprobe=2 finds it, at the cost of scanning 7 points instead of 3.</p>
+<p><b>nprobe=3 (=nlist).</b> Every cluster is scanned -- all ten points -- which is exactly Concept 01's own exhaustive exact search again. At nprobe=nlist, IVF's own speedup disappears completely: nothing is skipped, so the fraction-scanned formula from Section 09 (nprobe÷nlist) reaches 1.0, and recall is guaranteed 100%, exactly as it was in Concept 01.</p>
+<div class="callout"><b>Verification method</b>All ten point-to-query distances were computed with two independently-structured Node.js scripts -- one iterating over a labelled point list with a shared distance function, one with fully inline manual arithmetic per point -- and both produced identical results. A third script brute-force-sorted all ten distances to confirm (8,4) is the true global minimum, and that nprobe=1's own candidate, (10,2), is only the second-best point overall, confirming the miss is real rather than assumed.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A memory-constrained corpus too large for a graph index</h3><p>IVF's own inverted lists cost far less memory overhead per vector than HNSW's own graph edges, at a comparable recall target.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>nprobe=nlist</h3><p>Every cluster gets probed -- IVF degenerates exactly to Concept 01's own exhaustive exact search, with no speedup left at all.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming the nearest cluster always holds the true answer</h3><p>This concept's own worked example shows the true nearest neighbour sitting in the second-nearest cluster -- a real, confirmed miss at nprobe=1, not a hypothetical one.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The toy corpus's own IVF search, implemented directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN TEN-POINT TRACE EXACTLY</span>
+<pre><code>import math
+
+centroids = {"C1": (1/3, 1/3), "C2": (16/3, 16/3), "C3": (31/3, 4/3)}
+clusters = {
+    "C1": [(0, 0), (1, 0), (0, 1)],
+    "C2": [(5, 5), (6, 5), (5, 6), (8, 4)],
+    "C3": [(10, 1), (11, 1), (10, 2)],
+}
+
+def dist(p, q):
+    return math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
+
+def ivf_search(query, nprobe):
+    ranked_clusters = sorted(centroids, key=lambda c: dist(centroids[c], query))
+    probed = ranked_clusters[:nprobe]
+    candidates = [pt for c in probed for pt in clusters[c]]
+    return min(candidates, key=lambda pt: dist(pt, query)), probed
+
+query = (8.3, 3.7)
+
+best_1, probed_1 = ivf_search(query, nprobe=1)
+best_2, probed_2 = ivf_search(query, nprobe=2)
+
+all_points = [pt for pts in clusters.values() for pt in pts]
+true_best = min(all_points, key=lambda pt: dist(pt, query))
+
+assert probed_1 == ["C3"] and best_1 == (10, 2)
+assert probed_2 == ["C3", "C2"] and best_2 == (8, 4)
+assert true_best == (8, 4)
+assert best_1 != true_best  # nprobe=1 genuinely misses the true answer
+assert best_2 == true_best  # nprobe=2 finds it
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for IVF</h2></div></header>
+<p><a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes">FAISS's own Faiss-indexes wiki page</a> is this concept's primary source: its Cell-probe methods section defines nlist, nprobe, and the failure case cited verbatim above, alongside the real class name <code>IndexIVFFlat</code> and factory key <code>"IVFx,Flat"</code>. The same page also documents <code>IndexIVFPQ</code> ("IVFADC," IVF combined with product quantization) -- the real pairing Concept 05 names forward. <a href="https://en.wikipedia.org/wiki/K-means_clustering">k-means clustering (Wikipedia)</a> is cited at reference depth only for the centroid-assignment rule; Module 11's own future clustering module owns its full derivation. IVF-style partitioning also ships in production vector databases beyond FAISS -- pgvector's own <code>ivfflat</code> index type and Milvus's <code>IVF_FLAT</code> index type are both named-forward real deployments of the identical partition-then-probe idea.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Cluster Probe Selector</h2></div></header>
+<div class="lab">
+<p>Choose nprobe for this concept's own ten-point, three-cluster toy corpus and see exactly which clusters get searched, what candidate is found, and whether it matches the true global nearest neighbour.</p>
+<div class="lab-actions" role="group" aria-label="Choose nprobe">
+<button type="button" class="secondary active" data-nprobe="1">nprobe = 1</button>
+<button type="button" class="secondary" data-nprobe="2">nprobe = 2</button>
+<button type="button" class="secondary" data-nprobe="3">nprobe = 3 (= nlist)</button>
+</div>
+<div class="norm-readout" id="ivfReadout_0904">
+<div><span>CLUSTERS PROBED</span><b id="ivfProbed_0904">C3</b></div>
+<div><span>POINTS SCANNED</span><b id="ivfScanned_0904">3 of 10</b></div>
+<div><span>BEST FOUND</span><b id="ivfBest_0904">(10, 2), d=2.4042</b></div>
+<div><span>RESULT</span><b id="ivfResult_0904">MISS</b></div>
+</div>
+<div class="prob-bars" id="ivfBars_0904" role="img" aria-label="A bar showing the fraction of the corpus scanned">
+<div class="prob-row" id="ivfBarRow_0904"><span>Fraction of corpus scanned</span><div class="bar-track"><div class="bar-fill" id="ivfBarFill_0904" style="width:30%"></div></div><span id="ivfBarOut_0904">30%</span></div>
+</div>
+<div class="callout" id="ivfVerdict_0904" aria-live="polite"></div>
+<div class="callout warning">This lab uses this concept's own fixed 10-point corpus and query -- a real, hand-verified miss and catch, not a general claim about how often IVF misses on arbitrary data.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>IVF vs. HNSW, genuinely different strategies</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>IVF (this concept)</th><th>HNSW (Concept 03)</th></tr></thead>
+<tbody>
+<tr><td>Partition-based -- precomputed clusters, exhaustive scan within probed ones</td><td>Graph-based -- precomputed edges, greedy descent</td></tr>
+<tr><td>Coarse filter (nlist centroids) then a local brute-force scan</td><td>No coarse/fine split -- one continuous greedy walk, layer by layer</td></tr>
+<tr><td>Own parameters: nlist, nprobe</td><td>Own parameters: M, ef_construction, ef_search</td></tr>
+<tr><td>Degenerates to exact search at nprobe=nlist</td><td>No equivalent degenerate case -- graph structure remains regardless of ef_search</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>TOO FEW PROBES</span><h3>nprobe set too low for the corpus's own cluster overlap</h3><p>Symptom: this concept's own worked example -- a real, confirmed miss, at a rate that must be measured on real data, not assumed away.</p></article>
+<article class="info-card"><span>STALE CENTROIDS</span><h3>Centroids never retrained as the corpus grows</h3><p>Symptom: newly inserted vectors keep getting assigned to increasingly ill-fitting existing centroids, the same pattern this concept's own fourth C2 point demonstrates at toy scale.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The nearest cluster always contains the true nearest neighbour</td><td>False -- Section 10's own worked example shows a real, confirmed miss when the true answer sits in the second-nearest cluster.</td></tr>
+<tr><td>IVF is a simplified version of HNSW</td><td>False -- they are two separate real mechanisms with separate parameters and separate failure modes, shipped as separate FAISS index classes.</td></tr>
+<tr><td>A higher nprobe is always worth the extra scanning cost</td><td>False -- Section 10's own nprobe=3 case shows the cost can rise all the way back to Concept 01's own exhaustive search, erasing IVF's entire speedup.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>nprobe is the dial tuned in production, exactly like Concept 03's own ef_search -- raised until measured recall clears the product's own bar.</li>
+<li>nlist is a build-time choice, sized via FAISS's own nlist ≈ C·√n rule of thumb, far more expensive to change than nprobe.</li>
+<li>IVF's own memory footprint is typically lower than HNSW's -- Concept 06 (recall-latency-memory trade-offs) generalizes this comparison across all three named ANN families.</li>
+<li>IVF is very commonly paired with quantization in real systems (FAISS's own IVF-PQ) -- Concept 05 builds quantization's own mechanics next.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Describe IVF's search rule from memory.</summary><div>Partition the corpus into nlist clusters ahead of time via centroid assignment; at query time, exhaustively search only the nprobe clusters whose centroids are nearest the query.</div></details>
+<details class="quiz"><summary>Why does nprobe=1 miss the true nearest neighbour in this concept's own worked example?</summary><div>Because the true nearest neighbour, (8,4) at distance 0.4243, is assigned to C2 -- the second-nearest cluster to the query, not the nearest (C3) -- and nprobe=1 only ever probes the single nearest cluster.</div></details>
+<details class="quiz"><summary>What happens to IVF's own speedup at nprobe=nlist?</summary><div>It disappears entirely -- every cluster gets searched, which is identical in effect to Concept 01's own exhaustive exact search, with the fraction-scanned formula (nprobe÷nlist) reaching 1.0.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different toy corpus has two clusters with centroids at (2,2) and (8,8). Cluster A holds (1,1), (2,3), (3,2). Cluster B holds (7,7), (9,9), (8,6). A query arrives at (4,4). Rank the two centroids by distance to the query, then determine which points get scanned at nprobe=1, and identify the best candidate found. Separately, brute-force check all six points to determine the true global nearest neighbour, and state whether nprobe=1 finds it.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Distance from (4,4) to centroid (2,2) ≈ 2.8284; to centroid (8,8) ≈ 5.6569 -- cluster A (centroid (2,2)) is nearer. At nprobe=1, only cluster A is scanned: (1,1) at distance ≈4.2426, (2,3) at distance ≈2.2361, (3,2) at distance ≈2.2361. Best found: a tie between (2,3) and (3,2), both at ≈2.2361. Brute-force across all six points: cluster B's (8,6) is at distance ≈4.4721, farther than either tied candidate in cluster A -- so nprobe=1 <b>does</b> find the true global nearest neighbour here, unlike Section 10's own worked example, since this query sits closer to its own cluster's members than to anything across the boundary.</div>
+</details>
+<p>Teach-back: what real property of this exercise's own query (compared to Section 10's own query) makes nprobe=1 succeed here when it failed there?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>IVF partitioning</h3><ul><li><b>Definition:</b> partition the corpus into nlist clusters ahead of time; search only the nprobe nearest clusters per query</li><li><b>The parameters, cited:</b> nlist (FAISS's own Faiss-indexes wiki), nprobe -- and the page's own failure case, quoted verbatim</li><li><b>Memorable example:</b> this concept's own ten-point corpus -- nprobe=1 misses the true nearest neighbour (0.4243 away) sitting in the second-nearest cluster; nprobe=2 finds it.</li></ul></div>
+<div><h3>Module 09 · 4/10</h3><p>Concept 05, "Product and scalar quantization," is next -- a third mechanism, often paired directly with this concept's own IVF.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is IVF described as a "coarse filter, then a fine scan," rather than a single search step?</summary><div>Because it makes two structurally different comparisons: a cheap comparison against all nlist centroids to pick which clusters to probe, then an exhaustive, Concept-01-style brute-force scan only inside the probed clusters.</div></details>
+<details class="quiz"><summary>Mathematical: for nlist=1000 and nprobe=20, estimate the fraction of the corpus scanned per query.</summary><div>Approximately nprobe÷nlist = 20÷1000 = 0.02, or about 2% of the corpus -- FAISS's own page notes this is an approximation, since inverted lists are rarely equal in size.</div></details>
+<details class="quiz"><summary>Coding: extend this concept's own ivf_search function to also return the number of points scanned.</summary><div>Return len(candidates) alongside the best point and the probed cluster list -- for nprobe=1 in this concept's own worked example, that would be 3; for nprobe=2, 7.</div></details>
+<details class="quiz"><summary>System design: how would you choose nlist and nprobe for a new million-vector deployment?</summary><div>Start from FAISS's own rule of thumb, nlist ≈ C·√n, then measure recall@k on a real held-out query set while sweeping nprobe upward from a small value, stopping once recall clears the product's own bar -- the same measure-don't-assume discipline Concept 02 already established.</div></details>
+<details class="quiz"><summary>Debugging: after a bulk data load, IVF recall dropped even though nprobe was unchanged. What do you check first?</summary><div>Whether the newly inserted vectors are landing disproportionately in a few existing clusters (unbalanced inverted lists, exactly the pattern this concept's own fourth C2 point demonstrates), which quietly shifts the true nprobe÷nlist scanned-fraction approximation away from what was originally measured.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes"><b>Faiss indexes — FAISS wiki</b><br><span>The primary source for nlist, nprobe, the failure case quoted verbatim, and the IndexIVFFlat/IndexIVFPQ class names.</span></a>
+<a href="https://en.wikipedia.org/wiki/K-means_clustering"><b>k-means clustering — Wikipedia</b><br><span>The centroid-assignment rule, cited at reference depth only; Module 11's own future module owns its full derivation.</span></a>
+<a href="https://arxiv.org/abs/1603.09320"><b>HNSW paper — Malkov &amp; Yashunin, arXiv:1603.09320</b><br><span>Reused from Concept 03 as this concept's own direct contrast point.</span></a>
+<a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search"><b>Nearest neighbor search — Wikipedia</b><br><span>The formal definitional backdrop both this concept's and Concept 03's own toy examples instantiate concretely.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 4/10</span>
+<h3>Partition first. Search locally.</h3>
+<p>You can now describe IVF's partition-then-probe rule from memory; trace a small clustered corpus by hand and confirm a real miss and a real catch against a brute-force check; name nlist and nprobe from FAISS's own documentation; and explain why nprobe=nlist erases IVF's own speedup entirely. Concept 05, "Product and scalar quantization," is next -- a third mechanism, often paired directly with this concept's own IVF.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Cluster Probe Selector ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 4 of 10 concepts. Next concept: Concept 05, Product and scalar quantization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 04 · Active</p>
+<a href="module-09-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

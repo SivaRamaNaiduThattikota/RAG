@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's second concept names the fundamental trade-off every real vector index makes: skip most of the corpus on purpose, in exchange for a small, measured chance of missing the true nearest neighbour. On FAISS's own published SIFT1M benchmark (1,000,000 vectors, 128 dimensions, 10,000 queries), exact search takes 0.91 ms/query at 100% recall@1. nmslib's HNSW index answers the same queries in 0.0081 ms/query -- about 112.3x faster -- but its recall@1 drops to 81.95%, missing the true nearest neighbour roughly 1 in 5.5 queries. IVF16384,Flat sits at a different point on the same curve: 0.0538 ms/query (16.9x faster than exact) at 89.80% recall@1. HNSW and IVF's own internal mechanics are named forward only, deferred to Concepts 03-04.">
+<title>Approximate nearest-neighbour vector search — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 02</p>
+<h1>Skip most of the corpus.<br><em>On purpose.</em></h1>
+<p class="lesson-lead">Concept 01 costed out exact search and found its real, computable price: milliseconds that grow linearly with the corpus, guaranteed correct because nothing is skipped. This concept names the alternative every later concept in the module builds on: approximate nearest-neighbour (ANN) search deliberately skips most of the corpus, trading a small, measured amount of recall for a real, often dramatic speedup. On the standard SIFT1M benchmark, one real approximate index answers queries about 112 times faster than exact search -- and misses the true nearest neighbour for roughly one query in 5.5. That trade is the whole subject here.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second concept of Module 09 (2/10) -- opens the module's real trade-off, right after Concept 01's exact baseline</b></div>
+<div><span>PREREQUISITE</span><b>Module 09 Concept 01's T_wall formula and its 484-GFLOPS/AMD-Ryzen-5-3600 baseline (cited); Module 05 Concept 08's recall@k formula, Rec@k = |R_k ∩ Rel| / |Rel| (cited verbatim); Module 04 Concept 09's O(n·d)/O(n log n)/O(n·d)-space (cited)</b></div>
+<div><span>BEGINNER GOAL</span><b>Define ANN search; state recall@k's formula from memory; read one real recall-vs-speed operating point and explain why it's a deliberate trade, not a defect</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A bounded, measured chance of being wrong -- in exchange for speed</h2>
+</div>
+<p>Concept 01 scored every stored vector. This concept scores only some of them, on purpose, and puts a real number on what that costs in correctness.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Approximate nearest-neighbour (ANN) search -- skip most of the corpus, on purpose</h3>
+<div class="mental-compare">
+<div><span>EXACT (Concept 01)</span><p>Score the query against every stored vector, then sort. Guaranteed correct -- nothing skipped, but the cost grows linearly with the corpus.</p></div>
+<div><span>APPROXIMATE (this concept)</span><p>Score only a subset of the corpus, chosen by some index structure, then sort that subset. Usually correct, real speedup, real bounded chance of missing the true best match.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> approximate nearest-neighbour search skips most of the corpus on purpose, trading a small, measured amount of recall for a large, real speedup.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 01's own crossover made this necessary</h3>
+<p>Concept 01's own worked example showed exact search's crossover past a 100 ms interactive-latency budget landing between 10 million and 100 million vectors, at d=1,024 on its cited hardware. That crossover is real and reachable -- plenty of production corpora exceed it. Once a corpus passes that point, exact search's own guarantee (always correct) stops mattering if the answer no longer arrives in time. ANN search exists because that trade -- a little less guaranteed correctness for a lot more speed -- is often exactly what a real system needs.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>112.3x faster, 18.05 recall points cheaper</h3>
+<p>On FAISS's own published SIFT1M benchmark (1,000,000 base vectors, 128 dimensions, 10,000 queries, measured on an Intel Xeon E5-2680 v2), exact search ("Flat-CPU") takes 9.100 s to answer all 10,000 queries -- <b>0.91 ms per query</b>, at <b>100% recall@1</b> (guaranteed, since exact search skips nothing). nmslib's HNSW index answers the same 10,000 queries in 0.081 s -- <b>0.0081 ms per query</b>, about <b>112.3x faster</b> -- but its recall@1 drops to <b>81.95%</b>. In plain language: HNSW answers each query roughly 112 times faster, but misses the true nearest neighbour for about 1 query in every 5.5.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0902-b03-title">
+<strong class="concept-visual-title" id="c0902-b03-title">VISUAL · SCORE ONLY SOME OF THE CORPUS, RISK A MISS</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0902-svg-title-b c0902-svg-desc-b">
+<title id="c0902-svg-title-b">A query point compares against only some of a scattered field of stored vectors, collapsing into a ranked list that may miss the true best match</title>
+<desc id="c0902-svg-desc-b">Left: a single query point. Middle: nine scattered stored-vector points. Four of them (chosen by some index structure, not shown) get a solid comparison line to the query and are scored; five are skipped entirely, shown with faint dashed outlines and no line at all -- contrasting directly with Concept 01's diagram, where every point got a solid line. Right: the four scored points redrawn as a ranked list. One skipped point, marked with a warning triangle, was actually the true nearest neighbour and never got scored -- the visual chance of a miss that recall@1 measures.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<circle cx="34" cy="100" r="6" fill="#2f6f5c"/>
+<text x="10" y="118" font-size="7">QUERY</text>
+<circle cx="150" cy="34" r="3.5" fill="#3a5f95"/>
+<circle cx="168" cy="58" r="3.5" fill="#3a5f95"/>
+<circle cx="176" cy="92" r="3.5" fill="#3a5f95"/>
+<circle cx="164" cy="158" r="3.5" fill="#3a5f95"/>
+<circle cx="140" cy="72" r="3" fill="none" stroke="#8f9481" stroke-dasharray="2 2"/>
+<circle cx="148" cy="108" r="3" fill="none" stroke="#8f9481" stroke-dasharray="2 2"/>
+<circle cx="172" cy="126" r="3" fill="none" stroke="#b3543a" stroke-dasharray="2 2"/>
+<circle cx="138" cy="140" r="3" fill="none" stroke="#8f9481" stroke-dasharray="2 2"/>
+<circle cx="146" cy="172" r="3" fill="none" stroke="#8f9481" stroke-dasharray="2 2"/>
+<line x1="34" y1="100" x2="150" y2="34" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="168" y2="58" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="176" y2="92" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="164" y2="158" stroke="#c9cdb9" stroke-width="0.8"/>
+<text x="176" y="126" font-size="7" fill="#b3543a">✕ true NN</text>
+<text x="90" y="18" font-size="7">SCORE A SUBSET ONLY</text>
+<line x1="220" y1="14" x2="220" y2="188" stroke="#c9cdb9" stroke-width="1"/>
+<rect x="228" y="20" width="96" height="16" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="232" y="31" fill="#2f6f5c">1 · score 0.94</text>
+<rect x="228" y="38" width="96" height="16" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="232" y="49" fill="#2f6f5c">2 · score 0.89</text>
+<rect x="228" y="56" width="96" height="14" fill="none" stroke="#8f9481" stroke-width="1"/>
+<text x="232" y="66" fill="#5a5f52">3 · score 0.81</text>
+<rect x="228" y="72" width="96" height="14" fill="none" stroke="#8f9481" stroke-width="1"/>
+<text x="232" y="82" fill="#5a5f52">4 · score 0.66</text>
+<text x="228" y="102" font-size="7" fill="#b3543a">true NN never scored --</text>
+<text x="228" y="112" font-size="7" fill="#b3543a">a miss, not returned</text>
+<text x="222" y="8" font-size="7">RANKED, POSSIBLY WRONG</text>
+</g>
+</svg>
+<figcaption>Only 4 of the 9 stored vectors get scored -- five are skipped by whatever index structure chose the subset (Concepts 03-05, named forward only). Here the skipped true nearest neighbour (marked ✕) never makes the ranked list -- exactly the kind of miss recall@1 measures across many queries.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Some structure narrows the candidates -- unspecified here, on purpose</h3>
+<p>An ANN index pre-organizes the corpus somehow, so that at query time only a small fraction of the n stored vectors ever get scored -- far fewer than Concept 01's exhaustive n. Exactly how that structure is built and searched is deliberately not explained at this depth: HNSW (a graph, Concept 03), IVF (a partitioning scheme, Concept 04), and quantization (a compression scheme, Concept 05) are three different real answers to "which structure," each named forward only. This concept's job is just the trade-off those structures all exist to make: fewer candidates scored, real speedup, a real bounded chance of missing the true best.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span>Vectors [Module 08, done, stored at O(n·d) space]</span><i>→</i>
+<span class="hot">Retrieval [THIS concept -- an index narrows candidates, sub-O(n·d), mechanism TBD Concepts 03-05]</span><i>→</i>
+<span>Context</span><i>→</i>
+<span>LLM</span><i>→</i>
+<span>Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three things beginners conflate</h3>
+<div class="distinction-table" role="table" aria-label="Exact search, approximate search and recall at k distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Exact / brute-force search (Concept 01)</span><span role="cell">Scores every stored vector. Guaranteed correct, cost grows linearly with n.</span></div>
+<div role="row"><span role="cell">Approximate nearest-neighbour search (this concept)</span><span role="cell">Scores only a subset, chosen by an index structure. Usually correct, real speedup, real bounded miss rate.</span></div>
+<div role="row"><span role="cell">Recall@k (Module 05 Concept 08, cited)</span><span role="cell">The metric that measures how often approximate search's "usually correct" actually holds. Not a search method itself -- a yardstick for one.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Approximate means unreliable or random."</b><p>False -- ANN's miss rate is a bounded, measured, tunable quantity. SIFT1M's own HNSW row misses about 1 query in 5.5, not "sometimes, unpredictably."</p></div>
+<div><b>"100% recall is always the goal."</b><p>False -- accepting less than 100% recall in exchange for real speed is a deliberate product decision, not a failure. Section 10's own IVF16384,Flat row shows a different, equally valid choice on the same curve.</p></div>
+<div><b>"There's one universal recall/speed number for any ANN index."</b><p>False -- the same SIFT1M corpus produces two different operating points (HNSW and IVF16384,Flat) with different recall and different speed. It's a dial, not a fixed constant.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where the Oracle RAG project will eventually make this trade</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's own vector-index choice</b><p>Concept 01's crossover point (10M-100M vectors, at d=1,024, against a 100 ms budget) is the concrete trigger. Once the project's corpus approaches that range, accepting some recall loss for speed stops being optional.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 2/10</b><p>Concept 03 names the first real ANN mechanism (HNSW) that makes this trade concrete.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define ANN search in one sentence</b><p>Score only a subset of the corpus, chosen by some index structure, trading a bounded amount of guaranteed correctness for real speed.</p></div>
+<div><b>State recall@k's formula from memory</b><p>Rec@k = |R_k ∩ Rel| / |Rel| -- Module 05 Concept 08's own formula, cited unchanged. In the ANN setting, |Rel| = 1 (the singleton true nearest neighbour), averaged over many queries.</p></div>
+<div><b>Explain why a real system might choose 90% recall over 100%</b><p>Because the speedup on offer (here, up to ~112x) can be worth far more to a product's real latency budget than the last few points of recall -- a trade-off, not a defect.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does exact search always score 100% recall@1, by definition?</li>
+<li>What does it mean, concretely, for an index to have "81.95% recall@1" on a 10,000-query test set?</li>
+<li>Why can two different real indexes (HNSW and IVF16384,Flat) on the identical corpus have two different recall/speed numbers?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 2 OF 10</h3>
+<p>This concept named the fundamental trade-off -- recall for speed -- that every indexing structure in this module makes in its own way. Concept 03, "HNSW graph construction and search," is next: the first concept to actually explain how one of these index structures narrows the candidate set, rather than just naming that it does.</p>
+<div class="beginner-memory"><b>Concept 02 is active.</b> Module 09 stands at 2 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-01.html">← Back to Concept 01's exact baseline</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One real trade-off, two operating points</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>0.91 ms → 0.0081 ms, 112.3x</b><small>The beginner-convention headline: exact vs. nmslib HNSW, SIFT1M.</small></a>
+<a href="#s10"><span>02</span><b>Two operating points, one corpus</b><small>Adds IVF16384,Flat -- the full three-row SIFT1M table.</small></a>
+<a href="#s14"><span>03</span><b>The Recall/Speed Trade-off Bench</b><small>The lab -- snap between three real, named, pre-measured points.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full worked example, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> Concept 01's crossover motivates skipping candidates → an index (mechanism TBD, Concepts 03-05) scores only a subset → recall@k (Module 05 Concept 08's own formula, cited) measures how often that subset still contains the truth → SIFT1M's own real numbers show the trade in action → the lab lets you feel the dial.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Approximate nearest-neighbour vector search" deep dive</b><em>The full three-row SIFT1M table, the toy from-scratch code, and The Recall/Speed Trade-off Bench lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's second concept -- the trade-off everything else in the module makes</h2></div></header>
+<p>This is the second concept of Module 09, "Vector indexes and vector databases" (2/10), immediately following Concept 01's exact/brute-force baseline. Concepts 03-05 (HNSW, IVF, quantization) are three different real mechanisms for making the trade this concept names; Concept 06 (recall-latency-memory trade-offs) generalizes it further. None of those mechanisms are explained here -- this concept owns only the trade-off itself, and one real, cited worked example of it.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Approximate nearest-neighbour (ANN) search</h3><p>Score a chosen subset of the corpus instead of all of it, in exchange for a bounded, measured recall loss.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Module 05 Concept 08's recall@k, unchanged</h3><p>Rec@k = |R_k ∩ Rel| / |Rel| -- cited directly, with |Rel|=1 in the ANN setting.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>A real recall-vs-speed operating point</h3><p>From FAISS's own published SIFT1M numbers -- speedup and recall gap, both derived directly.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Exact vs. three forward-named approximate families</h3><p>HNSW, IVF, quantization -- named once each here, mechanisms deferred to Concepts 03-05.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-01.html">Module 09 Concept 01</a></b> -- exact search's own T_wall formula and its 484-GFLOPS/AMD-Ryzen-5-3600 baseline, reused as the "exact" comparison point (T_exact), cited unchanged.</li>
+<li><b><a href="module-05-concept-08.html">Module 05 Concept 08</a></b> -- recall@k's sets-based definition, Rec@k = |R_k ∩ Rel| / |Rel|, cited verbatim, not re-derived.</li>
+<li><b><a href="module-04-concept-09.html">Module 04 Concept 09</a></b> -- O(n·d)/O(n log n)/O(n·d)-space, cited, not re-derived.</li>
+<li><b>Module 08</b> -- the real embedding vectors this module searches over, cited by reference only.</li>
+<li><b>Explicitly out of scope:</b> HNSW graph construction, IVF partitioning, and quantization's own mechanics (Concepts 03-05) -- named forward only, never explained in this concept.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A librarian who checks only a cleverly-chosen shelf</h2></div></header>
+<p>Concept 01's librarian personally checked every single book before naming the best match -- slow but always right. This concept's librarian instead checks only a cleverly-chosen subset of shelves (chosen by some filing system not described here), and answers almost immediately. Almost always the book they hand back really is the best match. Occasionally -- roughly 1 time in 5.5, on this concept's own worked example -- the true best match was sitting on a shelf the librarian never checked.</p>
+<div class="callout warning"><b>Analogy boundary</b>This captures the recall/speed <i>shape</i> of the trade-off only -- it does not capture any specific filing system. HNSW's graph, IVF's partitioning, and quantization's compression (Concepts 03-05) are three different real "filing systems," none of them described by this analogy or by this concept.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Approximate nearest-neighbour (ANN) search</td><td>Score only a subset of the corpus, chosen by an index structure, then sort that subset -- usually but not always correct</td><td>—</td></tr>
+<tr><td>Relevant set (Module 05 Concept 08, cited)</td><td>Every item judged relevant to the query</td><td>Rel</td></tr>
+<tr><td>Recall@k (Module 05 Concept 08, cited verbatim)</td><td>The fraction of the relevant set that was retrieved</td><td>Rec@k = |R_k ∩ Rel| / |Rel|</td></tr>
+<tr><td>ANN recall@1 (this concept's instantiation of the formula above)</td><td>Rec@k with k=1 and |Rel|=1 (the singleton true nearest neighbour for one query), averaged over a test set of queries</td><td>R@1, reported as 1-R@1 per FAISS's own usage</td></tr>
+<tr><td>Speedup</td><td>How many times faster the approximate index answers a query than exact search on the identical corpus</td><td>speedup = T_exact ÷ T_approx</td></tr>
+<tr><td>Recall loss / miss probability</td><td>The chance a query's true nearest neighbour is absent from the returned result</td><td>1 − Rec@k</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Deliberately abstract -- what this concept does NOT build</h2></div></header>
+<p>An ANN index restricts which candidates ever get scored, using some corpus-specific structure. That structure is what Concepts 03-05 build: HNSW constructs a navigable graph over the vectors (Concept 03); IVF partitions the corpus into clusters and searches only the nearest few (Concept 04); quantization compresses vectors so more of them fit in memory and get scored per unit time (Concept 05). This concept builds none of those three things. Its own mechanism is one level up: whatever the structure, the result is fewer candidates scored, a real speedup, and a real, measurable chance that the true best match was among the candidates that got skipped.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>A partial fan, not a complete one</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Score a chosen subset · sub-O(n·d)</b><small>Fewer candidates than Concept 01's exhaustive n</small></div>
+<div class="diagram-node"><b>Query vector</b><small>Same query, same embedding space</small></div>
+<div class="diagram-node"><b>Some structure picks a subset</b><small>HNSW / IVF / quantization -- mechanism TBD, Concepts 03-05</small></div>
+<div class="diagram-node"><b>Ranked result, possibly missing the true best</b><small>Measured by recall@k, Module 05 Concept 08's own formula</small></div>
+</div>
+<p>Contrast directly with Concept 01's own Section 07: there, every one of n candidates fanned out from the query and got scored, with no possibility of a miss. Here, the fan is partial -- some candidates never get a comparison line at all, and the ranked result can, occasionally, be missing the true best.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Same retrieval slot, a different real mechanism</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — stored, O(n·d) space, Module 08 done</span><i>↓</i><span class="hot">Retrieval — approximate, sub-O(n·d), mechanism TBD (Concepts 03-05)</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Two quantities, both cited, neither re-derived</h2></div></header>
+<div class="equation">speedup = T_exact ÷ T_approx — T_exact is Concept 01's own T_wall(n,d), cited unchanged</div>
+<div class="equation">recall loss = 1 − Rec@k — Rec@k is Module 05 Concept 08's own formula, cited unchanged; |Rel|=1 per query in the ANN setting</div>
+<p>Neither equation is new mathematics. This concept's own contribution is naming both quantities together and computing them on one real, published benchmark -- the worked example in Section 10.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>SIFT1M: one corpus, three real operating points</h2></div></header>
+<p><b>Source data</b> -- FAISS's own wiki page, "Indexing 1M vectors," SIFT1M table, measured on an Intel Xeon E5-2680 v2 @ 2.80GHz, 20 threads, batch mode. The standard SIFT1M benchmark, confirmed via INRIA's texmex corpus page to have n=1,000,000 base vectors, d=128 dimensions, and a query set of 10,000 queries -- the divisor used below to turn the table's batched totals into per-query estimates.</p>
+<table class="worked-table">
+<thead><tr><th>Index</th><th>Total time (10,000 queries)</th><th>Per-query time (derived)</th><th>1-R@1 (recall@1)</th></tr></thead>
+<tbody>
+<tr><td>Flat-CPU (exact, Concept 01's baseline)</td><td>9.100 s</td><td>0.91 ms</td><td>1.0000 (100%)</td></tr>
+<tr><td>IVF16384,Flat</td><td>0.538 s</td><td>0.0538 ms</td><td>0.8980 (89.80%)</td></tr>
+<tr><td>nmslib (HNSW)</td><td>0.081 s</td><td>0.0081 ms</td><td>0.8195 (81.95%)</td></tr>
+</tbody>
+</table>
+<p><b>Per-query numbers are derived, not directly tabulated.</b> FAISS's own page reports batched totals across all 10,000 queries, not a literal per-query latency; the per-query figures above divide each total by 10,000 -- a real, computable estimate consistent with the cited hardware's batch-mode measurement, not a number FAISS states directly. The 10,000-query divisor itself was independently confirmed from a second source (INRIA's texmex corpus page), not assumed from the FAISS page alone.</p>
+<p><b>Headline comparison (HNSW vs. exact).</b> Trading recall for speed via nmslib's HNSW index costs 18.05 recall points (100% → 81.95%) in exchange for a ≈112.3x speedup (0.91 ms → 0.0081 ms per query). HNSW misses the true nearest neighbour for roughly 1 in 5.5 queries, but answers each query about 112 times faster than exact search, on the identical 1-million-vector, 128-dimension corpus.</p>
+<p><b>Second operating point (IVF16384,Flat) -- the trade-off is a dial, not one fixed number.</b> IVF16384,Flat trades away only 10.20 recall points (100% → 89.80%) for a smaller ≈16.9x speedup (0.91 ms → 0.0538 ms). HNSW is itself ≈6.64x faster than IVF16384,Flat here, but at 7.85 fewer recall points (89.80% → 81.95%). Two different real, named indexes sit at two different points on the same recall-vs-speed curve, on the identical corpus.</p>
+<p><b>Recall@k, cited, not re-derived.</b> The 1-R@1 figures above are Module 05 Concept 08's own Rec@k = |R_k ∩ Rel| / |Rel| formula, instantiated with |Rel|=1 -- the singleton true nearest neighbour for one query -- and averaged across the 10,000-query test set. FAISS's own page defines 1-R@1 as "the fraction of query vectors where the actual nearest-neighbor is ranked in the R first results," matching that formula exactly.</p>
+<figure class="concept-visual" aria-labelledby="c0902-s10-title">
+<strong class="concept-visual-title" id="c0902-s10-title">VISUAL · RECALL@1 vs. PER-QUERY TIME (SIFT1M, log-scale time axis)</strong>
+<svg class="vector-plane" viewBox="0 0 400 220" role="img" aria-labelledby="c0902-svg-title-s10 c0902-svg-desc-s10" style="max-width:560px">
+<title id="c0902-svg-title-s10">A scatter plot placing three real SIFT1M operating points by recall@1 on the x-axis and per-query time on a log-scale y-axis</title>
+<desc id="c0902-svg-desc-s10">X-axis: recall@1, from 80% to 100%. Y-axis: per-query time on a log scale, from 0.001 ms to 10 ms. Three points: Flat-CPU (exact) at 100% recall and 0.91 ms; IVF16384,Flat at 89.80% recall and 0.0538 ms; nmslib HNSW at 81.95% recall and 0.0081 ms. All three sit on a downward-sloping curve -- lower recall pairs with lower (faster) time, showing recall traded directly for speed.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<line x1="55" y1="20" x2="55" y2="190" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="55" y1="190" x2="380" y2="190" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="55" y1="20" x2="380" y2="20" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="55" y1="62.5" x2="380" y2="62.5" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="55" y1="105" x2="380" y2="105" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="55" y1="147.5" x2="380" y2="147.5" stroke="#e4e7d9" stroke-width="0.6"/>
+<text x="8" y="23" font-size="7">10 ms</text>
+<text x="12" y="65.5" font-size="7">1 ms</text>
+<text x="4" y="108" font-size="7">0.1 ms</text>
+<text x="2" y="150.5" font-size="7">0.01 ms</text>
+<text x="0" y="193" font-size="7">0.001 ms</text>
+<text x="60" y="205" font-size="7">80%</text>
+<text x="152" y="205" font-size="7">85%</text>
+<text x="244" y="205" font-size="7">90%</text>
+<text x="336" y="205" font-size="7">95% / 100%</text>
+<text x="150" y="216" font-size="7">RECALL@1 (log-scale time axis)</text>
+<circle cx="372" cy="65" r="4.5" fill="#2f6f5c"/>
+<text x="330" y="56" fill="#2f6f5c">Flat-CPU 0.91ms</text>
+<circle cx="256" cy="152" r="4.5" fill="#3a5f95"/>
+<text x="200" y="143" fill="#3a5f95">IVF16384 0.0538ms</text>
+<circle cx="118" cy="177" r="4.5" fill="#b3543a"/>
+<text x="60" y="168" fill="#b3543a">HNSW 0.0081ms</text>
+<line x1="372" y1="65" x2="256" y2="152" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="3 2"/>
+<line x1="256" y1="152" x2="118" y2="177" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="3 2"/>
+</g>
+</svg>
+<figcaption>Lower recall pairs with faster time, along one curve on one real corpus. Exact search anchors the top-right corner at 100% recall; HNSW and IVF16384,Flat sit at two different points further down and to the left -- two real, deliberate choices, not two accidents.</figcaption>
+</figure>
+<div class="callout"><b>Hardware and corpus caveat</b>This concept's 0.91 ms figure and Concept 01's own 4.23 ms figure are not directly comparable on an absolute-ms basis -- they come from different hardware (this concept: Intel Xeon E5-2680 v2, 2018-era, 20 threads, batch mode, d=128; Concept 01: a computed estimate at 484 GFLOPS on an AMD Ryzen 5 3600, d=1,024) and different corpora. Only the relative numbers within this concept's own table -- the speedup ratios and recall gaps -- are meant to be compared to each other.</div>
+<div class="callout"><b>Verification method</b>A Node.js script performed the four core divisions and three ratios directly (9.100/10000×1000, 0.081/10000×1000, 0.538/10000×1000, and the three speedup/gap ratios) rather than by hand. Confirmed outputs: Flat-CPU per-query = 0.91 ms; HNSW per-query = 0.0081 ms; HNSW speedup = 112.34567901234568 (112.3x); recall gap = 18.05 points; IVF16384,Flat per-query = 0.0538 ms; IVF speedup = 16.914498141263937 (16.9x); IVF recall gap = 10.199999999999998 (10.20 points); HNSW-vs-IVF speed ratio = 6.641975308641976 (6.64x); IVF exceeds HNSW recall by 7.850000000000001 points. The 10,000-query divisor was independently cross-checked against a second source (INRIA's texmex corpus page) rather than assumed.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A chatbot's retrieval step</h3><p>90% recall is often an acceptable, documented trade-off for sub-millisecond latency -- exactly IVF16384,Flat's own operating point above.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>A single-candidate corpus</h3><p>When n=1, there's nothing to skip -- approximate and exact search are identical, since any index structure has only one candidate to consider.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Choosing an index without measuring its real recall on your own data</h3><p>SIFT1M's own numbers above don't transfer automatically to a different dataset or query distribution -- they describe this one corpus, on this one hardware, at this one moment.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A deliberately naive "toy ANN" -- the general shape only</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- ILLUSTRATES THE SHAPE, NOT ANY REAL ALGORITHM (HNSW/IVF ARE CONCEPTS 03-04)</span>
+<pre><code>import random
+
+def cosine(u, v):
+    dot = sum(a * b for a, b in zip(u, v))
+    norm_u = sum(a * a for a in u) ** 0.5
+    norm_v = sum(b * b for b in v) ** 0.5
+    return dot / (norm_u * norm_v)
+
+def exact_top1(query, vectors):
+    # Concept 01's own mechanism, unchanged -- score everyone, keep the best.
+    return max(vectors, key=lambda pair: cosine(query, pair[1]))
+
+def toy_ann_top1(query, vectors, m, rng):
+    # NOT a real index -- no graph, no partitioning, no quantization.
+    # Scores only a random subset of size m &lt; n, illustrating the general
+    # shape (fewer candidates scored -&gt; real chance of missing the truth)
+    # without pre-empting Concepts 03-05's own real mechanisms.
+    subset = rng.sample(vectors, min(m, len(vectors)))
+    return max(subset, key=lambda pair: cosine(query, pair[1]))
+
+def measure_recall(vectors, num_queries, m, dims, trials, seed=0):
+    rng = random.Random(seed)
+    hits = 0
+    for _ in range(trials):
+        query = [rng.uniform(-1, 1) for _ in range(dims)]
+        true_best = exact_top1(query, vectors)
+        approx_best = toy_ann_top1(query, vectors, m, rng)
+        if approx_best[0] == true_best[0]:
+            hits += 1
+    return hits / trials
+
+rng = random.Random(42)
+dims = 8
+corpus = [(i, [rng.uniform(-1, 1) for _ in range(dims)]) for i in range(200)]
+
+# Scoring every candidate (m == n) must always match exact search.
+recall_full = measure_recall(corpus, 1, len(corpus), dims, trials=20, seed=1)
+assert recall_full == 1.0
+
+# Scoring a small subset (m &lt;&lt; n) can, sometimes, miss the true best --
+# recall drops below 1.0, the exact shape this concept describes.
+recall_partial = measure_recall(corpus, 1, 20, dims, trials=200, seed=2)
+assert 0.0 &lt;= recall_partial &lt; 1.0
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for this trade-off</h2></div></header>
+<p><a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors">FAISS's "Indexing 1M vectors" wiki page</a> is this concept's primary source: its own SIFT1M table (Flat-CPU, nmslib HNSW, IVF16384,Flat) with reported 1-R@1 and total search time, the direct origin of Section 10's worked example. FAISS's own index naming makes the contrast concrete: <code>IndexFlat*</code> types are exhaustive/exact (Concept 01), while its other index types (<code>IndexIVF*</code>, <code>IndexHNSW*</code>, product-quantized variants) are literally named for trading exactness for speed. <a href="http://corpus-texmex.irisa.fr/">INRIA's texmex corpus page</a> confirms SIFT1M's own dataset size (1,000,000 base vectors, 10,000 queries, 128 dimensions), the divisor behind Section 10's per-query estimates. <a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search">Nearest neighbor search (Wikipedia)</a> gives the formal definition this concept's title term extends, contrasting exact against approximate methods directly. ann-benchmarks.com is the standard place recall-vs-speed curves like Section 10's own get published across many real indexes and datasets -- named here as a pointer, not as a numeric source, since its result tables render client-side rather than appearing as static numbers.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Recall/Speed Trade-off Bench</h2></div></header>
+<div class="lab">
+<p>Snap between three real, named operating points measured on the identical SIFT1M corpus. The readouts update live: per-query time, speedup vs. exact search, recall@1, and the chance this query's true nearest neighbour is missing from the result.</p>
+<div class="lab-actions" role="group" aria-label="Choose an index">
+<button type="button" class="secondary active" data-index="exact">Exact (Flat-CPU)</button>
+<button type="button" class="secondary" data-index="ivf">IVF16384,Flat</button>
+<button type="button" class="secondary" data-index="hnsw">nmslib (HNSW)</button>
+</div>
+<div class="norm-readout" id="annReadout_0902">
+<div><span>PER-QUERY TIME</span><b id="annTime_0902">0.9100 ms</b></div>
+<div><span>SPEEDUP vs. EXACT</span><b id="annSpeedup_0902">1.00x</b></div>
+<div><span>RECALL@1</span><b id="annRecall_0902">100.00%</b></div>
+<div><span>MISS PROBABILITY</span><b id="annMiss_0902">0.00%</b></div>
+</div>
+<div class="prob-bars" id="annBars_0902" role="img" aria-label="A bar showing the chance this query's true nearest neighbour is missing from the result">
+<div class="prob-row" id="annBarRow_0902"><span>Chance of a miss</span><div class="bar-track"><div class="bar-fill" id="annBarFill_0902" style="width:0%"></div></div><span id="annBarOut_0902">0.00% risk</span></div>
+</div>
+<div class="callout" id="annVerdict_0902" aria-live="polite"></div>
+<div class="callout warning">HNSW's and IVF's own internal mechanics -- how each one actually decides which candidates to score -- are not covered here (Concepts 03-04, named forward only). This lab treats both strictly as two real, named, pre-measured operating points on a recall/speed curve, not as algorithms to explain.</div>
+<div class="callout warning">Measured on one real, cited hardware/dataset combination (Intel Xeon E5-2680 v2, SIFT1M) -- a different setup would shift the exact numbers, but the recall-for-speed <i>shape</i> of the trade-off holds regardless.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Exact vs. three approximate families, named forward only</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Exact (Concept 01)</th><th>Approximate families (this concept names them; mechanisms in Concepts 03-05)</th></tr></thead>
+<tbody>
+<tr><td>Scores all n candidates -- guaranteed correct</td><td>HNSW: a navigable graph narrows candidates (Concept 03)</td></tr>
+<tr><td>O(n·d) per query, grows linearly with the corpus</td><td>IVF: partitions the corpus, searches only nearby clusters (Concept 04)</td></tr>
+<tr><td>100% recall@1, by definition, always</td><td>Quantization: compresses vectors so more fit in memory/time (Concept 05)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNMEASURED RECALL</span><h3>Deploying an ANN index without ever measuring its real recall</h3><p>Symptom: the index looks fast in a demo, then quietly returns wrong answers at a rate nobody ever measured on the real, held-out query set.</p></article>
+<article class="info-card"><span>BORROWED BENCHMARK</span><h3>Assuming a public benchmark's recall number transfers</h3><p>Symptom: SIFT1M's own 81.95%/89.80% figures get quoted for a completely different corpus and query distribution, where the true number could be meaningfully different.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Approximate means unreliable</td><td>False -- it's a measured, bounded, tunable quantity, not an unpredictable one.</td></tr>
+<tr><td>There's one universal recall/speed number for any ANN index</td><td>False -- Section 10's own two operating points on the identical corpus prove it's tunable, not fixed.</td></tr>
+<tr><td>A faster index is automatically the wrong choice if its recall is lower</td><td>False -- whether the trade is worth it depends on the product's own latency budget and recall requirement, not on recall alone.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Recall targets are a product/business decision, not a default -- there is no universally "correct" recall number.</li>
+<li>Recall must be measured on your own held-out query set, not assumed from a public benchmark like SIFT1M's own numbers above.</li>
+<li>Concept 01's own latency budgets combine directly with this concept's recall numbers to pick a real operating point.</li>
+<li>HNSW, IVF and quantization (Concepts 03-05) are three different real families with different cost profiles -- none is a universal "best" approximate index.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State recall@k's formula from memory.</summary><div>Rec@k = |R_k ∩ Rel| / |Rel| -- Module 05 Concept 08's own formula, cited unchanged.</div></details>
+<details class="quiz"><summary>Why does exact search always score 100% recall@1?</summary><div>Because it scores every stored vector, so the true nearest neighbour is always among the candidates considered -- by definition, nothing is skipped.</div></details>
+<details class="quiz"><summary>Why isn't a faster index automatically the wrong choice despite lower recall?</summary><div>Because the speedup on offer can be worth far more to a product's real latency budget than the recall points given up -- Section 10's own 112.3x-for-18.05-points trade is a deliberate, measured choice, not a defect.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A different approximate index, measured on its own real benchmark, reports 0.15 ms per query at 92.40% recall@1. Exact search on the identical corpus takes 3.60 ms per query at 100% recall@1. Compute the speedup, the recall gap in points, and judge whether this operating point clears a 1 ms per-query latency budget.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Speedup = T_exact ÷ T_approx = 3.60 ÷ 0.15 = <b>24x</b>. Recall gap = 100% − 92.40% = <b>7.60 points</b>. Against a 1 ms budget: exact search (3.60 ms) fails it; the approximate index (0.15 ms) clears it comfortably. This operating point passes the latency budget at a real, computable recall cost of 7.60 points.</div>
+</details>
+<p>Teach-back: why does clearing a latency budget say nothing at all about whether 92.40% recall is actually good enough for this particular product?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Approximate nearest-neighbour vector search</h3><ul><li><b>Definition:</b> score only a chosen subset of the corpus, trading a bounded, measured amount of recall for real speed</li><li><b>The formula, cited:</b> Rec@k = |R_k ∩ Rel| / |Rel| (Module 05 Concept 08); speedup = T_exact ÷ T_approx</li><li><b>Memorable example:</b> SIFT1M -- HNSW is ≈112.3x faster than exact search, at 18.05 fewer recall@1 points (100% → 81.95%).</li></ul></div>
+<div><h3>Module 09 · 2/10</h3><p>Concept 03, "HNSW graph construction and search," is next -- the first ANN mechanism gets its own concept.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what does recall@k actually measure?</summary><div>The fraction of a query's truly relevant results that the search actually returned -- Rec@k = |R_k ∩ Rel| / |Rel|. In the ANN setting, it's usually measured with |Rel|=1 (the singleton true nearest neighbour), averaged across many queries.</div></details>
+<details class="quiz"><summary>Mathematical: compute a speedup from two per-query ms figures.</summary><div>speedup = T_exact ÷ T_approx. For SIFT1M's own IVF16384,Flat row: 0.91 ms ÷ 0.0538 ms ≈ 16.9x.</div></details>
+<details class="quiz"><summary>Coding: extend the toy subset-scan code to report recall across many m values.</summary><div>Loop <code>measure_recall</code> over several values of m (e.g. 5, 20, 50, 100), holding trials and dims fixed, and plot or print recall as a function of m -- recall should rise monotonically toward 1.0 as m approaches n, the same shape SIFT1M's own three real rows show.</div></details>
+<details class="quiz"><summary>System design: how would you choose a recall target for a support-ticket RAG system?</summary><div>Start from the product's own latency budget (Concept 01's own framing) and a labeled query set representative of real support tickets; measure recall@k on that set for candidate indexes, then pick the fastest one whose measured recall still meets a business-defined acceptable-miss-rate threshold -- not a number borrowed from a public benchmark like SIFT1M.</div></details>
+<details class="quiz"><summary>Debugging: a service's measured recall dropped after a corpus update, but nothing about the index changed. What do you check first?</summary><div>Whether the underlying data distribution shifted -- new documents, a changed embedding model, or a query distribution that no longer matches what the index was tuned against. A benchmark's recall number, including this concept's own SIFT1M figures, describes one dataset at one point in time; it does not automatically hold after the corpus changes underneath it.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors"><b>Indexing 1M vectors — FAISS wiki</b><br><span>The SIFT1M table (Flat-CPU, nmslib HNSW, IVF16384,Flat) this concept's entire worked example is built from.</span></a>
+<a href="http://corpus-texmex.irisa.fr/"><b>ANN_SIFT1M — INRIA texmex corpus</b><br><span>Confirms the dataset's own size: 1,000,000 base vectors, 10,000 queries, 128 dimensions.</span></a>
+<a href="https://en.wikipedia.org/wiki/Precision_and_recall"><b>Precision and recall — Wikipedia</b><br><span>The general definitional backdrop behind Module 05 Concept 08's own recall@k formula, cited unchanged here.</span></a>
+<a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search"><b>Nearest neighbor search — Wikipedia</b><br><span>The formal definitional anchor for this concept's own title term, contrasting exact against approximate methods directly.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 2/10</span>
+<h3>Skip most of the corpus. On purpose.</h3>
+<p>You can now define approximate nearest-neighbour search; state recall@k's formula from memory; read a real recall-vs-speed operating point and compute its speedup and recall gap; and explain why a lower-recall, faster index is often the right choice, not a defect. Concept 03, "HNSW graph construction and search," is next -- the first ANN mechanism gets its own concept.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Recall/Speed Trade-off Bench ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 2 of 10 concepts. Next concept: Concept 03, HNSW graph construction and search.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 02 · Complete</p>
+<a href="module-09-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

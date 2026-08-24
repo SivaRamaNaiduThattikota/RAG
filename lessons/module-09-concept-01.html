@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09 opens with the naive, exact baseline every later concept is measured against: compute the query vector's similarity against EVERY stored vector, one by one, then sort -- guaranteed correct, at a real, computable cost. At n=1,000,000 vectors and d=1,024 dimensions, one exhaustive search costs 2,047,000,000 floating-point operations -- about 4.23 ms at a cited real-hardware rate of 484 GFLOPS (AMD Ryzen 5 3600). Scaled to 1 billion vectors, the same search costs 4.23 seconds. The crossover past a 100 ms interactive-latency budget lands between 10 million and 100 million vectors -- the concrete cost that motivates Concept 02's approximate methods, named forward only.">
+<title>Exact vector similarity search — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 01</p>
+<h1>Compare against everyone.<br><em>Then pay for it.</em></h1>
+<p class="lesson-lead">Module 09 opens with the one mechanism every later concept in this module is measured against: exact, brute-force, exhaustive, flat, linear-scan search -- five names for the same idea. Score the query against every single stored vector, one by one, using Module 04 Concept 03's own cosine/dot-product formula unchanged. Once all n vectors have a score, sort them and keep the top-k. Nothing is skipped, so the result is guaranteed correct. This concept finally puts a real number on that guarantee's cost -- the exact step Module 04 Concept 09's own callout explicitly declined to take.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First concept of Module 09, "Vector indexes and vector databases" (1/10) -- the naive baseline the rest of the module beats</b></div>
+<div><span>PREREQUISITE</span><b>Module 04 Concept 03's cosine/dot-product formula and Concept 09's O(n·d)/O(n log n)/O(n·d)-space complexity, both reused unchanged; Module 08's real embedding vectors</b></div>
+<div><span>BEGINNER GOAL</span><b>Define exact/brute-force search; compute a real wall-clock estimate from n, d and a FLOPS rate; explain why linear growth in n eventually makes it impractical</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One mechanism, finally costed in real time</h2>
+</div>
+<p>No new similarity formula here -- Concept 03's cosine, reused unchanged, run against every stored vector, then sorted.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Exact / brute-force / exhaustive / flat / linear-scan -- five names, one mechanism</h3>
+<div class="mental-compare">
+<div><span>EXACT (this concept)</span><p>Score the query against every stored vector, one by one, then sort. Guaranteed correct -- nothing is skipped.</p></div>
+<div><span>APPROXIMATE (Concept 02, named only)</span><p>Skip most of the corpus on purpose, trading a small amount of guaranteed exactness for sub-linear query time. Not covered here.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> exact search means comparing against everyone -- the cost is real and grows with the corpus, but the result is always correct.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>The step Module 04's own callout declined to take</h3>
+<p>Module 04 Concept 09 already derived O(d) per score, O(n·d) for a full brute-force search, and O(n log n) to sort the results -- on paper, for 3-4 hypothetical candidates. That concept's own Section 04 callout said plainly that a real system's actual milliseconds also depend on hardware, something Big-O deliberately abstracts away, and stopped there. Module 08 then built real embedding vectors for millions of real chunks. This concept is the first point where "compute similarity against every stored vector" stops being a hypothetical exercise on paper and the course finally asks: at real corpus scale, how expensive is that, in actual seconds?</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>1,000,000 vectors, 1,024 dimensions, one real number</h3>
+<p>A corpus holds n = 1,000,000 stored vectors at d = 1,024 dimensions each -- a common real embedding size (Cohere embed-english-v3, BGE-large and Voyage-2 all embed near this scale). One score costs roughly d = 1,024 operations (the simple beginner count). A full brute-force search against every stored vector costs n × d = 1,000,000 × 1,024 = <b>1,024,000,000 operations</b> (1.024 billion). At a cited real-hardware rate of 484 GFLOPS (a stock AMD Ryzen 5 3600 CPU, from Wikipedia's FLOPS page), that search takes 1,024,000,000 ÷ 484,000,000,000 ≈ <b>2.12 milliseconds</b>. Sorting the 1,000,000 resulting scores costs about 1,000,000 × log₂(1,000,000) ≈ <b>19.93 million comparisons</b> -- a cost that depends on n, not on d. Storing all 1,000,000 vectors costs 1,000,000 × 1,024 × 4 bytes = <b>4.096 GB</b>.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0901-b03-title">
+<strong class="concept-visual-title" id="c0901-b03-title">VISUAL · ONE QUERY, EVERY STORED VECTOR, ONE SORTED LIST</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0901-svg-title-b c0901-svg-desc-b">
+<title id="c0901-svg-title-b">A query point on the left compares against a scattered field of stored vectors in the middle, collapsing into a sorted ranked list on the right</title>
+<desc id="c0901-svg-desc-b">Left: a single query point. Middle: nine scattered stored-vector points, every one of them connected to the query by its own comparison line -- none skipped. Right: the same nine points redrawn as a single vertical, ranked list, ordered top to bottom by descending similarity score, with the top three highlighted as the returned top-k.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<circle cx="34" cy="100" r="6" fill="#2f6f5c"/>
+<text x="10" y="118" font-size="7">QUERY</text>
+<circle cx="150" cy="34" r="3.5" fill="#3a5f95"/>
+<circle cx="168" cy="58" r="3.5" fill="#3a5f95"/>
+<circle cx="140" cy="72" r="3.5" fill="#3a5f95"/>
+<circle cx="176" cy="92" r="3.5" fill="#3a5f95"/>
+<circle cx="148" cy="108" r="3.5" fill="#3a5f95"/>
+<circle cx="172" cy="126" r="3.5" fill="#3a5f95"/>
+<circle cx="138" cy="140" r="3.5" fill="#3a5f95"/>
+<circle cx="164" cy="158" r="3.5" fill="#3a5f95"/>
+<circle cx="146" cy="172" r="3.5" fill="#3a5f95"/>
+<line x1="34" y1="100" x2="150" y2="34" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="168" y2="58" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="140" y2="72" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="176" y2="92" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="148" y2="108" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="172" y2="126" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="138" y2="140" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="164" y2="158" stroke="#c9cdb9" stroke-width="0.8"/>
+<line x1="34" y1="100" x2="146" y2="172" stroke="#c9cdb9" stroke-width="0.8"/>
+<text x="96" y="18" font-size="7">SCORE EVERY ONE · O(n·d)</text>
+<line x1="220" y1="14" x2="220" y2="188" stroke="#c9cdb9" stroke-width="1"/>
+<rect x="228" y="20" width="96" height="16" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="232" y="31" fill="#2f6f5c">1 · score 0.94</text>
+<rect x="228" y="38" width="96" height="16" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="232" y="49" fill="#2f6f5c">2 · score 0.89</text>
+<rect x="228" y="56" width="96" height="16" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="232" y="67" fill="#2f6f5c">3 · score 0.81</text>
+<rect x="228" y="74" width="96" height="14" fill="none" stroke="#8f9481" stroke-width="1"/>
+<text x="232" y="84" fill="#5a5f52">4 · score 0.66</text>
+<rect x="228" y="90" width="96" height="14" fill="none" stroke="#8f9481" stroke-width="1"/>
+<text x="232" y="100" fill="#5a5f52">5 · score 0.58</text>
+<text x="228" y="118" font-size="7" fill="#5a5f52">... n scores, sorted ...</text>
+<text x="222" y="8" font-size="7">SORT + TOP-k</text>
+</g>
+</svg>
+<figcaption>Every one of the nine stored vectors gets its own comparison line to the query -- none skipped, that is the exactness guarantee. Once every score exists, sorting turns the field into a single ranked list, and only the top-k (highlighted) is returned.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Score everyone, then sort</h3>
+<p>For each of the n stored vectors, compute its cosine or dot-product score against the query -- Concept 03's mechanism, unchanged. Once every one of the n vectors has a score, sort them (Concept 08's ranking, cited) and keep the top-k. Nothing is skipped -- that is the exactness guarantee, stated plainly: exact search is guaranteed to find the true top-k, at that cost.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span>Vectors [Module 08, done, stored at O(n·d) space]</span><i>→</i>
+<span class="hot">Retrieval [THIS concept -- exhaustive, O(n·d) time, no index yet]</span><i>→</i>
+<span>Context</span><i>→</i>
+<span>LLM</span><i>→</i>
+<span>Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Five names for the same thing, one different thing, and one unrelated thing</h3>
+<div class="distinction-table" role="table" aria-label="Exact search's five synonyms distinguished from approximate search and from lexical search">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Exact / brute-force / exhaustive / flat / linear-scan search</span><span role="cell">Five names for one mechanism -- compare the query against every stored vector, then sort. This concept.</span></div>
+<div role="row"><span role="cell">Approximate nearest-neighbor search (Concept 02, name only)</span><span role="cell">Skips most of the corpus on purpose for sub-linear query time, trading away some guaranteed exactness. Mechanism not covered here.</span></div>
+<div role="row"><span role="cell">Lexical / BM25 search (Module 05)</span><span role="cell">An entirely different, term-based mechanism, already contrasted against dense retrieval in Module 05. Not re-taught here, just distinguished by name.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Big-O numbers are already milliseconds."</b><p>False -- O(n·d) is an operation count, not a time. This concept is where the real millisecond number finally appears, by dividing that count by a real hardware rate.</p></div>
+<div><b>"Exact/brute-force search is always too slow for production."</b><p>False -- the worked example above shows single-digit milliseconds at a genuinely real, deployable scale (1,000,000 vectors).</p></div>
+<div><b>"A vector database's job is always approximate search."</b><p>False -- FAISS's own IndexFlatL2 and IndexFlatIP exist specifically for exact search, by deliberate choice, not as a fallback.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>The first real number behind an already-named cost</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's own brute-force VECTOR_DISTANCE scan</b><p>Module 04 Concept 09's project-mapping section already named this cost without a number. This concept gives it one -- a real, computable millisecond figure at real corpus scale.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 OPENS (1/10)</b><p>Module 10 will cover Oracle's real vector-index syntax that exists specifically to beat this concept's own baseline.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define exact/brute-force search</b><p>In one sentence: compare the query against every stored vector, one by one, then sort -- nothing skipped.</p></div>
+<div><b>State the three complexities from memory</b><p>O(n·d) search, O(n log n) sort, O(n·d) storage -- Module 04 Concept 09's own formulas, cited, not re-derived here.</p></div>
+<div><b>Compute a wall-clock estimate</b><p>Given n, d and a FLOPS rate: operations = n × d, time = operations ÷ rate.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is exact search "exact" -- what guarantee does it actually make?</li>
+<li>Why does sort's cost not depend on the embedding dimension d?</li>
+<li>Why does linear growth in n eventually make brute force impractical at real production scale?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 OPENS -- 1 of 10</h3>
+<p>This concept built and cost out the naive, exact baseline every later concept in this module is measured against. Concept 02, "Approximate nearest-neighbor vector search," is next -- trading a small amount of guaranteed exactness for sub-linear query time (mechanism deferred to Concepts 03-05, named forward only).</p>
+<div class="beginner-memory"><b>Concept 01 is active.</b> Module 09 has just opened, at 1 of 10 concepts.</div>
+<a class="button primary" href="module-08-concept-11.html">← Back to Module 08's close</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A real number, finally</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>1,024,000,000 ops ≈ 2.12 ms</b><small>The beginner-convention headline: n=1,000,000, d=1,024.</small></a>
+<a href="#s10"><span>02</span><b>4.23 ms → 4.23 s</b><small>The exact 2d−1 convention, scaled from 1M to 1B vectors.</small></a>
+<a href="#s14"><span>03</span><b>23,644,357 vectors within 100 ms</b><small>The Latency Budget Checker lab -- live PASS/FAIL against a real budget.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full scaling table, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> score the query against every stored vector (Concept 03's formula, unchanged) → sort all n scores → convert the O(n·d) operation count into a real millisecond figure at a cited hardware rate → find the corpus size where that number stops fitting a real latency budget → Concept 02, named forward only.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Exact vector similarity search" deep dive</b><em>The full scaling table, the inverse budget calculation, from-scratch code, and The Latency Budget Checker lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09 opens -- the baseline everything else beats</h2></div></header>
+<p>Module 09, "Vector indexes and vector databases," opens here. This concept is the naive/exact baseline every later concept in the module (02-10: approximate NN, HNSW, IVF, quantization, recall-latency-memory trade-offs, metadata filtering, updates/deletes, replication/sharding, capacity planning) is defined and measured against.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Exact / brute-force / exhaustive / flat search</h3><p>Five names for one mechanism -- compare against every stored vector, then sort.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Module 04's own formulas, unchanged</h3><p>Concept 03's cosine/dot-product; Concept 09's O(n·d)/O(n log n)/O(n·d)-space -- cited directly, not re-derived.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>A real wall-clock number</h3><p>From a cited FLOPS rate -- the exact translation Concept 09's own callout declined to make.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Exact vs. the forward-named approximate family</h3><p>Concept 02's own title, named once here, not explained.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-04-concept-03.html">Module 04 Concept 03</a></b> -- dot product / cosine similarity, reused unchanged as the scoring mechanism.</li>
+<li><b><a href="module-04-concept-09.html">Module 04 Concept 09</a></b> -- O(d)/O(n·d)/O(n log n)/O(n·d)-space, reused unchanged, explicitly not re-derived here.</li>
+<li><b><a href="module-04-concept-10.html">Module 04 Concept 10</a></b> -- worked retrieval geometry, the chaining precedent this concept extends with new numbers.</li>
+<li><b>Module 08</b> -- the real embedding vectors (definition, normalization/dot-equals-cosine proof, model-selection funnel) this concept now searches over, cited by reference only.</li>
+<li><b>Explicitly out of scope:</b> any approximate-index mechanism -- HNSW, IVF, quantization (Concepts 03-05) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A librarian who checks every book, cover to cover</h2></div></header>
+<p>A single librarian personally compares your request against every book in the whole library, one at a time, before naming the best match. Guaranteed correct, since none were skipped -- but the librarian's own time is the entire real cost, and that time grows with every book the library adds.</p>
+<div class="callout warning"><b>Analogy boundary</b>This captures "exhaustive, guaranteed-correct comparison, paid for in real time" -- it does not capture the geometric/vector mechanism itself. That belongs to Module 04 Concept 03's cosine formula and Module 08's real vectors, both reused unchanged.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Exact / brute-force / exhaustive / flat / linear-scan search</td><td>Synonyms in production use (per FAISS's own index table) for comparing a query against every stored vector before ranking</td><td>—</td></tr>
+<tr><td>FLOPS</td><td>Floating-point operations per second -- a hardware rate</td><td>FLOPS</td></tr>
+<tr><td>Wall-clock time</td><td>Operations required, divided by the hardware's rate</td><td>T = ops ÷ RATE</td></tr>
+<tr><td>Simple-proxy op count</td><td>One score ≈ d operations (Concept 09's beginner convention)</td><td>ops ≈ d</td></tr>
+<tr><td>Exact op count</td><td>One score = 2d−1 operations (Concept 09's advanced convention: d multiplications + d−1 additions)</td><td>ops = 2d−1</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Score every candidate, then sort, then return</h2></div></header>
+<p>Step 1: for each of n stored vectors, compute an O(d) cosine or dot-product score against the query (Module 04 Concept 03, cited unchanged). Step 2: once all n are scored, sort or select the top-k (Concept 08's ranking plus Concept 09's O(n log n) sort, both cited). Step 3: return the guaranteed true top-k -- nothing was skipped.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Fan out, then collapse</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Score every candidate · O(n·d)</b><small>The exhaustive comparison</small></div>
+<div class="diagram-node"><b>Query vector</b><small>One scoring pass per stored vector</small></div>
+<div class="diagram-node"><b>n stored vectors</b><small>Module 08's real embeddings, none skipped</small></div>
+<div class="diagram-node"><b>Sorted top-k</b><small>Concept 08's ranking + Concept 09's O(n log n) sort</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Today's real mechanism, no index yet</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — stored, O(n·d) space, Module 08 done</span><i>↓</i><span class="hot">Retrieval — this concept's exhaustive O(n·d) scan, today's real mechanism, no index yet</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Concept 09's shape, cited -- this concept's own new step: real seconds</h2></div></header>
+<div class="equation">T(n,d) = O(n·d) + O(n log n) = O(n·(d + log n)) — Concept 09's own combine equation, cited unchanged; search dominates when d ≫ log₂(n)</div>
+<div class="equation">T_wall(n,d) = (n × (2d−1)) ÷ RATE, RATE = 484×10⁹ FLOPS (cited, AMD Ryzen 5 3600, Wikipedia's FLOPS page)</div>
+<p>Concept 09's own combine equation is reused as context, unchanged. This concept's own contribution is the second line: dividing the O(n·d) operation count by a real, cited hardware rate to get an actual number of seconds -- explicitly the step Concept 09's own Section 04 callout declined to take.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>1,000,000 vectors to 1,000,000,000 -- and the budget crossover</h2></div></header>
+<p><b>Two conventions, side by side</b> -- mirroring Concept 09's own precedent (its beginner section used the simpler d-ops proxy; its advanced Section 12 code used the exact 2d−1 count; the two differ by a constant factor of roughly 2×, which does not change the O(n·d) classification).</p>
+<p><b>Beginner / simple-proxy convention</b> (one score ≈ d ops): one score = 1,024 ops. Full search = 1,000,000 × 1,024 = <b>1,024,000,000 ops</b>. Wall-clock at 484 GFLOPS: 1,024,000,000 ÷ 484,000,000,000 ≈ <b>2.12 ms</b>.</p>
+<p><b>Advanced / exact convention</b> (one score = 2d−1 ops, matching Concept 09's <code>dot_product_ops(d) = d + (d−1)</code> exactly): one score = 2×1,024−1 = 2,047 ops. Full search = 1,000,000 × 2,047 = <b>2,047,000,000 ops</b>. Wall-clock: 2,047,000,000 ÷ 484,000,000,000 ≈ <b>4.23 ms</b>. Ratio exact/simple = 1.999... ≈ 2×, exactly reproducing Concept 09's own stated constant-factor gap.</p>
+<p><b>Sort</b> (Concept 09's O(n log n), independent of d, cited): 1,000,000 × log₂(1,000,000) ≈ <b>19,931,569 comparisons</b>. <b>Storage</b> (Concept 09's O(n·d) space, cited): 1,000,000 × 1,024 × 4 = <b>4.096 GB</b>.</p>
+<table class="worked-table">
+<thead><tr><th>n</th><th>Search FLOPs (exact, 2d−1)</th><th>Wall-clock time</th><th>Sort comparisons</th><th>Storage</th></tr></thead>
+<tbody>
+<tr><td>1,000,000</td><td>2,047,000,000</td><td>4.2293 ms</td><td>19,931,569</td><td>4.096 GB</td></tr>
+<tr><td>10,000,000</td><td>20,470,000,000</td><td>42.2934 ms</td><td>232,534,967</td><td>40.960 GB</td></tr>
+<tr><td>100,000,000</td><td>204,700,000,000</td><td>422.9339 ms</td><td>2,657,542,476</td><td>409.600 GB</td></tr>
+<tr><td>1,000,000,000</td><td>2,047,000,000,000</td><td>4,229.3388 ms (4.229 s)</td><td>29,897,352,854</td><td>4,096.000 GB (4.096 TB)</td></tr>
+</tbody>
+</table>
+<p><b>Crossover.</b> At n=1M and n=10M, one query's brute-force search (4.23 ms / 42.29 ms) comfortably fits inside every common interactive-latency budget checked (50 ms/100 ms/300 ms). At n=100M, 422.93 ms exceeds all three. At n=1B, 4.23 s exceeds all three by more than an order of magnitude. Against a 100 ms budget, the crossover lands between n=10M and n=100M -- the concrete point where exact search stops being "obviously fine."</p>
+<p><b>Inverse calculation</b> (feeds the lab): n_max(budget, d) = floor(budget_seconds × RATE ÷ (2d−1)). At d=1,024 and a 100 ms budget: n_max = floor(0.1 × 484,000,000,000 ÷ 2,047) = <b>23,644,357 vectors</b> -- brute force can handle up to ~23.6 million 1,024-dimension vectors within a 100 ms per-query budget on this cited hardware rate, before exceeding it.</p>
+<figure class="concept-visual" aria-labelledby="c0901-s10-title">
+<strong class="concept-visual-title" id="c0901-s10-title">VISUAL · WALL-CLOCK TIME vs. CORPUS SIZE n (d=1,024, log-log axes)</strong>
+<svg class="vector-plane" viewBox="0 0 400 220" role="img" aria-labelledby="c0901-svg-title-s10 c0901-svg-desc-s10" style="max-width:560px">
+<title id="c0901-svg-title-s10">A log-log line chart plotting wall-clock search time against corpus size n, with a 100 millisecond budget line crossing the data between 10 million and 100 million vectors</title>
+<desc id="c0901-svg-desc-s10">X-axis: corpus size n on a log scale from 1 million to 1 billion. Y-axis: wall-clock time on a log scale from 1 millisecond to 10 seconds. Four data points at n=1M (4.23ms), n=10M (42.29ms), n=100M (422.93ms) and n=1B (4,229.34ms) form a straight line, reflecting linear O(n) growth. A dashed horizontal line marks the 100 millisecond budget, crossing the data line at approximately n=23.6 million, between the 10 million and 100 million points.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<line x1="50" y1="20" x2="50" y2="190" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="50" y1="190" x2="380" y2="190" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="50" y1="20" x2="380" y2="20" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="50" y1="62.5" x2="380" y2="62.5" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="50" y1="105" x2="380" y2="105" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="50" y1="147.5" x2="380" y2="147.5" stroke="#e4e7d9" stroke-width="0.6"/>
+<text x="10" y="23" font-size="7">10 s</text>
+<text x="6" y="65.5" font-size="7">1 s</text>
+<text x="2" y="108" font-size="7">100 ms</text>
+<text x="2" y="150.5" font-size="7">10 ms</text>
+<text x="4" y="193" font-size="7">1 ms</text>
+<text x="45" y="205" font-size="7">1M</text>
+<text x="148" y="205" font-size="7">10M</text>
+<text x="255" y="205" font-size="7">100M</text>
+<text x="365" y="205" font-size="7">1B</text>
+<text x="150" y="215" font-size="7">CORPUS SIZE n (log scale)</text>
+<line x1="50" y1="105" x2="380" y2="105" stroke="#b3543a" stroke-width="1.4" stroke-dasharray="5 3"/>
+<text x="284" y="100" fill="#b3543a">100 ms BUDGET</text>
+<polyline points="50,163.4 156.7,120.9 263.3,78.4 370,35.9" fill="none" stroke="#2f6f5c" stroke-width="1.8"/>
+<circle cx="50" cy="163.4" r="4" fill="#2f6f5c"/>
+<circle cx="156.7" cy="120.9" r="4" fill="#2f6f5c"/>
+<circle cx="263.3" cy="78.4" r="4" fill="#2f6f5c"/>
+<circle cx="370" cy="35.9" r="4" fill="#2f6f5c"/>
+<circle cx="196.5" cy="105" r="4.5" fill="#b3543a"/>
+<text x="188" y="96" fill="#b3543a">n≈23.6M</text>
+<text x="54" y="176" fill="#2f6f5c">4.23 ms</text>
+<text x="160" y="133" fill="#2f6f5c">42.29 ms</text>
+<text x="267" y="91" fill="#2f6f5c">422.93 ms</text>
+<text x="330" y="30" fill="#2f6f5c">4.23 s</text>
+</g>
+</svg>
+<figcaption>Linear O(n) growth is a straight line on log-log axes. The 100 ms budget line crosses the data at n≈23.6 million, matching the lab's own inverse calculation -- comfortably past n=10M, well short of n=100M.</figcaption>
+</figure>
+<div class="callout"><b>Verification method</b>Every figure above was computed and cross-checked via three independent Node.js scripts: (1) a direct formula pass over n=1M/10M/100M/1B at d=1,024; (2) a structurally different manual multiply-loop-plus-add-loop simulation of one score's exact operation count, asserted equal to the closed-form 2d−1 (2,047 = 2,047); (3) a forward/inverse consistency check -- computing n_max for several budgets and dimensions, then plugging it back into the forward time formula and confirming the result lands at or just under the budget (0.09999999747727273 s against a 0.1 s budget).</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A single-team, 1,000,000-vector corpus</h3><p>Brute force is genuinely fine here -- sub-5-ms exact search, no index needed yet.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>n = 1</h3><p>Search collapses to a single O(d) score -- Concept 09's own boundary case, cited.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming brute force is "obviously too slow"</h3><p>Without first computing the real n·d and wall-clock time -- Concept 09's own production-implications line, echoed not repeated.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>A linear scan and a wall-clock estimator, from scratch</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- REUSES CONCEPT 09'S EXACT 2d−1 CONVENTION</span>
+<pre><code>def cosine(u, v):
+    dot = sum(a * b for a, b in zip(u, v))
+    norm_u = sum(a * a for a in u) ** 0.5
+    norm_v = sum(b * b for b in v) ** 0.5
+    return dot / (norm_u * norm_v)
+
+def linear_scan(query, vectors, k):
+    # Score EVERY stored vector -- nothing is skipped.
+    scored = [(vec_id, cosine(query, vec)) for vec_id, vec in vectors]
+    scored.sort(key=lambda pair: pair[1], reverse=True)
+    return scored[:k]
+
+def estimate_wall_clock(n, d, flops_rate):
+    ops_per_score = 2 * d - 1          # d multiplications + (d-1) additions
+    total_ops = n * ops_per_score
+    return total_ops / flops_rate       # seconds
+
+RATE = 484e9  # AMD Ryzen 5 3600, 484 GFLOPS, Wikipedia's FLOPS page
+
+assert round(estimate_wall_clock(1_000_000, 1024, RATE) * 1000, 4) == 4.2293
+assert round(estimate_wall_clock(1_000_000_000, 1024, RATE), 3) == 4.229
+
+# Edge case: asking for more results than exist should not crash.
+tiny_corpus = [(1, [0.1, 0.2]), (2, [0.3, 0.4])]
+assert len(linear_scan([0.2, 0.3], tiny_corpus, k=10)) == 2
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for exact search</h2></div></header>
+<p><a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search">Nearest neighbor search (Wikipedia)</a> gives the formal definition of exact nearest-neighbor search and its own contrast with approximate methods, directly on-topic for this concept's title. <a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes">FAISS's index table</a> lists <code>IndexFlatL2</code> ("Exact Search for L2") and <code>IndexFlatIP</code> ("Exact Search for Inner Product," explicitly noting "also for cosine, normalize vectors beforehand"), both marked Exhaustive: yes, Comments: brute-force, at 4×d bytes per vector -- real production confirmation of this concept's exact/exhaustive/brute-force definition and the n×d×4-bytes storage convention already used in Module 08 and Concept 09. NumPy's vectorized <code>corpus_matrix @ query_vector</code> computes the identical O(n·d) brute-force search as the from-scratch code above, at a far smaller constant factor. <a href="https://en.wikipedia.org/wiki/Big_O_notation">Big O notation (Wikipedia)</a> gives the formal definitions this concept applies -- O(n·d), O(n log n) -- without re-deriving them.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Latency Budget Checker</h2></div></header>
+<div class="lab">
+<p>Pick a corpus size, an embedding dimension and a latency budget. The readouts update live: search cost, real wall-clock time at a cited hardware rate, storage, and the maximum number of vectors that fit inside your chosen budget.</p>
+<div class="norm-controls" id="latSliders_0901">
+<div class="control"><label for="latN_0901">Corpus size n</label><input type="range" id="latN_0901" min="0" max="3" step="1" value="0"><output id="latNOut_0901">1,000,000</output></div>
+<div class="control"><label for="latD_0901">Embedding dimension d</label><input type="range" id="latD_0901" min="0" max="5" step="1" value="3"><output id="latDOut_0901">1,024</output></div>
+</div>
+<div class="lab-actions" role="group" aria-label="Latency budget">
+<button type="button" class="secondary" data-budget="50">50 ms budget</button>
+<button type="button" class="secondary active" data-budget="100">100 ms budget</button>
+<button type="button" class="secondary" data-budget="300">300 ms budget</button>
+</div>
+<div class="norm-readout" id="latReadout_0901">
+<div><span>SEARCH COST</span><b id="latCost_0901">2.05B ops</b></div>
+<div><span>WALL-CLOCK TIME</span><b id="latTime_0901">4.2293 ms</b></div>
+<div><span>STORAGE</span><b id="latStorage_0901">4.096 GB</b></div>
+<div><span>MAX VECTORS WITHIN BUDGET</span><b id="latMax_0901">23,644,357</b></div>
+</div>
+<div class="prob-bars" id="latBars_0901" role="img" aria-label="A single bar showing wall-clock time as a fraction of the chosen latency budget">
+<div class="prob-row" id="latBarRow_0901"><span>Time ÷ budget</span><div class="bar-track"><div class="bar-fill" id="latBarFill_0901" style="width:4.2%"></div></div><span id="latBarOut_0901">4.23% of budget</span></div>
+</div>
+<div class="callout" id="latVerdict_0901" aria-live="polite"></div>
+<div class="callout warning">484 GFLOPS is this concept's one cited, real hardware figure -- a real 6-core desktop CPU's rated peak, from Wikipedia's FLOPS page. A different chip, cluster, GPU, or non-vectorized implementation would give a different constant, but the O(n·d) <i>shape</i> -- and therefore every PASS-to-FAIL crossover this lab demonstrates as n grows -- holds regardless of which real rate is plugged in.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Exact search vs. the forward-named approximate family</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Exact / brute-force (this concept)</th><th>Approximate (Concept 02, named only)</th></tr></thead>
+<tbody>
+<tr><td>O(n·d) per query -- grows linearly with the corpus</td><td>Sub-linear query time (mechanism not detailed here)</td></tr>
+<tr><td>Zero approximation error -- always finds the true top-k</td><td>Trades away some exactness in exchange for speed</td></tr>
+<tr><td>Real, computable time cost -- 4.23 ms at 1M vectors, 4.23 s at 1B</td><td>The reason later concepts (03-05: HNSW, IVF, quantization) exist</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNBUDGETED SCALE</span><h3>Deploying without ever computing n·d or wall-time first</h3><p>Symptom: the service works fine in testing, then silently exceeds its own latency budget once the real corpus grows -- this concept's own lab is the fix.</p></article>
+<article class="info-card"><span>MISPLACED CONFIDENCE</span><h3>Treating "exact" as meaning "free"</h3><p>Symptom: assuming a guaranteed-correct search also means a cheap one -- exactness means zero approximation error, not zero compute cost.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Brute-force search is always too slow</td><td>False -- this concept's own 1M-vector number (4.23 ms) is comfortably within every common interactive-latency budget.</td></tr>
+<tr><td>A bigger d only costs storage, not speed</td><td>False -- a brief callback to Concept 09's own identical correction, not re-taught in full here.</td></tr>
+<tr><td>Exact search means zero cost</td><td>False -- it means zero approximation error, not zero FLOPs.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Real interactive latency budgets sit around 50-300 ms per query -- the same range this concept's lab checks against.</li>
+<li>The concrete crossover point from Section 10 lands between 10 million and 100 million vectors, at d=1,024, against a 100 ms budget.</li>
+<li>Storage is paid once; time is paid every query -- Concept 09's own distinction, cited.</li>
+<li>Concepts 02-05 exist specifically to beat this concept's own O(n·d) baseline -- this module's throughline, stated plainly.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Why doesn't sort's cost depend on d?</summary><div>Sorting compares already-computed scores against each other -- each comparison is O(1) regardless of how many dimensions produced the score. Only computing the scores themselves (O(n·d)) depends on d.</div></details>
+<details class="quiz"><summary>Why is exact search still valuable even after Concept 02 introduces approximate methods?</summary><div>Exact search is the only guaranteed-correct option, and it remains genuinely fast enough for real corpora up to tens of millions of vectors (Section 10's own crossover point) -- it isn't obsolete, it's a baseline with a known, computable range of usefulness.</div></details>
+<details class="quiz"><summary>How do you compute a wall-clock estimate from n, d and a FLOPS rate?</summary><div>operations = n × (2d−1); time_seconds = operations ÷ RATE. Multiply by 1,000 for milliseconds.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A corpus holds n = 5,000,000 vectors at d = 1,536 dimensions. Your latency budget is 100 ms. Compute the search FLOPs (exact convention), the wall-clock time, whether it passes or fails the budget, and the maximum n that would fit within that same budget at d=1,536.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>One score = 2×1,536−1 = 3,071 ops. Search FLOPs = 5,000,000 × 3,071 = 15,355,000,000 ops. Wall-clock = 15,355,000,000 ÷ 484,000,000,000 ≈ <b>31.72 ms</b> -- well within the 100 ms budget (PASS). Maximum n within budget: floor(0.1 × 484,000,000,000 ÷ 3,071) = <b>15,760,637 vectors</b> at d=1,536 before exceeding 100 ms.</div>
+</details>
+<p>Teach-back: why does a larger embedding dimension (1,536 vs. 1,024) lower the maximum corpus size that fits within the same time budget, even though nothing about n changed?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Exact vector similarity search</h3><ul><li><b>Definition:</b> score the query against every stored vector, then sort -- nothing skipped, always correct</li><li><b>The equation:</b> T_wall(n,d) = (n × (2d−1)) ÷ RATE</li><li><b>Memorable example:</b> n=1,000,000, d=1,024 → 4.23 ms. Scaled to n=1,000,000,000 → 4.23 s.</li></ul></div>
+<div><h3>Module 09 opens</h3><p>MODULE 09 OPENS (1/10). Concept 02, "Approximate nearest-neighbor vector search," is next -- named forward only, opening the module's real trade-off.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is exact search "exact"?</summary><div>Because it compares the query against every single stored vector before ranking -- nothing is skipped, so the returned top-k is guaranteed to be the true top-k, not an estimate.</div></details>
+<details class="quiz"><summary>Mathematical: verify a wall-clock figure from the scaling table.</summary><div>At n=100,000,000 and d=1,024: ops = 100,000,000 × 2,047 = 204,700,000,000. Time = 204,700,000,000 ÷ 484,000,000,000 ≈ 422.93 ms, matching the table.</div></details>
+<details class="quiz"><summary>Coding: implement linear_scan.</summary><div>Section 12 gives the full from-scratch implementation -- score every stored vector with cosine similarity, sort descending, return the top-k slice.</div></details>
+<details class="quiz"><summary>Debugging: a service's brute-force search suddenly got slower. What's the first thing to check?</summary><div>Whether n (corpus size) or d (embedding dimension) changed -- both feed directly into the O(n·d) cost, and either one growing explains a slowdown without anything being "broken."</div></details>
+<details class="quiz"><summary>System design: at what corpus size would you start evaluating an approximate index, and what would you measure first?</summary><div>As soon as a real wall-clock estimate (Section 09's formula) approaches your interactive latency budget -- for this concept's own cited hardware and d=1,024, that's roughly the 10-100 million vector range. Measure actual query latency under real load first, not just the theoretical estimate, before committing to an approximate index's added complexity.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Big_O_notation"><b>Big O notation — Wikipedia</b><br><span>The formal O(n·d)/O(n log n) definitions this concept applies but does not re-derive.</span></a>
+<a href="https://en.wikipedia.org/wiki/Nearest_neighbor_search"><b>Nearest neighbor search — Wikipedia</b><br><span>The formal definition of exact nearest-neighbor search, and its own contrast with approximate methods.</span></a>
+<a href="https://en.wikipedia.org/wiki/FLOPS"><b>FLOPS — Wikipedia</b><br><span>Its cost-efficiency history table lists a stock AMD Ryzen 5 3600 CPU at 484 GFLOPS -- this concept's one cited, real-hardware rate.</span></a>
+<a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes"><b>Faiss indexes — GitHub wiki</b><br><span>IndexFlatL2/IndexFlatIP, both marked Exhaustive: yes, Comments: brute-force -- real production confirmation of this concept's exact-search definition.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">CONCEPT 01 COMPLETE · MODULE 09 OPEN — 1/10</span>
+<h3>Compare against everyone. Then pay for it.</h3>
+<p>You can now define exact/brute-force search; state O(n·d)/O(n log n)/O(n·d)-space from memory; compute a wall-clock estimate for any n/d/FLOPS-rate; and explain why linear growth in n eventually makes brute force impractical at real production scale. Concept 02, "Approximate nearest-neighbor vector search," is next -- named forward only, mechanism deferred to Concepts 03-05.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Latency Budget Checker ↑</a>
+</div>
+<p class="fine-print">Module 09 opens at 1 of 10 concepts. Next concept: Concept 02, approximate nearest-neighbor vector search.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 01 · Complete</p>
+<a href="module-08-concept-11.html">← Concept</a>
+</footer>
+</body>
+</html>
