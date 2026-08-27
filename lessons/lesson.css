@@ -347,3 +347,11 @@ html[data-theme=dark] .boundary-chunk.shade-b{background:#0c1f18}
 .rank-chip.excluded{opacity:.4}
 .rank-chip.match{outline:3px solid var(--lime);outline-offset:-3px}
 @media(max-width:480px){.token-bar{height:20px}.boundary-strip{font-size:11px}}
+
+/* The Boundary Sorter lab (Module 10, Concept 01) */
+.rank-chip.bin-store{border-left:4px solid #b3543a}
+.rank-chip.bin-database{border-left:4px solid #5ee6c3}
+.rank-chip.bin-search{border-left:4px solid #3a5f95}
+.rank-chip.sorted-in{animation:sortIn225 .25s ease}
+@keyframes sortIn225{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.lab button.sorted{opacity:.4;cursor:default}

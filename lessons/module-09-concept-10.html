@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's closing concept combines every prior concept's own cited numbers into one hardware decision. Qdrant's own capacity-planning documentation supplies five real formulas -- vector storage, HNSW graph overhead, id-tracker overhead, a 20% headroom buffer, and a node-count ceiling division. Applied to a verified N=200,000,000/d=128 scenario: HNSW ef_search=16 is chosen over IVF16384,Flat via Concept 06's own marginal-cost-per-recall-point method (0.01783 ms per recall point), SQ8 quantization is chosen via Concept 05's own cited 4.00x ratio, and the whole cluster shrinks from 320.79 GiB/7 nodes to 149.13 GiB/3 nodes -- a 2.15x whole-cluster reduction, not the 4.00x per-vector ratio, because the HNSW graph and id-tracker overhead don't compress. A live two-axis calculator lab lets you replay the same formula at four corpus sizes.">
+<title>Capacity planning and benchmarking — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 10 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 10</p>
+<h1>Two numbers, one hardware plan.<br><em>Measure it, then size it.</em></h1>
+<p class="lesson-lead">Concepts 01-09 each studied one mechanism, encoding, or sharding lever in isolation. This closing concept combines them: a real benchmark measures a recall/latency operating point on a fixed dataset, and capacity planning projects that measurement -- plus a real per-component memory formula, cited directly from Qdrant's own documentation -- onto a much larger corpus, to size actual hardware. A verified N=200,000,000/d=128 scenario shows the whole plan end to end: HNSW chosen over IVF via Concept 06's own marginal-cost method, SQ8 chosen via Concept 05's own cited ratio, and a cluster that shrinks from 7 nodes to 3 -- a 2.15x whole-cluster reduction, not the 4.00x per-vector ratio everyone expects.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth and closing concept of Module 09 (10/10) -- the module's own second-order synthesis, combining Concepts 01-09's cited numbers into one hardware decision</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's flat-cost convention, Concepts 02/03's SIFT1M numbers, Concept 05's SQ8/PQ ratios, Concept 06's marginal-cost method, Concept 09's sharding formula -- all cited, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the two ingredients capacity planning combines; explain why a 4.00x per-vector ratio produced only a 2.15x whole-cluster reduction; compute a node count from a RAM total and node size</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Measure a real operating point, then size real hardware</h2>
+</div>
+<p>Every concept through Concept 09 studied one lever in isolation -- a mechanism, an encoding, a sharding rule. This concept is about combining measured numbers, not guesses, into one hardware plan before a corpus goes live.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Benchmarking and capacity planning -- two words, two jobs</h3>
+<div class="mental-compare">
+<div><span>BENCHMARKING</span><p>Measures a real recall/latency/memory operating point on a real, fixed dataset -- Concepts 02/03's own SIFT1M numbers are examples of this.</p></div>
+<div><span>CAPACITY PLANNING</span><p>Projects that measured point, plus a real per-component memory formula, onto a different, larger corpus -- to size actual hardware.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> a benchmark tells you what a mechanism costs at the scale it was measured; capacity planning is the arithmetic that carries that cost to your own corpus's own size. Neither one substitutes for the other.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Nine isolated levers need one combined decision</h3>
+<p>Concepts 01-09 studied exact search, HNSW, IVF, quantization, metadata filtering, tombstones, and sharding each on its own. A real deployment can't tune one lever at a time and hope the rest works out -- it has to combine measured numbers (which mechanism clears the recall bar, which encoding fits in RAM, how many machines that RAM needs) into one hardware plan before the corpus goes live. This concept is the first to do that combining explicitly.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>200 million chunks, one hardware plan</h3>
+<p>The Oracle RAG project's corpus has grown to N=200,000,000 chunks, d=128 (Concepts 02/03/05's own dimension convention, reused). Target: recall@1 ≥ 85%, lowest available latency, high availability (Qdrant's own cited minimum: at least 3 nodes, replication_factor ≥ 2).</p>
+<p><b>Mechanism (reuses Concepts 02, 03, 06):</b> two cited SIFT1M points clear 85% recall -- HNSW ef_search=16 (0.011 ms/query, 87.40% recall@1) and IVF16384,Flat (0.0538 ms/query, 89.80% recall@1). Concept 06's own marginal-cost-per-recall-point method, applied to this new pair: (0.0538−0.011)/(89.80−87.40) = 0.01783 ms per recall point, a 4.891x latency multiplier for 2.40 extra recall points. <b>HNSW ef_search=16 wins</b> -- the recall gain from IVF isn't worth nearly 5x the latency once the 85% floor is already cleared.</p>
+<p><b>Encoding (reuses Concept 05):</b> SQ8 quantization -- Concept 05's cited 4.00x compression (1 byte/dim vs. Flat's 4 bytes/dim, dimension-independent).</p>
+<p><b>Capacity (new source -- Qdrant's own cited formulas):</b> at replication_factor=2, the whole cluster needs <b>320.79 GiB / 7 nodes</b> without quantization, or <b>149.13 GiB / 3 nodes</b> with SQ8 -- bumped to 4 nodes against Qdrant's own stated rough per-node ceiling (~100 million vectors/node). The RAM shrinks 2.15x, not SQ8's own 4.00x per-vector ratio, because the HNSW graph and id-tracker overhead don't compress.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0910-b03-title">
+<strong class="concept-visual-title" id="c0910-b03-title">VISUAL · WHOLE-CLUSTER RAM, WITH AND WITHOUT SQ8, AT N=200,000,000</strong>
+<svg class="vector-plane" viewBox="0 0 300 230" role="img" aria-labelledby="c0910-svg-title-b c0910-svg-desc-b" style="max-width:460px">
+<title id="c0910-svg-title-b">A bar chart on a GiB axis comparing total cluster RAM without quantization against total cluster RAM with SQ8 quantization, at N=200,000,000</title>
+<desc id="c0910-svg-desc-b">A y-axis from 0 to 350 GiB with gridlines at 0, 100, 200 and 300. Two bars: the left bar, labeled No quantization, reaches 320.79 GiB and is annotated 7 nodes. The right bar, labeled SQ8, reaches 149.13 GiB and is annotated 3 nodes, bumped to 4 in the final recommendation.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<line x1="50" y1="190" x2="270" y2="190" stroke="#14241f" stroke-width="1.2"/>
+<line x1="50" y1="190" x2="50" y2="35" stroke="#14241f" stroke-width="1.2"/>
+<line x1="50" y1="147.14" x2="270" y2="147.14" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="2 2"/>
+<line x1="50" y1="104.29" x2="270" y2="104.29" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="2 2"/>
+<line x1="50" y1="61.43" x2="270" y2="61.43" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="2 2"/>
+<text x="30" y="193" font-size="6.5" text-anchor="end">0</text>
+<text x="30" y="150" font-size="6.5" text-anchor="end">100</text>
+<text x="30" y="107" font-size="6.5" text-anchor="end">200</text>
+<text x="30" y="64" font-size="6.5" text-anchor="end">300</text>
+<text x="14" y="45" font-size="6.5">GiB</text>
+<rect x="90" y="52.52" width="50" height="137.48" fill="#3a5f95"/>
+<text x="115" y="46" font-size="7" text-anchor="middle" font-weight="700">320.79</text>
+<rect x="190" y="126.09" width="50" height="63.91" fill="#5ee6c3"/>
+<text x="215" y="120" font-size="7" text-anchor="middle" font-weight="700">149.13</text>
+<text x="115" y="203" font-size="6.5" text-anchor="middle">No quantization</text>
+<text x="115" y="214" font-size="6.5" text-anchor="middle" font-weight="700">7 nodes</text>
+<text x="215" y="203" font-size="6.5" text-anchor="middle">SQ8</text>
+<text x="215" y="214" font-size="6.5" text-anchor="middle" font-weight="700">3 nodes (→4)</text>
+<text x="50" y="226" font-size="6" fill="#5b6a63">node_ram=64 GiB, usable=51.2 GiB (80%); node count = ceil(total ÷ usable)</text>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Five real formulas, cited from Qdrant's own capacity-planning page</h3>
+<p><b>base</b> = number_of_points × replication_factor -- the real unit every other formula multiplies from. <b>Vector-storage cost</b> = base × dimensions × bytes_per_dim (4 bytes for float32, 1 byte for SQ8 -- Concept 05's own cited ratio, applied here at whole-cluster scale). <b>Graph cost</b> (HNSW) = base × m × 2 × 4 bytes × 1.2, where m is the graph's own connections-per-node parameter (default 16) -- this cost is the same whether or not vectors are quantized, since the graph itself stores integer neighbor ids, not vector values. <b>Id-tracker cost</b> = base × 52 bytes -- fixed per-point bookkeeping overhead, also unaffected by quantization. <b>Headroom and nodes:</b> Qdrant's own docs add 20% headroom on top of the summed RAM/disk totals, then divide by each node's own usable RAM (node_ram × 0.8) and round up to get the node count.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span class="hot">Vectors [sized by this concept's own cited formula]</span><i>→</i>
+<span class="hot">Retrieval [mechanism chosen via Concepts 02/03/06's own cited benchmark numbers]</span><i>→</i>
+<span>Context → LLM → Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Benchmarking vs. capacity planning -- two jobs, not one</h3>
+<div class="distinction-table" role="table" aria-label="Benchmarking and capacity planning distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Benchmarking</span><span role="cell">Measures a recall/latency/memory operating point on a FIXED real dataset, at whatever scale that dataset happens to be (Concepts 02/03's own SIFT1M, 1 million vectors).</span></div>
+<div role="row"><span role="cell">Capacity planning (this concept)</span><span role="cell">Projects that measured point, plus a per-component memory formula, onto a DIFFERENT real deployment size -- 200 million chunks here, 200x the benchmark's own scale.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A compression ratio divides the node count 1:1."</b><p>False -- SQ8's own cited 4.00x per-vector ratio only produced a 2.15x whole-cluster RAM reduction here, because the HNSW graph and id-tracker overhead don't compress.</p></div>
+<div><b>"A 1-million-vector benchmark holds unchanged at 200x scale."</b><p>False -- it's an empirical operating point on one dataset, not a guarantee; Qdrant's own documentation itself recommends testing with a representative sample.</p></div>
+<div><b>"Skipping the headroom buffer is a safe shortcut."</b><p>False -- the +20%/80% buffers exist so a cluster isn't run right at the edge of its own measured capacity.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>The Oracle RAG project's vector-layer sizing, before go-live</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The pre-launch hardware decision</b><p>This is the concept that turns Concepts 01-09's own mechanisms into an actual cluster spec, before the corpus goes live.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 10/10 -- COMPLETE</b><p>Module 10, "RAG databases and vector-store implementation," is named forward only, one line, in Section 10.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the two ingredients capacity planning combines</b><p>A benchmarked recall/latency/memory operating point on a fixed real dataset, plus a per-component memory formula applied to a different, larger corpus size.</p></div>
+<div><b>Explain the 4.00x-vs-2.15x gap</b><p>SQ8's own cited 4.00x ratio only compresses vector storage; the HNSW graph and id-tracker overhead are fixed and don't compress, so the whole-cluster RAM only shrinks 320.79/149.13 = 2.15x.</p></div>
+<div><b>Compute a node count from a RAM total and node size</b><p>nodes = ceil(total_ram_with_headroom ÷ (node_ram × 0.8)) -- e.g. ceil(149.13 ÷ 51.2) = 3.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does SQ8's own 4.00x per-vector ratio not produce a 4.00x reduction in whole-cluster node count?</li>
+<li>Why was HNSW ef_search=16 chosen over IVF16384,Flat in Section 03's own scenario, even though IVF's own cited recall is 2.40 points higher?</li>
+<li>What are the two real risks of skipping the +20%/80% headroom buffers?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 10 OF 10 -- COMPLETE</h3>
+<p>This concept combined Concepts 01-09's own cited mechanism, encoding and sharding numbers, through Qdrant's own real capacity-planning formulas, into one verified N=200,000,000 hardware plan -- 7 nodes without quantization, 3 (bumped to 4) with SQ8, a 2.15x whole-cluster RAM reduction rather than SQ8's own 4.00x per-vector ratio. Module 09, "Vector indexes and vector databases," is now complete at 10 of 10 concepts. Module 10, "RAG databases and vector-store implementation," is named forward only here.</p>
+<div class="beginner-memory"><b>Concept 10 is active.</b> Module 09 stands at 10 of 10 concepts -- complete.</div>
+<a class="button primary" href="module-09-concept-09.html">← Back to Concept 09's sharding and replication</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Nine levers, one cited formula, one hardware plan</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>320.79 GiB / 7 nodes vs. 149.13 GiB / 3 nodes</b><small>The beginner-convention headline: one scenario, two quantization states, one cited formula.</small></a>
+<a href="#s10"><span>02</span><b>The full five-step decision, worked in full</b><small>Mechanism, encoding, formula, headroom, node count, shards -- traced end to end.</small></a>
+<a href="#s14"><span>03</span><b>The Capacity Planner</b><small>The lab -- pick a corpus size and a quantization state, watch the RAM breakdown and node count recompute.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal definitions, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> Concepts 01-09 each studied one lever in isolation → a real deployment must combine measured numbers into one hardware plan → Concepts 02/03/06's own cited numbers pick the mechanism → Concept 05's own cited ratio picks the encoding → Qdrant's own cited formulas turn that choice into a RAM total and a node count → Concept 09's own sharding rule turns the node count into a shard plan → the lab lets you replay the same formula at four corpus sizes.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Capacity planning and benchmarking" deep dive</b><em>Formal definitions, the from-scratch code, and The Capacity Planner lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's tenth and closing concept</h2></div></header>
+<p>This is the tenth and final concept of Module 09, "Vector indexes and vector databases" (10/10). Concepts 01-09 each studied one mechanism, encoding, or sharding lever in isolation. This concept is the module's own second-order synthesis: it derives no new mechanism, ratio, or benchmark number of its own -- it reuses Concept 01's flat-cost convention, Concepts 02/03's cited recall-latency operating points, Concept 05's SQ8 ratio, Concept 06's marginal-cost method, and Concept 09's sharding formula, combined through one new cited source (Qdrant's own capacity-planning documentation) into a hardware-sizing decision. Module 10, "RAG databases and vector-store implementation," is named forward only, one line, here.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Benchmarking vs. capacity planning</h3><p>Two distinct jobs -- measuring a real operating point, and projecting it onto a different deployment size.</p></article>
+<article class="info-card"><span>APPLY</span><h3>Five cited Qdrant formulas</h3><p>base, vector-storage cost, graph cost, id-tracker cost, headroom, and node count -- all cited directly.</p></article>
+<article class="info-card"><span>TRACE</span><h3>The full N=200,000,000 worked example</h3><p>Mechanism choice, encoding choice, formula, headroom, node count, and shard plan -- every number verified.</p></article>
+<article class="info-card"><span>USE</span><h3>The Capacity Planner lab</h3><p>Recompute the same formula live at four corpus sizes and two quantization states.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-01.html">Module 09 Concept 01</a></b> -- the 4×d flat-storage cost convention, cited by name; reused unchanged as this concept's own baseline dimension convention.</li>
+<li><b><a href="module-09-concept-02.html">Module 09 Concept 02</a></b> -- the SIFT1M IVF16384,Flat operating point (0.0538 ms/query, 89.80% recall@1), cited by name and reused unchanged in Section 10's own mechanism choice.</li>
+<li><b><a href="module-09-concept-03.html">Module 09 Concept 03</a></b> -- HNSW's own M/ef_search parameters and the ef_search=16 operating point (0.011 ms/query, 87.40% recall@1), cited by name.</li>
+<li><b><a href="module-09-concept-05.html">Module 09 Concept 05</a></b> -- SQ8's own cited 4.00x compression ratio and PQ's own cited 32.00x ratio, cited by name.</li>
+<li><b><a href="module-09-concept-06.html">Module 09 Concept 06</a></b> -- the marginal-cost-per-recall-point method, cited by name and reapplied here to a new pair of operating points.</li>
+<li><b><a href="module-09-concept-09.html">Module 09 Concept 09</a></b> -- the sharding/replication formula, the local_k=k safe rule, and the S×local_k fan-out cost, all cited by name.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Sizing a moving truck from a measured box, not a guess</h2></div></header>
+<p>Capacity planning is like sizing a moving truck: you measure one real box (the benchmark -- how much space, in practice, one representative item takes), then multiply by how many boxes you actually have (the corpus size) to pick a truck that fits everything, with a bit of room to spare. Guessing the truck size without measuring a real box, or measuring one box and assuming the truck needs no extra room at all, both fail the same way -- the plan doesn't match reality.</p>
+<div class="callout warning"><b>Analogy boundary</b>The analogy explains WHY two separate measurements (a real box, a real count) combine into one plan -- not the exact GiB or node numbers, which come from the verified worked example in Section 10.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Base unit (Qdrant, cited)</td><td>Number of points times the replication factor -- the multiplier every other formula below starts from</td><td>base = N × replication_factor</td></tr>
+<tr><td>Dense/quantized size (Qdrant, cited)</td><td>Vector-storage cost: base × dimensions × bytes per dimension (4 for float32, 1 for SQ8)</td><td>size = base × d × bytes_per_dim</td></tr>
+<tr><td>HNSW graph cost (Qdrant, cited)</td><td>Graph-connection storage cost, independent of quantization state</td><td>hnsw_size = base × m × 2 × 4 × 1.2</td></tr>
+<tr><td>Id-tracker cost (Qdrant, cited)</td><td>Fixed per-point bookkeeping overhead, independent of quantization state</td><td>id_tracker_size = base × 52 bytes</td></tr>
+<tr><td>Node count (Qdrant, cited)</td><td>Total RAM with headroom, divided by each node's own usable RAM, rounded up</td><td>nodes = ceil(total × 1.2 ÷ (node_ram × 0.8))</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Five steps, one decision</h2></div></header>
+<p><b>1. Pick the operating point.</b> Compare cited benchmark numbers against the recall floor (Concepts 02/03/06). <b>2. Pick the encoding.</b> Compare cited compression ratios against the RAM budget (Concept 05). <b>3. Apply the formula.</b> Qdrant's own cited base/vector-storage/graph/id-tracker formulas turn a point count into a byte count. <b>4. Sum and add headroom.</b> Qdrant's own cited +20% buffer on the summed total. <b>5. Divide into nodes, then pick shards.</b> Qdrant's own cited ceiling-division node formula, then Concept 09's own cited sharding rule ("at least two shards per node") and fan-out sanity check (S×local_k).</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Three RAM components, stacked, with and without SQ8</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0910-s07-title">
+<strong class="concept-visual-title" id="c0910-s07-title">VISUAL · RAM COMPONENT BREAKDOWN, N=200,000,000, NO-QUANT VS. SQ8</strong>
+<svg class="vector-plane" viewBox="0 0 340 260" role="img" aria-labelledby="c0910-svg-title-s07 c0910-svg-desc-s07" style="max-width:540px">
+<title id="c0910-svg-title-s07">A stacked bar chart on a GiB axis showing vector storage, HNSW graph, and id-tracker cost, for both the no-quantization and SQ8 states, with cited totals and node counts</title>
+<desc id="c0910-svg-desc-s07">A y-axis from 0 to 350 GiB with gridlines at 0, 100, 200 and 300. Two stacked bars, each made of three segments: vector storage (bottom), HNSW graph (middle), id-tracker (top). The no-quantization bar's vector-storage segment is much taller than the SQ8 bar's, while the HNSW graph and id-tracker segments are identical heights in both bars. Totals of 320.79 GiB / 7 nodes and 149.13 GiB / 3 nodes (bumped to 4) are labeled below each bar.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<line x1="50" y1="190" x2="310" y2="190" stroke="#14241f" stroke-width="1.2"/>
+<line x1="50" y1="190" x2="50" y2="35" stroke="#14241f" stroke-width="1.2"/>
+<line x1="50" y1="147.14" x2="310" y2="147.14" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="2 2"/>
+<line x1="50" y1="104.29" x2="310" y2="104.29" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="2 2"/>
+<line x1="50" y1="61.43" x2="310" y2="61.43" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="2 2"/>
+<text x="30" y="193" font-size="6.5" text-anchor="end">0</text>
+<text x="30" y="150" font-size="6.5" text-anchor="end">100</text>
+<text x="30" y="107" font-size="6.5" text-anchor="end">200</text>
+<text x="30" y="64" font-size="6.5" text-anchor="end">300</text>
+<text x="14" y="45" font-size="6.5">GiB</text>
+<rect x="100" y="108.26" width="60" height="81.74" fill="#3a5f95"/>
+<rect x="100" y="83.74" width="60" height="24.52" fill="#b3543a"/>
+<rect x="100" y="75.44" width="60" height="8.30" fill="#d7ff53"/>
+<rect x="220" y="169.57" width="60" height="20.43" fill="#5ee6c3"/>
+<rect x="220" y="145.05" width="60" height="24.52" fill="#b3543a"/>
+<rect x="220" y="136.75" width="60" height="8.30" fill="#d7ff53"/>
+<text x="130" y="203" font-size="6.5" text-anchor="middle">No quantization</text>
+<text x="130" y="214" font-size="6.5" text-anchor="middle" font-weight="700">320.79 GiB → 7 nodes</text>
+<text x="250" y="203" font-size="6.5" text-anchor="middle">SQ8</text>
+<text x="250" y="214" font-size="6.5" text-anchor="middle" font-weight="700">149.13 GiB → 3 nodes (→4)</text>
+<rect x="55" y="230" width="9" height="9" fill="#3a5f95"/><text x="67" y="238" font-size="6.5">vector storage (float32)</text>
+<rect x="180" y="230" width="9" height="9" fill="#5ee6c3"/><text x="192" y="238" font-size="6.5">vector storage (SQ8)</text>
+<rect x="55" y="245" width="9" height="9" fill="#b3543a"/><text x="67" y="253" font-size="6.5">HNSW graph (fixed)</text>
+<rect x="180" y="245" width="9" height="9" fill="#d7ff53"/><text x="192" y="253" font-size="6.5">id-tracker (fixed)</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Sized before storage, chosen before retrieval</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — sized via this concept's own cited Qdrant formula</span><i>↓</i><span class="hot">Retrieval — mechanism chosen via Concepts 02/03/06's own cited benchmark numbers</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The marginal-cost equation, reapplied, plus the five cited formulas</h2></div></header>
+<div class="equation">marginal cost per recall point = (latency_B − latency_A) ÷ (recall_B − recall_A) = (0.0538 − 0.011) ÷ (89.80 − 87.40) = 0.01783 ms/point</div>
+<div class="equation">base = N × replication_factor; dense_size = base×d×4; quantized_size = base×d×1; hnsw_size = base×m×2×4×1.2; id_tracker_size = base×52</div>
+<div class="equation">RAM total = (dense_or_quantized_size + hnsw_size + id_tracker_size) × 1.2; nodes = ceil(RAM total ÷ (node_ram × 0.8))</div>
+<p>The marginal-cost equation is Concept 06's own cited method, reapplied here to a new pair of operating points -- not a duplicate of Concept 06's own 7-row table. The five capacity formulas are cited directly from Qdrant's own capacity-planning documentation.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full five-step decision, N=200,000,000, d=128</h2></div></header>
+<p><b>Step 1 -- mechanism (reuses Concepts 02, 03, 06).</b> Two cited SIFT1M operating points clear the 85% recall bar: HNSW ef_search=16 (0.011 ms/query, 87.40% recall@1) and IVF16384,Flat (0.0538 ms/query, 89.80% recall@1). Marginal cost = (0.0538−0.011)/(89.80−87.40) = 0.0428/2.40 = 0.01783 ms per recall point, a 4.891x latency multiplier. <b>Decision: HNSW ef_search=16</b> -- IVF's 2.40-point recall gain costs nearly 5x the latency for a workload whose recall floor is already cleared.</p>
+<p><b>Step 2 -- encoding (reuses Concept 05).</b> SQ8 chosen: Concept 05's cited 4.00x ratio (1 byte/dim vs. Flat's 4 bytes/dim, dimension-independent). PQ's cited 32.00x ratio was considered and set aside -- SQ8 alone already brings the cluster to a small, HA-viable node count, without PQ's added recall risk.</p>
+<p><b>Step 3 -- capacity formula (new source -- Qdrant's own cited page).</b> base = 200,000,000 × 2 = 400,000,000. dense_size = base×128×4 = 190.7349 GiB. quantized_size = base×128×1 = 47.6837 GiB (exactly dense_size/4, Concept 05's own 4.00x ratio holding unchanged at whole-cluster scale). hnsw_size = base×16×2×4×1.2 = 57.2205 GiB (same regardless of quantization). id_tracker_size = base×52 = 19.3715 GiB (same regardless of quantization).</p>
+<table class="worked-table">
+<thead><tr><th>State</th><th>Vector storage</th><th>HNSW graph</th><th>Id-tracker</th><th>RAM total (+20%)</th><th>Nodes (ceil ÷ 51.2)</th></tr></thead>
+<tbody>
+<tr><td>No quantization</td><td>190.7349 GiB</td><td>57.2205 GiB</td><td>19.3715 GiB</td><td>320.7922 GiB</td><td>7</td></tr>
+<tr><td>SQ8</td><td>47.6837 GiB</td><td>57.2205 GiB</td><td>19.3715 GiB</td><td>149.1308 GiB</td><td>3</td></tr>
+</tbody>
+</table>
+<p><b>Step 4 -- node count.</b> node_ram=64 GiB, usable=51.2 GiB. No-quant: ceil(320.7922/51.2)=7. SQ8: ceil(149.1308/51.2)=3. Whole-cluster RAM shrinks 320.7922/149.1308 = 2.151x -- NOT the 4.00x raw SQ8 ratio, because hnsw_size+id_tracker_size (76.59 GiB, fixed) don't compress. Cross-checking against Qdrant's own stated rough ceiling ("a single node typically tops out around 100 million vectors"): at 3 nodes, base/3 = 133,333,333 points-worth/node, above that rough ceiling even though RAM fits. <b>Final recommendation bumps to 4 nodes</b>, landing exactly at base/4 = 100,000,000 points/node -- the ceiling itself, with real margin.</p>
+<p><b>Step 5 -- shards and fan-out (reuses Concept 09).</b> shard_number=8 (Qdrant's own cited floor: "create at least two shards per node," 4 nodes×2). replication_factor=2 → 16 total shard-replicas, 4 per node. Fan-out sanity check via Concept 09's own S×local_k formula at the safe rule local_k=k=10: 8×10=80 candidates fanned back per query -- a small, cheap cost next to the RAM/node savings just made.</p>
+<p><b>Preset table (for the lab, same formula, four corpus sizes):</b> N=20,000,000 → no-quant 32.08 GiB/1 node, SQ8 14.91 GiB/1 node (quantization saves RAM but doesn't cross a node threshold here -- a boundary case). N=50,000,000 → no-quant 80.20 GiB/2 nodes, SQ8 37.28 GiB/1 node. N=200,000,000 → this concept's own anchor scenario above. N=500,000,000 → no-quant 801.98 GiB/16 nodes, SQ8 372.83 GiB/8 nodes.</p>
+<div class="callout"><b>Verification method</b>Every arithmetic result above -- base, dense_size, quantized_size, hnsw_size, id_tracker_size, both RAM totals, both node counts, the marginal-cost figure, and all four presets -- was computed and independently cross-checked before this lesson was written; the Qdrant formulas themselves were confirmed live against qdrant.tech and cross-checked against that page's own worked example before reuse at this concept's own parameters.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a genuine caveat</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Pre-launch corpus sizing</h3><p>A growing corpus with a known target recall and a known dataset size -- exactly this concept's own N=200,000,000 scenario.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>N=20,000,000</h3><p>Quantization saves real RAM here but doesn't cross a node-count threshold -- both states still need only 1 node.</p></article>
+<article class="info-card"><span>GENUINE CAVEAT</span><h3>A 1M-point benchmark isn't automatically valid at 200x scale</h3><p>Qdrant's own documentation itself recommends testing with a representative sample before trusting a benchmark at a much larger deployment size.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The cited formula and node-count calculator, implemented directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN PRESET TABLE EXACTLY</span>
+<pre><code>// Qdrant's own cited capacity-planning formulas, applied directly.
+function capacityPlan(n, replicationFactor, d, m, nodeRam, quantized) {
+  const base = n * replicationFactor;
+  const bytesPerDim = quantized ? 1 : 4;
+  const vectorBytes = base * d * bytesPerDim;
+  const hnswBytes = base * m * 2 * 4 * 1.2;
+  const idTrackerBytes = base * 52;
+  const GiB = 1024 ** 3;
+  const totalGiB = ((vectorBytes + hnswBytes + idTrackerBytes) / GiB) * 1.2;
+  const usableRam = nodeRam * 0.8;
+  const nodes = Math.ceil(totalGiB / usableRam);
+  return { vectorGiB: vectorBytes / GiB, hnswGiB: hnswBytes / GiB, idTrackerGiB: idTrackerBytes / GiB, totalGiB, nodes };
+}
+
+const d = 128, m = 16, replicationFactor = 2, nodeRam = 64;
+
+const noQuant200M = capacityPlan(200_000_000, replicationFactor, d, m, nodeRam, false);
+const sq8_200M = capacityPlan(200_000_000, replicationFactor, d, m, nodeRam, true);
+
+console.assert(Math.abs(noQuant200M.totalGiB - 320.7922) < 0.01, "no-quant total matches 320.79 GiB");
+console.assert(noQuant200M.nodes === 7, "no-quant needs 7 nodes");
+console.assert(Math.abs(sq8_200M.totalGiB - 149.1308) < 0.01, "SQ8 total matches 149.13 GiB");
+console.assert(sq8_200M.nodes === 3, "SQ8 needs 3 nodes (ceil, before the 100M/node ceiling bump)");
+console.assert(Math.abs(noQuant200M.totalGiB / sq8_200M.totalGiB - 2.151) < 0.01, "whole-cluster reduction is ~2.15x, not SQ8's own 4.00x per-vector ratio");
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for capacity planning and benchmarking</h2></div></header>
+<p><a href="https://qdrant.tech/documentation/capacity-planning/">Qdrant's own capacity-planning documentation</a> is the primary source for this concept's five formulas -- base, vector-storage cost, HNSW graph cost, id-tracker cost, headroom, and node count -- plus the stated rough ceiling of roughly 100 million vectors per node and the recommendation to use at least three nodes with a replication factor of two or higher for high availability. <a href="https://ann-benchmarks.com/index.html">ANN-Benchmarks</a> states its own recall-vs-queries-per-second methodology directly, the named live anchor for this concept's "benchmarking" half. <a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors">FAISS's own SIFT1M indexing page</a> (already cited in Concepts 02/03) supplies the two operating points reused unchanged in Section 10's own mechanism decision.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Capacity Planner</h2></div></header>
+<div class="lab">
+<p>Pick a corpus-size preset, then toggle quantization on or off. The bars below recompute the three RAM components live, and the readout shows the total RAM (with Qdrant's own cited +20% headroom) and the resulting node count (ceil formula, node_ram=64 GiB fixed).</p>
+<div class="lab-actions" role="group" aria-label="Choose a corpus size">
+<button type="button" class="secondary" id="n20Btn_0910" data-n="20000000">N = 20M</button>
+<button type="button" class="secondary" id="n50Btn_0910" data-n="50000000">N = 50M</button>
+<button type="button" class="secondary active" id="n200Btn_0910" data-n="200000000">N = 200M</button>
+<button type="button" class="secondary" id="n500Btn_0910" data-n="500000000">N = 500M</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Toggle quantization">
+<button type="button" class="secondary active" id="quantOffBtn_0910">Quantization: Off (float32)</button>
+<button type="button" class="secondary" id="quantOnBtn_0910">Quantization: On (SQ8)</button>
+</div>
+<div class="prob-bars" id="capBars_0910" role="img" aria-label="RAM breakdown by component, as a share of the pre-headroom subtotal">
+<div class="prob-row"><span>Vector storage</span><div class="bar-track"><div class="bar-fill" id="capFillVector_0910" style="width:0%"></div></div><span id="capOutVector_0910">0.00 GiB</span></div>
+<div class="prob-row"><span>HNSW graph</span><div class="bar-track"><div class="bar-fill" id="capFillHnsw_0910" style="width:0%"></div></div><span id="capOutHnsw_0910">0.00 GiB</span></div>
+<div class="prob-row"><span>Id-tracker</span><div class="bar-track"><div class="bar-fill" id="capFillId_0910" style="width:0%"></div></div><span id="capOutId_0910">0.00 GiB</span></div>
+</div>
+<div class="norm-readout" id="capReadout_0910">
+<div><span>TOTAL RAM (+20% HEADROOM)</span><b id="capTotalRam_0910">—</b></div>
+<div><span>NODE RAM (FIXED)</span><b id="capNodeRam_0910">64 GiB (51.2 usable)</b></div>
+<div><span>NODES NEEDED</span><b id="capNodesNeeded_0910">—</b></div>
+<div><span>REPLICATION FACTOR (FIXED)</span><b id="capReplication_0910">2</b></div>
+</div>
+<div class="callout" id="capVerdict_0910" aria-live="polite">Pick a preset and a quantization state above to see the RAM breakdown and node count.</div>
+<div class="callout warning">This calculator applies Qdrant's own cited formula live -- it is arithmetic on a real, cited formula, not a new benchmark; the recall/latency operating points that justified the mechanism choice come from Section 10's own cited SIFT1M numbers only, and are not recomputed here.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Same formula family, different scope -- the gap made explicit</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Ratio</th><th>What it measures</th><th>Value at N=200,000,000</th></tr></thead>
+<tbody>
+<tr><td>SQ8 per-vector ratio (Concept 05, cited)</td><td>Flat bytes/dim ÷ SQ8 bytes/dim -- one vector's own storage only</td><td>4.00x</td></tr>
+<tr><td>Whole-cluster RAM ratio (this concept)</td><td>Total RAM with headroom, no-quant ÷ SQ8 -- vector storage PLUS the fixed HNSW graph and id-tracker overhead</td><td>2.15x</td></tr>
+</tbody>
+</table>
+<p>Same SQ8 encoding, same underlying formula family -- but a per-vector ratio and a whole-system ratio answer different questions. The fixed overhead that doesn't compress is exactly what explains the gap.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNDERSIZED CLUSTER</span><h3>Headroom skipped</h3><p>Symptom: a cluster sized to the raw formula total, with no +20% buffer, runs out of memory the first time load spikes above average.</p></article>
+<article class="info-card"><span>STALE-BENCHMARK ASSUMPTION</span><h3>Bench at 1M, deploy at 500M unverified</h3><p>Symptom: a recall number measured at SIFT1M scale is assumed to hold unchanged at 500x the corpus size, without re-testing on a representative sample.</p></article>
+<article class="info-card"><span>WRONG SHARD COUNT</span><h3>Too few, or too many</h3><p>Symptom: too few shards blocks growth without a full reshard (Qdrant's own cited "cannot be changed without recreating the collection" rule); too many wastes per-shard overhead on a small cluster.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A compression ratio divides node count 1:1</td><td>False -- fixed overheads (the HNSW graph, the id-tracker) don't compress, so a 4.00x per-vector ratio became a 2.15x whole-cluster reduction here.</td></tr>
+<tr><td>More shards is always better</td><td>False, per Qdrant's own stated tradeoff -- too many shards wastes per-shard overhead on a small cluster.</td></tr>
+<tr><td>A benchmark's recall number holds at any corpus size</td><td>False -- it's an empirical operating point on one dataset, not a guarantee, per ANN-Benchmarks' own methodology framing.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Capacity planning happens pre-launch, and gets re-validated as the corpus actually grows -- it is not a one-time calculation.</li>
+<li>Resharding an existing collection is not free -- Qdrant's own documentation states shard_number "cannot be changed without recreating the collection," which is exactly why Concept 09's own sharding decision and this concept's own node-count decision are made together, up front.</li>
+<li>Headroom is a real operational buffer against load spikes, not padding to be trimmed under budget pressure.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the two ingredients capacity planning combines.</summary><div>A benchmarked recall/latency/memory operating point on a fixed real dataset, plus a per-component memory formula applied to a different, larger corpus size.</div></details>
+<details class="quiz"><summary>Explain the 4.00x-vs-2.15x gap from memory.</summary><div>SQ8's own cited 4.00x ratio only compresses vector storage; the HNSW graph and id-tracker overhead are fixed and don't compress, so the whole-cluster RAM only shrinks 2.15x.</div></details>
+<details class="quiz"><summary>State the safe shard-floor rule, cited from Qdrant.</summary><div>Create at least two shards per node.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using this concept's own formula (d=128, m=16, replication_factor=2, node_ram=64 GiB), recompute the full pipeline at N=1,000,000,000, for both quantization states. State the final node-count and minimum-shard-count recommendations.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>base = 1,000,000,000 × 2 = 2,000,000,000. No quantization: total RAM ≈ 1603.96 GiB → ceil(1603.96/51.2) = <b>32 nodes</b>. SQ8: total RAM ≈ 745.65 GiB → ceil(745.65/51.2) = <b>15 nodes</b> -- a 32/15 = 2.133x node reduction, again below SQ8's own 4.00x per-vector ratio, for the same fixed-overhead reason as the N=200,000,000 case. Minimum shards at Qdrant's own cited "at least two per node" floor, against the 15-node SQ8 cluster: <b>30 shards</b>.</div>
+</details>
+<p>Teach-back: in one sentence, why does the node-reduction factor (2.133x here, 2.15x at N=200,000,000) stay below SQ8's own cited 4.00x ratio at every corpus size?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Capacity planning and benchmarking</h3><ul><li><b>Definition:</b> benchmarking measures a real recall/latency/memory point on a fixed dataset; capacity planning projects that point, plus a real memory formula, onto a different deployment size</li><li><b>The five cited formulas:</b> base, vector-storage cost, HNSW graph cost, id-tracker cost, headroom+node-count</li><li><b>Memorable gap:</b> SQ8's own cited 4.00x per-vector ratio produced only a 2.15x whole-cluster RAM reduction at N=200,000,000, because the HNSW graph and id-tracker overhead don't compress.</li></ul></div>
+<div><h3>Module 09 · 10/10 -- COMPLETE</h3><p>Module 10, "RAG databases and vector-store implementation," is next -- named forward only here.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: how does benchmarking differ from capacity planning?</summary><div>Benchmarking measures a real operating point on a fixed dataset at whatever scale that dataset happens to be; capacity planning projects that measured point, plus a per-component memory formula, onto a different, usually much larger, deployment size.</div></details>
+<details class="quiz"><summary>Mathematical: recompute the node count at a new N, say 100,000,000, with SQ8.</summary><div>base = 100,000,000×2=200,000,000; total RAM with SQ8 scales linearly from the N=200,000,000 SQ8 total (149.1308 GiB) by a factor of 0.5, giving ≈74.57 GiB; ceil(74.57/51.2) = 2 nodes.</div></details>
+<details class="quiz"><summary>Coding: extend the calculator in Section 12 with a PQ option.</summary><div>Add a third bytesPerDim case using Concept 05's own cited PQ ratio (32.00x at d=128/M=16, so bytesPerDim ≈ d×4/32) and branch on a quantization mode string instead of a boolean.</div></details>
+<details class="quiz"><summary>System design: how would you choose node_ram, shard_number and replication_factor for a real workload?</summary><div>Size shard_number and replication_factor from expected corpus growth and failure tolerance, choose node_ram from available hardware, then run this concept's own formula to get a node count -- and cross-check that count against Qdrant's own stated ~100-million-vectors-per-node rough ceiling before finalizing.</div></details>
+<details class="quiz"><summary>Debugging: a cluster fits the RAM formula on paper but still OOMs in production. What do you check first?</summary><div>Whether the +20% headroom buffer was actually applied, and whether the per-node vector count is near or above Qdrant's own stated ~100-million-vectors-per-node rough ceiling -- both are easy to silently skip when sizing a cluster from the raw formula total alone.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://qdrant.tech/documentation/capacity-planning/"><b>Capacity planning — Qdrant Documentation</b><br><span>The primary source for this concept's five formulas -- base, vector-storage cost, HNSW graph cost, id-tracker cost, headroom, and node count -- plus the ~100M-vectors-per-node rough ceiling and the ≥3-node/replication_factor≥2 HA recommendation.</span></a>
+<a href="https://ann-benchmarks.com/index.html"><b>ANN-Benchmarks</b><br><span>States its own recall-vs-queries-per-second benchmarking methodology directly -- the named live anchor for this concept's benchmarking half.</span></a>
+<a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors"><b>Indexing 1M vectors — FAISS wiki</b><br><span>Already cited in Concepts 02/03; supplies the two SIFT1M operating points reused unchanged in Section 10's own mechanism decision.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 10/10 — COMPLETE</span>
+<h3>Two numbers, one hardware plan. Measure it, then size it.</h3>
+<p>You can now name benchmarking and capacity planning as two distinct jobs; apply Qdrant's own five cited formulas; trace the full N=200,000,000 worked example end to end; and explain why a 4.00x per-vector ratio only produced a 2.15x whole-cluster RAM reduction. Module 09, "Vector indexes and vector databases," is complete at 10 of 10 concepts. Module 10, "RAG databases and vector-store implementation," is next, named forward only here.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Capacity Planner ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 10 of 10 concepts -- complete.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 10 · Active</p>
+<a href="module-09-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>

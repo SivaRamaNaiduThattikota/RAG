@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's ninth concept is the first to leave a single machine behind. Qdrant's own documentation names automatic hash-based sharding and a search that fans out to every shard through Raft consensus, plus a write_consistency_factor that defaults to 1 -- meaning concurrent updates can leave replicas temporarily inconsistent by design. A 12-chunk toy corpus is hash-assigned across 3 shards (sizes 3/5/4, an unbalanced real consequence of hashing), then a query fans out with three local_k settings: local_k=1 misses the true 4th-ranked result entirely, local_k=3 gets lucky, and local_k=k=4 is proven safe by construction. A toy write_consistency_factor example shows a 35ms staleness window at Qdrant's own real default.">
+<title>Replication, sharding and consistency — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 09</p>
+<h1>One machine isn't enough.<br><em>Split it, copy it, live with the gap.</em></h1>
+<p class="lesson-lead">Concepts 01-08 all quietly assumed one machine held the whole index. Real corpora outgrow one machine's storage, and one machine is a single point of failure. Qdrant's own documentation names the two real fixes -- sharding (split the corpus across machines) and replication (copy the same shard onto more than one machine) -- plus the cost neither one erases: a write lands on one replica before the others, and a client reading the wrong one can see stale data. A verified 12-chunk, 3-shard worked example traces exactly when that fan-out gets the right answer, when it gets lucky, and when it silently misses.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth concept of Module 09 (9/10) -- the first concept to leave a single machine behind</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's exact baseline, Concept 04's IVF partitioning (for the "partition" word contrast), Concept 08's tombstone/write mechanism (for the replica-lag analogy) -- all cited, not re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Name sharding vs. replication vs. consistency; state the safe local_k=k rule; explain the write_consistency_factor trade-off in one sentence</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Split the corpus, copy the shards, live with the gap</h2>
+</div>
+<p>Every structure through Concept 08 assumed a single machine. This concept is about what changes once the corpus -- or the query traffic -- outgrows that one machine, and what it actually costs to fan a query out across several.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Sharding, replication, consistency -- three precise words</h3>
+<div class="mental-compare">
+<div><span>SHARDING</span><p>Split the corpus across machines, by some fixed rule -- so no single machine has to hold all of it.</p></div>
+<div><span>REPLICATION</span><p>Copy the same shard onto more than one machine -- so no single machine failing takes that shard down with it.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> per Qdrant's own documentation, "writes execute in parallel on all active replicas of a shard," but "Qdrant prioritizes availability and throughput, so concurrent updates to the same document can leave replicas temporarily inconsistent" -- eventual consistency, by default, not a bug.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concepts 01-08 silently assumed one machine, forever</h3>
+<p>Exact search, HNSW, IVF, PQ/SQ, metadata filtering, tombstones -- every one of them was reasoned about as if the whole index lived on one machine's own disk and memory. Two real limits break that assumption: a corpus can grow past what one machine can store (sharding answers this), and one machine is a single point of failure and a read-throughput ceiling (replication answers this). They are two separate levers, not one.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>12 chunks, 3 shards, and a fan-out that can miss</h3>
+<p>A toy corpus of 12 chunks, 2D coordinates (same illustrative convention as Concepts 03-04's own toy corpus). Each doc id is hashed and assigned to one of 3 shards -- Qdrant's own docs name "a consistent hashing algorithm" for this; the toy example below stands in with a simple hash mod 3. The split lands unevenly: Shard 0 gets 3 docs, Shard 1 gets 5, Shard 2 gets 4. <b>Hash-based sharding does not guarantee equal shard sizes.</b></p>
+<p>Query Q=(2,1) is sent to <b>every</b> shard -- never just some, unlike Concept 04's own nprobe&lt;nlist, which deliberately skips clusters. The full brute-force ranking (Concept 01's own exact search) says the true top-4 nearest to Q are doc-01, doc-02, doc-03, doc-12. Each shard searches only its own members and forwards its own local top-(local_k) back to a coordinator, which merges everything and re-sorts:</p>
+<table class="worked-table">
+<thead><tr><th>local_k</th><th>Candidates fanned back</th><th>Merged result</th><th>Matches ground truth?</th></tr></thead>
+<tbody>
+<tr><td>1 (too small)</td><td>3</td><td>doc-01, doc-02, doc-03</td><td>NO -- doc-12 never sent</td></tr>
+<tr><td>3 (below k=4)</td><td>9</td><td>doc-01, doc-02, doc-03, doc-12</td><td>Yes -- but only by luck</td></tr>
+<tr><td>4 (= k, the safe rule)</td><td>11</td><td>doc-01, doc-02, doc-03, doc-12</td><td>Yes -- guaranteed</td></tr>
+</tbody>
+</table>
+<p>At local_k=1, doc-12 -- the true 4th-nearest point, sitting inside Shard 1 -- is never surfaced, because Shard 1 only forwarded its own single best result. At local_k=3 the merge happens to be correct, because doc-12 happened to land inside Shard 1's own top-3 anyway -- a lucky case, not a rule. <b>The safe rule: set local_k=k on every shard.</b> No single shard can ever hold more than k of the true global top-k results, since there are only k slots to begin with -- so local_k=k is guaranteed correct for any query, on any shard split.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0909-b03-title">
+<strong class="concept-visual-title" id="c0909-b03-title">VISUAL · 12 CHUNKS, 3 SHARDS, QUERY Q=(2,1)</strong>
+<svg class="vector-plane" viewBox="0 0 340 300" role="img" aria-labelledby="c0909-svg-title-b c0909-svg-desc-b" style="max-width:520px">
+<title id="c0909-svg-title-b">A 2D coordinate plane plotting 12 toy chunks colored by their hash-assigned shard, plus the query point and the true top-4 nearest neighbours</title>
+<desc id="c0909-svg-desc-b">An x-y grid from 0 to 10 on both axes. Twelve points are plotted, each colored by one of three shard colors (teal for Shard 0, blue for Shard 1, orange for Shard 2). A black diamond marks the query Q at (2,1). Four of the twelve points -- doc-01, doc-02, doc-03 and doc-12, the verified ground-truth top-4 nearest to Q -- are drawn with an extra lime ring around them.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<line x1="40" y1="270" x2="300" y2="270" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="40" y1="270" x2="40" y2="10" stroke="#c9cdb9" stroke-width="1"/>
+<text x="304" y="273" font-size="7">x</text>
+<text x="30" y="10" font-size="7">y</text>
+<text x="36" y="282" font-size="6" text-anchor="middle">0</text>
+<text x="92" y="282" font-size="6" text-anchor="middle">2</text>
+<text x="144" y="282" font-size="6" text-anchor="middle">4</text>
+<text x="196" y="282" font-size="6" text-anchor="middle">6</text>
+<text x="248" y="282" font-size="6" text-anchor="middle">8</text>
+<text x="24" y="244" font-size="6">1</text>
+<text x="24" y="192" font-size="6">3</text>
+<text x="24" y="140" font-size="6">5</text>
+<text x="24" y="88" font-size="6">7</text>
+<text x="24" y="36" font-size="6">9</text>
+<circle cx="66" cy="244" r="6.5" fill="none" stroke="#d7ff53" stroke-width="2.5"/>
+<circle cx="66" cy="244" r="5" fill="#3a5f95"/><text x="72" y="242" font-size="6">doc-01</text>
+<circle cx="92" cy="218" r="6.5" fill="none" stroke="#d7ff53" stroke-width="2.5"/>
+<circle cx="92" cy="218" r="5" fill="#b3543a"/><text x="98" y="216" font-size="6">doc-02</text>
+<circle cx="66" cy="192" r="6.5" fill="none" stroke="#d7ff53" stroke-width="2.5"/>
+<circle cx="66" cy="192" r="5" fill="#5ee6c3"/><text x="72" y="190" font-size="6">doc-03</text>
+<circle cx="248" cy="62" r="5" fill="#3a5f95"/><text x="254" y="60" font-size="6">doc-04</text>
+<circle cx="274" cy="88" r="5" fill="#b3543a"/><text x="280" y="86" font-size="6">doc-05</text>
+<circle cx="222" cy="36" r="5" fill="#5ee6c3"/><text x="196" y="30" font-size="6">doc-06</text>
+<circle cx="92" cy="62" r="5" fill="#3a5f95"/><text x="98" y="60" font-size="6">doc-07</text>
+<circle cx="66" cy="36" r="5" fill="#b3543a"/><text x="40" y="26" font-size="6">doc-08</text>
+<circle cx="118" cy="36" r="5" fill="#5ee6c3"/><text x="112" y="26" font-size="6">doc-09</text>
+<circle cx="248" cy="244" r="5" fill="#b3543a"/><text x="254" y="242" font-size="6">doc-10</text>
+<circle cx="274" cy="218" r="5" fill="#3a5f95"/><text x="280" y="216" font-size="6">doc-11</text>
+<circle cx="222" cy="244" r="6.5" fill="none" stroke="#d7ff53" stroke-width="2.5"/>
+<circle cx="222" cy="244" r="5" fill="#3a5f95"/><text x="228" y="242" font-size="6">doc-12</text>
+<path d="M92 244 l6 -6 l6 6 l-6 6 z" fill="#14241f"/><text x="82" y="258" font-size="6.5" font-weight="700">Q (2,1)</text>
+<text x="200" y="296" font-size="6.5" fill="#5ee6c3" font-weight="700">■ shard 0</text>
+<text x="245" y="296" font-size="6.5" fill="#3a5f95" font-weight="700">■ shard 1</text>
+<text x="290" y="296" font-size="6.5" fill="#b3543a" font-weight="700">■</text>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Hash to assign, fan out to search, ack-count to write</h3>
+<p><b>Sharding.</b> Qdrant's own documentation: "points are assigned to shards using a consistent hashing algorithm," and "a search request sent to any single node automatically fans out to the rest of the cluster to gather the full result" through Raft consensus. <b>Replication.</b> Qdrant's own docs: "Writes execute in parallel on all active replicas of a shard, and any replica can serve reads or writes." <b>Consistency.</b> Qdrant's own <code>write_consistency_factor</code> parameter "defines the number of replicas that must acknowledge a write operation before responding to the client" -- it "is set to 1 by default," and can range from 1 up to the shard's own replication factor.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span class="hot">Vectors [now split across shards, each possibly replicated]</span><i>→</i>
+<span class="hot">Retrieval [fan-out to every shard, then merge]</span><i>→</i>
+<span>Context → LLM → Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Sharding vs. Concept 04's IVF partitioning -- same word, two jobs</h3>
+<div class="distinction-table" role="table" aria-label="Sharding and IVF partitioning distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">IVF partitioning (Concept 04)</span><span role="cell">Splits vectors WITHIN one machine's own index, by nearest-centroid similarity -- a deliberate approximation that can miss when nprobe&lt;nlist.</span></div>
+<div role="row"><span role="cell">Sharding (this concept)</span><span role="cell">Splits the corpus ACROSS machines, by an identity-based hash rule unrelated to vector similarity -- a query fans out to every shard, never skipping one.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Sharding narrows the search, like IVF does."</b><p>False -- every shard is always queried in full. Sharding splits WHERE data lives, not which of it gets looked at.</p></div>
+<div><b>"More replicas means instantly consistent."</b><p>False, per Qdrant's own documentation -- the default is eventual consistency; concurrent updates can leave replicas temporarily out of sync.</p></div>
+<div><b>"Sharding and replication are the same lever."</b><p>False -- sharding splits the data, replication copies it. Orthogonal choices; a real deployment tunes both, separately.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>The Oracle RAG project, once it outgrows one instance</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A real design fork: when the corpus or query volume outgrows one machine</b><p>Sharding and replication become live decisions the moment a single instance can no longer hold the data or serve the read load.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 9/10</b><p>Concept 10 (capacity planning and benchmarking) is named forward only -- the tool for deciding WHEN this fork gets pulled.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name sharding vs. replication vs. consistency</b><p>Sharding splits the corpus across machines; replication copies a shard onto more than one machine; consistency is what a client sees when a write has landed on some replicas but not all yet.</p></div>
+<div><b>State the safe local_k=k rule</b><p>Setting local_k=k on every shard guarantees the correct global top-k for any query, because no single shard can ever hold more than k of the true global top-k results.</p></div>
+<div><b>Explain the write_consistency_factor trade-off in one sentence</b><p>A lower write_consistency_factor returns faster but risks a stale read from a slow replica; a higher one waits for more replicas and is slower but safer.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does local_k=1 miss doc-12 in Section 03's own trace, but local_k=4 never can?</li>
+<li>What does Qdrant's own documentation say happens to a search request sent to any single node in the cluster?</li>
+<li>Why is hash-based sharding not the same lever as IVF's own nearest-centroid partitioning, even though both use the word "partition"?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 9 OF 10</h3>
+<p>This concept named sharding, replication and consistency as the first multi-machine axis in this module, and showed -- with a verified 12-chunk/3-shard worked example -- exactly when a fan-out-and-merge search gets the right answer, when it gets lucky, and when it silently misses. Concept 10, capacity planning and benchmarking, closes out Module 09 next, named forward only here.</p>
+<div class="beginner-memory"><b>Concept 09 is active.</b> Module 09 stands at 9 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-08.html">← Back to Concept 08's tombstones</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Sharded, replicated, and eventually consistent -- traced end to end</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>local_k=1 misses, local_k=4 is safe</b><small>The beginner-convention headline: the same fan-out, three settings, one guaranteed rule.</small></a>
+<a href="#s10"><span>02</span><b>Fan-out cost, and a 35ms staleness window</b><small>Merge cost scales with shard count; a slow replica means a real, quantified gap.</small></a>
+<a href="#s14"><span>03</span><b>The Shard Fan-Out Console</b><small>The lab -- watch the fan-out and merge happen, three settings.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal definitions, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Concepts 01-08 assumed one machine → a corpus can outgrow it, and one machine is a single point of failure → sharding splits the data, replication copies it → a fan-out query merges results from every shard → the local_k=k rule guarantees correctness → replicas can briefly disagree, and write_consistency_factor is the real, tunable trade-off → the lab lets you watch the fan-out and merge yourself.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Replication, sharding and consistency" deep dive</b><em>Formal definitions, the from-scratch code, and The Shard Fan-Out Console lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's ninth concept -- the first to open the multi-machine axis</h2></div></header>
+<p>This is the ninth concept of Module 09, "Vector indexes and vector databases" (9/10), following eight concepts that all reasoned about a single machine's own index. This concept names what changes once the corpus or query traffic outgrows one machine -- sharding, replication, and the consistency gap that comes with copying data across machines. Concept 10 (capacity planning and benchmarking) closes the module next, named forward only.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Sharding, replication, consistency</h3><p>Three separate, orthogonal levers -- cited directly from Qdrant's own documentation.</p></article>
+<article class="info-card"><span>DEFINE</span><h3>write_consistency_factor</h3><p>How many replicas must ack a write before the client's call returns -- Qdrant's own real, settable parameter.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A verified 12-chunk, 3-shard fan-out</h3><p>Three local_k settings, one miss, one lucky match, one guaranteed match -- all verified via node.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Sharding vs. Concept 04's IVF partitioning</h3><p>Same word "partition," two unrelated mechanisms -- cross-machine identity split vs. within-machine similarity split.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-01.html">Module 09 Concept 01</a></b> -- exact brute-force search, cited by name; this concept's own ground-truth ranking is that same mechanism, run once per query.</li>
+<li><b><a href="module-09-concept-04.html">Module 09 Concept 04</a></b> -- IVF's nlist/nprobe partitioning, cited by name; this concept's own Section 15 contrasts it directly against cross-machine sharding.</li>
+<li><b><a href="module-09-concept-08.html">Module 09 Concept 08</a></b> -- the tombstone-write mechanism, cited by name; this concept reuses "a write lands on one replica before others" as the same fact, now across machines instead of within one.</li>
+<li><b>Explicitly out of scope:</b> capacity planning and benchmarking (Concept 10) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A library with branches, and a photocopied catalog</h2></div></header>
+<p>Sharding is like splitting one library's catalog across several branches -- no single branch holds every book, so a librarian's own patron request has to be sent to all of them to be sure nothing's missed. Replication is like photocopying one branch's own catalog and keeping the copy at a second branch -- if the first branch closes for the day, the copy still answers requests, though the copy might not yet reflect a book that was just checked out five minutes ago at the original branch.</p>
+<div class="callout warning"><b>Analogy boundary</b>The analogy explains WHY the two levers are separate and why a copy can lag, not the exact numbers -- those come from the verified worked example in Section 10.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Shard</td><td>A subset of the corpus, assigned by a fixed rule (e.g. a hash of the point's id), stored on one or more machines</td><td>—</td></tr>
+<tr><td>Replica</td><td>A copy of a single shard, stored on a different machine than at least one other copy of that same shard</td><td>—</td></tr>
+<tr><td>Replication factor (Qdrant, cited)</td><td>The number of copies maintained per shard; default 1, meaning no additional copy is maintained automatically</td><td>replication_factor</td></tr>
+<tr><td>Write consistency factor (Qdrant, cited)</td><td>The number of replicas that must acknowledge a write before the client's write call returns; default 1</td><td>write_consistency_factor, 1 ≤ wcf ≤ replication_factor</td></tr>
+<tr><td>Safe local fetch depth</td><td>The per-shard result count that guarantees a correct global top-k merge</td><td>local_k = k</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Three real, cited mechanisms</h2></div></header>
+<p><b>Sharding.</b> Qdrant's own scaling documentation states: "Qdrant distributes points across shards in one of two ways: Automatic sharding (default): points are assigned to shards using a consistent hashing algorithm... Every node knows where all shards are stored through Raft consensus, so a search request sent to any single node automatically fans out to the rest of the cluster to gather the full result." <b>Replication.</b> The same page: "Writes execute in parallel on all active replicas of a shard, and any replica can serve reads or writes," with three documented replica states -- active, dead, partial -- and a direct statement of the default trade-off: "By default, Qdrant prioritizes availability and throughput, so concurrent updates to the same document can leave replicas temporarily inconsistent." <b>Consistency.</b> Qdrant's own consistency-guarantees page names <code>write_consistency_factor</code> -- "defines the number of replicas that must acknowledge a write operation before responding to the client... It is set to 1 by default... This value can range from 1 to the number of replicas you have for each shard" -- alongside read consistency (query multiple replicas, reconcile) and write ordering (route to a leader for serialized writes).</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One machine, vs. three shards each with two replicas</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0909-s07-title">
+<strong class="concept-visual-title" id="c0909-s07-title">VISUAL · ONE MACHINE VS. A SHARDED, REPLICATED CLUSTER</strong>
+<svg class="vector-plane" viewBox="0 0 400 190" role="img" aria-labelledby="c0909-svg-title-s07 c0909-svg-desc-s07" style="max-width:560px">
+<title id="c0909-svg-title-s07">Two diagrams contrasting one machine holding the whole index against three shards, each replicated twice, with a query fanning out to all three</title>
+<desc id="c0909-svg-desc-s07">Left diagram: a single box labelled ONE MACHINE containing all twelve chunks, with a single arrow in from a query. Right diagram: a query box with three arrows fanning out to three shard groups, each shard group containing two stacked replica boxes -- six machines total for three shards at replication factor two.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<text x="20" y="20" font-weight="700">ONE MACHINE (Concepts 01-08)</text>
+<rect x="20" y="34" width="130" height="90" fill="none" stroke="#3a5f95" stroke-width="1.4"/>
+<text x="30" y="60" font-size="6.5">all 12 chunks,</text>
+<text x="30" y="72" font-size="6.5">one index,</text>
+<text x="30" y="84" font-size="6.5">one point of failure</text>
+<line x1="85" y1="10" x2="85" y2="34" stroke="#14241f" stroke-width="1.4"/>
+<text x="55" y="8" font-size="6.5">query</text>
+<text x="210" y="20" font-weight="700">SHARDED + REPLICATED (this concept)</text>
+<rect x="228" y="4" width="46" height="16" fill="#d7ff53" stroke="#14241f"/><text x="234" y="15" font-size="6.5">query</text>
+<line x1="251" y1="20" x2="215" y2="42" stroke="#14241f" stroke-width="1.2"/>
+<line x1="251" y1="20" x2="290" y2="42" stroke="#14241f" stroke-width="1.2"/>
+<line x1="251" y1="20" x2="365" y2="42" stroke="#14241f" stroke-width="1.2"/>
+<rect x="200" y="44" width="60" height="24" fill="none" stroke="#5ee6c3" stroke-width="1.4"/><text x="205" y="59" font-size="6">shard 0 · A</text>
+<rect x="200" y="72" width="60" height="24" fill="none" stroke="#5ee6c3" stroke-width="1.4" stroke-dasharray="2 2"/><text x="205" y="87" font-size="6">shard 0 · B</text>
+<rect x="270" y="44" width="60" height="24" fill="none" stroke="#3a5f95" stroke-width="1.4"/><text x="275" y="59" font-size="6">shard 1 · A</text>
+<rect x="270" y="72" width="60" height="24" fill="none" stroke="#3a5f95" stroke-width="1.4" stroke-dasharray="2 2"/><text x="275" y="87" font-size="6">shard 1 · B</text>
+<rect x="340" y="44" width="55" height="24" fill="none" stroke="#b3543a" stroke-width="1.4"/><text x="344" y="59" font-size="6">shard 2 · A</text>
+<rect x="340" y="72" width="55" height="24" fill="none" stroke="#b3543a" stroke-width="1.4" stroke-dasharray="2 2"/><text x="344" y="87" font-size="6">shard 2 · B</text>
+<text x="200" y="112" font-size="6.5">solid = active replica, dashed = second replica (replication_factor=2)</text>
+<text x="200" y="124" font-size="6.5">every shard is queried, none skipped -- unlike IVF's own nprobe&lt;nlist</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Split at storage time, fanned out and merged at query time</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — split into shards, each optionally replicated</span><i>↓</i><span class="hot">Retrieval — fan out to every shard, merge each shard's local top-(local_k) back into a global top-k</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Fan-out cost, and a sorted-ack-latency lookup</h2></div></header>
+<div class="equation">Total merge candidates ≈ S × local_k — illustrative, simplified cost model, NOT a vendor benchmark; assumes shards are large enough that none truncates below local_k</div>
+<div class="equation">Safe merge guarantee: local_k = k ⇒ merged top-k is always correct, for any query and any shard split</div>
+<div class="equation">write_consistency_factor lookup: sort replica ack latencies ascending, take the wcf-th value — that is the write call's own return time</div>
+<p>The S×local_k model is this concept's own illustrative construct, clearly labeled as such -- not a number Qdrant or any vendor publishes. The safe-merge guarantee and the write_consistency_factor lookup both follow directly from Qdrant's own cited mechanism in Section 06.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Hash assignment, three local_k cases, fan-out cost, and a consistency window</h2></div></header>
+<p><b>Step 1 -- hash-based shard assignment (S=3).</b> A djb2 string hash of each doc id, mod 3: Shard 0 = {doc-03, doc-06, doc-09} (3), Shard 1 = {doc-01, doc-04, doc-07, doc-11, doc-12} (5), Shard 2 = {doc-02, doc-05, doc-08, doc-10} (4). Total 12 -- an uneven 3/5/4 split, a real consequence of hashing rather than manual round-robin placement.</p>
+<p><b>Step 2 -- ground truth.</b> Full brute-force ranking for Q=(2,1), Euclidean distance, all 12 points. Top-4: doc-01 (d=1.0000), doc-02 (d=1.0000), doc-03 (d=2.2361), doc-12 (d=5.0000).</p>
+<table class="worked-table">
+<thead><tr><th>local_k</th><th>Shard 0 sends</th><th>Shard 1 sends</th><th>Shard 2 sends</th><th>Candidates</th><th>Merged top-4</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>doc-03</td><td>doc-01</td><td>doc-02</td><td>3</td><td>doc-01, doc-02, doc-03</td><td>MISS -- doc-12 never sent</td></tr>
+<tr><td>3</td><td>doc-03, doc-09, doc-06</td><td>doc-01, doc-12, doc-07</td><td>doc-02, doc-10, doc-08</td><td>9</td><td>doc-01, doc-02, doc-03, doc-12</td><td>MATCH -- lucky</td></tr>
+<tr><td>4 (safe)</td><td>doc-03, doc-09, doc-06</td><td>doc-01, doc-12, doc-07, doc-11</td><td>doc-02, doc-10, doc-08, doc-05</td><td>11</td><td>doc-01, doc-02, doc-03, doc-12</td><td>MATCH -- guaranteed</td></tr>
+</tbody>
+</table>
+<p><b>Step 3 -- fan-out/merge cost scaling (illustrative, S × k, N=1,000,000, k=10, NOT a vendor benchmark).</b> S=1 → 10 candidates, S=2 → 20, S=4 → 40, S=8 → 80, S=16 → 160, S=32 → 320, S=64 → 640. Merge cost grows linearly with shard count -- more shards shrink each shard's own local search, but grow the coordinator's own fan-out and merge cost. A real, quantifiable trade-off, distinct from Concepts 03-05's own single-machine recall/latency/memory trade-offs.</p>
+<p><b>Step 4 -- consistency window, grounded in Qdrant's own write_consistency_factor.</b> replication_factor=3, toy replica-ack latencies: A=5ms, B=8ms, C=40ms (a slow replica). wcf=1 (Qdrant's real default) → write returns at t=5ms. wcf=2 → returns at t=8ms. wcf=3 → returns at t=40ms. At wcf=1, any read routed to replica C between t=5ms and t=40ms still sees the pre-write value -- a real, quantified 35ms staleness window in this toy example. At wcf=3 no read after t=40ms can see stale data, but every write now pays replica C's own worst latency.</p>
+<div class="callout"><b>Verification method</b>Every candidate list, merge result, match/mismatch verdict, and consistency-window number above was produced by three separate node script runs (djb2 hash assignment + shard sizes; brute-force ranking + three local_k merges checked against ground truth; write_consistency_factor sorted-ack-latency lookup), with literal console output captured and cross-checked by hand against every number quoted here.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a genuine caveat</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A growing multi-tenant corpus</h3><p>Once one machine can no longer hold the data or serve the read load, sharding and replication become the direct answer.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Qdrant's own wcf=1 default</h3><p>The out-of-the-box setting favors speed and availability over immediate consistency -- a documented default, not an oversight.</p></article>
+<article class="info-card"><span>GENUINE CAVEAT</span><h3>Adding shards is not free scaling</h3><p>Per Section 10's own S×k model, more shards raise the coordinator's own fan-out and merge cost even as they shrink each shard's own local search.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Hash assignment and the verified merge trace, implemented directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN SHARD ASSIGNMENT AND MERGE TRACE EXACTLY</span>
+<pre><code>// djb2 string hash, standard constants, mod S shards.
+function djb2Hash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash >>> 0;
+  }
+  return hash;
+}
+function assignShard(id, S) {
+  return djb2Hash(id) % S;
+}
+
+// mergeTopK: each shard independently ranks only its own points and
+// forwards its own local top-(localK); the coordinator merges every
+// forwarded candidate and re-sorts to produce the final top-k.
+function mergeTopK(shards, localK, k) {
+  const candidates = [];
+  for (const shardPoints of shards) {
+    const sorted = [...shardPoints].sort((a, b) => a.d - b.d);
+    candidates.push(...sorted.slice(0, localK));
+  }
+  candidates.sort((a, b) => a.d - b.d);
+  return { merged: candidates.slice(0, k).map(p => p.id), fannedOut: candidates.length };
+}
+
+const shard0 = [{id:'doc-03',d:2.2361},{id:'doc-09',d:8.0623},{id:'doc-06',d:9.4340}];
+const shard1 = [{id:'doc-01',d:1.0000},{id:'doc-12',d:5.0000},{id:'doc-07',d:7.0000},{id:'doc-11',d:7.0711},{id:'doc-04',d:9.2195}];
+const shard2 = [{id:'doc-02',d:1.0000},{id:'doc-10',d:6.0000},{id:'doc-08',d:8.0623},{id:'doc-05',d:9.2195}];
+const groundTruth = ['doc-01','doc-02','doc-03','doc-12'];
+
+console.assert(mergeTopK([shard0,shard1,shard2], 1, 4).merged.join() !== groundTruth.join(), "local_k=1 misses");
+console.assert(mergeTopK([shard0,shard1,shard2], 3, 4).merged.join() === groundTruth.join(), "local_k=3 lucky match");
+console.assert(mergeTopK([shard0,shard1,shard2], 4, 4).merged.join() === groundTruth.join(), "local_k=4 guaranteed match");
+console.assert(mergeTopK([shard0,shard1,shard2], 4, 4).fannedOut === 11, "11 candidates fan back at local_k=4");
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for sharding, replication and consistency</h2></div></header>
+<p><a href="https://qdrant.tech/documentation/scaling/horizontal-scaling/">Qdrant's own horizontal-scaling documentation</a> is the primary source for hash-based automatic sharding and fan-out-to-every-shard, stating directly that points are assigned "using a consistent hashing algorithm" and that a search "automatically fans out to the rest of the cluster to gather the full result" -- and documents replica states and the default availability-over-consistency trade-off. <a href="https://qdrant.tech/documentation/scaling/consistency-guarantees/">Qdrant's own consistency-guarantees documentation</a> names <code>write_consistency_factor</code> directly, including its real default of 1 and its valid range. <a href="https://qdrant.tech/documentation/scaling/distributed_deployment/">Qdrant's own distributed-deployment documentation</a> grounds <code>shard_number</code> and <code>replication_factor</code> as real, settable collection-creation parameters, with code samples across multiple client languages.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Shard Fan-Out Console</h2></div></header>
+<div class="lab">
+<p>Pick a local_k setting below. Each shard card lights up its own top-(local_k) chips as "sent to coordinator" and dims the rest as "kept local, discarded." The readout below shows how many candidates fanned back, the merged top-4, and whether it matches the verified ground truth from Section 10.</p>
+<div class="lab-actions" role="group" aria-label="Shard fan-out console controls">
+<button type="button" class="secondary" id="lk1Btn_0909">local_k = 1</button>
+<button type="button" class="secondary" id="lk3Btn_0909">local_k = 3</button>
+<button type="button" class="secondary" id="lk4Btn_0909">local_k = 4 (safe rule)</button>
+</div>
+<div class="example-grid" id="shardGrid_0909" style="grid-template-columns:repeat(3,1fr)">
+<article class="info-card"><span id="shardLabel0_0909">SHARD 0 (3 CHUNKS)</span><h3>Sorted by distance to Q</h3><div class="rank-chip-row" id="shardChips0_0909"></div></article>
+<article class="info-card"><span id="shardLabel1_0909">SHARD 1 (5 CHUNKS)</span><h3>Sorted by distance to Q</h3><div class="rank-chip-row" id="shardChips1_0909"></div></article>
+<article class="info-card"><span id="shardLabel2_0909">SHARD 2 (4 CHUNKS)</span><h3>Sorted by distance to Q</h3><div class="rank-chip-row" id="shardChips2_0909"></div></article>
+</div>
+<div class="norm-readout" id="fanoutReadout_0909">
+<div><span>CANDIDATES FANNED OUT</span><b id="fanoutCandidates_0909">3</b></div>
+<div><span>MERGED TOP-4</span><b id="fanoutMerged_0909">—</b></div>
+<div><span>MATCH VS. GROUND TRUTH</span><b id="fanoutMatch_0909">—</b></div>
+</div>
+<div class="callout" id="fanoutVerdict_0909" aria-live="polite">Pick a local_k setting above to see the fan-out and merge trace.</div>
+<div class="callout warning">This widget replays the exact pre-verified fan-out/merge numbers from the worked example -- no live benchmarking, no new randomness.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Same word, same problem shape -- different mechanism</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Same word / same problem</th><th>Concept 04 IVF / Concept 08 tombstones</th><th>Concept 09 sharding / replication (this concept)</th></tr></thead>
+<tbody>
+<tr><td>"Partition"</td><td>Splits vectors WITHIN one machine's index by nearest-centroid similarity; deliberately skippable when nprobe&lt;nlist</td><td>Splits the corpus ACROSS machines by an identity-based hash rule; every shard is always queried, never skipped</td></tr>
+<tr><td>Availability under partial failure</td><td>A tombstoned entry stays queryable-but-flagged on the SAME single machine</td><td>A replica copies the SAME shard onto a DIFFERENT machine, so the shard survives one machine failing entirely</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>HOT SHARD</span><h3>An unbalanced hash split</h3><p>Symptom: one shard (Shard 1's own 5-of-12 in this concept's toy example) carries disproportionately more load than the others, even though the hash function is working correctly.</p></article>
+<article class="info-card"><span>STALE READ</span><h3>A read routed to a lagging replica under wcf=1</h3><p>Symptom: a client reads a value that does not yet reflect a very recent write -- the real, documented consequence of Qdrant's own default.</p></article>
+<article class="info-card"><span>UNDER-FETCHING SHARD</span><h3>local_k set below k</h3><p>Symptom: a true top-k member sitting inside one shard's own results never gets forwarded -- Section 10's own local_k=1 case.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Sharding narrows the search like IVF does</td><td>False -- every shard is always queried in full; sharding splits WHERE data lives, not which of it gets examined.</td></tr>
+<tr><td>More replicas means instantly consistent</td><td>False, per Qdrant's own documentation -- the default is eventual consistency, and concurrent updates can leave replicas temporarily out of sync.</td></tr>
+<tr><td>Sharding and replication are the same lever</td><td>False -- one splits the data, the other copies it; a real deployment tunes both independently.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Staleness SLOs and write_consistency_factor are a real operational decision, not a default to leave untouched -- Qdrant's own wcf=1 default trades speed for a real, quantifiable staleness window.</li>
+<li>Replica-state monitoring (Qdrant's own active/dead/partial states) is how a real deployment notices a lagging or failed replica before a client does.</li>
+<li>Resharding an existing collection is not free -- Qdrant's own documentation states shard_number "cannot be changed without recreating the collection." Concept 10's own capacity-planning formulas are the tool for sizing this decision up front; named forward only here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name sharding, replication and consistency from memory.</summary><div>Sharding splits the corpus across machines; replication copies a shard onto more than one machine; consistency is what a client sees when a write has landed on some replicas but not all yet.</div></details>
+<details class="quiz"><summary>Why does local_k=3 happen to match ground truth in Section 10, even though it's below k=4?</summary><div>Because doc-12, the true 4th-nearest point, happened to also fall inside Shard 1's own top-3 -- a lucky case tied to this specific query and split, not a guarantee.</div></details>
+<details class="quiz"><summary>What does Qdrant's own documentation say is the real default trade-off for concurrent updates?</summary><div>Qdrant prioritizes availability and throughput by default, so concurrent updates to the same document can leave replicas temporarily inconsistent.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using this concept's own 12-doc corpus and Q=(2,1), a 4th shard is added and doc-11 is reassigned into it, on its own (Shard 3 = {doc-11}, Shard 1 shrinks to {doc-01, doc-04, doc-07, doc-12}). At local_k=4, recompute which shards forward doc-11, and whether the merged top-4 still matches ground truth.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Shard 3 has only one member, doc-11 (d=7.0711), so at local_k=4 it forwards doc-11 by itself (min(4,1)=1). Shard 1 now has 4 members and forwards all of them (min(4,4)=4): doc-01 (1.0000), doc-12 (5.0000), doc-07 (7.0000), doc-04 (9.2195). Shard 0 and Shard 2 are unchanged from Section 10. Merging every forwarded candidate and re-sorting still produces doc-01, doc-02, doc-03, doc-12 as the top-4 -- <b>MATCH, unchanged</b>, because local_k=4 remains the safe rule regardless of how many shards exist or how they're split.</div>
+</details>
+<p>Teach-back: in one sentence, why does the safe local_k=k rule hold even after a 4th shard is added?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Replication, sharding and consistency</h3><ul><li><b>Definition:</b> sharding splits the corpus across machines; replication copies a shard onto more than one machine; consistency is what a client sees mid-write</li><li><b>The safe rule, cited:</b> local_k=k on every shard guarantees the correct global top-k merge</li><li><b>Memorable example:</b> this concept's own 12-chunk, 3-shard trace -- local_k=1 misses doc-12 entirely; local_k=4 catches it, guaranteed, no matter how the shards are split.</li></ul></div>
+<div><h3>Module 09 · 9/10</h3><p>Concept 10 (capacity planning and benchmarking) is next -- named forward only here.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: how does cross-machine sharding differ from IVF's own within-machine partitioning?</summary><div>IVF splits vectors inside one machine's index by nearest-centroid similarity and can deliberately skip a cluster (nprobe&lt;nlist); sharding splits the corpus across machines by an identity-based hash rule, and a query always fans out to every shard.</div></details>
+<details class="quiz"><summary>Mathematical: at N=1,000,000, k=10, recompute the S×k fan-out cost at S=128.</summary><div>1,280 candidates -- doubling S from 64 (640, this concept's own last row) to 128 doubles the merge cost again, confirming the linear-in-S scaling named in Section 10.</div></details>
+<details class="quiz"><summary>Coding: extend mergeTopK to also return which shard each forwarded candidate came from.</summary><div>Track the shard index alongside each point when building the candidates array (e.g. push {...point, shard: shardIndex} instead of just the point), then include that field in the final merged output.</div></details>
+<details class="quiz"><summary>System design: how would you choose shard_number, replication_factor and write_consistency_factor for a real workload?</summary><div>Size shard_number and replication_factor from expected corpus growth and failure tolerance (Concept 10's own sizing formulas, named forward), then choose write_consistency_factor as the explicit speed-vs-staleness trade-off for that workload -- 1 for latency-sensitive reads that can tolerate brief staleness, higher for workloads that cannot.</div></details>
+<details class="quiz"><summary>Debugging: a client writes a point, then immediately reads it back and gets a 404. What do you check first?</summary><div>Whether the write used a low write_consistency_factor (e.g. 1) and the immediate read got routed to a replica that had not yet received the write -- the exact staleness window quantified in Section 10's own consistency example.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://qdrant.tech/documentation/scaling/horizontal-scaling/"><b>Horizontal scaling — Qdrant Documentation</b><br><span>Names automatic hash-based sharding, the fan-out-to-every-shard mechanism, replica states, and the default availability-over-consistency trade-off.</span></a>
+<a href="https://qdrant.tech/documentation/scaling/consistency-guarantees/"><b>Consistency guarantees — Qdrant Documentation</b><br><span>Names write_consistency_factor directly, including its real default of 1 and its valid range up to the replication factor.</span></a>
+<a href="https://qdrant.tech/documentation/scaling/distributed_deployment/"><b>Distributed deployment — Qdrant Documentation</b><br><span>The real collection-creation API for shard_number and replication_factor, with code samples across multiple client languages.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 9/10</span>
+<h3>One machine isn't enough. Split it, copy it, live with the gap.</h3>
+<p>You can now name sharding, replication and consistency as three separate levers; state the safe local_k=k merge rule; and explain the write_consistency_factor trade-off in one sentence. Concept 10, capacity planning and benchmarking, closes Module 09 next, named forward only here.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Shard Fan-Out Console ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 9 of 10 concepts. Next concept: Concept 10, Capacity planning and benchmarking.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 09 · Complete</p>
+<a href="module-09-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

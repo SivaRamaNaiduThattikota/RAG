@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10's fifth concept swaps two placeholders Concepts 03 and 04 left standing in for real syntax: Concept 03's generic VECTOR(384) type becomes Oracle's own VECTOR(384, FLOAT32), and Concept 04's generic <-> distance placeholder becomes Oracle's own VECTOR_DISTANCE function. The twist -- Concept 04's exact <-> characters turn out to be real Oracle syntax after all, but for the Euclidean metric, not this course's cosine convention (M04/M08/M09). The correct substitution is VECTOR_DISTANCE(...,COSINE), or the <=> operator, or COSINE_DISTANCE(). Both SQL shapes and every numeric fact are reused verbatim from Concept 04; only the distance expression changes. The lab, The Metric Swap Trap, lets you drop five real Oracle expressions into one query and watch which ones keep the same six matches and which ones silently re-rank them.">
+<title>Oracle AI Database VECTOR type and vector-distance SQL — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 05 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 05</p>
+<h1>Those exact characters were real all along.<br><em>Just not the metric this course has been using.</em></h1>
+<p class="lesson-lead">Concept 04's SQL used <code>&lt;-&gt;</code> as a generic, explicitly-fake placeholder for "a vector-distance comparison happens here." It turns out those exact three characters are real Oracle syntax -- the Euclidean-distance operator. This concept supplies Oracle's own real VECTOR type and VECTOR_DISTANCE function, and shows why the correct substitution for Concept 04's placeholder is not &lt;-&gt;, but VECTOR_DISTANCE(...,COSINE) -- the metric this project has used since Module 04 Concept 03.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth concept of Module 10 (5/14) -- the first concept in this course to use real Oracle VECTOR-type and VECTOR_DISTANCE syntax</b></div>
+<div><span>PREREQUISITE</span><b>Concept 03's placeholder VECTOR(384) type, Concept 04's two SQL shapes and their explicitly-fake &lt;-&gt; placeholder (both cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Write the real VECTOR(384, FLOAT32) type and the VECTOR_DISTANCE(...,COSINE) substitution; explain why &lt;-&gt; is real syntax but the wrong choice here</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Real syntax, and a trap hiding inside it</h2>
+</div>
+<p>Concept 03 and Concept 04 both left a generic placeholder standing in for real Oracle syntax. This concept supplies the real syntax for both -- and shows that one of the placeholder's own characters, <code>&lt;-&gt;</code>, is itself real Oracle syntax, just for the wrong metric.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Recall the placeholder, and its own warning label</h3>
+<p>Concept 04's SQL wrote <code>e.embedding &lt;-&gt; :query_embedding</code> in its ORDER BY clause, and said plainly that this was a generic placeholder, not real Oracle syntax. That warning turns out to be half right: <code>&lt;-&gt;</code> is real Oracle syntax after all -- it just isn't the metric this course needs.</p>
+<div class="beginner-memory"><b>First memory:</b> "generic placeholder" and "real syntax" aren't opposites here -- <code>&lt;-&gt;</code> is both real AND the wrong choice, which is precisely the trap this concept exists to name.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Two placeholders, one real vendor's syntax</h3>
+<p>Concept 03 used a generic <code>VECTOR(384)</code> type; Concept 04 used a generic <code>&lt;-&gt;</code> distance comparison. Both were explicitly named as stand-ins. This concept replaces both with Oracle AI Database's own real syntax -- the VECTOR column type and the VECTOR_DISTANCE function -- so the schema and queries this course has been building stop being illustrative and start being executable against a real engine.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The real column type</h3>
+<p><code>ALTER TABLE embeddings MODIFY (embedding VECTOR(384, FLOAT32));</code> -- 384 is the same dimension Module 08's all-MiniLM-L6-v2 embeddings have used throughout this course; FLOAT32 is one of four real Oracle format tokens. This swaps Concept 03's placeholder <code>VECTOR(384)</code> type for Oracle's own real one.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c1005-b04-title">
+<strong class="concept-visual-title" id="c1005-b04-title">VISUAL · ONE PLACEHOLDER, TWO REAL ALTERNATIVES, ONE WRONG TURN</strong>
+<svg class="vector-plane" viewBox="0 0 400 160" role="img" aria-labelledby="c1005-svg-title-b c1005-svg-desc-b" style="max-width:560px">
+<title id="c1005-svg-title-b">A small flow diagram showing the placeholder splitting into a real-but-wrong path and a real-and-correct path</title>
+<desc id="c1005-svg-desc-b">A box labelled Concept 04's placeholder &lt;-&gt; splits into two boxes. The left box, labelled &lt;-&gt; is real Oracle syntax for EUCLIDEAN, carries a warning label reading wrong metric for this course. The right box, labelled VECTOR_DISTANCE(...,COSINE), carries a label reading matches M04/M08/M09's convention.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<rect x="140" y="12" width="120" height="24" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="150" y="28">Concept 04's &lt;-&gt; placeholder</text>
+<line x1="200" y1="36" x2="90" y2="60" stroke="#b3543a" stroke-width="1.2"/>
+<line x1="200" y1="36" x2="310" y2="60" stroke="#3a5f95" stroke-width="1.2"/>
+<rect x="20" y="60" width="140" height="26" fill="none" stroke="#b3543a" stroke-width="1.2"/>
+<text x="28" y="76" fill="#b3543a">&lt;-&gt; = EUCLIDEAN (real)</text>
+<text x="18" y="100" font-size="6.5" fill="#b3543a">wrong metric for this course</text>
+<rect x="240" y="60" width="150" height="26" fill="none" stroke="#3a5f95" stroke-width="1.2"/>
+<text x="248" y="76" fill="#3a5f95">VECTOR_DISTANCE(...,COSINE)</text>
+<text x="238" y="100" font-size="6.5" fill="#3a5f95">matches M04/M08/M09's convention</text>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The real distance function</h3>
+<p><code>VECTOR_DISTANCE(expr1, expr2 [, metric])</code> -- takes two vector expressions and an optional metric name, returns a plain number where lower means more similar. That's the same ORDER BY ... ASC pattern this course has used since Concept 04, just with a real function name and a metric argument now spelled out.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 03 — placeholder VECTOR(384) type</span><i>→</i>
+<span>Concept 04 — placeholder &lt;-&gt; distance comparison, named fake</span><i>→</i>
+<span class="hot">This concept — Oracle's own real VECTOR(384, FLOAT32) and VECTOR_DISTANCE(...,COSINE)</span><i>→</i>
+<span>Concept 06 — vector indexes, named forward-only</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four real format tokens; this course uses one</h3>
+<div class="distinction-table" role="table" aria-label="The four real VECTOR format tokens, and which one this course uses">
+<div role="row"><b role="cell">Format token</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">FLOAT32 (used here)</span><span role="cell">Standard 32-bit float per dimension -- matches the raw MiniLM output this course has stored since Module 08.</span></div>
+<div role="row"><span role="cell">INT8 / FLOAT64 / BINARY (named, not used)</span><span role="cell">Quantized or specialized storage formats -- forward-referenced to Module 09 Concept 05's own quantization territory, out of scope here.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"&lt;-&gt; isn't real Oracle syntax, so it's safe to ignore."</b><p>False -- it is real, and it works. It resolves to the Euclidean metric, which silently produces a different ranking than the cosine convention this course has used since Module 04.</p></div>
+<div><b>"Since VECTOR_DISTANCE's own default metric is cosine, the metric argument can be left out."</b><p>Technically true today, but this course writes COSINE explicitly anyway -- what the default resolves to once a vector index exists on the column is Concept 06's own territory, not settled here.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The schema and queries stop being illustrative</b><p>Concept 03's placeholder type and Concept 04's placeholder operator both become real, executable Oracle syntax here.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 5/14</b><p>Concept 06 begins vector indexes -- and the index-dependent default-metric question this concept deliberately does not settle.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Write the real column type from memory</b><p><code>ALTER TABLE embeddings MODIFY (embedding VECTOR(384, FLOAT32));</code></p></div>
+<div><b>Write the correct distance substitution for Concept 04's placeholder</b><p><code>VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)</code> -- not <code>&lt;-&gt;</code>.</p></div>
+<div><b>Explain why &lt;-&gt; is a trap rather than simply wrong</b><p>It's real Oracle syntax that runs without error -- it just silently switches the metric away from this course's cosine convention.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What metric does the &lt;-&gt; operator actually resolve to in Oracle?</li>
+<li>Why does this course write COSINE explicitly instead of relying on VECTOR_DISTANCE's own documented default?</li>
+<li>Which four real format tokens can fill VECTOR's second parameter, and which one does this course use?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · 5 OF 14</h3>
+<p>This concept replaced Concept 03's placeholder VECTOR type and Concept 04's placeholder distance comparison with Oracle's own real VECTOR(384, FLOAT32) and VECTOR_DISTANCE(...,COSINE) -- and named the trap hiding in Concept 04's own placeholder characters. Concept 06 is next, covering vector indexes and how a column's own index can change VECTOR_DISTANCE's default-metric behavior -- named forward-only here, not settled in this concept.</p>
+<div class="beginner-memory"><b>Concept 05 is active.</b> Module 10 stands at 5 of 14 concepts.</div>
+<a class="button primary" href="module-10-concept-04.html">← Back to Concept 04's SQL shapes</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One trap, two real substitutions</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b04"><span>01</span><b>The real VECTOR type and VECTOR_DISTANCE</b><small>The beginner-convention headline: real Oracle syntax replaces two placeholders.</small></a>
+<a href="#s12"><span>02</span><b>The central trap, called out directly</b><small>&lt;-&gt; is real syntax -- for the wrong metric.</small></a>
+<a href="#s18"><span>03</span><b>The Metric Swap Trap</b><small>The lab -- drop five real expressions into one query.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Concept 03's placeholder VECTOR(384) type and Concept 04's placeholder &lt;-&gt; comparison both get Oracle's own real syntax → the twist: &lt;-&gt; itself is real Oracle syntax, just for Euclidean, not this course's cosine convention → the correct substitution for Concept 04's placeholder is VECTOR_DISTANCE(...,COSINE) (or &lt;=&gt;/COSINE_DISTANCE()) → both of Concept 04's SQL shapes are reused verbatim with only that one substitution → the lab lets you try all five real expressions and watch which ones keep the same six matches → Concept 06 begins vector indexes next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Oracle AI Database VECTOR type and vector-distance SQL" deep dive</b><em>Full citations, the annotated SQL, and The Metric Swap Trap lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 10's fifth concept -- the first with real Oracle syntax</h2></div></header>
+<p>This is the fifth concept of Module 10 (5/14) and the first in this entire course to use real Oracle AI Database VECTOR-type and VECTOR_DISTANCE syntax. Concept 03's placeholder <code>VECTOR(384)</code> type and Concept 04's placeholder <code>&lt;-&gt;</code> distance comparison are both replaced here with Oracle's own real syntax. Concept 06 (vector indexes), Concept 07 (Oracle Text hybrid), and Concept 08 (python-oracledb) remain untouched, named forward-only.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>REPLACE</span><h3>The placeholder VECTOR type</h3><p>Concept 03's generic <code>VECTOR(384)</code> becomes Oracle's real <code>VECTOR(384, FLOAT32)</code>.</p></article>
+<article class="info-card"><span>REPLACE</span><h3>The placeholder distance comparison</h3><p>Concept 04's generic <code>&lt;-&gt;</code> becomes Oracle's real <code>VECTOR_DISTANCE(...,COSINE)</code>.</p></article>
+<article class="info-card"><span>NAME</span><h3>The trap directly</h3><p><code>&lt;-&gt;</code> is real Oracle syntax too -- for Euclidean, not this course's cosine convention.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>Vector indexes, index-dependent default-metric behavior, Oracle Text hybrid, and python-oracledb -- named forward-only (Concepts 06-08).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema and its own placeholder <code>VECTOR(384)</code> column type, replaced here with Oracle's real one.</li>
+<li><b><a href="module-10-concept-04.html">Module 10 Concept 04</a></b> -- both SQL shapes (pre-filter and post-filter) and their own placeholder <code>&lt;-&gt;</code> distance comparison, reused verbatim except for that one substitution.</li>
+<li><b>Module 08's all-MiniLM-L6-v2 embeddings, Module 04 Concept 03 and Module 09's own cosine convention</b> -- cited, not re-derived; this concept exists specifically to keep that convention intact through the real-syntax swap.</li>
+<li><b>Explicitly out of scope:</b> <code>CREATE VECTOR INDEX</code>/HNSW/IVF and how a vector index changes VECTOR_DISTANCE's default-metric behavior (Concept 06), Oracle Text hybrid retrieval (Concept 07), python-oracledb client code (Concept 08) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A fake street name that turns out to be real -- just in the wrong town</h2></div></header>
+<p>Concept 04's <code>&lt;-&gt;</code> was written as a made-up stand-in, the way a diagram might label a street "Main St" without checking if that street exists. It turns out Oracle really does have a street called <code>&lt;-&gt;</code> -- it just leads to the Euclidean-distance neighborhood, not the cosine-distance neighborhood this course has lived in since Module 04. Following the placeholder literally gets you somewhere real, just not where the rest of the course has been going.</p>
+<div class="callout warning"><b>Analogy boundary</b>The actual risk comes from Section 10's own worked queries and Section 12's own annotated SQL, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>VECTOR type</td><td>Oracle AI Database's real column type for storing a fixed-dimension numeric vector</td><td>VECTOR(number_of_dimensions, dimension_element_format [, DENSE|SPARSE])</td></tr>
+<tr><td>VECTOR_DISTANCE</td><td>Oracle's real function computing a distance between two vector expressions under a named metric; lower return value means more similar</td><td>VECTOR_DISTANCE(expr1, expr2 [, metric])</td></tr>
+<tr><td>Shorthand operators (real, each fixed to one metric)</td><td><code>&lt;-&gt;</code> Euclidean, <code>&lt;=&gt;</code> cosine, <code>&lt;#&gt;</code> negative dot product</td><td>≡ VECTOR_DISTANCE(...,EUCLIDEAN/COSINE/DOT)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The real VECTOR type's grammar</h2></div></header>
+<div class="core-block">
+<p>Oracle's real grammar is <code>VECTOR(number_of_dimensions, dimension_element_format [, DENSE|SPARSE])</code>. The third parameter defaults to DENSE and is not exercised in this concept. <span class="fine-print">Optional flavor, not load-bearing: non-BINARY dimension counts must fall in the 1-65535 range, and BINARY dimension counts must be a multiple of 8 up to 65528, with Oracle raising ORA-51801/ORA-51813 outside those bounds -- cited as a documented boundary, not something this concept's own worked example needs.</span></p>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · REAL COLUMN TYPE (per Oracle's create-tables-using-vector-data-type documentation)</span>
+<pre><code>ALTER TABLE embeddings MODIFY (embedding VECTOR(384, FLOAT32));
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The four real format tokens, and the one this course uses</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1005-s07-title">
+<strong class="concept-visual-title" id="c1005-s07-title">VISUAL · FOUR FORMAT TOKENS, ONE IN SCOPE</strong>
+<svg class="vector-plane" viewBox="0 0 400 130" role="img" aria-labelledby="c1005-svg-title-s c1005-svg-desc-s" style="max-width:560px">
+<title id="c1005-svg-title-s">Four boxes representing the four real VECTOR dimension_element_format tokens</title>
+<desc id="c1005-svg-desc-s">Four boxes labelled FLOAT32, INT8, FLOAT64, and BINARY. FLOAT32 is highlighted as the format this course uses, tied to Module 08's MiniLM output. The other three are labelled forward-referenced to Module 09 Concept 05, out of scope here.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<rect x="10" y="16" width="85" height="40" fill="none" stroke="#3a5f95" stroke-width="1.6"/>
+<text x="18" y="34" fill="#3a5f95" font-weight="700">FLOAT32</text>
+<text x="14" y="46" font-size="6">used here --</text>
+<text x="14" y="54" font-size="6">M08's MiniLM output</text>
+<rect x="105" y="16" width="85" height="40" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="118" y="34">INT8</text>
+<rect x="200" y="16" width="85" height="40" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="207" y="34">FLOAT64</text>
+<rect x="295" y="16" width="95" height="40" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="303" y="34">BINARY</text>
+<text x="105" y="70" font-size="6.5">forward-referenced to Module 09 Concept 05 -- quantization, out of scope here</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Both real syntax pieces belong to query execution and persistence</h2></div></header>
+<div class="pipeline-preview">
+<span>Persistence — the real VECTOR(384, FLOAT32) column, replacing Concept 03's placeholder</span><i>↓</i><span class="hot">Query execution — VECTOR_DISTANCE(...,COSINE), replacing Concept 04's placeholder, cited to Concept 02's own three-jobs boundary</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Seven real metric tokens, one default</h2></div></header>
+<div class="equation">VECTOR_DISTANCE(expr1, expr2 [, metric]) -- metric ∈ {COSINE, DOT, EUCLIDEAN, EUCLIDEAN_SQUARED, HAMMING, MANHATTAN, JACCARD}</div>
+<div class="equation">Lower return value = more similar, for every metric -- matches the ORDER BY ... ASC pattern already used since Concept 04</div>
+<div class="callout"><b>Default-metric hedge</b>Per Oracle's own documentation, the default metric is COSINE when omitted (HAMMING for BINARY inputs). What happens to that default once a vector index exists on the column is Concept 06's own territory -- not verified or claimed here. This course writes COSINE explicitly for exactly that reason, not because the default is expected to be unsafe.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Both of Concept 04's SQL shapes, one substitution</h2></div></header>
+<p>Reusing Concept 04's own 20-chunk, 30%-selectivity corpus and rank list unchanged: 6 of 20 chunks belong to tenant "Acme," at ranks {3, 7, 9, 14, 17, 20}. Target k=5. Only the distance expression changes -- from Concept 04's placeholder <code>&lt;-&gt;</code> to Oracle's real <code>VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)</code>.</p>
+<p><b>Pre-filter shape.</b> Unchanged from Concept 04 except for the ORDER BY expression: the tenant WHERE clause still runs before the vector-distance ORDER BY, so only Acme's own 6 rows are ever touched. Fetched: 6 rows touched, top 5 returned, 1 discarded (Acme's own 6th-ranked row).</p>
+<p><b>Post-filter shape.</b> Unchanged from Concept 04 except for the inner subquery's dist column expression: the inner subquery still fetches the top 17 rows by distance across all tenants before the outer tenant WHERE runs. Fetched: 20 rows touched, 17 survive the inner limit (5 of which are Acme, at ranks 3,7,9,14,17), 12 discarded. Acme's own 6th match, at global rank 20, still never enters the inner result at all -- that structural fact is Concept 04's own finding and is unaffected by which real metric expression fills the ORDER BY.</p>
+<div class="callout"><b>Verification method</b>Both real syntax claims in this concept -- <code>VECTOR(384, FLOAT32)</code> and <code>VECTOR_DISTANCE(...,COSINE)</code> -- were confirmed by live curl against Oracle's own create-tables-using-vector-data-type.html and vector_distance.html documentation pages this session. COSINE is written explicitly here rather than relied on as the default because the default's own behavior can shift once a vector index exists on the column -- that interaction is Concept 06's own territory and is not verified or claimed here.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a genuine caveat</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>Explicit COSINE in every ORDER BY</h3><p>Keeps the metric this course has used since Module 04 visible in the query text, regardless of index state.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Relying on VECTOR_DISTANCE's own default</h3><p>Documented as COSINE today, but its interaction with a vector index on the column is Concept 06's own territory -- not settled here.</p></article>
+<article class="info-card"><span>GENUINE CAVEAT</span><h3>&lt;-&gt; runs without error</h3><p>It's real Oracle syntax -- there is no exception to catch. The only defense is knowing what metric each shorthand actually resolves to.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The central trap, called out directly</h2></div></header>
+<div class="mistake-list">
+<div><b>Concept 04's own placeholder characters, &lt;-&gt;, are real Oracle syntax.</b><p>They resolve to the Euclidean metric, not a generic "vector distance" stand-in. Reusing them literally in a real query would silently switch this project's retrieval metric away from the cosine convention used since M04 Concept 03, M08, and M09 -- with no error, and a plausible-looking but differently-ordered result.</p></div>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · PRE-FILTER SHAPE (real syntax -- correct substitution)</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+WHERE d.tenant_id = :tenant_id
+ORDER BY VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · POST-FILTER SHAPE (real syntax -- correct substitution)</span>
+<pre><code>SELECT ranked.chunk_id, ranked.text
+FROM (
+  SELECT c.chunk_id, c.text, c.doc_id,
+         VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE) AS dist
+  FROM chunks c
+  JOIN embeddings e ON e.chunk_id = c.chunk_id
+  ORDER BY dist
+  FETCH FIRST 17 ROWS ONLY
+) ranked
+JOIN documents d ON d.doc_id = ranked.doc_id
+WHERE d.tenant_id = :tenant_id
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · WRONG SUBSTITUTION -- REAL SYNTAX, WRONG METRIC (shown, not used)</span>
+<pre><code>-- Runs without error. Silently ranks by EUCLIDEAN instead of COSINE.
+ORDER BY e.embedding &lt;-&gt; :query_embedding
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for VECTOR syntax</h2></div></header>
+<p>Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html">create-tables-using-vector-data-type documentation</a>, re-fetched live this session, gives the real VECTOR grammar and the worked example <code>CREATE TABLE my_vectors (id NUMBER, embedding VECTOR(768, INT8));</code> along with the four real format tokens (INT8, FLOAT32, FLOAT64, BINARY) used to choose FLOAT32 for this concept. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html">vector_distance documentation</a>, also re-fetched live this session, gives the real function signature, all seven metrics, the documented default (COSINE, or HAMMING for BINARY inputs), and the shorthand functions and operators. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/overview-ai-vector-search.html">AI Vector Search overview</a> (reused from Concept 01) supplies the general VECTOR-type framing. <a href="https://github.com/pgvector/pgvector">pgvector's own README</a> (reused) shows a different vendor's own <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> convention as optional cross-vendor flavor, not load-bearing here.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">TRADE-OFFS</span><h2>Explicit metric vs. relying on the default</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Explicit VECTOR_DISTANCE(...,COSINE) (this course's choice)</th><th>Relying on the documented default</th></tr></thead>
+<tbody>
+<tr><td>Metric stays visible in the query text regardless of index state</td><td>One fewer argument to type, but the choice is invisible in the SQL</td></tr>
+<tr><td>Behavior does not depend on whether a vector index exists on the column</td><td>Interaction with a vector index is Concept 06's own territory -- not verified here</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">REPETITION</span><h2>The touched/returned/discarded counts, restated unchanged</h2></div></header>
+<ul>
+<li>Pre-filter: touches Acme's own 6 rows, returns 5, discards 1 -- cited unchanged from Concept 04.</li>
+<li>Post-filter: touches all 20 rows, inner subquery survives 17 (5 of which are Acme, at ranks 3, 7, 9, 14, 17), discards 12 -- cited unchanged from Concept 04 / Module 09 Concept 07.</li>
+<li>Acme's own 6th match, at global rank 20, never enters the post-filter shape's own inner result at all -- the same structural fact Concept 04 already established, unaffected by which real distance expression fills the ORDER BY.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT METRIC SWITCH</span><h3>Results plausible but ranking differs from earlier cosine-based work</h3><p>Cause: <code>&lt;-&gt;</code> or <code>VECTOR_DISTANCE(...,EUCLIDEAN)</code> used in place of the cosine convention. Fix: switch to explicit COSINE, or <code>&lt;=&gt;</code>, or <code>COSINE_DISTANCE()</code>.</p></article>
+<article class="info-card"><span>DIMENSION OUT OF BOUNDS</span><h3>ORA-51801 / ORA-51813 on table create or alter</h3><p>Cause: dimension count outside the 1-65535 (or 65528-multiple-of-8 for BINARY) range. Flagged as optional detail, not verified as load-bearing for this concept's own 384-dimension example.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>&lt;-&gt; isn't real Oracle syntax, so it's harmless to use</td><td>False -- it is real, and resolves to EUCLIDEAN, silently switching the metric away from this course's cosine convention.</td></tr>
+<tr><td>Since COSINE is the documented default, the metric argument is optional to write</td><td>True today, but this course writes it explicitly anyway -- the default's interaction with a vector index on the column is Concept 06's own territory, not settled here.</td></tr>
+<tr><td>INT8/FLOAT64/BINARY are just other ways to write the same FLOAT32 vectors</td><td>False -- they are distinct, often quantized formats with their own trade-offs, forward-referenced to Module 09 Concept 05, out of scope here.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Metric Swap Trap</h2></div></header>
+<div class="lab">
+<p>The same pre-filter query shape from Concept 04, with one blank slot in the ORDER BY line. Drop in one of five real Oracle expressions and watch whether Acme's own six cited matches (ranks 3, 7, 9, 14, 17, 20) stay included, or get silently re-ranked under a different metric.</p>
+<div class="code-block">
+<span class="code-label">SQL · PRE-FILTER SHAPE WITH A BLANK SLOT</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+WHERE d.tenant_id = :tenant_id
+ORDER BY <span id="metricSlot_1005">VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)</span>
+FETCH FIRST 5 ROWS ONLY;</code></pre>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose a real Oracle distance expression">
+<button type="button" class="secondary" data-expr="euclid-op">&lt;-&gt; (Euclidean operator)</button>
+<button type="button" class="secondary" data-expr="cosine-op">&lt;=&gt; (cosine operator)</button>
+<button type="button" class="secondary active" data-expr="vd-cosine">VECTOR_DISTANCE(...,COSINE)</button>
+<button type="button" class="secondary" data-expr="vd-euclid">VECTOR_DISTANCE(...,EUCLIDEAN)</button>
+<button type="button" class="secondary" data-expr="cosine-fn">COSINE_DISTANCE(...)</button>
+</div>
+<p class="fine-print">FULL RANK LIST, ACME'S SIX CITED MATCHES (unchanged from Module 09 Concept 07 / Concept 04)</p>
+<div class="rank-chip-row" id="metricChipRow_1005">
+<div class="rank-chip match"><b>3</b><span>Acme</span></div>
+<div class="rank-chip match"><b>7</b><span>Acme</span></div>
+<div class="rank-chip match"><b>9</b><span>Acme</span></div>
+<div class="rank-chip match"><b>14</b><span>Acme</span></div>
+<div class="rank-chip match"><b>17</b><span>Acme</span></div>
+<div class="rank-chip match"><b>20</b><span>Acme</span></div>
+</div>
+<div class="callout" id="metricVerdict_1005" aria-live="polite">VECTOR_DISTANCE(...,COSINE) resolves to the COSINE metric -- matches this course's convention. All six of Acme's cited matches stay included.</div>
+<table class="compare-table">
+<thead><tr><th>Expression</th><th>Real Oracle syntax?</th><th>Metric</th><th>Matches this course's cosine convention?</th></tr></thead>
+<tbody>
+<tr><td>&lt;-&gt;</td><td>Yes</td><td>EUCLIDEAN</td><td>No -- the exact trap Concept 04's placeholder set up</td></tr>
+<tr><td>&lt;=&gt;</td><td>Yes</td><td>COSINE</td><td>Yes</td></tr>
+<tr><td>VECTOR_DISTANCE(...,COSINE)</td><td>Yes</td><td>COSINE</td><td>Yes -- this concept's own chosen form</td></tr>
+<tr><td>VECTOR_DISTANCE(...,EUCLIDEAN)</td><td>Yes</td><td>EUCLIDEAN</td><td>No</td></tr>
+<tr><td>COSINE_DISTANCE(...)</td><td>Yes</td><td>COSINE</td><td>Yes</td></tr>
+</tbody>
+</table>
+<p class="fine-print">This table is the same information the buttons above demonstrate live -- the takeaway survives without JavaScript. Out of scope here: how a vector index on the column changes VECTOR_DISTANCE's own default-metric behavior -- that's Concept 06's territory.</p>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Consolidated mistake list</h2></div></header>
+<div class="mistake-list">
+<div><b>Reusing &lt;-&gt; literally from Concept 04's own placeholder.</b><p>Real syntax, wrong metric -- the central trap of this concept.</p></div>
+<div><b>Assuming the omitted-metric default is always safe without checking index presence.</b><p>The default's interaction with a vector index is Concept 06's own territory, not verified here.</p></div>
+<div><b>Assuming INT8/BINARY quantized formats are in scope here.</b><p>They're forward-referenced to Module 09 Concept 05, not this concept.</p></div>
+<div><b>Assuming CREATE VECTOR INDEX syntax was covered.</b><p>It wasn't -- that's Concept 06.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Concept 04's own post-filter SQL shape, rewrite its inner subquery's dist column to use the real <code>&lt;=&gt;</code> operator instead of <code>VECTOR_DISTANCE(...,COSINE)</code>, and state whether the touched/survives/discarded counts (20/17/12) from Concept 04's own worked example change as a result.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>The rewritten dist column is <code>e.embedding &lt;=&gt; :query_embedding</code>. Since <code>&lt;=&gt;</code> resolves to the same COSINE metric as <code>VECTOR_DISTANCE(...,COSINE)</code>, the ranking is identical -- so the touched/survives/discarded counts (20/17/12) from Concept 04's own worked example do NOT change. Only expressions that resolve to a different metric (like <code>&lt;-&gt;</code> or <code>VECTOR_DISTANCE(...,EUCLIDEAN)</code>) would risk changing which rows land in the top 17.</div>
+</details>
+<p>Teach-back: why does swapping to a same-metric shorthand (<code>&lt;=&gt;</code> or <code>COSINE_DISTANCE()</code>) never change the ranking, while swapping to <code>&lt;-&gt;</code> can?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Oracle AI Database VECTOR type and vector-distance SQL</h3><ul><li><b>The real type:</b> ALTER TABLE embeddings MODIFY (embedding VECTOR(384, FLOAT32));</li><li><b>The real function:</b> VECTOR_DISTANCE(expr1, expr2 [, metric]), seven real metrics, COSINE the documented default.</li><li><b>The trap:</b> &lt;-&gt; is real Oracle syntax, but resolves to EUCLIDEAN -- the correct substitution is VECTOR_DISTANCE(...,COSINE), or &lt;=&gt;, or COSINE_DISTANCE().</li></ul></div>
+<div><h3>Module 10 · 5/14</h3><p>Concept 06, vector indexes and index-dependent default-metric behavior, is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what is VECTOR_DISTANCE's default metric, and what changes it?</summary><div>Per Oracle's own documentation, the default is COSINE when the metric argument is omitted (HAMMING for BINARY inputs). Whether the presence of a vector index on the column changes that default behavior is a separate question this concept does not verify or claim to answer.</div></details>
+<details class="quiz"><summary>Mathematical: what is the difference between &lt;-&gt; and &lt;=&gt;?</summary><div>&lt;-&gt; is the real Euclidean-distance shorthand operator (≡ L2_DISTANCE / VECTOR_DISTANCE(...,EUCLIDEAN)). &lt;=&gt; is the real cosine-distance shorthand operator (≡ COSINE_DISTANCE / VECTOR_DISTANCE(...,COSINE)). Both are real; they are simply locked to different metrics.</div></details>
+<details class="quiz"><summary>Coding: rewrite Concept 04's pre-filter query using the real VECTOR_DISTANCE function.</summary><div>SELECT c.chunk_id, c.text FROM chunks c JOIN documents d ON c.doc_id = d.doc_id JOIN embeddings e ON e.chunk_id = c.chunk_id WHERE d.tenant_id = :tenant_id ORDER BY VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE) FETCH FIRST 5 ROWS ONLY;</div></details>
+<details class="quiz"><summary>System design: why write the metric explicitly instead of relying on VECTOR_DISTANCE's own documented default?</summary><div>The default's own interaction with the presence of a vector index on the column is not verified in this concept -- writing COSINE explicitly keeps the chosen metric visible in the query text and independent of index state, deferring that unverified interaction to Concept 06.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/overview-ai-vector-search.html"><b>Overview of AI Vector Search — Oracle Documentation</b><br><span>Reused from Concept 01 -- general VECTOR-type framing, per Oracle's own documentation as of this writing.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html"><b>Create Tables Using the VECTOR Data Type — Oracle Documentation</b><br><span>Re-fetched live this session (curl -L, HTTP 200) -- the real VECTOR grammar and its four format tokens.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Re-fetched live this session (curl -L, HTTP 200) -- the real function signature, seven metrics, documented default, shorthand functions and operators.</span></a>
+<a href="https://github.com/pgvector/pgvector"><b>pgvector — GitHub</b><br><span>Optional cross-vendor flavor only -- pgvector's own &lt;-&gt;/&lt;=&gt;/&lt;#&gt; convention, not load-bearing here.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 5/14</span>
+<h3>Those exact characters were real all along. Just not the metric this course has been using.</h3>
+<p>You can now write the real VECTOR(384, FLOAT32) type and the VECTOR_DISTANCE(...,COSINE) substitution from memory, and explain why &lt;-&gt; is a trap rather than simply wrong. Concept 06 is next, covering vector indexes and the index-dependent default-metric behavior this concept deliberately left unverified.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s18">Open The Metric Swap Trap ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at 5 of 14 concepts. Next concept: Concept 06, vector indexes and index-dependent default-metric behavior.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 05 · Active</p>
+<a href="module-10-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's eighth concept names what happens to HNSW's graph, IVF's inverted lists, and PQ/SQ's compressed codes when the underlying corpus changes after indexing. FAISS's own documentation lists remove_ids support for IndexFlat, IndexIVFFlat and IDMap -- with no IndexHNSWFlat entry anywhere on the page -- while Weaviate's own docs describe both deletes and updates going through the same tombstone-then-async-cleanup path: objects are marked deleted but stay wired into the HNSW graph until a rebuild reassigns their edges. A 20-chunk toy index shows tombstone cost is positional, not count-based: three extra deletes add zero extra query cost when they land past a query's own fetch window, while the same five deletes bunched at the top instead force a 2.00x over-fetch. Qdrant's own documented 20% deleted_threshold sits just below this toy example's 25% tombstone rate.">
+<title>Updates, deletes and tombstones — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 08 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 08</p>
+<h1>Mark it deleted.<br><em>Don't rebuild the whole index yet.</em></h1>
+<p class="lesson-lead">Concepts 01-07 all treated the corpus as fixed once indexed. Real corpora change -- documents get updated, deleted, replaced -- and every structure this module has built (HNSW's graph, IVF's inverted lists, PQ/SQ's compressed codes) has to cope with that or degrade. FAISS's own documentation lists deletion support for IndexFlat and IndexIVFFlat, with no entry anywhere for IndexHNSWFlat. The real, standard workaround production systems use is the tombstone: mark an entry deleted without immediately restructuring anything, then periodically compact. A 20-chunk toy index shows exactly why that trade-off works -- and why its cost depends on where a deletion lands, not how many there are.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth concept of Module 09 (8/10) -- what happens to Concepts 03-05's own structures once the corpus stops being static</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's exact baseline, Concept 03's HNSW graph, Concept 04's IVF lists, Concept 05's PQ/SQ compression, Concept 07's post-filtering scan-and-skip mechanism (all cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three structures' own deletion costs; explain why a tombstone is marked rather than restructured immediately; state the compaction trade-off in one sentence</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Mark, don't rebuild -- until compaction actually runs</h2>
+</div>
+<p>Every structure through Concept 07 assumed the corpus stayed fixed after indexing. Real corpora don't. This concept is about what actually happens -- and what it actually costs -- when a document gets updated or deleted after it's already been indexed.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Update, delete, tombstone -- three precise words</h3>
+<div class="mental-compare">
+<div><span>UPDATE / DELETE</span><p>A document changed or was removed from the source corpus after it was already indexed.</p></div>
+<div><span>TOMBSTONE (this concept)</span><p>The real workaround: mark the entry invalid without immediately restructuring the index. It stays physically present -- still a node in HNSW's graph, still an id in IVF's list -- but flagged so queries skip it.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> per Weaviate's own documentation, both updates and deletes go through the same tombstone-then-async-cleanup path -- an update is a tombstone-old plus insert-new, not an in-place edit.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concepts 01-07 silently assumed a static corpus</h3>
+<p>Every mechanism this module has built -- exact search, HNSW, IVF, PQ/SQ, metadata filtering -- was demonstrated on a corpus that never changed after indexing. Real corpora change constantly. Immediately restructuring a graph or a compressed index on every single delete would be expensive; tombstoning defers that cost to a later, batched compaction step instead.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>20 chunks, 5 deletes, and a cost that doesn't scale with count</h3>
+<p>A toy index of N=20 chunks (the same scale as Concept 07's own corpus). A query produces a full similarity ranking over all 20 physical entries; the system needs the top k=5 valid results. Five deletes land, one at a time, at fixed ranks: 2, 5, 11, 16, 19.</p>
+<table class="worked-table">
+<thead><tr><th>Tick</th><th>Tombstones</th><th>Fetched</th><th>Skipped</th><th>Over-fetch</th></tr></thead>
+<tbody>
+<tr><td>0 (fresh)</td><td>0</td><td>5</td><td>0</td><td>1.00x</td></tr>
+<tr><td>1 (rank 2)</td><td>1</td><td>6</td><td>1</td><td>1.20x</td></tr>
+<tr><td>2 (rank 5)</td><td>2</td><td>7</td><td>2</td><td>1.40x</td></tr>
+<tr><td>3 (rank 11)</td><td>3</td><td>7</td><td>2</td><td>1.40x (unchanged)</td></tr>
+<tr><td>4 (rank 16)</td><td>4</td><td>7</td><td>2</td><td>1.40x (unchanged)</td></tr>
+<tr><td>5 (rank 19)</td><td>5</td><td>7</td><td>2</td><td>1.40x (unchanged)</td></tr>
+</tbody>
+</table>
+<p>Ticks 3-5 add three more deletes -- the corpus's own tombstone rate keeps climbing (15%, 20%, 25%) -- but the query's own cost stays frozen at 1.40x, because all three land past rank 7, the depth this particular query already needed. <b>Cost is positional, not count-based.</b> Compaction then physically purges all 5 tombstones and rebuilds the structure, returning to fetched=5, over-fetch=1.00x -- identical to tick 0.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0908-b03-title">
+<strong class="concept-visual-title" id="c0908-b03-title">VISUAL · TOMBSTONES ACCUMULATE, QUERY COST DOESN'T ALWAYS FOLLOW</strong>
+<svg class="vector-plane" viewBox="0 0 400 150" role="img" aria-labelledby="c0908-svg-title-b c0908-svg-desc-b" style="max-width:560px">
+<title id="c0908-svg-title-b">A rank axis from 1 to 20 marking five tombstoned ranks and the fetch cutoff for a query needing 5 valid results</title>
+<desc id="c0908-svg-desc-b">A horizontal axis labelled RANK, ticked 1 to 20. Five markers, at ranks 2, 5, 11, 16 and 19, are marked as tombstoned. A dashed vertical line sits just after rank 7, labelled "fetch cutoff for k=5" -- because only 2 tombstones (ranks 2 and 5) fall before it. The tombstones at ranks 11, 16 and 19 sit past the cutoff and add no cost to this query.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<line x1="30" y1="90" x2="370" y2="90" stroke="#c9cdb9" stroke-width="1"/>
+<text x="4" y="93" font-size="7.5">RANK →</text>
+<circle cx="38.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="35" y="106" font-size="6">1</text>
+<circle cx="55.5" cy="90" r="5.5" fill="none" stroke="#b3543a" stroke-width="2"/><text x="52" y="106" font-size="6" fill="#b3543a" font-weight="700">2</text>
+<circle cx="72.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="68" y="106" font-size="6">3</text>
+<circle cx="89.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="86" y="106" font-size="6">4</text>
+<circle cx="106.5" cy="90" r="5.5" fill="none" stroke="#b3543a" stroke-width="2"/><text x="102" y="106" font-size="6" fill="#b3543a" font-weight="700">5</text>
+<circle cx="123.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="119" y="106" font-size="6">6</text>
+<circle cx="140.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="135" y="106" font-size="6">7</text>
+<circle cx="157.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="153" y="106" font-size="6">8</text>
+<circle cx="174.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="169" y="106" font-size="6">9</text>
+<circle cx="191.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="185" y="106" font-size="6">10</text>
+<circle cx="208.5" cy="90" r="5.5" fill="none" stroke="#8f9481" stroke-width="1.4" stroke-dasharray="1 1"/><text x="202" y="106" font-size="6">11</text>
+<circle cx="225.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="219" y="106" font-size="6">12</text>
+<circle cx="242.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="236" y="106" font-size="6">13</text>
+<circle cx="259.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="252" y="106" font-size="6">14</text>
+<circle cx="276.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="269" y="106" font-size="6">15</text>
+<circle cx="293.5" cy="90" r="5.5" fill="none" stroke="#8f9481" stroke-width="1.4" stroke-dasharray="1 1"/><text x="286" y="106" font-size="6">16</text>
+<circle cx="310.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="303" y="106" font-size="6">17</text>
+<circle cx="327.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="320" y="106" font-size="6">18</text>
+<circle cx="344.5" cy="90" r="5.5" fill="none" stroke="#8f9481" stroke-width="1.4" stroke-dasharray="1 1"/><text x="337" y="106" font-size="6">19</text>
+<circle cx="361.5" cy="90" r="5" fill="#61706a" opacity="0.4"/><text x="354" y="106" font-size="6">20</text>
+<line x1="150.5" y1="55" x2="150.5" y2="115" stroke="#b3543a" stroke-width="1.4" stroke-dasharray="3 2"/>
+<text x="70" y="48" fill="#b3543a" font-size="7">fetch cutoff for k=5, rank 7</text>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three structures, three different deletion costs</h3>
+<p><b>HNSW's graph (Concept 03)</b> makes naive deletion hard: removing a node risks disconnecting its neighbours' own shortest paths through the graph. FAISS's own "Special operations on indexes" wiki page lists <code>remove_ids</code> support for <code>IndexFlat</code>, <code>IndexIVFFlat</code> and <code>IDMap</code> -- <code>IndexHNSWFlat</code> is never named anywhere on that page. <b>IVF's inverted lists (Concept 04)</b> make deletion comparatively cheap: crossing an id off one list touches nothing else, though FAISS's own page notes a real precondition -- a plain-array direct map can't remove without shifting every index; only a hashtable direct map with an id-selector removes without a full scan. <b>PQ/SQ's compressed codes (Concept 05)</b> delete exactly like an uncompressed vector would -- compression only changes each vector's own byte cost, not how membership in a list or graph works.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span class="hot">Vectors [tombstones live here -- still physically present, flagged invalid]</span><i>→</i>
+<span class="hot">Retrieval [the cost is paid here -- skipping tombstoned candidates at query time]</span><i>→</i>
+<span>Context → LLM → Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Tombstone vs. compaction vs. Concept 07's post-filtering</h3>
+<div class="distinction-table" role="table" aria-label="Tombstone, compaction and post-filtering distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Tombstone (this concept)</span><span role="cell">Mark an entry invalid immediately; defer restructuring.</span></div>
+<div role="row"><span role="cell">Compaction (this concept)</span><span role="cell">The later, batched restructuring that physically purges tombstoned entries -- Weaviate's own async cleanup, Qdrant's own Vacuum Optimizer.</span></div>
+<div role="row"><span role="cell">Post-filtering (Concept 07)</span><span role="cell">Same scan-and-skip shape at query time, but discards results for failing a metadata check, not for being deleted -- a different reason, identical mechanism.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"More tombstones always means more query cost."</b><p>False -- ticks 3-5 in Section 03's own table are the counterexample. Cost is positional (where a tombstone sits relative to a query's own fetch window), not count-based.</p></div>
+<div><b>"An update is a cheap in-place edit."</b><p>False, per Weaviate's own documentation -- updates go through the same tombstone-old-plus-insert-new path as deletes, not an in-place mutation.</p></div>
+<div><b>"Compaction is free."</b><p>False -- it is a real, scheduled rebuild cost. Module 19's own maintenance-cost concept covers quantifying it; this concept only names that the cost exists.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>The Oracle RAG project's documents get revised constantly</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A real, unavoidable design choice: when does compaction run?</b><p>Documents get revised, retired, and replaced on an ongoing basis -- deciding a tombstone/compaction policy isn't optional.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 8/10</b><p>Concepts 09-10 (replication/sharding, capacity planning) are named forward only, not covered here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the three structures' own deletion costs</b><p>HNSW: hard (FAISS documents no removal support). IVF: cheap (cross an id off a list). PQ/SQ: orthogonal (deletes exactly like an uncompressed vector).</p></div>
+<div><b>Explain why a tombstone is marked rather than restructured immediately</b><p>Immediate restructuring on every single delete would be expensive; tombstoning defers that cost to a later, batched compaction step.</p></div>
+<div><b>State the compaction trade-off in one sentence</b><p>Compaction removes tombstone overhead but costs a real, scheduled rebuild -- deferring cost isn't eliminating it.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why do ticks 3-5 in Section 03's own table leave the over-fetch factor completely unchanged?</li>
+<li>What does Weaviate's own documentation say happens to a tombstoned object's graph edges before cleanup runs?</li>
+<li>Why does compression (Concept 05) not change how deletion works, even though it changes storage cost?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 8 OF 10</h3>
+<p>This concept named what updates, deletes and tombstones actually cost across HNSW, IVF and PQ/SQ, and showed -- with a verified 20-chunk worked example -- that cost is positional, not count-based. Concepts 09 and 10 (replication/sharding and capacity planning) are next, named forward only here.</p>
+<div class="beginner-memory"><b>Concept 08 is active.</b> Module 09 stands at 8 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-07.html">← Back to Concept 07's metadata filtering</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Tombstone, then compact -- traced tick by tick</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Cost frozen at 1.40x, ticks 3-5</b><small>The beginner-convention headline: three extra deletes, zero extra cost.</small></a>
+<a href="#s10"><span>02</span><b>Worst, best, and impossible cases</b><small>2.00x when tombstones bunch at the top; 1.00x when they don't; a hard ceiling at 16/20 deleted.</small></a>
+<a href="#s14"><span>03</span><b>The Compaction Clock</b><small>The lab -- click through 5 deletes, then compact.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Formal definitions, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concepts 01-07 assumed a static corpus → real corpora change → HNSW/IVF/PQ-SQ each pay a different real deletion cost → tombstoning defers restructuring to a later compaction → a verified 20-chunk trace shows cost is positional, not count-based → the lab lets you click through the same trace yourself.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Updates, deletes and tombstones" deep dive</b><em>Formal definitions, the from-scratch code, and The Compaction Clock lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's eighth concept -- the first to name a changing corpus</h2></div></header>
+<p>This is the eighth concept of Module 09, "Vector indexes and vector databases" (8/10), following seven concepts that all assumed a fixed, unchanging corpus. This concept names what actually happens to HNSW (Concept 03), IVF (Concept 04) and PQ/SQ (Concept 05) once documents get updated or deleted after indexing. Concepts 09-10 (replication/sharding, capacity planning) are named forward only.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>Each structure's own deletion cost</h3><p>HNSW (hard), IVF (cheap), PQ/SQ (orthogonal) -- cited directly from FAISS's own documentation.</p></article>
+<article class="info-card"><span>DEFINE</span><h3>Tombstone and compaction</h3><p>Mark now, restructure later -- cited from Weaviate's and Qdrant's own documented mechanisms.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A tick-by-tick 20-chunk example</h3><p>Showing cost is positional, not count-based, verified via node.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Tombstoning vs. Concept 07's post-filtering</h3><p>Same scan-and-skip shape, different reason for exclusion.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-03.html">Module 09 Concept 03</a></b> -- HNSW's graph-traversal mechanism, cited by name; this concept only adds what happens when a graph node is removed.</li>
+<li><b><a href="module-09-concept-04.html">Module 09 Concept 04</a></b> -- IVF's inverted-list mechanism, cited by name; this concept only adds what happens when an entry leaves a list.</li>
+<li><b><a href="module-09-concept-05.html">Module 09 Concept 05</a></b> -- PQ/SQ's per-vector compression, cited by name; deletion of a compressed code is mechanically identical to deleting an uncompressed one.</li>
+<li><b><a href="module-09-concept-07.html">Module 09 Concept 07</a></b> -- the post-filtering scan-and-skip mechanism, the direct structural template for this concept's own worked example.</li>
+<li><b>Explicitly out of scope:</b> replication/sharding and capacity planning (Concepts 09-10) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A closed subway station, and a crossed-out phone-book card</h2></div></header>
+<p>Deleting an HNSW node is like ripping out a subway station -- every neighbouring line's own cable has to be re-spliced, so instead operators post a "closed" sign and reroute trains, doing the real rewiring on a scheduled maintenance window (the tombstone-then-compaction pattern). Deleting an IVF entry is like crossing one card out of one drawer in a phone-book index -- nothing else in that drawer, or any other drawer, needs to move at all.</p>
+<div class="callout warning"><b>Analogy boundary</b>Both analogies explain WHY the two costs differ, not the exact numbers -- those come from the verified worked example in Section 10, not from the analogy itself.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Tombstone</td><td>An entry marked invalid without immediately restructuring the index it lives in</td><td>—</td></tr>
+<tr><td>Compaction</td><td>The later, batched rebuild that physically purges tombstoned entries and restructures the index (Weaviate: async cleanup; Qdrant: Vacuum Optimizer)</td><td>—</td></tr>
+<tr><td>Live fraction</td><td>The fraction of a corpus that is NOT tombstoned</td><td>p_live = (N − tombstones) / N</td></tr>
+<tr><td>Deleted threshold (Qdrant, cited)</td><td>The fraction of deleted vectors in a segment that triggers automatic compaction</td><td>deleted_threshold = 0.2 (Qdrant's own default)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Three structures, cited from real documentation</h2></div></header>
+<p><b>HNSW.</b> FAISS's own "Special operations on indexes" wiki page names <code>remove_ids</code> as "Supported by IndexFlat, IndexIVFFlat, IDMap" -- <code>IndexHNSWFlat</code> never appears on the page. Weaviate's own vector-index docs state directly: "Cleanup is an async process that rebuilds the HNSW graph after deletes and updates. Prior to cleanup, objects are marked as deleted, but they are still connected to the HNSW graph. During cleanup, the edges are reassigned and the objects are deleted for good." <b>IVF.</b> FAISS's own page distinguishes sequential indexes (where removing one entry shifts every higher id down by one) from <code>IndexIVF</code> and <code>IDMap2</code>, which store ids explicitly -- removing one leaves every other id untouched, cheap by construction, though a plain-array direct map still can't remove without a full scan; only a hashtable direct map with an id-selector avoids that. <b>PQ/SQ.</b> Compression (Concept 05) changes each vector's own byte cost, not how list or graph membership works -- deleting a compressed code is mechanically identical to deleting an uncompressed one.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Still wired in, vs. simply crossed out</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0908-s07-title">
+<strong class="concept-visual-title" id="c0908-s07-title">VISUAL · A TOMBSTONED HNSW NODE (STILL WIRED) VS. A CROSSED-OUT IVF ENTRY</strong>
+<svg class="vector-plane" viewBox="0 0 400 170" role="img" aria-labelledby="c0908-svg-title-s07 c0908-svg-desc-s07" style="max-width:560px">
+<title id="c0908-svg-title-s07">Two small diagrams contrasting a tombstoned HNSW graph node, still connected by its edges, with a crossed-out IVF list entry that leaves its list otherwise untouched</title>
+<desc id="c0908-svg-desc-s07">Left diagram: a small graph of five nodes; one node in the middle is greyed out and marked TOMBSTONED, but its edges to three neighbours remain drawn, unbroken. Right diagram: an inverted list of five ids; the third entry is drawn with a strikethrough, and the four other entries sit in exactly the same position as before, unmoved.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<circle cx="60" cy="40" r="8" fill="none" stroke="#3a5f95" stroke-width="1.4"/>
+<circle cx="100" cy="80" r="9" fill="#8f9481" opacity="0.5"/>
+<text x="82" y="105" font-size="6.5">TOMBSTONED</text>
+<circle cx="140" cy="40" r="8" fill="none" stroke="#3a5f95" stroke-width="1.4"/>
+<circle cx="60" cy="120" r="8" fill="none" stroke="#3a5f95" stroke-width="1.4"/>
+<circle cx="140" cy="120" r="8" fill="none" stroke="#3a5f95" stroke-width="1.4"/>
+<line x1="60" y1="40" x2="100" y2="80" stroke="#3a5f95" stroke-width="1"/>
+<line x1="140" y1="40" x2="100" y2="80" stroke="#3a5f95" stroke-width="1"/>
+<line x1="60" y1="120" x2="100" y2="80" stroke="#3a5f95" stroke-width="1"/>
+<text x="30" y="20" font-weight="700">HNSW: still wired in</text>
+<text x="240" y="20" font-weight="700">IVF: simply crossed out</text>
+<rect x="240" y="30" width="120" height="18" fill="none" stroke="#c9cdb9"/><text x="246" y="42">id 41</text>
+<rect x="240" y="50" width="120" height="18" fill="none" stroke="#c9cdb9"/><text x="246" y="62">id 17</text>
+<rect x="240" y="70" width="120" height="18" fill="none" stroke="#b3543a"/><text x="246" y="82" text-decoration="line-through" fill="#b3543a">id 05</text>
+<rect x="240" y="90" width="120" height="18" fill="none" stroke="#c9cdb9"/><text x="246" y="102">id 33</text>
+<rect x="240" y="110" width="120" height="18" fill="none" stroke="#c9cdb9"/><text x="246" y="122">id 09</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Marked at storage time, paid for at query time</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — tombstones marked here, structure left otherwise intact</span><i>↓</i><span class="hot">Retrieval — the skip-past-tombstones cost is paid here, beside Concept 07's own metadata-skip cost</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same shape as Concept 07's own formulas, reused</h2></div></header>
+<div class="equation">p_live = (N − tombstones) / N — the live fraction, directly analogous to Concept 07's own selectivity p</div>
+<div class="equation">Expected fetch depth ≈ k / p_live — Concept 07's own k/p heuristic, cited, applied to live fraction instead of selectivity</div>
+<div class="equation">Worst-case fetch depth = N − (liveCount − k) — identical formula shape to Concept 07's own worst-case formula</div>
+<p>None of these three equations is new mathematics -- all reuse Concept 07's own already-cited shapes, substituting "live" for "matches a filter."</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full tick-by-tick trace, plus worst, best and impossible cases</h2></div></header>
+<p>N=20, k=5 throughout. Deletion order (fixed, not random): ranks 2, 5, 11, 16, 19.</p>
+<table class="worked-table">
+<thead><tr><th>Case</th><th>Tombstones</th><th>Fetched</th><th>Skipped</th><th>Over-fetch</th></tr></thead>
+<tbody>
+<tr><td>Tick 0 (fresh)</td><td>0</td><td>5</td><td>0</td><td>1.00x</td></tr>
+<tr><td>Tick 1</td><td>1 (rank 2)</td><td>6</td><td>1</td><td>1.20x</td></tr>
+<tr><td>Tick 2</td><td>2 (ranks 2, 5)</td><td>7</td><td>2</td><td>1.40x</td></tr>
+<tr><td>Tick 3</td><td>3 (+rank 11)</td><td>7</td><td>2</td><td>1.40x</td></tr>
+<tr><td>Tick 4</td><td>4 (+rank 16)</td><td>7</td><td>2</td><td>1.40x</td></tr>
+<tr><td>Tick 5</td><td>5 (+rank 19, 25% of corpus)</td><td>7</td><td>2</td><td>1.40x</td></tr>
+<tr><td>Worst case (ranks 1-5 tombstoned)</td><td>5</td><td>10</td><td>5</td><td>2.00x</td></tr>
+<tr><td>Best case (ranks 16-20 tombstoned)</td><td>5</td><td>5</td><td>0</td><td>1.00x</td></tr>
+<tr><td>Impossible (16/20 tombstoned)</td><td>16</td><td>20 (scans everything)</td><td>16</td><td>only 4 collected, k=5 unreachable</td></tr>
+</tbody>
+</table>
+<p><b>The plateau, explained.</b> Ticks 3-5 add three more deletes, but every one lands at a rank past 7 -- the depth this query already needed at tick 2 -- so none of them change the answer. The corpus's own tombstone rate keeps climbing (15% → 20% → 25%), but this query's own cost is frozen. A different query, with a different similarity ranking, would feel those same three tombstones differently.</p>
+<p><b>Worst case, cross-checked.</b> If all 5 tombstones instead sat at ranks 1-5, the system must fetch 10 candidates to collect 5 live ones -- matching the closed-form worst-case formula N − (liveCount − k) = 20 − (15 − 5) = 10 exactly.</p>
+<p><b>The real-system callback.</b> This toy index's 25% tombstone rate (tick 5) sits just above Qdrant's own documented Vacuum Optimizer trigger, <code>deleted_threshold: 0.2</code> -- in a real Qdrant segment at this deletion rate, compaction would already be scheduled.</p>
+<div class="callout"><b>Verification method</b>Every row above was computed via a Node.js scan script (scan ranks 1..N, skip tombstoned ranks, collect live ones, stop at k) run directly during research, with literal console output captured for every case, and cross-checked against the closed-form worst-case formula.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a genuine caveat</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A low-churn corpus</h3><p>Where deletes are rare, tombstone overhead stays negligible almost indefinitely -- compaction can run infrequently.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>Qdrant's own 20% deleted_threshold</h3><p>This toy example's 25% tombstone rate sits just past that real, documented trigger point.</p></article>
+<article class="info-card"><span>GENUINE CAVEAT</span><h3>An update is not a free in-place edit</h3><p>Per Weaviate's own documentation, both updates and deletes go through the identical tombstone-then-cleanup path -- there is no cheaper update-only route.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The tick-by-tick trace, implemented directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN TICK-BY-TICK TABLE EXACTLY</span>
+<pre><code>// tombstoneRanks: sorted ranks (1-indexed) marked deleted, out of a
+// corpus of size N. Scans ranks in order, skipping tombstoned ones,
+// until k live results are collected.
+function scanPastTombstones(N, tombstoneRanks, k) {
+  const tombstoned = new Set(tombstoneRanks);
+  let collected = 0, skipped = 0, fetched = 0;
+  for (let rank = 1; rank <= N; rank++) {
+    fetched = rank;
+    if (tombstoned.has(rank)) { skipped++; continue; }
+    collected++;
+    if (collected === k) break;
+  }
+  return { fetched, skipped, collected, impossible: collected < k };
+}
+
+const N = 20, k = 5;
+console.assert(scanPastTombstones(N, [2], k).fetched === 6, "tick 1");
+console.assert(scanPastTombstones(N, [2, 5], k).fetched === 7, "tick 2");
+console.assert(scanPastTombstones(N, [2, 5, 11], k).fetched === 7, "tick 3 -- unchanged");
+console.assert(scanPastTombstones(N, [2, 5, 11, 16, 19], k).fetched === 7, "tick 5 -- still unchanged");
+console.assert(scanPastTombstones(N, [1, 2, 3, 4, 5], k).fetched === 10, "worst case");
+
+function worstCaseFetch(N, liveCount, k) {
+  return N - (liveCount - k);
+}
+console.assert(worstCaseFetch(20, 15, 5) === 10, "worst-case formula matches the scan");
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for tombstoning and compaction</h2></div></header>
+<p><a href="https://github.com/facebookresearch/faiss/wiki/Special-operations-on-indexes">FAISS's own "Special operations on indexes" wiki page</a> is the primary source for this concept's own per-structure deletion costs -- its "Removing elements from an index" section names <code>remove_ids</code> as supported by <code>IndexFlat</code>, <code>IndexIVFFlat</code> and <code>IDMap</code>, with no mention anywhere of <code>IndexHNSWFlat</code>. <a href="https://docs.weaviate.io/weaviate/concepts/vector-index">Weaviate's own vector-index documentation</a> gives the tombstone mechanism itself, verbatim, in its "Deletions" section: objects marked deleted stay wired into the HNSW graph until an async cleanup pass reassigns their edges -- covering both deletes and updates through the same path. <a href="https://qdrant.tech/documentation/ops-optimization/optimizer/">Qdrant's own Vacuum Optimizer documentation</a> states directly: "Qdrant does not delete entries immediately... it marks records as deleted and ignores them for future queries," and names the real trigger values <code>deleted_threshold: 0.2</code> and <code>vacuum_min_vector_number: 1000</code> -- the source of this concept's own 20%-vs-25% comparison.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Compaction Clock</h2></div></header>
+<div class="lab">
+<p>Click "Delete next chunk" up to five times to tombstone this concept's own fixed ranks (2, 5, 11, 16, 19) one at a time, watching FETCHED / SKIPPED / OVER-FETCH update tick by tick exactly as verified in Section 10. Then click "Compact index now" to purge every tombstone at once and watch the readout snap back to the fresh state.</p>
+<div class="lab-actions" role="group" aria-label="Compaction clock controls">
+<button type="button" class="secondary" id="deleteBtn_0908">Delete next chunk</button>
+<button type="button" class="secondary" id="compactBtn_0908">Compact index now</button>
+</div>
+<p class="fine-print">RANK STRIP, 1-20 (lime = live, dimmed-red = tombstoned, dashed edge = fetch cutoff)</p>
+<div class="rank-chip-row" id="clockRow_0908"></div>
+<div class="norm-readout" id="clockReadout_0908">
+<div><span>TOMBSTONES</span><b id="clockTombstones_0908">0</b></div>
+<div><span>FETCHED</span><b id="clockFetched_0908">5</b></div>
+<div><span>SKIPPED</span><b id="clockSkipped_0908">0</b></div>
+<div><span>OVER-FETCH</span><b id="clockOverfetch_0908">1.00x</b></div>
+</div>
+<div class="callout" id="clockVerdict_0908" aria-live="polite">Deletes since last compaction: 0. Qdrant's own deleted_threshold is 0.2 (20%) -- watch this callout flag when the toy index's own rate crosses it.</div>
+<div class="callout warning">This widget replays the exact pre-verified tick-by-tick numbers from Section 10 -- no live randomness, no new benchmarking.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Deletion cost, update cost, compaction need</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>HNSW (Concept 03)</th><th>IVF (Concept 04)</th><th>PQ / SQ (Concept 05)</th></tr></thead>
+<tbody>
+<tr><td>Hard -- no documented FAISS remove_ids support</td><td>Cheap -- cross an id off a list, others untouched</td><td>Orthogonal -- deletes exactly like an uncompressed vector</td></tr>
+<tr><td>Tombstone required in practice; compaction rebuilds the graph</td><td>Tombstone optional in principle, still common in practice</td><td>Follows whichever structure (HNSW/IVF) holds the compressed code</td></tr>
+<tr><td>Compaction cost: full graph rebuild</td><td>Compaction cost: rebuild affected lists only</td><td>Compaction cost: re-encode surviving vectors, if codebooks change</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SKIPPED SKIP STEP</span><h3>A caller bypasses the tombstone-skip logic</h3><p>Symptom: stale, deleted content still shows up in results, served directly from an entry that was marked invalid but never checked.</p></article>
+<article class="info-card"><span>UNBOUNDED GROWTH</span><h3>Compaction never runs</h3><p>Symptom: tombstone rate climbs indefinitely, and every query's own over-fetch cost keeps rising along with it.</p></article>
+<article class="info-card"><span>OVER-AGGRESSIVE COMPACTION</span><h3>A rebuild runs too often or too broadly</h3><p>Symptom: query throughput starves mid-rebuild -- Qdrant's own copy-on-write proxy-segment design exists specifically to mitigate this.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>More tombstones always means more query cost</td><td>False -- Section 10's own ticks 3-5 are the counterexample; cost is positional, not count-based.</td></tr>
+<tr><td>Updates are cheap in-place edits</td><td>False, per Weaviate's own documentation -- updates go through the same tombstone-and-rebuild path as deletes.</td></tr>
+<tr><td>Compaction is free</td><td>False -- it is a real, scheduled rebuild cost, quantified further in Module 19's own maintenance-cost concept.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Staleness SLOs and compaction scheduling are a real operational decision, not a default -- Qdrant's own deleted_threshold (0.2) is a concrete, documented example of making that decision explicit.</li>
+<li>Weaviate's own async cleanup design keeps search available throughout compaction; Qdrant's own segment-level copy-on-write keeps a segment readable mid-rebuild -- both real, named mitigations against the over-aggressive-compaction failure mode above.</li>
+<li>Deciding a tombstone/compaction policy per structure (HNSW vs. IVF vs. PQ/SQ) is realistic, not overkill -- their own costs genuinely differ, per Section 06.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the three structures' own deletion costs from memory.</summary><div>HNSW: hard (no documented FAISS remove_ids support). IVF: cheap (cross an id off a list). PQ/SQ: orthogonal (deletes exactly like an uncompressed vector).</div></details>
+<details class="quiz"><summary>Why does adding three more tombstones at ticks 3-5 leave the over-fetch factor at 1.40x, unchanged?</summary><div>Because all three land at ranks past 7, the fetch depth this particular query already needed at tick 2 -- cost is positional, not count-based.</div></details>
+<details class="quiz"><summary>What does Weaviate's own documentation say happens to a tombstoned object before cleanup runs?</summary><div>It stays marked as deleted but remains physically connected to the HNSW graph -- cleanup is an async process that later reassigns its edges and deletes it for good.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using this concept's own fixed corpus (N=20, k=5), a sixth delete lands at rank 4 (on top of the five already tombstoned at ranks 2, 5, 11, 16, 19). Compute the new fetched, skipped, and over-fetch values.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Tombstoned ranks are now {2, 4, 5, 11, 16, 19}. Scanning from rank 1: rank 1 live (1st), rank 2 skipped, rank 3 live (2nd), rank 4 skipped, rank 5 skipped, rank 6 live (3rd), rank 7 live (4th), rank 8 live (5th) -- 5 live results collected by rank 8. <b>Fetched=8, skipped=3, over-fetch=8÷5=1.60x</b> -- higher than tick 5's own 1.40x, because this new delete (rank 4) lands INSIDE the fetch window this query needs, unlike ticks 3-5's own ranks (11, 16, 19), which all sat past it.</div>
+</details>
+<p>Teach-back: in one sentence, why does a delete at rank 4 raise this query's own cost while a delete at rank 16 does not?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Updates, deletes and tombstones</h3><ul><li><b>Definition:</b> mark an entry invalid without restructuring immediately (tombstone); physically purge and rebuild later (compaction)</li><li><b>The three costs, cited:</b> HNSW hard, IVF cheap, PQ/SQ orthogonal (FAISS's own documentation)</li><li><b>Memorable example:</b> this concept's own 20-chunk trace -- three extra deletes at ticks 3-5 add zero extra query cost, because all three land past the query's own rank-7 fetch depth.</li></ul></div>
+<div><h3>Module 09 · 8/10</h3><p>Concepts 09 and 10 (replication/sharding, capacity planning) are next -- named forward only here.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is deleting an HNSW node harder than deleting an IVF entry?</summary><div>Removing a graph node risks disconnecting its neighbours' own shortest paths through the structure, requiring re-splicing; removing an IVF entry just crosses an id off one inverted list, with nothing else to preserve.</div></details>
+<details class="quiz"><summary>Mathematical: at N=20, k=5, with 7 tombstones bunched at ranks 1-7, compute the fetch depth.</summary><div>Live count = 13. Worst-case-style scan: fetched = 12 (ranks 1-7 skipped, ranks 8-12 collected as the 5 live results) -- over-fetch = 12÷5 = 2.40x.</div></details>
+<details class="quiz"><summary>Coding: extend scanPastTombstones to also return the live fraction p_live.</summary><div>Add <code>const pLive = (N - tombstoneRanks.length) / N</code> to the function and include it in the returned object -- a direct application of Section 09's own p_live formula.</div></details>
+<details class="quiz"><summary>System design: how would you decide when to run compaction for a given index?</summary><div>Track the tombstone rate per segment (Qdrant's own deleted_threshold pattern) and trigger a rebuild once it crosses a chosen bound, balancing query-cost creep against the real cost of the rebuild itself -- not a fixed schedule alone.</div></details>
+<details class="quiz"><summary>Debugging: a production search occasionally returns a document that was deleted hours ago. What do you check first?</summary><div>Whether the retrieval path actually checks the tombstone flag before returning a candidate -- Weaviate's own design keeps a tombstoned object physically present until cleanup, so any code path that skips the flag check will surface it.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/facebookresearch/faiss/wiki/Special-operations-on-indexes"><b>Special operations on indexes — FAISS wiki</b><br><span>Names remove_ids support for IndexFlat/IndexIVFFlat/IDMap, with no IndexHNSWFlat entry anywhere on the page.</span></a>
+<a href="https://docs.weaviate.io/weaviate/concepts/vector-index"><b>Vector index — Weaviate Documentation</b><br><span>The primary source for the tombstone mechanism itself, covering both deletes and updates through the same async-cleanup path.</span></a>
+<a href="https://qdrant.tech/documentation/ops-optimization/optimizer/"><b>Optimizer — Qdrant Documentation</b><br><span>The Vacuum Optimizer's own documented deleted_threshold (0.2) and vacuum_min_vector_number (1000) trigger values.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 8/10</span>
+<h3>Mark it deleted. Don't rebuild the whole index yet.</h3>
+<p>You can now name each of HNSW's, IVF's and PQ/SQ's own deletion costs; explain why a tombstone is marked rather than restructured immediately; and trace a tick-by-tick example showing cost is positional, not count-based. Concepts 09 and 10 (replication/sharding, capacity planning) are next, named forward only here.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Compaction Clock ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 8 of 10 concepts. Next concept: Concept 09, Replication, sharding and consistency.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 08 · Complete</p>
+<a href="module-09-concept-07.html">← Concept</a>
+</footer>
+</body>
+</html>

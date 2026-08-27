@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's sixth concept builds no new mechanism at all -- it is the module's first generalizing concept. It assembles the already-verified numbers from Concept 02 (SIFT1M Flat/IVF/HNSW table), Concept 03 (FAISS's own ef_search table), Concept 04 (nprobe worked example) and Concept 05 (Flat/SQ8/PQ byte-cost table) into one consolidated 7-row table across all three axes -- recall, latency, memory -- and shows that every mechanism this module has built occupies a different point on the same three-way trade, none of them winning on more than one cited axis at once. A new marginal cost-per-recall-point derivation (ms per recall point, computed purely from those cited numbers) shows the price of the next recall point rises sharply near 100%.">
+<title>Recall–latency–memory trade-offs — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 06</p>
+<h1>Every mechanism wins one axis.<br><em>None wins all three.</em></h1>
+<p class="lesson-lead">Concepts 02-05 each measured HNSW, IVF and quantization on at most two of three axes -- recall, latency, memory. This concept builds no new mechanism, corpus or algorithm at all. It is the module's first generalizing concept: it assembles those four concepts' own already-verified numbers into one consolidated table, derives the marginal cost of the next recall point purely by arithmetic on cited figures, and shows that no operating point this module has cited ever wins on more than one axis.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth concept of Module 09 (6/10) -- the module's first generalizing concept, no new mechanism built</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's SIFT1M table, Concept 03's ef_search table, Concept 04's nprobe example, Concept 05's byte-cost table -- all cited unchanged</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three axes; read the consolidated table and state which row wins which axis; explain why no row wins more than one</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Three axes, one table, no free lunch</h2>
+</div>
+<p>Nothing here is measured for the first time. Every number below is a direct citation from Concepts 02-05; the only new work is putting them side by side and doing the arithmetic on top.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Recall, latency, memory -- the three axes every dial in this module has been trading among</h3>
+<div class="mental-compare">
+<div><span>INSTINCT</span><p>Look for "the best" index or setting, as if one choice could win outright.</p></div>
+<div><span>REALITY (this concept)</span><p>Recall, latency and memory are three separate, already-cited axes. Every mechanism this module has built already sits at a specific point on all three -- it was just measured on at most two of them until now.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> no row in this concept's own consolidated table wins on more than one of the three axes, among the numbers this module has actually cited.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Four concepts, four partial views -- this is the first full one</h3>
+<p>Concept 03 (HNSW) and Concept 04 (IVF) each measured recall and latency for their own mechanism, but neither one ever cited a memory number. Concept 05 (quantization) measured memory precisely -- and explicitly scoped recall and latency <i>out</i>, stating directly that "this widget shows memory cost only... that three-way generalization is Concept 06's own subject." This concept is that payoff: the first pass in the module that puts recall, latency and memory numbers from four different concepts side by side, on the same page, at the same time.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Seven cited operating points, three axes, one table</h3>
+<p>All figures below are direct, unchanged citations -- SIFT1M scale throughout, n=1,000,000 vectors, d=128 dimensions (the same corpus already used by Concepts 01, 02 and 05).</p>
+<table class="worked-table">
+<thead><tr><th>#</th><th>Mechanism (source)</th><th>Recall@1</th><th>Latency/query</th><th>Memory/vector</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Flat / exact (C01, C02, C05)</td><td>100.00%</td><td>0.91 ms</td><td>512 B</td></tr>
+<tr><td>2</td><td>IVF16384,Flat, default nprobe (C02)</td><td>89.80%</td><td>0.0538 ms</td><td>512 B</td></tr>
+<tr><td>3</td><td>HNSW, nmslib, SIFT1M table (C02)</td><td>81.95%</td><td>0.0081 ms</td><td>512 B + graph edges</td></tr>
+<tr><td>4</td><td>HNSW, FAISS ef_search=16 (C03)</td><td>87.40%</td><td>0.011 ms</td><td>512 B + graph edges</td></tr>
+<tr><td>5</td><td>HNSW, FAISS ef_search=256 (C03)</td><td>99.20%</td><td>0.104 ms</td><td>512 B + graph edges</td></tr>
+<tr><td>6</td><td>SQ8 (C05)</td><td>not measured here</td><td>not measured here</td><td>128 B (4.00x smaller)</td></tr>
+<tr><td>7</td><td>PQ, M=16, nbits=8 (C05)</td><td>not measured here</td><td>not measured here</td><td>16 B (32.00x smaller)</td></tr>
+</tbody>
+</table>
+<p>Row 1 wins recall outright but is the slowest row. Row 3 is the fastest row but gives up the most recall. Row 7 wins memory outright but has no cited recall or latency number anywhere in this module -- the honest gap Concept 05 itself flagged forward, kept visible here rather than smoothed over.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0906-b03-title">
+<strong class="concept-visual-title" id="c0906-b03-title">VISUAL · RECALL@1 vs. PER-QUERY TIME, ALL FIVE MEASURED ROWS (log-scale time axis)</strong>
+<svg class="vector-plane" viewBox="0 0 400 220" role="img" aria-labelledby="c0906-svg-title-b03 c0906-svg-desc-b03" style="max-width:560px">
+<title id="c0906-svg-title-b03">A scatter plot placing all five recall-and-latency-cited operating points from this module on one curve</title>
+<desc id="c0906-svg-desc-b03">X-axis: recall at 1, from 80% to 100%. Y-axis: per-query time on a log scale, from 0.001 ms to 10 ms. Five points along one downward-sloping curve: HNSW nmslib at 81.95% and 0.0081 ms; HNSW ef_search 16 at 87.40% and 0.011 ms; IVF16384,Flat at 89.80% and 0.0538 ms; HNSW ef_search 256 at 99.20% and 0.104 ms; Flat exact at 100% and 0.91 ms. No point sits near the top-left corner, which would mean high recall and low latency at once.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<line x1="55" y1="20" x2="55" y2="190" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="55" y1="190" x2="380" y2="190" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="55" y1="20" x2="380" y2="20" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="55" y1="62.5" x2="380" y2="62.5" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="55" y1="105" x2="380" y2="105" stroke="#e4e7d9" stroke-width="0.6"/>
+<line x1="55" y1="147.5" x2="380" y2="147.5" stroke="#e4e7d9" stroke-width="0.6"/>
+<text x="8" y="23" font-size="7">10 ms</text>
+<text x="12" y="65.5" font-size="7">1 ms</text>
+<text x="4" y="108" font-size="7">0.1 ms</text>
+<text x="2" y="150.5" font-size="7">0.01 ms</text>
+<text x="0" y="193" font-size="7">0.001 ms</text>
+<text x="60" y="205" font-size="7">80%</text>
+<text x="152" y="205" font-size="7">85%</text>
+<text x="244" y="205" font-size="7">90%</text>
+<text x="336" y="205" font-size="7">95% / 100%</text>
+<text x="130" y="216" font-size="7">RECALL@1 (log-scale time axis) -- rows 1-5</text>
+<line x1="118" y1="177" x2="214" y2="173" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="3 2"/>
+<line x1="214" y1="173" x2="256" y2="152" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="3 2"/>
+<line x1="256" y1="152" x2="363" y2="132" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="3 2"/>
+<line x1="363" y1="132" x2="372" y2="65" stroke="#c9cdb9" stroke-width="1" stroke-dasharray="3 2"/>
+<circle cx="118" cy="177" r="4.5" fill="#b3543a"/>
+<text x="60" y="188" fill="#b3543a">row3 HNSW-nmslib</text>
+<circle cx="214" cy="173" r="4.5" fill="#8a6d3a"/>
+<text x="178" y="164" fill="#8a6d3a">row4 ef=16</text>
+<circle cx="256" cy="152" r="4.5" fill="#3a5f95"/>
+<text x="222" y="143" fill="#3a5f95">row2 IVF16384</text>
+<circle cx="363" cy="132" r="4.5" fill="#6a4c93"/>
+<text x="300" y="123" fill="#6a4c93">row5 ef=256</text>
+<circle cx="372" cy="65" r="4.5" fill="#2f6f5c"/>
+<text x="308" y="56" fill="#2f6f5c">row1 Flat 0.91ms</text>
+</g>
+</svg>
+<figcaption>All five points sit on one downward-sloping curve -- higher recall always pairs with higher (slower) latency, among these five cited rows. Row 5 (HNSW ef_search=256) is the one point that buys back almost all of Flat's recall while still keeping most of HNSW's speed advantage.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Which cited dial moves which axis-pair</h3>
+<p>Sort every dial this module has built by which axis-pair it actually moves, per this module's own citations. <code>ef_search</code> (HNSW, Concept 03) and <code>nprobe</code> (IVF, Concept 04) both trade recall against latency, with memory roughly fixed -- turning either dial up buys recall points at a latency cost, and turning it down does the reverse. <code>nbits</code> and <code>M</code> (quantization, Concept 05) trade memory only -- Concept 05 built and cited the byte-cost formula for that dial, but never cited what happens to recall or latency when it moves. That is not an oversight; it is this module's own honest citation gap, restated directly rather than filled in with a guess.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span>Vectors [optionally SQ/PQ-encoded, Concept 05]</span><i>→</i>
+<span class="hot">Retrieval [THIS concept -- HNSW/IVF/quantization reframed as a 3-axis choice, not a single "best index" pick]</span><i>→</i>
+<span>Context → LLM → Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three different kinds of decisions, easy to conflate</h3>
+<div class="distinction-table" role="table" aria-label="Recall-latency dial, memory dial and mechanism choice distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">A recall-latency dial</span><span role="cell"><code>ef_search</code> (HNSW) or <code>nprobe</code> (IVF) -- moves recall and latency together, memory roughly fixed.</span></div>
+<div role="row"><span role="cell">A memory dial</span><span role="cell"><code>nbits</code>/<code>M</code> (quantization) -- moves memory only, per this module's own citations; recall/latency impact never cited here.</span></div>
+<div role="row"><span role="cell">A mechanism choice</span><span role="cell">Flat vs. IVF vs. HNSW vs. quantization entirely -- a different structural decision from tuning any one mechanism's own dial.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"One system can be optimal on all three axes at once."</b><p>False, per the table -- among the seven cited rows, the recall winner is the latency loser, the latency winner gives up the most recall, and the memory winner has no cited recall or latency number at all.</p></div>
+<div><b>"The cost of the next recall point is always the same."</b><p>False -- the derived marginal-cost figures (Section 09/10) rise sharply near 100%: IVF→Flat's next recall point costs roughly 14.4x more than HNSW→IVF's own next point.</p></div>
+<div><b>"Quantization has zero effect on recall in practice."</b><p>Neither asserted nor denied here -- this module never measured it. Flagged honestly as unmeasured, not filled in with a plausible-sounding guess.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>The Oracle RAG project's own index choice is a real three-way negotiation</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Every retrieval-layer decision in the Oracle RAG project weighs recall, latency and memory at once</b><p>None of the three axes can be optimized in isolation without measuring the cost on the other two.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 6/10</b><p>Concept 07 names metadata filtering next -- a different axis entirely, not covered by this table.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the three axes</b><p>Recall, latency, memory -- the same three this concept's own title names directly.</p></div>
+<div><b>Read the consolidated table and state which row wins which axis</b><p>Row 1 wins recall; row 3 wins latency; row 7 wins memory -- three different rows, never the same one twice.</p></div>
+<div><b>Explain why no row wins more than one axis</b><p>Because no cited number in this module ever measured all three for the same mechanism at the same time.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does row 1 (Flat) win recall but lose latency, while row 3 (HNSW nmslib) does the exact opposite?</li>
+<li>Why are rows 6 and 7's own recall and latency cells marked "not measured here" instead of a plausible guessed number?</li>
+<li>Which two rows are both labelled "HNSW," and why must they never be averaged into one number?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 6 OF 10</h3>
+<p>This concept built no new mechanism at all -- it combined four concepts' own already-cited numbers into one table and showed that no cited operating point wins on more than one of the three axes. Concept 07, "Metadata filtering strategies," is next: a different axis entirely, named forward only here.</p>
+<div class="beginner-memory"><b>Concept 06 is complete.</b> Module 09 stands at 6 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-05.html">← Back to Concept 05's quantization</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One table, one derivation, one lab</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>The 7-row consolidated table</b><small>The beginner-convention headline: recall, latency and memory from four different concepts, side by side.</small></a>
+<a href="#s10"><span>02</span><b>The marginal cost-per-recall-point derivation</b><small>Why the next recall point gets more expensive the closer you are to 100%.</small></a>
+<a href="#s14"><span>03</span><b>The Constraint Filter</b><small>The lab -- pick a threshold on one axis, see which of the 7 cited rows survive.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>The full triangle diagram, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concepts 02-05 each cited numbers on at most two of three axes → this concept assembles all of them into one 7-row table → a new marginal cost-per-recall-point derivation, computed only from cited numbers → no row wins more than one axis → the lab lets you pick a threshold and watch the same honesty apply live.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Recall–latency–memory trade-offs" deep dive</b><em>The full marginal-cost derivation, the triangle diagram, from-scratch code, and The Constraint Filter lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's sixth concept -- the first generalizing concept, not a mechanism</h2></div></header>
+<p>This is the sixth concept of Module 09, "Vector indexes and vector databases" (6/10), following Concept 03 (HNSW), Concept 04 (IVF) and Concept 05 (quantization) -- the module's three named mechanisms. This concept builds none of them again. It generalizes across all three, reusing each one's own already-verified numbers rather than introducing a new corpus, algorithm or benchmark.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>The three axes</h3><p>Recall, latency and memory -- and the thesis that no mechanism in this module escapes trading among them.</p></article>
+<article class="info-card"><span>ASSEMBLE</span><h3>The consolidated table</h3><p>Seven cited operating points across Concepts 02-05, combined for the first time on all three axes at once.</p></article>
+<article class="info-card"><span>DERIVE</span><h3>Marginal cost-per-recall-point</h3><p>Δlatency ÷ Δrecall between cited operating points -- new arithmetic on top of old, cited numbers.</p></article>
+<article class="info-card"><span>STATE</span><h3>The quantization citation gap</h3><p>SQ8's and PQ's own recall/latency were never measured in this module -- named directly, not glossed over.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-02.html">Module 09 Concept 02</a></b> -- the SIFT1M Flat/IVF16384,Flat/nmslib-HNSW table, cited unchanged for rows 1-3.</li>
+<li><b><a href="module-09-concept-03.html">Module 09 Concept 03</a></b> -- FAISS's own bench_hnsw.py ef_search table, cited unchanged for rows 4-5.</li>
+<li><b><a href="module-09-concept-04.html">Module 09 Concept 04</a></b> -- the nprobe worked example and scanned-fraction proxy, cited for IVF's own row and its latency mechanism.</li>
+<li><b><a href="module-09-concept-05.html">Module 09 Concept 05</a></b> -- the Flat/SQ8/PQ byte-cost table, cited unchanged for rows 6-7's own memory numbers.</li>
+<li><b>Explicitly out of scope:</b> metadata filtering (Concept 07) and updates/deletes/tombstones (Concept 08) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A three-resource budget, grounded in this module's own numbers</h2></div></header>
+<p>Think of recall, latency and memory as three separate budgets a system spends against at once -- the way time, money and space compete against each other in almost any real plan. Spending more of one (accepting slower queries, in exchange for higher recall) doesn't refund the other two for free; Concept 05's own quantization dial spends memory specifically, without any cited receipt for what it costs on the other two budgets.</p>
+<div class="callout warning"><b>Analogy boundary</b>This is a framing device, not a new measurement -- every number the framing is grounded in below is a direct, unchanged citation from Concepts 02-05.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Recall@1 (cited, Concept 02)</td><td>Fraction of queries where the true nearest neighbour is returned first</td><td>%</td></tr>
+<tr><td>Latency (cited, Concepts 02-04)</td><td>Per-query wall-clock time to return results</td><td>ms/query</td></tr>
+<tr><td>Memory (cited, Concept 05)</td><td>Bytes stored per vector, at rest</td><td>bytes/vector</td></tr>
+<tr><td>Operating point (this concept)</td><td>A mechanism plus a parameter setting's own (recall, latency, memory) triple</td><td>one row of the table</td></tr>
+<tr><td>Marginal cost-per-recall-point (this concept)</td><td>The latency price of the next recall point between two cited operating points</td><td>Δlatency ÷ Δrecall</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Which cited dial moves which axis-pair, restated formally</h2></div></header>
+<p><code>ef_search</code> (HNSW, Concept 03) and <code>nprobe</code> (IVF, Concept 04) both move recall and latency together, with memory left roughly fixed by this module's own citations -- turning either dial up widens the search (more graph hops, or more clusters probed) at a latency cost, in exchange for recall. <code>nbits</code> and <code>M</code> (quantization, Concept 05) move memory only; Concept 04's own scanned-fraction proxy (≈ nprobe/nlist) restates IVF's own latency mechanism as a fraction of the corpus actually compared per query, reused unchanged here as the mechanism behind IVF's own row in the table below.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>A recall/latency/memory triangle -- no row sits near all three vertices</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c0906-s07-title">
+<strong class="concept-visual-title" id="c0906-s07-title">VISUAL · SEVEN OPERATING POINTS PLACED NEAR THEIR STRONGEST AXIS</strong>
+<svg class="vector-plane" viewBox="0 0 340 200" role="img" aria-labelledby="c0906-svg-title-s07 c0906-svg-desc-s07" style="max-width:420px">
+<title id="c0906-svg-title-s07">A triangle diagram with three vertices -- recall, latency, memory -- placing each of the seven cited rows near whichever vertex it is strongest on</title>
+<desc id="c0906-svg-desc-s07">A triangle with a Recall vertex at top, a Latency vertex at bottom left, and a Memory vertex at bottom right. Row 1 (Flat) sits near the Recall vertex. Row 3 (HNSW nmslib) sits near the Latency vertex. Rows 6 and 7 (SQ8, PQ) sit near the Memory vertex, drawn muted because their recall and latency are unmeasured in this module. Rows 2, 4 and 5 sit in between the Recall and Latency vertices at varying distances. No row sits close to all three vertices at once -- this placement is illustrative, showing which axis each row is strongest on, not a precise three-way coordinate computation.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<line x1="170" y1="20" x2="30" y2="170" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="30" y1="170" x2="310" y2="170" stroke="#c9cdb9" stroke-width="1"/>
+<line x1="310" y1="170" x2="170" y2="20" stroke="#c9cdb9" stroke-width="1"/>
+<text x="152" y="14" font-size="8" font-weight="700">RECALL</text>
+<text x="2" y="184" font-size="8" font-weight="700">LATENCY</text>
+<text x="266" y="184" font-size="8" font-weight="700">MEMORY</text>
+<circle cx="170" cy="55" r="5" fill="#2f6f5c"/>
+<text x="178" y="52" fill="#2f6f5c">1 Flat</text>
+<circle cx="140" cy="70" r="4.5" fill="#6a4c93"/>
+<text x="148" y="80" fill="#6a4c93">5 ef=256</text>
+<circle cx="110" cy="100" r="4.5" fill="#3a5f95"/>
+<text x="60" y="95" fill="#3a5f95">2 IVF</text>
+<circle cx="75" cy="130" r="4.5" fill="#8a6d3a"/>
+<text x="8" y="128" fill="#8a6d3a">4 ef=16</text>
+<circle cx="55" cy="150" r="5" fill="#b3543a"/>
+<text x="18" y="163" fill="#b3543a">3 nmslib</text>
+<circle cx="250" cy="140" r="4.5" fill="#61706a" opacity="0.55"/>
+<text x="218" y="132" fill="#61706a" opacity="0.85">6 SQ8 (unk. R/L)</text>
+<circle cx="290" cy="155" r="5" fill="#61706a" opacity="0.55"/>
+<text x="230" y="167" fill="#61706a" opacity="0.85">7 PQ (unk. R/L)</text>
+</g>
+</svg>
+</figure>
+<p>Contrast directly with Concept 05's own Section 07: there, the diagram traced a single split-snap-concatenate flow. Here, the diagram places seven already-cited rows on a shared triangle -- rows 1 and 3 sit near opposite vertices (recall vs. latency), rows 6 and 7 sit near the memory vertex but are drawn muted, because this module never cited what their own placement on the other two vertices would be.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Same retrieval slot, reframed as a 3-axis choice</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — optionally SQ/PQ-encoded (Concept 05)</span><i>↓</i><span class="hot">Retrieval — HNSW/IVF/quantization (Concepts 03-05), now read as one 3-axis choice, not a single "best index" pick</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>One new formula, applied to cited numbers only</h2></div></header>
+<div class="equation">Operating point = (recall, latency, memory) triple for one mechanism + parameter setting</div>
+<div class="equation">Marginal cost-per-recall-point = Δlatency ÷ Δrecall, between two cited operating points</div>
+<div class="equation">IVF's own latency mechanism (Concept 04, cited) = scanned fraction ≈ nprobe / nlist</div>
+<p>Recall, latency and memory themselves are not re-derived here -- all five recall/latency pairs and both memory ratios are direct citations. The only new computation in this concept is the marginal-cost formula above, applied to those cited pairs in Section 10.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The consolidated table, plus the marginal cost-per-recall-point derivation</h2></div></header>
+<p><b>The consolidated table.</b> d=128, n=1,000,000 vectors -- the same SIFT1M-style corpus already used by Concepts 01, 02 and 05.</p>
+<table class="worked-table">
+<thead><tr><th>#</th><th>Mechanism (source)</th><th>Recall@1</th><th>Latency/query</th><th>Memory/vector</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Flat / exact (C01, C02, C05)</td><td>100.00% (guaranteed)</td><td>0.91 ms</td><td>512 B (4·d)</td></tr>
+<tr><td>2</td><td>IVF16384,Flat, SIFT1M default nprobe (C02)</td><td>89.80%</td><td>0.0538 ms</td><td>512 B (unquantized; same raw encoding as Flat, just partitioned)</td></tr>
+<tr><td>3</td><td>HNSW, nmslib, SIFT1M table (C02)</td><td>81.95%</td><td>0.0081 ms</td><td>512 B + graph edges (edge overhead never quantified numerically in this module)</td></tr>
+<tr><td>4</td><td>HNSW, FAISS bench_hnsw.py, ef_search=16 (C03)</td><td>87.40%</td><td>0.011 ms</td><td>512 B + graph edges (same, unquantified)</td></tr>
+<tr><td>5</td><td>HNSW, FAISS bench_hnsw.py, ef_search=256 (C03)</td><td>99.20%</td><td>0.104 ms</td><td>512 B + graph edges (same, unquantified)</td></tr>
+<tr><td>6</td><td>SQ8 (C05)</td><td>not separately measured in this module (Exhaustive: yes)</td><td>not separately measured in this module</td><td>128 B (4.00x smaller than Flat)</td></tr>
+<tr><td>7</td><td>PQ, M=16, nbits=8 (C05)</td><td>not separately measured in this module (Exhaustive: yes)</td><td>not separately measured in this module</td><td>16 B (32.00x smaller than Flat)</td></tr>
+</tbody>
+</table>
+<div class="callout warning">Rows 3 and 4 are BOTH labelled "HNSW" but must never be conflated -- row 3 is nmslib's own SIFT1M measurement (Concept 02's cross-mechanism table); rows 4-5 are FAISS's own separate bench_hnsw.py measurement, at two different ef_search settings inside ONE FAISS index (Concept 03's own within-mechanism table). Two different libraries, two different cited sources, both real.</div>
+<p><b>Marginal cost-per-recall-point.</b> Computed purely by subtraction and division on the cited pairs above -- nothing here was newly measured.</p>
+<table class="notation">
+<thead><tr><th>Step (cited operating points)</th><th>Δrecall</th><th>Δlatency</th><th>Cost/point</th></tr></thead>
+<tbody>
+<tr><td>IVF (row 2) → Flat (row 1)</td><td>10.20 points</td><td>0.8562 ms</td><td>0.0839 ms/point</td></tr>
+<tr><td>HNSW nmslib (row 3) → IVF (row 2)</td><td>7.85 points</td><td>0.0457 ms</td><td>0.0058 ms/point</td></tr>
+<tr><td>ef_search 16 (row 4) → ef_search 256 (row 5)</td><td>11.80 points</td><td>0.093 ms</td><td>0.0079 ms/point</td></tr>
+</tbody>
+</table>
+<p>The IVF→Flat step's own marginal recall point costs about <b>14.42x</b> more than the HNSW-nmslib→IVF step's own marginal point (0.0839 ÷ 0.0058). The IVF→Flat step also costs about <b>10.65x</b> more than the ef_search 16→256 dial's own marginal point, and that dial's own point costs about <b>1.35x</b> more than the HNSW-nmslib→IVF step's -- three different dials, three different marginal prices, all rising as recall approaches 100%. A fourth cited comparison: HNSW at ef_search=256 (row 5) reaches within <b>0.80 recall points</b> of exact Flat search while still running about <b>8.75x</b> faster (0.91 ms ÷ 0.104 ms) -- a genuinely different, non-extreme operating point on the same curve, not just an average of the two extremes.</p>
+<div class="callout"><b>Verification method</b>Every derived ratio and cost-per-point figure above was computed via two independently-structured Node.js scripts -- one using named variables and helper functions, one with fully inline arithmetic and no shared code -- and both matched to full float precision. Nothing in this derivation was measured empirically; every input number is a direct, unchanged citation from Concepts 02-05, and only the combining arithmetic (subtraction, division) is new.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A RAM-constrained fleet of replicas</h3><p>Picks PQ (row 7) for its cited 32x memory win, despite this module's own unmeasured recall risk -- to be validated empirically on held-out queries before shipping, not assumed.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3><code>nprobe</code> set to <code>nlist</code>, or <code>ef_search</code> set very high</h3><p>Collapses IVF's or HNSW's own row back toward Flat's row on recall AND latency at once -- the dial's own ceiling, not a new mechanism.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming a compressed encoding's recall matches Flat's without ever measuring it</h3><p>Exactly the gap Concept 05 itself flagged forward -- rows 6-7's own "not measured here" cells exist precisely to keep that assumption from being made silently.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Recomputing every marginal-cost figure from the cited operating points</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN MARGINAL-COST NUMBERS EXACTLY</span>
+<pre><code># Every input below is a direct citation from Concepts 02-03; only the
+# division/subtraction combining them is new to this concept.
+rows = {
+    "flat":   {"recall": 100.00, "latency_ms": 0.91},    # Concept 02
+    "ivf":    {"recall": 89.80,  "latency_ms": 0.0538},  # Concept 02
+    "hnsw_nmslib": {"recall": 81.95, "latency_ms": 0.0081},  # Concept 02
+    "hnsw_ef16":   {"recall": 87.40, "latency_ms": 0.011},   # Concept 03
+    "hnsw_ef256":  {"recall": 99.20, "latency_ms": 0.104},   # Concept 03
+}
+
+def cost_per_point(lo_key, hi_key):
+    lo, hi = rows[lo_key], rows[hi_key]
+    d_recall = hi["recall"] - lo["recall"]
+    d_latency = hi["latency_ms"] - lo["latency_ms"]
+    return d_latency / d_recall
+
+ivf_to_flat = cost_per_point("ivf", "flat")
+hnsw_to_ivf = cost_per_point("hnsw_nmslib", "ivf")
+ef16_to_ef256 = cost_per_point("hnsw_ef16", "hnsw_ef256")
+
+assert round(ivf_to_flat, 4) == 0.0839
+assert round(hnsw_to_ivf, 4) == 0.0058
+assert round(ef16_to_ef256, 4) == 0.0079
+assert round(ivf_to_flat / hnsw_to_ivf, 2) == 14.42
+assert round(ivf_to_flat / ef16_to_ef256, 2) == 10.65
+assert round(ef16_to_ef256 / hnsw_to_ivf, 2) == 1.35
+
+speedup_ef256_vs_flat = rows["flat"]["latency_ms"] / rows["hnsw_ef256"]["latency_ms"]
+recall_gap_ef256_vs_flat = rows["flat"]["recall"] - rows["hnsw_ef256"]["recall"]
+assert round(speedup_ef256_vs_flat, 2) == 8.75
+assert round(recall_gap_ef256_vs_flat, 2) == 0.80
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for this concept's own framing</h2></div></header>
+<p><a href="https://www.pinecone.io/learn/series/faiss/vector-indexes/">Pinecone's vector-indexes overview page</a> states the exact three-axis framing this concept's own title uses directly: "we will be focused on a few indexes that prioritize search speed, quality, or index memory," and "there is always a trade-off between search-speed and search-quality (accuracy)." <a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes">FAISS's own Faiss-indexes wiki page</a> (already the source for Concepts 01/02/04/05) supplies Flat's 4·d bytes/vector, SQ8's d bytes/vector, PQ's ceil(M·nbits/8) bytes/vector, and IVF's own nlist/nprobe mechanics, reused unchanged. <a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors">FAISS's own Indexing-1M-vectors wiki page</a> supplies the SIFT1M Flat/IVF16384,Flat/nmslib-HNSW recall+latency table (rows 1-3). <a href="https://www.pinecone.io/learn/series/faiss/hnsw/">Pinecone's HNSW page</a> is the source of FAISS's own bench_hnsw.py ef_search table (rows 4-5).</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Constraint Filter</h2></div></header>
+<div class="lab">
+<p>Pick one threshold on one axis and watch which of the seven cited rows from Section 10 actually pass -- using only this module's own already-cited numbers. Picking a new axis clears the other two axes' own selection, so only one constraint is ever active at a time.</p>
+<div class="lab-actions" role="group" aria-label="Recall constraint" id="recallGroup_0906">
+<button type="button" class="secondary active" data-axis="recall" data-threshold="none">No constraint</button>
+<button type="button" class="secondary" data-axis="recall" data-threshold="90">Recall ≥ 90%</button>
+<button type="button" class="secondary" data-axis="recall" data-threshold="95">Recall ≥ 95%</button>
+<button type="button" class="secondary" data-axis="recall" data-threshold="99">Recall ≥ 99%</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Latency constraint" id="latencyGroup_0906">
+<button type="button" class="secondary active" data-axis="latency" data-threshold="none">No constraint</button>
+<button type="button" class="secondary" data-axis="latency" data-threshold="0.1">Latency ≤ 0.1 ms</button>
+<button type="button" class="secondary" data-axis="latency" data-threshold="0.01">Latency ≤ 0.01 ms</button>
+<button type="button" class="secondary" data-axis="latency" data-threshold="0.005">Latency ≤ 0.005 ms</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Memory constraint" id="memoryGroup_0906">
+<button type="button" class="secondary active" data-axis="memory" data-threshold="none">No constraint</button>
+<button type="button" class="secondary" data-axis="memory" data-threshold="128">Memory ≤ 128 B</button>
+<button type="button" class="secondary" data-axis="memory" data-threshold="64">Memory ≤ 64 B</button>
+<button type="button" class="secondary" data-axis="memory" data-threshold="16">Memory ≤ 16 B</button>
+</div>
+<div class="norm-readout" id="filterReadout_0906">
+<div><span>PASS</span><b id="filterPass_0906">7</b></div>
+<div><span>FAIL</span><b id="filterFail_0906">0</b></div>
+<div><span>UNKNOWN</span><b id="filterUnknown_0906">0</b></div>
+</div>
+<table class="worked-table" id="filterTable_0906">
+<thead><tr><th>#</th><th>Mechanism (source)</th><th>Recall@1</th><th>Latency/query</th><th>Memory/vector</th></tr></thead>
+<tbody>
+<tr id="labRow1_0906"><td>1</td><td>Flat / exact</td><td>100.00%</td><td>0.91 ms</td><td>512 B</td></tr>
+<tr id="labRow2_0906"><td>2</td><td>IVF16384,Flat</td><td>89.80%</td><td>0.0538 ms</td><td>512 B</td></tr>
+<tr id="labRow3_0906"><td>3</td><td>HNSW, nmslib</td><td>81.95%</td><td>0.0081 ms</td><td>512 B + graph edges</td></tr>
+<tr id="labRow4_0906"><td>4</td><td>HNSW, ef_search=16</td><td>87.40%</td><td>0.011 ms</td><td>512 B + graph edges</td></tr>
+<tr id="labRow5_0906"><td>5</td><td>HNSW, ef_search=256</td><td>99.20%</td><td>0.104 ms</td><td>512 B + graph edges</td></tr>
+<tr id="labRow6_0906"><td>6</td><td>SQ8</td><td>UNKNOWN -- never cited in this module</td><td>UNKNOWN -- never cited in this module</td><td>128 B</td></tr>
+<tr id="labRow7_0906"><td>7</td><td>PQ, M=16, nbits=8</td><td>UNKNOWN -- never cited in this module</td><td>UNKNOWN -- never cited in this module</td><td>16 B</td></tr>
+</tbody>
+</table>
+<div class="callout">No single row in this table passes a strict constraint on all three axes at once, because no cited number in this module ever measured all three for the same mechanism at the same time -- IVF-PQ and HNSW+quantization (named forward, not built here) are the real production answers when a system genuinely needs measured numbers on all three axes together.</div>
+<div class="callout warning">This widget filters ALREADY-CITED numbers only; it performs no new benchmarking and introduces no new corpus.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Three kinds of dials, separated</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Recall-latency dial</th><th>Memory dial</th><th>Combined (named forward)</th></tr></thead>
+<tbody>
+<tr><td><code>ef_search</code> (HNSW), <code>nprobe</code> (IVF)</td><td><code>nbits</code>, <code>M</code> (quantization)</td><td>IVF-PQ, HNSW+PQ (FAISS's own <code>IndexIVFPQ</code>)</td></tr>
+<tr><td>Moves recall + latency together</td><td>Moves memory only, per this module's own citations</td><td>Measures all three axes on one mechanism together</td></tr>
+<tr><td>Recall/latency both cited (rows 1-5)</td><td>Memory cited, recall/latency not (rows 6-7)</td><td>Not built in this module -- named forward only</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SINGLE-AXIS TUNNEL VISION</span><h3>Optimizing one axis in isolation without ever measuring the others</h3><p>Directly citing Concept 05's own explicit scope warning as the real-world instance of this failure -- a memory win with an unmeasured recall/latency cost is a real risk, not a hypothetical one.</p></article>
+<article class="info-card"><span>AVERAGING DISTINCT SOURCES</span><h3>Treating rows 3 and 4-5 as one "HNSW number"</h3><p>Symptom: a single blended recall/latency figure that belongs to neither nmslib's own measurement nor FAISS's own bench_hnsw.py measurement.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Fastest is always best</td><td>False -- per the table, the fastest row (3) gives up the most recall of any row with a cited recall number.</td></tr>
+<tr><td>Compression is free</td><td>False -- rows 6-7 win memory outright but carry an honest, unmeasured recall/latency risk in this module.</td></tr>
+<tr><td>One index is globally optimal for every workload</td><td>False -- each row wins at most one axis among the numbers this module has actually cited; the right choice depends on which axis a given workload actually constrains.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Real systems combine dials -- IVF-PQ, HNSW+PQ -- precisely because no single-axis choice is ever globally optimal, per this concept's own consolidated table.</li>
+<li>The marginal-cost derivation's own headline (the next recall point gets more expensive near 100%) is a real planning input: chasing the last few recall points is measurably not the same price as the first few.</li>
+<li>Quantization's own unmeasured recall/latency risk (rows 6-7) must be validated empirically on real held-out queries before a production system ships it, not assumed from the memory win alone.</li>
+<li>Concept 10, "Capacity planning and benchmarking" (named forward), owns actually measuring all three axes together on real production data -- this concept only assembles what has already been cited.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name the three axes this concept's own title names directly.</summary><div>Recall, latency and memory.</div></details>
+<details class="quiz"><summary>Which cited row wins recall outright, which wins latency outright, and which wins memory outright?</summary><div>Row 1 (Flat) wins recall at 100.00%. Row 3 (HNSW, nmslib) wins latency at 0.0081 ms. Row 7 (PQ, M=16, nbits=8) wins memory at 16 B/vector, 32.00x smaller than Flat.</div></details>
+<details class="quiz"><summary>Why does no row in the table win on more than one axis?</summary><div>Because no cited number in this module ever measured all three axes for the same mechanism at the same time -- each of Concepts 02-05 measured at most two.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using only this concept's own consolidated table (Section 10), a new constraint arrives: recall ≥ 90% AND latency ≤ 0.06 ms. Which of the seven cited rows qualify?</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Row 1 (Flat): recall 100.00% ≥ 90% ✓, latency 0.91 ms ≤ 0.06 ms ✗ -- fails. Row 2 (IVF16384,Flat): recall 89.80% ≥ 90% ✗ (just short) -- fails. Row 3 (HNSW nmslib): recall 81.95% ✗ -- fails. Row 4 (ef_search=16): recall 87.40% ✗ -- fails. Row 5 (ef_search=256): recall 99.20% ≥ 90% ✓, latency 0.104 ms ≤ 0.06 ms ✗ -- fails. Rows 6-7: recall UNKNOWN in this module -- cannot be evaluated against the recall half of the constraint at all. <b>Zero of the seven cited rows qualify</b> -- exactly the table's own headline: no row wins on more than one axis at a strict combined threshold either.</div>
+</details>
+<p>Teach-back: why does row 2 (IVF) come the closest to qualifying, and what single number separates it from passing the recall half of the constraint?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Recall–latency–memory trade-offs</h3><ul><li><b>The three axes:</b> recall, latency, memory -- named directly by this concept's own title.</li><li><b>The headline:</b> seven cited rows (Flat, IVF, HNSW×3, SQ8, PQ); no row wins on more than one axis.</li><li><b>The new arithmetic:</b> marginal cost-per-recall-point rises sharply near 100% (IVF→Flat costs ~14.4x more per point than HNSW→IVF).</li></ul></div>
+<div><h3>Module 09 · 6/10</h3><p>Concept 07, "Metadata filtering strategies," is next -- a different axis entirely.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is it misleading to ask "which vector index is best" without qualification?</summary><div>Because "best" depends on which of recall, latency and memory is the binding constraint -- per this concept's own table, no cited mechanism wins on more than one axis, so "best" always means "best for this specific constraint."</div></details>
+<details class="quiz"><summary>Mathematical: given recall/latency pairs (89.80%, 0.0538 ms) and (81.95%, 0.0081 ms), compute the marginal cost-per-recall-point between them.</summary><div>Δrecall = 89.80 - 81.95 = 7.85 points. Δlatency = 0.0538 - 0.0081 = 0.0457 ms. Cost/point = 0.0457 / 7.85 ≈ 0.0058 ms/point -- exactly this concept's own HNSW-nmslib→IVF figure.</div></details>
+<details class="quiz"><summary>Coding: extend Section 12's script to compute the marginal cost-per-recall-point between row 1 (Flat) and row 5 (ef_search=256) directly.</summary><div>Δrecall = 100.00 - 99.20 = 0.80 points. Δlatency = 0.91 - 0.104 = 0.806 ms. Cost/point = 0.806 / 0.80 ≈ 1.0075 ms/point -- far higher than any other step in the table, showing the last 0.80 recall points toward exact search are the single most expensive ones cited anywhere in this concept.</div></details>
+<details class="quiz"><summary>System design: a team wants "IVF's speed with Flat's recall." What does this concept's own table say about that request?</summary><div>No cited row offers both -- the table's own headline is that no mechanism wins recall and latency simultaneously among the cited numbers. The real answer is to pick an explicit operating point (e.g. row 5, HNSW ef_search=256) that trades a small, named amount of recall for a large, named amount of speed, or to measure a combined mechanism like IVF-PQ that this module never built.</div></details>
+<details class="quiz"><summary>Debugging: a system measured only memory before shipping quantization, and recall regressed in production. What does this concept's own table say went wrong?</summary><div>Exactly the gap rows 6-7 flag directly -- quantization's own recall/latency impact was never cited or measured in this module, so shipping on the memory number alone, without measuring recall separately, is the precise mistake this concept warns against.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes"><b>Faiss indexes — FAISS wiki</b><br><span>Source of Flat's 4·d bytes/vector, SQ8's d bytes/vector, PQ's ceil(M·nbits/8) bytes/vector, and IVF's own nlist/nprobe mechanics -- reused unchanged.</span></a>
+<a href="https://github.com/facebookresearch/faiss/wiki/Indexing-1M-vectors"><b>Indexing 1M vectors — FAISS wiki</b><br><span>Source of the SIFT1M Flat-CPU/IVF16384,Flat/nmslib-HNSW recall+latency table (rows 1-3).</span></a>
+<a href="https://www.pinecone.io/learn/series/faiss/hnsw/"><b>HNSW: Hierarchical Navigable Small World Graphs — Pinecone</b><br><span>Source of FAISS's own bench_hnsw.py ef_search table (rows 4-5).</span></a>
+<a href="https://www.pinecone.io/learn/series/faiss/vector-indexes/"><b>Nearest Neighbor Indexes for Similarity Search — Pinecone</b><br><span>States the exact speed/quality/memory three-axis framing this concept's own title names directly.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 6/10</span>
+<h3>Every mechanism wins one axis. None wins all three.</h3>
+<p>You can now name the three axes; read the consolidated table and state which row wins which axis; derive marginal cost-per-recall-point from cited numbers alone; and state the quantization recall/latency citation gap directly rather than filling it in with a guess. Concept 07, "Metadata filtering strategies," is next -- a different axis entirely.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Constraint Filter ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 6 of 10 concepts. Next concept: Concept 07, Metadata filtering strategies.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 06 · Complete</p>
+<a href="module-09-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

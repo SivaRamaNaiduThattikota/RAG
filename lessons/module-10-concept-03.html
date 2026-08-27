@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10 Concept 02 named the database's three owned jobs. This concept makes persistence's identity-and-content half concrete: five normalized tables -- documents, document_versions, chunks, embeddings, citations -- with real surrogate-key primary keys, real foreign keys, and a version-history pattern (CURRENT/SUPERSEDED) reused from Module 06 Concept 07's own SCD Type 2 pattern. A worked doc_9f21 dataset is inserted, joined citation-to-document in one query, and checked by an already-completed node script that verified every foreign key resolves. The lab, The Paper Trail, traces the same five-table chain live: three chunks, only one ever cited.">
+<title>Schema design for documents, versions, chunks, embeddings and citations — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 03 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 03</p>
+<h1>Five tables.<br><em>One traceable chain.</em></h1>
+<p class="lesson-lead">Concept 02 named persistence as an owned job without showing a single row. This concept shows the rows: five normalized tables -- documents, document_versions, chunks, embeddings, citations -- with real primary keys, real foreign keys, and a version-history pattern that never overwrites an old row. Insert one document, edit it once, chunk it, embed it, cite it -- and trace the whole chain back in one query.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third concept of Module 10 (3/14) -- makes Concept 02's "persistence" job concrete as real tables</b></div>
+<div><span>PREREQUISITE</span><b>Module 06 Concept 07's surrogate-key + SCD Type 2 pattern; Module 06 Concept 08's provenance fields; Module 07's chunking output; Module 08 Concept 06's 384-dim embeddings; Module 03 Concept 04's citation/provenance definition (all cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the five tables and the chain that connects them; explain why citations has no foreign key into an answers table</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">What persistence actually looks like, table by table</h2>
+</div>
+<p>Concept 02 said the database owns persistence, transactional consistency and query execution, without showing any rows. This concept fills in persistence's own shape: five tables, in plain language first -- zero SQL here, SQL is the advanced section's job.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The concrete answer to "what does persistence look like as real tables"</h3>
+<p>This concept is the literal, buildable schema a RAG-backed database uses to store identity, edit history, content, vectors, and "where did this claim come from." Five tables -- documents, document_versions, chunks, embeddings, citations -- and nothing more. Every one of the five is a plain SQL table you could create today.</p>
+<div class="beginner-memory"><b>First memory:</b> five tables, one chain. documents → document_versions → chunks → embeddings, with a second branch off chunks into citations.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Persistence's identity half and content-plus-vector half, made real</h3>
+<p>Concept 02 split the database's owned jobs into persistence, transactional consistency and query execution. Persistence itself has two halves: an identity half (what document is this, and which edit of it) and a content-plus-vector half (what text, what embedding, what citation points back at it). Without concrete tables, "the database persists data" stays an abstract claim. Concept 01's own category boundary is also why this is even possible here: a full ACID DBMS supports real foreign keys and atomic multi-table commits, not just a bare vector index.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One KB article, walked through the whole chain</h3>
+<p>A knowledge-base article gets written and stored as a <b>document</b>. Someone edits it once -- that edit produces a second <b>version</b> row, stamped CURRENT, while the original version flips to SUPERSEDED (it isn't deleted, just marked old). The current version gets split into a <b>chunk</b>. That chunk gets turned into an <b>embedding</b> vector. Later, a generated answer quotes that chunk, and a <b>citation</b> row records exactly which chunk backed that claim.</p>
+<div class="mental-compare">
+<div><span>DOCUMENT → VERSION</span><p>One thread of identity (the article), two rows of history (before the edit, after the edit) -- the old one kept, not thrown away.</p></div>
+<div><span>VERSION → CHUNK → EMBEDDING</span><p>The current text gets split and vectorized -- the same two stages Module 07 and Module 08 already built, now landing in a real table.</p></div>
+<div><span>CHUNK → CITATION</span><p>Sometimes, later, a generated answer points back at exactly this chunk as its source.</p></div>
+</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two ideas that hold the five tables together</h3>
+<p>First: a <b>foreign key</b> is a column that must point at a row that actually exists in another table, and <b>referential integrity</b> is the rule that this must always hold -- a chunk's foreign key always resolves to a real document version, never a dangling reference. Second: a version row is never overwritten or deleted. Each edit adds a new row stamped CURRENT while the prior one flips to SUPERSEDED -- the same pattern already established as SCD Type 2. Every one of the five tables also gets a <b>surrogate key</b> -- a stable ID like <code>doc_id</code> or <code>chunk_id</code> that never changes even though the content behind it does.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One forward chain, one branch</h3>
+<figure class="concept-visual" aria-labelledby="c1003-b05-title">
+<strong class="concept-visual-title" id="c1003-b05-title">VISUAL · THE FIVE-TABLE CHAIN, IN MINIATURE</strong>
+<svg class="vector-plane" viewBox="0 0 400 150" role="img" aria-labelledby="c1003-svg-title-b c1003-svg-desc-b" style="max-width:560px">
+<title id="c1003-svg-title-b">A left-to-right chain of four boxes -- documents, document_versions, chunks, embeddings -- with a second branch dropping down from chunks into a fifth box, citations</title>
+<desc id="c1003-svg-desc-b">Four boxes connected left to right by arrows: documents, then document_versions, then chunks, then embeddings. A second arrow drops down from chunks to a fifth box, citations, drawn below the main row to show it is a branch, not a continuation of the same line.</desc>
+<g font-family="DM Mono, monospace" font-size="9" fill="#14241f">
+<rect x="8" y="35" width="80" height="40" fill="none" stroke="#14241f" stroke-width="1.4"/>
+<text x="15" y="59" font-size="8">documents</text>
+<line x1="88" y1="55" x2="106" y2="55" stroke="#14241f" stroke-width="1.4"/>
+<polygon points="106,50 106,60 114,55" fill="#14241f"/>
+<rect x="116" y="35" width="98" height="40" fill="none" stroke="#14241f" stroke-width="1.4"/>
+<text x="121" y="59" font-size="8">document_versions</text>
+<line x1="214" y1="55" x2="232" y2="55" stroke="#14241f" stroke-width="1.4"/>
+<polygon points="232,50 232,60 240,55" fill="#14241f"/>
+<rect x="242" y="35" width="70" height="40" fill="none" stroke="#14241f" stroke-width="1.4"/>
+<text x="256" y="59" font-size="8">chunks</text>
+<line x1="312" y1="55" x2="330" y2="55" stroke="#14241f" stroke-width="1.4"/>
+<polygon points="330,50 330,60 338,55" fill="#14241f"/>
+<rect x="340" y="35" width="54" height="40" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="346" y="59" font-size="7.5" fill="#2f6f5c">embeddings</text>
+<line x1="277" y1="75" x2="277" y2="100" stroke="#b3543a" stroke-width="1.4"/>
+<polygon points="272,100 282,100 277,108" fill="#b3543a"/>
+<rect x="232" y="110" width="90" height="34" fill="none" stroke="#b3543a" stroke-width="1.4"/>
+<text x="240" y="131" font-size="8" fill="#b3543a">citations</text>
+<text x="8" y="20" font-size="7">documents → versions → chunks → embeddings: always populated</text>
+<text x="8" y="98" font-size="7" fill="#b3543a">chunks → citations: only sometimes populated</text>
+</g>
+</svg>
+</figure>
+<p>Two forward branches leave chunks. The embeddings branch always gets populated -- every chunk gets vectorized. The citations branch only sometimes gets populated -- a chunk is cited only if some later generated answer actually quoted it.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three things this schema deliberately does not do yet</h3>
+<div class="distinction-table" role="table" aria-label="What this concept's schema does not cover yet">
+<div role="row"><b role="cell">Not covered here</b><b role="cell">Where it belongs instead</b></div>
+<div role="row"><span role="cell">Filtering rows by metadata or tenant with a WHERE clause</span><span role="cell">Concept 04 -- named forward only, no filter syntax appears in this concept.</span></div>
+<div role="row"><span role="cell">Oracle's own native VECTOR type and distance operators</span><span role="cell">Concept 05 -- the <code>VECTOR(384)</code> column below is a generic, vendor-neutral placeholder only.</span></div>
+<div role="row"><span role="cell">The tombstone-then-compact delete/update mechanism at the vector-index level</span><span role="cell">Already covered in Module 09 Concept 08 -- a different, lower-level mechanism from this schema's own version-history rows.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often get wrong with this exact schema</h3>
+<div class="mistake-list">
+<div><b>"Just update the version row in place when the document changes."</b><p>False -- overwrite the old row and its history is gone. Stamp the old row SUPERSEDED and insert a new CURRENT row instead.</p></div>
+<div><b>"citations should have a foreign key into an answers table."</b><p>Not a bug -- a documented scope choice. Storing generation events is out of this concept's scope, so <code>answer_id</code> is deliberately not a foreign key here.</p></div>
+<div><b>"Any version_id will do, as long as the chunk points at some version."</b><p>False -- a chunk's <code>version_id</code> must belong to the same <code>doc_id</code> the chunk itself is tagged with. A chunk from one document pointing at another document's version is exactly the defect class the verification script below checks for.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>This is the chain your own flagship builds walk, every time</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>CFPB Complaint Copilot and OpsRAG, every time either answers a question and shows "here's where that came from"</b><p>A complaint narrative or an ops document is the document; a corrected re-ingestion is a new version; its chunks and embeddings feed retrieval; a generated answer's citation points back at one specific chunk.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 3/14</b><p>Concept 04 adds the WHERE-clause filtering layer on top of these same tables next; Concept 05 swaps in Oracle's real VECTOR type after that.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · READINESS CHECK</span>
+<h3>Before opening the advanced section, you should be able to answer</h3>
+<p>Which table does a chunk's foreign key point into -- one table, or two, and why two? Why doesn't <code>citations</code> have a foreign key into an answers table? What happens to a version row on the next edit -- updated in place, or a new row? If you're not sure, "The Paper Trail" lab in the advanced section below lets you click through a real chunk and watch every answer resolve live.</p>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · 3 OF 14</h3>
+<p>This concept turned persistence into five concrete tables and one traceable chain. Concept 04 adds metadata/tenant filtering -- the WHERE-clause layer on top of these same tables. Concept 05 replaces the generic <code>VECTOR(384)</code> placeholder used below with Oracle's actual native VECTOR type and distance operators. Neither appears here.</p>
+<div class="beginner-memory"><b>Concept 03 is active.</b> Module 10 stands at 3 of 14 concepts.</div>
+<a class="button primary" href="module-10-concept-02.html">← Back to Concept 02's three owned jobs</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Five tables, one DDL block, one traced row</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>documents → versions → chunks → embeddings → citations</b><small>The beginner-convention headline: the chain, named plainly.</small></a>
+<a href="#s08"><span>02</span><b>The full CREATE TABLE block</b><small>All five tables, real DDL, one reference point for the rest of the lesson.</small></a>
+<a href="#s20"><span>03</span><b>The Paper Trail</b><small>The lab -- click a chunk, trace it backward and forward live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full DDL, worked INSERTs, the tracing JOIN, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Concept 02 named persistence as an owned job → this concept builds the five tables that realize it (documents, document_versions, chunks, embeddings, citations) → one worked document is inserted, edited, chunked, embedded and cited → a single JOIN query traces a citation all the way back to its source document version → the lab lets you click through a second, simplified dataset and watch the same chain resolve live → Concept 04 covers the WHERE-clause filtering layer on top of these same tables next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Schema design for documents, versions, chunks, embeddings and citations" deep dive</b><em>Full DDL, worked INSERTs, the tracing JOIN, the verification script, and The Paper Trail lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Recap</a>
+<a href="#s02"><i>02</i> Why five tables</a>
+<a href="#s03"><i>03</i> documents</a>
+<a href="#s04"><i>04</i> document_versions</a>
+<a href="#s05"><i>05</i> chunks</a>
+<a href="#s06"><i>06</i> embeddings</a>
+<a href="#s07"><i>07</i> citations</a>
+<a href="#s08"><i>08</i> Full DDL</a>
+<a href="#s09"><i>09</i> PK/FK walkthrough</a>
+<a href="#s10"><i>10</i> Worked INSERTs</a>
+<a href="#s11"><i>11</i> Tracing JOIN</a>
+<a href="#s12"><i>12</i> Result walkthrough</a>
+<a href="#s13"><i>13</i> Verification</a>
+<a href="#s14"><i>14</i> Flow diagram</a>
+<a href="#s15"><i>15</i> Not Concept 04</a>
+<a href="#s16"><i>16</i> Not Concept 05</a>
+<a href="#s17"><i>17</i> Not M09C08</a>
+<a href="#s18"><i>18</i> Common mistakes</a>
+<a href="#s19"><i>19</i> Project mapping</a>
+<a href="#s20"><i>20</i> Lab intro</a>
+<a href="#s21"><i>21</i> Lab interaction</a>
+<a href="#s22"><i>22</i> Lab reset + a11y</a>
+<a href="#s23"><i>23</i> Readiness tie-back</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From "the database owns persistence" to "here are its tables"</h2></div></header>
+<p>Concept 02 named persistence, transactional consistency and query execution as the database's three owned jobs, with zero schema syntax. This concept builds the concrete tables for job one, persistence -- both halves of it: identity (which document, which edit) and content-plus-vector (what text, what embedding, what citation points back at it). Concept 01's own category boundary is why this is even possible here at all: a full ACID DBMS, not a bare vector store, is what allows real foreign keys and atomic multi-table commits.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">DESIGN RATIONALE</span><h2>Why five separate tables, not one wide table</h2></div></header>
+<p><a href="https://en.wikipedia.org/wiki/Database_normalization">Database normalization</a> is the practice of organizing a schema to reduce redundancy and improve data integrity. Identity, version history, content, vectors and provenance each change independently and at different rates -- a document rarely changes, a version is added on every edit, a chunk is fixed once its version is fixed, an embedding is recomputed only if the model changes, a citation appears only when some later answer quotes the chunk. Splitting these into five normalized tables, rather than one wide table repeating a document's identity on every chunk and citation row, is what that principle recommends here.</p>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">TABLE 1</span><h2>documents -- the stable thread identity</h2></div></header>
+<p>One row per real-world document. This is the identity that survives every edit -- the thread the version rows below all hang off of.</p>
+<table class="worked-table">
+<thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>doc_id</td><td>VARCHAR PK</td><td>Surrogate key -- a stable, meaningless-value ID that survives every future edit.</td></tr>
+<tr><td>source_id</td><td>VARCHAR</td><td>Provenance -- which upstream system this document came from.</td></tr>
+<tr><td>source_type</td><td>VARCHAR</td><td>Provenance -- what kind of source (KB article, complaint narrative, policy doc, ...).</td></tr>
+<tr><td>author</td><td>VARCHAR</td><td>Provenance -- who owns/wrote it.</td></tr>
+<tr><td>created_at</td><td>TIMESTAMP</td><td>When the document thread itself was first created.</td></tr>
+</tbody>
+</table>
+<p>The <a href="https://en.wikipedia.org/wiki/Surrogate_key">surrogate key</a> pattern behind <code>doc_id</code> and the provenance fields (<code>source_id</code>/<code>source_type</code>/<code>author</code>) are both reused directly from Module 06 -- not re-derived here.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">TABLE 2</span><h2>document_versions -- one row per edit, never overwritten</h2></div></header>
+<p>Every edit to a document produces a new row here instead of modifying an existing one -- the <a href="https://en.wikipedia.org/wiki/Slowly_changing_dimension">Slowly changing dimension</a> Type 2 pattern already established in Module 06 Concept 07, reused directly rather than re-derived.</p>
+<table class="worked-table">
+<thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>version_id</td><td>VARCHAR PK</td><td>Surrogate key for this specific edit.</td></tr>
+<tr><td>doc_id</td><td>VARCHAR FK → documents</td><td>Which document thread this version belongs to.</td></tr>
+<tr><td>version_number</td><td>INT</td><td>1, 2, 3, ... in edit order; UNIQUE together with doc_id.</td></tr>
+<tr><td>status</td><td>VARCHAR CHECK IN ('CURRENT','SUPERSEDED')</td><td>Exactly one CURRENT row per doc_id at any time; all older ones flip to SUPERSEDED.</td></tr>
+<tr><td>content_hash</td><td>VARCHAR</td><td>SHA-256 change-detection hash (Module 06 Concepts 06-07).</td></tr>
+<tr><td>ingested_at / updated_at / superseded_at</td><td>TIMESTAMP</td><td>Module 06 Concept 08's three provenance timestamp fields.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">TABLE 3</span><h2>chunks -- Module 07's output, made persistent</h2></div></header>
+<p>One row per chunk. A chunk carries <em>two</em> foreign keys, not one: <code>doc_id</code> and <code>version_id</code> together, because a chunk belongs to one specific version, not just to a document in the abstract -- the same document can have chunks scattered across two different versions at once (an old SUPERSEDED version's chunks and a new CURRENT version's chunks), and the schema needs to distinguish them.</p>
+<table class="worked-table">
+<thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>chunk_id</td><td>VARCHAR PK</td><td>Surrogate key for this chunk.</td></tr>
+<tr><td>doc_id</td><td>VARCHAR FK → documents</td><td>Which document thread.</td></tr>
+<tr><td>version_id</td><td>VARCHAR FK → document_versions</td><td>Which specific edit this chunk was split from.</td></tr>
+<tr><td>chunk_index</td><td>INT</td><td>Order of this chunk within its version.</td></tr>
+<tr><td>char_start / char_end</td><td>INT</td><td>Character offsets into the version's text.</td></tr>
+<tr><td>chunk_text</td><td>TEXT</td><td>The chunk's actual content.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">TABLE 4</span><h2>embeddings -- Module 08's output, made persistent</h2></div></header>
+<p>One row per chunk's embedding. The <code>VECTOR(384)</code> column is explicitly a generic, vendor-neutral placeholder, not Oracle's own VECTOR syntax -- that's Concept 05's job. The pattern is reused verbatim from pgvector's own README: <code>CREATE TABLE items (id bigserial PRIMARY KEY, embedding vector(3));</code> -- a portable precedent for "a vector is just another typed column."</p>
+<table class="worked-table">
+<thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>embedding_id</td><td>VARCHAR PK</td><td>Surrogate key for this embedding.</td></tr>
+<tr><td>chunk_id</td><td>VARCHAR FK → chunks</td><td>Which chunk this vector represents.</td></tr>
+<tr><td>model_name</td><td>VARCHAR</td><td>e.g. all-MiniLM-L6-v2 (Module 08 Concept 06).</td></tr>
+<tr><td>dim</td><td>INT</td><td>384 for all-MiniLM-L6-v2; 768 and 1536 are the other already-cited alternatives.</td></tr>
+<tr><td>embedding</td><td>VECTOR(384)</td><td>Generic placeholder type -- Oracle's own native VECTOR type is Concept 05's job.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">TABLE 5</span><h2>citations -- the concrete realization of "provenance"</h2></div></header>
+<p>Module 03 Concept 04 already defined a citation as "a citation tag pointing a claim back to the passage that backed it" -- this table is that definition, made concrete as rows. <code>answer_id</code> is deliberately <em>not</em> a foreign key into any answers table: storing generation events (the answers themselves) is out of this concept's scope, a documented boundary, not an oversight.</p>
+<table class="worked-table">
+<thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>citation_id</td><td>VARCHAR PK</td><td>Surrogate key for this citation.</td></tr>
+<tr><td>chunk_id</td><td>VARCHAR FK → chunks</td><td>Which chunk backed the claim.</td></tr>
+<tr><td>answer_id</td><td>VARCHAR</td><td>Which generated answer cited it -- intentionally not FK'd to anything.</td></tr>
+<tr><td>rank</td><td>INT</td><td>This citation's rank among the answer's own citations.</td></tr>
+<tr><td>created_at</td><td>TIMESTAMP</td><td>When the citation was recorded.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">REFERENCE BLOCK</span><h2>The full DDL, all five tables together</h2></div></header>
+<p>Every section below points back to this one block.</p>
+<div class="code-block">
+<span class="code-label">sql — five-table schema</span>
+<pre><code>CREATE TABLE documents (
+  doc_id        VARCHAR(32) PRIMARY KEY,
+  source_id     VARCHAR(64),
+  source_type   VARCHAR(32),
+  author        VARCHAR(128),
+  created_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE document_versions (
+  version_id      VARCHAR(32) PRIMARY KEY,
+  doc_id          VARCHAR(32) NOT NULL REFERENCES documents(doc_id),
+  version_number  INT NOT NULL,
+  status          VARCHAR(10) NOT NULL CHECK (status IN ('CURRENT','SUPERSEDED')),
+  content_hash    VARCHAR(64) NOT NULL,
+  ingested_at     TIMESTAMP NOT NULL,
+  updated_at      TIMESTAMP,
+  superseded_at   TIMESTAMP,
+  UNIQUE (doc_id, version_number)
+);
+
+CREATE TABLE chunks (
+  chunk_id     VARCHAR(32) PRIMARY KEY,
+  doc_id       VARCHAR(32) NOT NULL REFERENCES documents(doc_id),
+  version_id   VARCHAR(32) NOT NULL REFERENCES document_versions(version_id),
+  chunk_index  INT NOT NULL,
+  char_start   INT NOT NULL,
+  char_end     INT NOT NULL,
+  chunk_text   TEXT NOT NULL
+);
+
+CREATE TABLE embeddings (
+  embedding_id  VARCHAR(32) PRIMARY KEY,
+  chunk_id      VARCHAR(32) NOT NULL REFERENCES chunks(chunk_id),
+  model_name    VARCHAR(64) NOT NULL,
+  dim           INT NOT NULL,
+  embedding     VECTOR(384)
+);
+
+CREATE TABLE citations (
+  citation_id  VARCHAR(32) PRIMARY KEY,
+  chunk_id     VARCHAR(32) NOT NULL REFERENCES chunks(chunk_id),
+  answer_id    VARCHAR(32) NOT NULL,
+  rank         INT NOT NULL,
+  created_at   TIMESTAMP NOT NULL
+);</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">PK/FK WALKTHROUGH</span><h2>Four foreign-key edges, formally</h2></div></header>
+<p>A <a href="https://en.wikipedia.org/wiki/Foreign_key">foreign key</a> is a column that must reference a row that actually exists in another table. <a href="https://en.wikipedia.org/wiki/Referential_integrity">Referential integrity</a> is the rule that this must always hold, for every row, at every point in time. This schema has four such edges: <code>document_versions.doc_id → documents.doc_id</code>; <code>chunks.doc_id → documents.doc_id</code> and <code>chunks.version_id → document_versions.version_id</code> together; <code>embeddings.chunk_id → chunks.chunk_id</code>; <code>citations.chunk_id → chunks.chunk_id</code>. Every one of these must resolve for the schema to be considered sound.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One document, one edit, one chunk, one embedding, one citation</h2></div></header>
+<div class="code-block">
+<span class="code-label">sql — worked INSERTs</span>
+<pre><code>INSERT INTO documents VALUES
+  ('doc_9f21', 'kb-042', 'kb_article', 'support-team', '2026-01-05 09:00:00');
+-- the KB article is created
+
+INSERT INTO document_versions VALUES
+  ('ver_9f21_1', 'doc_9f21', 1, 'SUPERSEDED', 'a1b2c3...', '2026-01-05 09:00:00', NULL, '2026-02-11 14:20:00'),
+  ('ver_9f21_2', 'doc_9f21', 2, 'CURRENT',    'd4e5f6...', '2026-02-11 14:20:00', '2026-02-11 14:20:00', NULL);
+-- the article is edited once: version 1 flips to SUPERSEDED, version 2 becomes CURRENT
+
+INSERT INTO chunks VALUES
+  ('chk_9f21_2_03', 'doc_9f21', 'ver_9f21_2', 3, 640, 910, 'To reset a vendor account, an admin must...');
+-- the CURRENT version is split into chunks; this is chunk index 3
+
+INSERT INTO embeddings VALUES
+  ('emb_9f21_2_03', 'chk_9f21_2_03', 'all-MiniLM-L6-v2', 384, '[0.021, -0.114, ...]');
+-- that chunk is embedded, 384 dimensions
+
+INSERT INTO citations VALUES
+  ('cit_5501', 'chk_9f21_2_03', 'ans_7734', 1, '2026-03-02 11:05:00');
+-- a generated answer (ans_7734) cites this exact chunk, at rank 1</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">TRACING JOIN</span><h2>One query, citation back to document version</h2></div></header>
+<div class="code-block">
+<span class="code-label">sql — tracing JOIN</span>
+<pre><code>SELECT d.doc_id, dv.version_number, dv.status,
+       c.chunk_id, c.chunk_text,
+       e.model_name, e.dim,
+       ci.citation_id, ci.answer_id, ci.rank
+FROM citations ci
+JOIN chunks c            ON ci.chunk_id = c.chunk_id
+JOIN document_versions dv ON c.version_id = dv.version_id
+JOIN documents d          ON dv.doc_id = d.doc_id
+JOIN embeddings e         ON e.chunk_id = c.chunk_id
+WHERE ci.citation_id = 'cit_5501';</code></pre>
+</div>
+<p>Two join chains meet at <code>chunks</code>: one walks backward through <code>document_versions</code> to <code>documents</code>, the other walks sideways to <code>embeddings</code> -- both anchored on the same <code>chunk_id</code>.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">RESULT</span><h2>One row, read left to right as a sentence</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>doc_id</th><th>version</th><th>status</th><th>chunk_id</th><th>model</th><th>dim</th><th>citation_id</th><th>answer_id</th><th>rank</th></tr></thead>
+<tbody>
+<tr><td>doc_9f21</td><td>2</td><td>CURRENT</td><td>chk_9f21_2_03</td><td>all-MiniLM-L6-v2</td><td>384</td><td>cit_5501</td><td>ans_7734</td><td>1</td></tr>
+</tbody>
+</table>
+<p>Read left to right: a generated answer's citation, traced back through its embedding and chunk to the exact document version it was drawn from -- doc_9f21, version 2, CURRENT.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">VERIFICATION</span><h2>Already checked -- stated, not redone</h2></div></header>
+<div class="callout"><b>Verification method</b>A node script (python/python3 unavailable in this environment) modeled the five INSERT rows above as arrays and checked every foreign-key column against its referenced table's primary-key set, including the cross-check that a chunk's <code>version_id</code> actually belongs to its own <code>doc_id</code>, plus the invariant that each <code>doc_id</code> has exactly one CURRENT version. Printed <code>"PASS: all foreign keys resolve; every table row is reachable from documents -&gt; citations."</code> with zero failures.</div>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">DIAGRAM</span><h2>The full chain, with the worked IDs</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1003-s14-title">
+<strong class="concept-visual-title" id="c1003-s14-title">VISUAL · THE FULL CHAIN, doc_9f21's OWN ROWS</strong>
+<svg class="vector-plane" viewBox="0 0 460 190" role="img" aria-labelledby="c1003-svg-title-s c1003-svg-desc-s" style="max-width:640px">
+<title id="c1003-svg-title-s">A left-to-right chain of five worked-example row IDs -- doc_9f21, ver_9f21_2, chk_9f21_2_03, emb_9f21_2_03 -- with a branch below chunks into cit_5501, and a faded ver_9f21_1 box above showing the superseded version</title>
+<desc id="c1003-svg-desc-s">Boxes left to right: doc_9f21 (documents), ver_9f21_2 marked CURRENT (document_versions), chk_9f21_2_03 (chunks), emb_9f21_2_03 (embeddings). A faded box ver_9f21_1 marked SUPERSEDED sits above ver_9f21_2, connected to doc_9f21 but not continuing forward, showing the old version is kept but not part of the live chain. A branch drops from chk_9f21_2_03 down to cit_5501 (citations).</desc>
+<g font-family="DM Mono, monospace" font-size="8" fill="#14241f">
+<rect x="8" y="16" width="90" height="30" fill="none" stroke="#7d8e87" stroke-width="1.2" opacity="0.6"/>
+<text x="14" y="35" font-size="7" fill="#7d8e87">ver_9f21_1 · SUPERSEDED</text>
+<line x1="53" y1="46" x2="53" y2="70" stroke="#7d8e87" stroke-width="1" stroke-dasharray="3,3"/>
+<rect x="8" y="78" width="80" height="36" fill="none" stroke="#14241f" stroke-width="1.4"/>
+<text x="14" y="99" font-size="7.5">doc_9f21</text>
+<line x1="88" y1="96" x2="106" y2="96" stroke="#14241f" stroke-width="1.4"/>
+<polygon points="106,91 106,101 114,96" fill="#14241f"/>
+<rect x="116" y="78" width="104" height="36" fill="#d7ff53" stroke="#14241f" stroke-width="1.4"/>
+<text x="121" y="93" font-size="7">ver_9f21_2</text>
+<text x="121" y="106" font-size="7">CURRENT</text>
+<line x1="220" y1="96" x2="238" y2="96" stroke="#14241f" stroke-width="1.4"/>
+<polygon points="238,91 238,101 246,96" fill="#14241f"/>
+<rect x="248" y="78" width="98" height="36" fill="none" stroke="#14241f" stroke-width="1.4"/>
+<text x="253" y="99" font-size="7">chk_9f21_2_03</text>
+<line x1="346" y1="96" x2="364" y2="96" stroke="#14241f" stroke-width="1.4"/>
+<polygon points="364,91 364,101 372,96" fill="#14241f"/>
+<rect x="374" y="78" width="78" height="36" fill="none" stroke="#2f6f5c" stroke-width="1.4"/>
+<text x="379" y="99" font-size="7" fill="#2f6f5c">emb_9f21_2_03</text>
+<line x1="297" y1="114" x2="297" y2="140" stroke="#b3543a" stroke-width="1.4"/>
+<polygon points="292,140 302,140 297,148" fill="#b3543a"/>
+<rect x="257" y="150" width="80" height="32" fill="none" stroke="#b3543a" stroke-width="1.4"/>
+<text x="266" y="170" font-size="7" fill="#b3543a">cit_5501</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">DISTINCTION 1</span><h2>This concept vs. Concept 04</h2></div></header>
+<p>No WHERE-clause metadata or tenant-filtering syntax appears anywhere above -- named here only as a forward reference, exactly the way Concept 02 named Concepts 03 and 04 forward. Concept 04 covers that filtering layer on top of these same five tables.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DISTINCTION 2</span><h2>This concept vs. Concept 05</h2></div></header>
+<p>The <code>VECTOR(384)</code> column in Section 06/08 above is a documented, vendor-neutral placeholder only, grounded in pgvector's own README example -- not Oracle's own native VECTOR type or its distance operators. Concept 05 covers those directly; they are not reproduced here.</p>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">DISTINCTION 3</span><h2>This concept's version rows vs. Module 09 Concept 08's tombstones</h2></div></header>
+<p>These are different layers. This concept's SCD-Type-2 version rows are a row-level history mechanism sitting inside <code>document_versions</code>. Module 09 Concept 08's tombstone-then-compact mechanism operates one level lower, inside the vector index itself, handling physical delete/update of index entries. Neither re-explains the other; the boundary is simply marked here.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">COMMON MISTAKES</span><h2>The SQL-literate version of Section b07's list</h2></div></header>
+<ul>
+<li>Overwriting an existing <code>document_versions</code> row in place instead of inserting a new SUPERSEDED/CURRENT pair -- the whole point of SCD Type 2 is that the old row survives.</li>
+<li>Adding a foreign key from <code>citations.answer_id</code> into a table that doesn't exist in this schema -- an intentional scope boundary (Section 07), not something to "fix."</li>
+<li>Letting a chunk's <code>version_id</code> resolve to a version belonging to a different <code>doc_id</code> than the chunk's own <code>doc_id</code> column -- the exact defect class Section 13's verification script checks for.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">PROJECT MAPPING</span><h2>How CFPB Complaint Copilot and OpsRAG instantiate this exact shape</h2></div></header>
+<p>In CFPB Complaint Copilot, a complaint narrative is the document; a corrected or re-ingested narrative is a new version; its retrieved chunks and their embeddings feed the answer; a generated answer's citations point back at the specific complaint text that backed each claim. OpsRAG walks the identical five-table chain for an internal ops document instead of a complaint narrative. Same schema, different source content.</p>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">LAB INTRO</span><h2>The Paper Trail</h2></div></header>
+<p>The worked example above used one chunk and one citation -- too small a dataset to show a chunk that gets embedded but never cited. The lab below uses its own, deliberately simplified second dataset -- <code>D100</code>/<code>V1</code>/<code>V2</code>/<code>C1</code>-<code>C3</code>/<code>E1</code>-<code>E3</code>/<code>X1</code> -- not the same rows as <code>doc_9f21</code> above, built specifically so three chunks are visible at once and only one of them ends up cited.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Paper Trail — click a chunk, trace it live</h2></div></header>
+<div class="lab" id="lab_1003">
+<p>Documents, versions, chunks, embeddings and citations render below as five columns. Click any of the three CHUNKS chips (C1, C2, C3) -- it walks backward to its own version and document, and forward to its own embedding and (only sometimes) its citation.</p>
+<div class="example-grid" style="grid-template-columns:repeat(5,1fr)">
+<article class="info-card">
+<span>DOCUMENTS</span>
+<h3>documents</h3>
+<div class="rank-chip-row">
+<span class="rank-chip" id="chip_1003_D100"><b>D100</b><span>Vendor Security Policy</span></span>
+</div>
+</article>
+<article class="info-card">
+<span>VERSIONS</span>
+<h3>document_versions</h3>
+<div class="rank-chip-row">
+<span class="rank-chip" id="chip_1003_V1"><b>V1</b><span>SUPERSEDED</span></span>
+<span class="rank-chip" id="chip_1003_V2"><b>V2</b><span>CURRENT</span></span>
+</div>
+</article>
+<article class="info-card">
+<span>CHUNKS</span>
+<h3>chunks</h3>
+<div class="rank-chip-row">
+<span class="rank-chip" id="chip_1003_C1" tabindex="0" role="button" aria-pressed="false"><b>C1</b><span>from V1</span></span>
+<span class="rank-chip" id="chip_1003_C2" tabindex="0" role="button" aria-pressed="false"><b>C2</b><span>from V2</span></span>
+<span class="rank-chip" id="chip_1003_C3" tabindex="0" role="button" aria-pressed="false"><b>C3</b><span>from V2</span></span>
+</div>
+</article>
+<article class="info-card">
+<span>EMBEDDINGS</span>
+<h3>embeddings</h3>
+<div class="rank-chip-row">
+<span class="rank-chip" id="chip_1003_E1"><b>E1</b><span>384-d</span></span>
+<span class="rank-chip" id="chip_1003_E2"><b>E2</b><span>384-d</span></span>
+<span class="rank-chip" id="chip_1003_E3"><b>E3</b><span>384-d</span></span>
+</div>
+</article>
+<article class="info-card">
+<span>CITATIONS</span>
+<h3>citations</h3>
+<div class="rank-chip-row">
+<span class="rank-chip" id="chip_1003_X1"><b>X1</b><span>cites C3</span></span>
+</div>
+</article>
+</div>
+<div class="norm-readout">
+<div><span>SELECTED CHUNK</span><b id="readoutRow_1003">—</b></div>
+<div><span>TABLES TOUCHED</span><b id="readoutTables_1003">0 / 5</b></div>
+<div><span>HOPS FROM CHUNK</span><b id="readoutHops_1003">—</b></div>
+<div><span>CITED?</span><b id="readoutCited_1003">—</b></div>
+</div>
+<div class="callout" id="fkCallout_1003">Click C1, C2 or C3 above to trace its own chain across all five tables.</div>
+<div class="lab-actions">
+<button type="button" class="secondary" id="resetBtn_1003">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">RESET + ACCESSIBILITY</span><h2>Reset behavior and keyboard access</h2></div></header>
+<p><code>#resetBtn_1003</code> clears every chip's classes and <code>aria-pressed</code> state and restores the readout and callout to their defaults. The three clickable chunk chips carry <code>tabindex="0"</code>, <code>role="button"</code> and <code>aria-pressed</code>, and respond to both click and Enter/Space, the same pattern used across this course's other click-driven labs.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">TIE-BACK</span><h2>C1 and C2 answer b09's own readiness questions</h2></div></header>
+<p>Click C1 or C2 in the lab above and the citations column stays empty for that chunk -- both were embedded, both are fully persisted, and neither was ever cited. That's Module 03 Concept 04's own definition of a citation working exactly as documented: being embedded and retrievable does not guarantee a chunk is ever cited. C3 is the one exception, and clicking it is the fastest way to check b09's own readiness questions against a live example.</p>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://en.wikipedia.org/wiki/Surrogate_key"><b>Surrogate key — Wikipedia</b><br><span>Grounds the doc_id/version_id/chunk_id/embedding_id/citation_id pattern -- a stable, meaningless-value key that survives edits.</span></a>
+<a href="https://en.wikipedia.org/wiki/Slowly_changing_dimension"><b>Slowly changing dimension — Wikipedia</b><br><span>Grounds the documents + document_versions CURRENT/SUPERSEDED pattern (SCD Type 2), reused from Module 06 Concept 07.</span></a>
+<a href="https://en.wikipedia.org/wiki/Foreign_key"><b>Foreign key — Wikipedia</b><br><span>Grounds chunks→documents/document_versions, embeddings→chunks and citations→chunks foreign-key relationships.</span></a>
+<a href="https://en.wikipedia.org/wiki/Referential_integrity"><b>Referential integrity — Wikipedia</b><br><span>Grounds the "every foreign key actually resolves" requirement checked by Section 13's verification script.</span></a>
+<a href="https://en.wikipedia.org/wiki/Database_normalization"><b>Database normalization — Wikipedia</b><br><span>Grounds the five-separate-normalized-tables design choice over one wide table.</span></a>
+<a href="https://github.com/pgvector/pgvector"><b>pgvector — GitHub README</b><br><span>Source for the portable "CREATE TABLE items (id bigserial PRIMARY KEY, embedding vector(3));" precedent behind the VECTOR(384) placeholder.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 3/14</span>
+<h3>Five tables. One traceable chain.</h3>
+<p>You can now name the five tables (documents, document_versions, chunks, embeddings, citations), explain why each of the four foreign-key edges must resolve, trace a citation back through its embedding and chunk to the exact document version it came from, and explain why citations deliberately has no foreign key into an answers table. Concept 04 adds metadata/tenant filtering on top of these same tables next; Concept 05 swaps in Oracle's real native VECTOR type after that.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s21">Open The Paper Trail ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at 3 of 14 concepts. Next concept: Concept 04, metadata and tenant filtering.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 03 · Complete</p>
+<a href="module-10-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

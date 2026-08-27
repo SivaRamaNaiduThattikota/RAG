@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10's fourth concept adds one column, tenant_id, to Concept 03's own documents table, then writes real SQL for the two strategies Module 09 Concept 07 already named: pre-filtering (WHERE before ORDER BY, touching only the eligible rows) and post-filtering (ORDER BY before WHERE, over-fetching by Concept 07's own verified 3.4x factor). On the identical 20-chunk, 30%-selectivity corpus Concept 07 already verified, pre-filtering touches only Acme's own 6 rows; post-filtering touches all 20 and, worse, discards Acme's own 6th real match at rank 20 before the tenant WHERE clause ever sees it -- a leak-by-omission the pre-filter shape cannot produce. The lab, The Filter-Order Duel, runs both SQL shapes live over the same rank strip.">
+<title>Metadata, tenant and authorization filters in SQL — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 04 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 04</p>
+<h1>Same tenant filter.<br><em>Different clause order, a different real answer.</em></h1>
+<p class="lesson-lead">Concept 03 built five tables with no notion of "who is allowed to see this row." This concept closes that gap: one new column, tenant_id, on the documents table, then real SQL for the two strategies Module 09 Concept 07 already named -- pre-filtering (narrow first, then rank) and post-filtering (rank first, then discard). On the identical corpus Concept 07 already verified, both queries claim to filter by tenant. Only one of them actually can't leak a match by omission.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth concept of Module 10 (4/14) -- the last of this batch, closing out the pre-Oracle-SQL run before Concept 05 introduces the real VECTOR type</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's three-jobs boundary, Concept 03's five-table schema, Module 09 Concept 07's pre/post-filtering strategies and its own 3.4x over-fetch figure (all cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Write the tenant_id column addition; read both SQL shapes; explain why only the post-filter shape can silently drop a true match</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One column, two clause orders, two different real answers</h2>
+</div>
+<p>Concept 03's five tables have no access-control column at all. This concept adds exactly one, then writes the real SQL for the two filtering strategies Module 09 already named -- and shows clause order alone changing which rows actually come back.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>One new column closes a real gap</h3>
+<p>Concept 03 built five tables -- documents, document_versions, chunks, embeddings, citations -- and none of them has any notion of "who is allowed to see this row." A real RAG system serving multiple customers must never let one tenant's search results leak rows belonging to another tenant, no matter how similar those rows are to the query vector.</p>
+<div class="beginner-memory"><b>First memory:</b> add tenant_id to documents, not to every other table -- access control is a document-level property, and chunks already reach it transitively via doc_id.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Module 09's two named strategies, now literal SQL</h3>
+<p>Module 09 Concept 07 already named two strategies for combining a metadata constraint with a vector search: pre-filtering (narrow the row set first, then rank) and post-filtering (rank everything first, then discard non-matches) -- cited directly, not redefined. This concept is the first to write real, executable SQL for both, against Concept 03's own schema.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The schema extension</h3>
+<p><code>ALTER TABLE documents ADD tenant_id VARCHAR(64) NOT NULL;</code> -- one column, on documents only. document_versions, embeddings, and citations are untouched; chunks reaches tenant_id transitively through its own doc_id foreign key back to documents.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Two SQL shapes, same two ingredients</h3>
+<p><b>Pre-filter shape:</b> the tenant WHERE clause is evaluated as part of the same join/scan that produces the candidate set, so the vector-distance ORDER BY only ever sees rows that already passed the tenant check. <b>Post-filter shape:</b> an inner subquery ranks by distance across ALL tenants first, with no tenant awareness at all, and the tenant WHERE clause runs on the OUTSIDE, after the ranking -- and after an inner row limit has already discarded whatever didn't make the cut.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c1004-b04-title">
+<strong class="concept-visual-title" id="c1004-b04-title">VISUAL · WHERE BEFORE ORDER BY, VS. ORDER BY BEFORE WHERE</strong>
+<svg class="vector-plane" viewBox="0 0 400 160" role="img" aria-labelledby="c1004-svg-title-b c1004-svg-desc-b" style="max-width:560px">
+<title id="c1004-svg-title-b">Two small flow diagrams contrasting pre-filter-shaped and post-filter-shaped SQL</title>
+<desc id="c1004-svg-desc-b">Left diagram: a WHERE tenant filter box feeding into an ORDER BY vector-distance box, labelled "narrow first, then rank." Right diagram: an ORDER BY vector-distance box feeding into a WHERE tenant filter box, with a warning label reading "can discard a true match before the filter ever runs."</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<rect x="10" y="20" width="150" height="26" fill="none" stroke="#3a5f95" stroke-width="1.2"/>
+<text x="18" y="36" fill="#3a5f95">WHERE tenant_id = :tenant</text>
+<line x1="85" y1="46" x2="85" y2="66" stroke="#3a5f95" stroke-width="1.2"/>
+<rect x="10" y="66" width="150" height="26" fill="none" stroke="#3a5f95" stroke-width="1.2"/>
+<text x="18" y="82" fill="#3a5f95">ORDER BY embedding &lt;-&gt; :query</text>
+<text x="8" y="112" font-weight="700">PRE-FILTER</text>
+<text x="8" y="122" font-size="6.5">narrow first, then rank</text>
+<rect x="215" y="20" width="175" height="26" fill="none" stroke="#b3543a" stroke-width="1.2"/>
+<text x="223" y="36" fill="#b3543a">ORDER BY ... FETCH FIRST 17</text>
+<line x1="302" y1="46" x2="302" y2="66" stroke="#b3543a" stroke-width="1.2"/>
+<rect x="215" y="66" width="175" height="26" fill="none" stroke="#b3543a" stroke-width="1.2"/>
+<text x="223" y="82" fill="#b3543a">WHERE tenant_id = :tenant</text>
+<text x="213" y="112" font-weight="700">POST-FILTER</text>
+<text x="213" y="122" font-size="6.5" fill="#b3543a">can discard a true match before the filter ever runs</text>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 02 — the database's three owned jobs, named</span><i>→</i>
+<span>Concept 03 — five tables, no access control</span><i>→</i>
+<span class="hot">This concept — one column, two real SQL shapes</span><i>→</i>
+<span>Concept 05 — Oracle's own real VECTOR type, replacing the placeholder</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>An application WHERE clause vs. engine-enforced row security</h3>
+<div class="distinction-table" role="table" aria-label="WHERE-clause filtering distinguished from row-level security">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">WHERE-clause tenant filter (this concept)</span><span role="cell">Correctness depends on every query author remembering to add the predicate.</span></div>
+<div role="row"><span role="cell">Row-level security (named, not built here)</span><span role="cell">The database engine itself refuses any row access not covered by a policy, regardless of what the caller's query says -- PostgreSQL's own ENABLE ROW LEVEL SECURITY + CREATE POLICY, cited.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Both queries have a tenant filter, so both are equally safe."</b><p>False -- the post-filter shape can discard a true match before the tenant WHERE clause ever sees it, a failure mode the pre-filter shape structurally cannot produce.</p></div>
+<div><b>"The <-> operator here is real Oracle syntax."</b><p>False -- it's a deliberate, generic placeholder for "a vector-distance comparison happens here." Concept 05 supplies Oracle's own real operator.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Multi-tenant isolation, a real design decision this project cannot skip</b><p>Choosing WHERE-clause filtering vs. engine-enforced row-level security is a real, consequential decision, not a formality.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 4/14</b><p>This is the last concept of the current batch -- Concept 05 begins Oracle's own real SQL syntax next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Write the schema extension from memory</b><p><code>ALTER TABLE documents ADD tenant_id VARCHAR(64) NOT NULL;</code></p></div>
+<div><b>Read both SQL shapes and identify which is which</b><p>WHERE before ORDER BY = pre-filter. ORDER BY (with an inner row limit) before an outer WHERE = post-filter.</p></div>
+<div><b>Explain the post-filter shape's own unique failure mode</b><p>It can discard a true match inside its own inner row limit before the outer tenant WHERE clause ever gets a chance to check it.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does tenant_id go on documents rather than on every one of the five tables?</li>
+<li>Why does the post-filter query's inner subquery ask for 17 rows instead of 5?</li>
+<li>What real, engine-enforced mechanism would remove the "caller must remember the WHERE clause" risk entirely?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · 4 OF 14</h3>
+<p>This concept added tenant_id to Concept 03's own schema and wrote real SQL for Module 09's own pre/post-filtering strategies, showing clause order alone change which rows come back. Concept 05, "Oracle AI Database VECTOR type and vector-distance SQL," is next -- swapping the illustrative <code>&lt;-&gt;</code> placeholder for Oracle's own real type and operators.</p>
+<div class="beginner-memory"><b>Concept 04 is active.</b> Module 10 stands at 4 of 14 concepts.</div>
+<a class="button primary" href="module-10-concept-03.html">← Back to Concept 03's schema</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One tenant, two clause orders, two real outcomes</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b04"><span>01</span><b>WHERE before ORDER BY, or after</b><small>The beginner-convention headline: two SQL shapes, same two ingredients.</small></a>
+<a href="#s10"><span>02</span><b>The full annotated queries</b><small>Clause-by-clause, tied directly to Module 09 Concept 07's own numbers.</small></a>
+<a href="#s14"><span>03</span><b>The Filter-Order Duel</b><small>The lab -- run both SQL shapes live over the same 20-chunk corpus.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> Concept 03's five tables have no access-control column → this concept adds exactly one, tenant_id → Module 09 Concept 07's own two named strategies become real SQL → the same 20-chunk corpus shows pre-filter touching only 6 rows and post-filter touching all 20, with a real leak-by-omission risk unique to the second shape → the lab lets you run both live → Concept 05 begins Oracle's own real SQL syntax next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Metadata, tenant and authorization filters in SQL" deep dive</b><em>Full citations, the annotated SQL, and The Filter-Order Duel lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 10's fourth concept -- closing the pre-Oracle-SQL run</h2></div></header>
+<p>This is the fourth and last concept of the current batch (4/14). Concept 03 built five tables with zero access-control columns; this concept adds one and writes the first real, executable SQL in this module. Concept 05 begins Oracle's own real VECTOR-type syntax next.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>EXTEND</span><h3>The schema with one column</h3><p><code>tenant_id</code> on documents, cited transitively through chunks' own doc_id.</p></article>
+<article class="info-card"><span>WRITE</span><h3>Both SQL shapes</h3><p>Pre-filter (WHERE before ORDER BY) and post-filter (ORDER BY before WHERE), both real, executable, generic SQL.</p></article>
+<article class="info-card"><span>CITE</span><h3>Module 09 Concept 07's own numbers</h3><p>The 3.4x over-fetch and the matchRanks {3,7,9,14,17,20}, reused unchanged.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>WHERE-clause filtering vs. row-level security</h3><p>Caller-dependent correctness vs. engine-enforced access control.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-02.html">Module 10 Concept 02</a></b> -- the database's three owned jobs; both queries here belong to query execution.</li>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema, extended here with exactly one column.</li>
+<li><b><a href="module-09-concept-07.html">Module 09 Concept 07</a></b> -- pre/post-filtering strategies and the 3.4x over-fetch figure, cited unchanged.</li>
+<li><b>Explicitly out of scope:</b> vector index internals (Module 09's own HNSW/IVF/filtered-ANN), any real Oracle VECTOR-type syntax (Concept 05+) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Checking IDs at the door vs. after everyone's already seated</h2></div></header>
+<p>Pre-filtering is checking IDs at the door -- only eligible guests are ever considered. Post-filtering is letting everyone in first and checking IDs table by table afterward -- and if the venue only keeps the first 17 arrivals on the guest log before the ID check even starts, a legitimate guest who arrived 20th is already gone by the time anyone checks.</p>
+<div class="callout warning"><b>Analogy boundary</b>This restates Module 09 Concept 07's own analogy at the SQL level -- the actual risk comes from Section 10's own worked queries, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Pre-filter SQL shape</td><td>The metadata WHERE clause is evaluated in the same scan/join that produces the candidate set, before the vector ORDER BY runs</td><td>—</td></tr>
+<tr><td>Post-filter SQL shape</td><td>An inner subquery ranks by vector distance first (with a row limit), an outer query applies the metadata WHERE afterward</td><td>—</td></tr>
+<tr><td>Row-level security (cited)</td><td>Engine-enforced access control -- the database itself refuses any row access not covered by a policy (<a href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html">PostgreSQL, Row Security Policies</a>)</td><td>ENABLE ROW LEVEL SECURITY + CREATE POLICY</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The schema extension and both queries, in full</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · SCHEMA EXTENSION</span>
+<pre><code>ALTER TABLE documents ADD tenant_id VARCHAR(64) NOT NULL;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · PRE-FILTER SHAPE (illustrative &lt;-&gt; placeholder -- real Oracle syntax at Concept 05)</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+WHERE d.tenant_id = :tenant_id
+ORDER BY e.embedding &lt;-&gt; :query_embedding
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · POST-FILTER SHAPE (illustrative &lt;-&gt; placeholder -- real Oracle syntax at Concept 05)</span>
+<pre><code>SELECT ranked.chunk_id, ranked.text
+FROM (
+  SELECT c.chunk_id, c.text, c.doc_id, e.embedding &lt;-&gt; :query_embedding AS dist
+  FROM chunks c
+  JOIN embeddings e ON e.chunk_id = c.chunk_id
+  ORDER BY dist
+  FETCH FIRST 17 ROWS ONLY
+) ranked
+JOIN documents d ON d.doc_id = ranked.doc_id
+WHERE d.tenant_id = :tenant_id
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The same two ingredients, two orderings</h2></div></header>
+<p>Section 04's own figure shows both flows side by side. Here, the same shapes are annotated with real column names: the pre-filter's WHERE d.tenant_id predicate sits inside the same FROM/JOIN the ORDER BY e.embedding &lt;-&gt; ... clause later scans; the post-filter's WHERE d.tenant_id predicate sits entirely outside the derived table ranked, which has already applied its own FETCH FIRST 17 ROWS ONLY limit with zero tenant awareness.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Both queries belong to query execution</h2></div></header>
+<div class="pipeline-preview">
+<span>Persistence — documents/chunks/embeddings (Concept 03)</span><i>↓</i><span class="hot">Query execution — both SQL shapes here, cited to Concept 02's own three-jobs boundary</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>One cited number, reused exactly</h2></div></header>
+<div class="equation">Post-filter inner FETCH FIRST n = Module 09 Concept 07's own fetch-depth figure -- 17 for this exact corpus, cited unchanged</div>
+<div class="equation">Over-fetch factor = 17 ÷ 5 = 3.4x -- Concept 07's own already-verified number, not recomputed here</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Both queries, clause by clause, against the same corpus</h2></div></header>
+<p>Reusing Module 09 Concept 07's own 20-chunk, 30%-selectivity corpus unchanged: 6 of 20 chunks belong to tenant "Acme," at ranks {3, 7, 9, 14, 17, 20}. Target k=5.</p>
+<p><b>Pre-filter shape.</b> The WHERE d.tenant_id predicate is evaluated as part of the same join/scan that produces the candidate set -- so the ORDER BY vector-distance comparison only ever sees Acme's own 6 rows. Fetched: 6 rows touched, top 5 returned, 1 discarded (the 6th-ranked Acme row itself, not a wrong-tenant row).</p>
+<p><b>Post-filter shape.</b> The inner ranked subquery has no tenant awareness at all -- it fetches the top 17 rows by distance across ALL tenants (Concept 07's own already-verified fetch depth for this exact selectivity/k), THEN the outer WHERE filters by tenant. Fetched: 20 rows touched by the base scan feeding the subquery's own ORDER BY, 17 rows survive the inner limit, of which 5 are Acme (ranks 3,7,9,14,17) and 12 are discarded (Concept 07's own number, cited). <b>Acme's own 6th match, at global rank 20, never enters the inner ranked result at all</b> -- it was cut by FETCH FIRST 17 ROWS ONLY before the outer tenant WHERE clause ever ran. This is a real, structural failure mode the pre-filter shape cannot produce: pre-filtering never even considers a non-eligible row, so it can never accidentally cut off an eligible one via an unrelated row limit.</p>
+<div class="callout"><b>Verification method</b>Both queries were checked for well-formedness manually: every foreign-key reference resolves against Concept 03's own schema (chunks.doc_id→documents.doc_id, embeddings.chunk_id→chunks.chunk_id), clause ordering is valid standard SQL, parentheses around the derived table balance, and FETCH FIRST n ROWS ONLY is confirmed as the real, portable SQL:2008 row-limiting clause (not vendor-specific LIMIT/TOP). The 17/3.4x/12-discarded figures are Module 09 Concept 07's own already-verified numbers, cited directly, not recomputed.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a genuine caveat</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A low-selectivity tenant filter</h3><p>Pre-filtering keeps cost fixed at the eligible subset's own size, exactly as Module 09 Concept 07 already established.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>The post-filter shape's own inner row limit</h3><p>Raising the inner FETCH FIRST value reduces (but does not eliminate) the leak-by-omission risk -- at the cost of scanning even more rows.</p></article>
+<article class="info-card"><span>GENUINE CAVEAT</span><h3>A WHERE clause is only as reliable as the caller</h3><p>Forgetting the tenant predicate in either query shape is a real, catastrophic risk -- row-level security (Section 06, cited) removes that dependency entirely.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The schema extension, reproduced directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · SCHEMA EXTENSION AND BOTH QUERY SHAPES, TOGETHER</span>
+<pre><code>-- Step 1: add the access-control column (this concept's own contribution).
+ALTER TABLE documents ADD tenant_id VARCHAR(64) NOT NULL;
+
+-- Step 2a: pre-filter shape -- WHERE before ORDER BY.
+SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+WHERE d.tenant_id = :tenant_id
+ORDER BY e.embedding &lt;-&gt; :query_embedding
+FETCH FIRST 5 ROWS ONLY;
+
+-- Step 2b: post-filter shape -- ORDER BY (with its own inner limit) before WHERE.
+SELECT ranked.chunk_id, ranked.text
+FROM (
+  SELECT c.chunk_id, c.text, c.doc_id, e.embedding &lt;-&gt; :query_embedding AS dist
+  FROM chunks c
+  JOIN embeddings e ON e.chunk_id = c.chunk_id
+  ORDER BY dist
+  FETCH FIRST 17 ROWS ONLY
+) ranked
+JOIN documents d ON d.doc_id = ranked.doc_id
+WHERE d.tenant_id = :tenant_id
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for tenant isolation</h2></div></header>
+<p><a href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html">PostgreSQL's own Row Security Policies documentation</a> describes engine-enforced access control (ALTER TABLE ... ENABLE ROW LEVEL SECURITY + CREATE POLICY) as a real, distinct alternative to the WHERE-clause approach built in this concept. <a href="https://qdrant.tech/documentation/manage-data/multitenancy/">Qdrant's own multitenancy documentation</a> confirms a tenant field with a dedicated indexed predicate is treated as a mandatory, pre-filter-shaped constraint in that engine -- a second-vendor confirmation that pre-filtering on tenant is the production-recommended default. <a href="https://docs.pinecone.io/guides/index-data/implement-multitenancy">Pinecone's own multitenancy guide</a> shows a contrasting pattern: physically separate namespaces per tenant, rather than a shared table filtered per query -- a different way of solving the identical isolation requirement. <a href="https://github.com/pgvector/pgvector">pgvector's own README</a> (reused from Concept 03) is the generic-SQL precedent for pairing a vector-distance ORDER BY with WHERE-clause filtering.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Filter-Order Duel</h2></div></header>
+<div class="lab">
+<p>Run both SQL shapes against the exact same 20-chunk, 30%-selectivity corpus from Module 09 Concept 07. Watch which rows actually get touched, and where the post-filter shape's own inner row limit can quietly drop a true match.</p>
+<div class="example-grid" style="grid-template-columns:repeat(2,1fr)">
+<div class="code-block">
+<span class="code-label">PRE-FILTER SHAPE</span>
+<pre><code>WHERE d.tenant_id = :tenant_id
+ORDER BY e.embedding &lt;-&gt; :query
+FETCH FIRST 5 ROWS ONLY;</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">POST-FILTER SHAPE</span>
+<pre><code>ORDER BY dist
+FETCH FIRST 17 ROWS ONLY
+-- (then, outside:)
+WHERE d.tenant_id = :tenant_id;</code></pre>
+</div>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose which SQL shape to run">
+<button type="button" class="secondary active" data-mode="pre">Run pre-filter-shaped query</button>
+<button type="button" class="secondary" data-mode="post">Run post-filter-shaped query</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Reset" style="margin-top:8px">
+<button type="button" class="secondary" id="filterReset_1004">Reset</button>
+</div>
+<p class="fine-print">FULL 20-CHUNK CORPUS (lime = Acme tenant, dimmed = other tenant, dashed edge = row-limit cutoff)</p>
+<div class="rank-chip-row" id="filterRow_1004"></div>
+<div class="norm-readout" id="filterReadout_1004">
+<div><span>TOUCHED</span><b id="filterTouched_1004">—</b></div>
+<div><span>RETURNED</span><b id="filterReturned_1004">—</b></div>
+<div><span>DISCARDED</span><b id="filterDiscarded_1004">—</b></div>
+<div><span>SHAPE</span><b id="filterShape_1004">—</b></div>
+</div>
+<div class="callout" id="filterVerdict_1004" aria-live="polite">Click a button above to run one of the two SQL shapes against the same corpus.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Pre-filter SQL vs. post-filter SQL vs. row-level security</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Pre-filter SQL (this concept)</th><th>Post-filter SQL (this concept)</th><th>Row-level security (named, not built)</th></tr></thead>
+<tbody>
+<tr><td>Cost fixed at the eligible subset's size</td><td>Cost varies with the inner row limit; can leak-by-omission</td><td>Cost/behavior enforced by the engine, not the query</td></tr>
+<tr><td>Correctness depends on the caller adding WHERE</td><td>Correctness depends on the caller AND the inner limit being deep enough</td><td>Correctness guaranteed by policy, regardless of caller</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>LEAK-BY-OMISSION</span><h3>Post-filter's own inner row limit drops a true match</h3><p>Exactly Acme's own rank-20 match in this concept's own worked example -- discarded before the tenant WHERE clause ever runs.</p></article>
+<article class="info-card"><span>FORGOTTEN PREDICATE</span><h3>A caller omits the WHERE tenant_id clause entirely</h3><p>In either shape, this is a real, catastrophic cross-tenant data leak -- the exact risk row-level security (Section 06) is designed to remove.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Both queries have a tenant filter, so both are equally safe</td><td>False -- the post-filter shape can discard a true match inside its own inner row limit before the tenant WHERE clause ever sees it.</td></tr>
+<tr><td>The &lt;-&gt; operator here is real Oracle syntax</td><td>False -- it is a deliberate generic placeholder; Concept 05 supplies Oracle's own real operator.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Choosing pre-filter vs. post-filter SQL shape per query is a real design decision -- Module 09 Concept 07's own cost framing applies directly to which one is worth the SQL complexity.</li>
+<li>Row-level security (Section 06, cited) is worth adopting specifically when the cost of a forgotten WHERE clause is unacceptable, independent of which filter shape is otherwise used.</li>
+<li>Namespace-per-tenant (Pinecone's own pattern, cited) is a real alternative to logical filtering entirely -- physical isolation instead of a shared table.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Write the schema extension from memory.</summary><div>ALTER TABLE documents ADD tenant_id VARCHAR(64) NOT NULL;</div></details>
+<details class="quiz"><summary>Why can the post-filter shape discard a true match that the pre-filter shape never would?</summary><div>The post-filter shape's inner subquery ranks and limits rows with zero tenant awareness; a true match outside that inner limit is gone before the outer tenant WHERE clause ever runs. The pre-filter shape never considers ineligible rows in the first place, so it has no equivalent unrelated cutoff to lose an eligible row to.</div></details>
+<details class="quiz"><summary>What real, engine-enforced mechanism removes the "caller must remember the WHERE clause" risk?</summary><div>Row-level security -- PostgreSQL's own ENABLE ROW LEVEL SECURITY plus CREATE POLICY, where the database itself refuses any row access not covered by a policy, regardless of what the caller's query says.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Module 09 Concept 07's own 70%-selectivity row (14 of 20 chunks matching, 5th match at rank 7), write the pre-filter and post-filter SQL shapes' own inner FETCH FIRST value for k=5, and state whether the post-filter shape's own leak-by-omission risk is more or less likely at this higher selectivity than at 30%.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>At 70% selectivity, Concept 07's own table shows the 5th match landing at rank 7 -- so the post-filter shape's own inner FETCH FIRST value would be 7, not 17. The pre-filter shape is unaffected by selectivity in structure, still WHERE-then-ORDER-BY-then-FETCH-FIRST-5. <b>The leak-by-omission risk is LOWER at 70% selectivity</b> -- with matches so common, an inner limit of 7 is far less likely to cut off a true match than an inner limit of 17 was at 30% selectivity, since matches are packed more densely near the top of the ranking.</div>
+</details>
+<p>Teach-back: as selectivity approaches 100%, what happens to the post-filter shape's own inner FETCH FIRST value, and why does that shrink the leak-by-omission risk toward zero?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Metadata, tenant and authorization filters in SQL</h3><ul><li><b>The schema change:</b> ALTER TABLE documents ADD tenant_id VARCHAR(64) NOT NULL.</li><li><b>The two shapes:</b> pre-filter (WHERE before ORDER BY) vs. post-filter (ORDER BY, then WHERE) -- cited from Module 09 Concept 07.</li><li><b>The unique risk:</b> post-filter's own inner row limit can discard a true match before the tenant WHERE clause ever runs.</li></ul></div>
+<div><h3>Module 10 · 4/14</h3><p>Concept 05, "Oracle AI Database VECTOR type and vector-distance SQL," is next -- this batch's last concept.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does clause order matter in SQL when both queries "have" the same WHERE filter?</summary><div>SQL clauses execute against whatever result set exists at that point in the query plan -- a WHERE clause applied after an ORDER BY/FETCH FIRST limit only ever sees what survived that limit, which is not the same as applying the WHERE clause before any ranking happened.</div></details>
+<details class="quiz"><summary>Mathematical: at 50% selectivity (10 of 20 chunks matching) with k=5, what should the post-filter shape's own inner FETCH FIRST value be?</summary><div>Per Module 09 Concept 07's own 50%/k=5 row, the 5th match lands at rank 11 -- so FETCH FIRST 11 ROWS ONLY, cited directly, not recomputed here.</div></details>
+<details class="quiz"><summary>Coding: rewrite the post-filter query to also return how many rows were discarded by the outer WHERE.</summary><div>Wrap the outer query in a second derived table with a COUNT(*) OVER () window before the outer FETCH FIRST 5 ROWS ONLY, then subtract 5 from that count to get the discarded total -- or simpler, run the outer query twice: once for the actual rows, once with COUNT(*) instead of the row list.</div></details>
+<details class="quiz"><summary>System design: your team wants to guarantee tenant isolation even if a developer forgets a WHERE clause. What do you build?</summary><div>Row-level security (Section 06, cited) -- an engine-enforced policy that refuses any row access outside the caller's own tenant, regardless of what WHERE clause (or lack of one) the query itself contains.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html"><b>Row Security Policies — PostgreSQL Documentation</b><br><span>Engine-enforced access control, the real alternative to WHERE-clause filtering.</span></a>
+<a href="https://qdrant.tech/documentation/manage-data/multitenancy/"><b>Multitenancy — Qdrant Documentation</b><br><span>Tenant field as a mandatory, indexed, pre-filter-shaped predicate in a real vector database.</span></a>
+<a href="https://docs.pinecone.io/guides/index-data/implement-multitenancy"><b>Implement multitenancy — Pinecone</b><br><span>Namespace-per-tenant as a contrasting, physical-isolation pattern.</span></a>
+<a href="https://github.com/pgvector/pgvector"><b>pgvector — GitHub</b><br><span>Reused from Concept 03 -- the generic-SQL precedent for vector-distance ORDER BY paired with WHERE filtering.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 4/14</span>
+<h3>Same tenant filter. Different clause order, a different real answer.</h3>
+<p>You can now write the tenant_id schema extension from memory, read both SQL shapes, and explain why only the post-filter shape can discard a true match by omission. This closes the current batch -- Concept 05, "Oracle AI Database VECTOR type and vector-distance SQL," begins Oracle's own real syntax next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Filter-Order Duel ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at 4 of 14 concepts. Next concept: Concept 05, Oracle AI Database VECTOR type and vector-distance SQL.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 04 · Active</p>
+<a href="module-10-concept-03.html">← Concept</a>
+</footer>
+</body>
+</html>

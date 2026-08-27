@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10 Concept 01 named the category (vector database). This concept narrows to what that category specifically owns inside a RAG pipeline: three responsibilities -- persistence (chunk + vector + metadata as one durable unit), transactional consistency (a write fully lands or doesn't, updates/deletes via Module 09 Concept 08's own tombstone mechanism), and query execution (vector search plus metadata filter as one operation, via Module 09 Concept 07's own pre-/post-/integrated-ANN strategies and its 3.4x over-fetch number) -- and three things it explicitly does not own: chunking (Module 07), embedding (Module 08), and generation (Phase 3, Module 11+). A two-trace worked example (insert, query) walks one chunk's round trip through the boundary; the lab, The Boundary Trace, classifies each step of that trip live as before, at, or after the database's own job.">
+<title>What the database owns in a RAG architecture — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 02</p>
+<h1>Three jobs the database owns.<br><em>Three it never touches.</em></h1>
+<p class="lesson-lead">Concept 01 answered which category of system this course lives inside -- a vector database, not a store or a search engine. That leaves an open question: what does a database sitting inside a RAG pipeline actually *do*, moment to moment? This concept answers it with a fixed list of three owned responsibilities -- persistence, transactional consistency, query execution -- and three explicit exclusions -- chunking, embedding, generation -- with a citation behind every claim on both sides of that boundary.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second concept of Module 10 (2/14) -- narrows Concept 01's category boundary into specific owned responsibilities</b></div>
+<div><span>PREREQUISITE</span><b>Module 10 Concept 01's category boundary (cited); Module 09 Concept 07's metadata-filtering strategies and Concept 08's tombstone mechanism (both cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three things the database owns and the three it doesn't; place one insert and one query on a before/at/after boundary map</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">What actually happens at the database, and what happens somewhere else</h2>
+</div>
+<p>Concept 01 drew the category line. This concept draws a second, sharper line: exactly which jobs sit inside that line (owned by the database) and which sit outside it (owned by earlier or later stages of the pipeline) -- with zero SQL or schema syntax, that's Concepts 03 and 04's job.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>After "which category," the next question is "which jobs"</h3>
+<p>Concept 01 established that this course runs inside a vector database, not a bare store or a search engine. That tells you the kind of system you're dealing with -- it doesn't yet tell you what that system actually does when a chunk arrives or a query comes in. This concept answers that directly with three owned jobs and three explicit non-jobs.</p>
+<div class="beginner-memory"><b>First memory:</b> "vector database" is a category. "Persistence, transactional consistency, query execution" are the three specific jobs that category commits to owning. This concept is about the second list, not the first.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A quick anchor back to Concept 01, not a re-teach</h3>
+<p>Concept 01's own boundary: a vector database is a full DBMS that owns its own indexing, compression, filtering, tombstones and replication as first-class features, with Oracle AI Database as this module's own exemplar. That's the category. This concept doesn't re-argue it -- it takes that category as given and asks the more specific question a beginner runs into next: once you're inside that category, what is the database itself actually responsible for on every single request?</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three owned jobs, named plainly</h3>
+<div class="mental-compare">
+<div><span>1 · PERSISTENCE</span><p>When a chunk arrives, the database stores its text reference, its embedding vector, and its metadata (like <code>tenant_id</code>) together, as one unit -- not three separate systems you keep in sync by hand.</p></div>
+<div><span>2 · TRANSACTIONAL CONSISTENCY</span><p>A write either fully lands or it doesn't land at all. An update or delete never leaves the index in a half-changed state.</p></div>
+<div><span>3 · QUERY EXECUTION</span><p>At search time, the database runs the vector search and applies any metadata filter (like "only this tenant's chunks") as a single operation, not two steps you glue together yourself.</p></div>
+</div>
+<div class="beginner-memory"><b>Second memory:</b> these three are a fixed, closed list for this concept -- not a starter set. Everything else a database happens to do (backups, monitoring, user management) is real, but it's outside what this concept is naming.</div>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Owned job 1: persistence -- one unit, not three systems</h3>
+<p>A chunk has three parts: its text reference, its embedding vector, and its metadata. If those three lived in three different systems, keeping them lined up would be your job, by hand, forever -- and a filtered query could silently return a chunk whose vector and metadata had drifted out of sync. Because persistence is an owned database job, the database itself guarantees that a chunk's three parts arrive, live, and get returned together, as one row-like unit.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Owned job 2: transactional consistency -- lands fully, or not at all</h3>
+<div class="scroll-flow">
+<span>Write arrives at the database</span><i>→</i>
+<span class="hot">Either the whole write commits, or none of it does</span><i>→</i>
+<span>Index never sits half-updated</span>
+</div>
+<p>This is the same idea Module 09 Concept 08 already built for updates and deletes -- mark the old entry as gone first (a tombstone), then clean it up later, so nothing is ever caught mid-change. That mechanism isn't re-explained here; it's simply named as the thing that makes "transactional consistency" one of the database's own owned jobs, not something the app has to guarantee itself.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Owned job 3 vs. what the database does not own</h3>
+<div class="distinction-table" role="table" aria-label="What the database owns versus what it does not own">
+<div role="row"><b role="cell">Job</b><b role="cell">Who owns it</b></div>
+<div role="row"><span role="cell">Query execution -- vector search + metadata filter as one operation</span><span role="cell">The database. It picks from Module 09 Concept 07's own named strategies (pre-filtering, post-filtering, filtered/integrated ANN) internally.</span></div>
+<div role="row"><span role="cell">Splitting a document into chunks</span><span role="cell">Module 07 -- finished long before the database ever sees anything.</span></div>
+<div role="row"><span role="cell">Turning text into a vector</span><span role="cell">Module 08 -- also finished before the database sees anything; it only ever receives an already-computed vector.</span></div>
+<div role="row"><span role="cell">Generating an answer from the retrieved chunks</span><span role="cell">Phase 3, starting Module 11 -- happens strictly after the database hands its results back. The LLM never talks to the database directly.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The database must be doing the chunking, since it stores chunks."</b><p>False -- by the time a chunk reaches the database, Module 07's chunking work is already finished. The database only ever sees the finished result.</p></div>
+<div><b>"The database calls the LLM to generate the answer."</b><p>False -- the database hands back matching chunks and stops. Building a prompt and calling an LLM is a separate stage (Phase 3), and the LLM never queries the database directly.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where these three jobs will live, concretely</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Oracle AI Database owning persistence, transactional consistency and query execution as first-class features</b><p>Named here purely as responsibilities, with zero SQL syntax -- Concept 03 looks at how the rows are actually laid out, and Concept 04 at the filter syntax itself.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 2/14</b><p>Concept 03 covers schema/table structure for these rows next; Concept 04 covers SQL filter syntax after that.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · READINESS CHECK</span>
+<h3>One insert, one query, traced across the boundary</h3>
+<p>Take one chunk on its round trip. <b>Insert:</b> the chunk is already made (Module 07) and its vector is already computed (Module 08) -- both <i>before</i> the boundary; the database then persists and commits the row as one atomic unit -- <i>at</i> the boundary; the app logs the returned <code>chunk_id</code> -- <i>after</i> the boundary. <b>Query:</b> the query text is already embedded (Module 08) -- <i>before</i>; the database runs the ANN search and the tenant filter together and returns five matching chunks -- <i>at</i>; those five chunks get handed to a separate generation stage -- <i>after</i>, and the LLM never queries the database itself.</p>
+<figure class="concept-visual" aria-labelledby="c1002-b09-title">
+<strong class="concept-visual-title" id="c1002-b09-title">VISUAL · WHERE EACH STEP SITS ON THE BEFORE / AT / AFTER LINE</strong>
+<svg class="vector-plane" viewBox="0 0 400 150" role="img" aria-labelledby="c1002-svg-title-b c1002-svg-desc-b" style="max-width:560px">
+<title id="c1002-svg-title-b">A horizontal axis divided into three zones -- before, at, after -- with the insert trace's steps and the query trace's steps plotted as points along it</title>
+<desc id="c1002-svg-desc-b">An x-axis from 0 to 400 split into three shaded zones: BEFORE (chunking, embedding), AT (persistence, transactional consistency, query execution), AFTER (generation). Two rows of points sit above the axis, one for the insert trace and one for the query trace, each point positioned inside the zone it belongs to.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<rect x="8" y="30" width="120" height="90" fill="#3a5f95" opacity="0.12"/>
+<rect x="128" y="30" width="150" height="90" fill="#2f6f5c" opacity="0.16"/>
+<rect x="278" y="30" width="114" height="90" fill="#b3543a" opacity="0.12"/>
+<line x1="8" y1="120" x2="392" y2="120" stroke="#14241f" stroke-width="1"/>
+<text x="14" y="22" font-size="7">BEFORE</text>
+<text x="150" y="22" font-size="7">AT THE BOUNDARY -- DATABASE OWNS</text>
+<text x="330" y="22" font-size="7">AFTER</text>
+<circle cx="30" cy="60" r="4" fill="#3a5f95"/><text x="10" y="50" font-size="6">chunk made</text>
+<circle cx="65" cy="60" r="4" fill="#3a5f95"/><text x="45" y="50" font-size="6">vector made</text>
+<circle cx="150" cy="60" r="4" fill="#2f6f5c"/><text x="132" y="50" font-size="6">write call</text>
+<circle cx="200" cy="60" r="4" fill="#2f6f5c"/><text x="182" y="50" font-size="6">commit</text>
+<circle cx="300" cy="60" r="4" fill="#b3543a"/><text x="282" y="50" font-size="6">chunk_id logged</text>
+<circle cx="65" cy="95" r="4" fill="#3a5f95"/><text x="35" y="107" font-size="6">query embedded</text>
+<circle cx="220" cy="95" r="4" fill="#2f6f5c"/><text x="178" y="107" font-size="6">ANN + filter + 5 rows back</text>
+<circle cx="340" cy="95" r="4" fill="#b3543a"/><text x="300" y="107" font-size="6">handed to LLM</text>
+</g>
+</svg>
+</figure>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · 2 OF 14</h3>
+<p>This concept named the database's three owned jobs -- persistence, transactional consistency, query execution -- and its three explicit non-jobs -- chunking (Module 07), embedding (Module 08), generation (Phase 3). Concept 03 looks at how a real database lays out the table/schema for these rows next; Concept 04 covers the SQL used to filter them. Neither appears here.</p>
+<div class="beginner-memory"><b>Concept 02 is complete.</b> Module 10 stands at 2 of 14 concepts.</div>
+<a class="button primary" href="module-10-concept-01.html">← Back to Concept 01's category boundary</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Three owned jobs, three excluded stages, one boundary line</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>Persistence, consistency, query execution</b><small>The beginner-convention headline: three owned jobs, named plainly.</small></a>
+<a href="#s16"><span>02</span><b>The full before/at/after map</b><small>Chunking and embedding before; three owned jobs at; generation after.</small></a>
+<a href="#s23"><span>03</span><b>The Boundary Trace</b><small>The lab -- classify a real request's own steps live, one at a time.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, two worked traces, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> Concept 01 named the category (vector database) → this concept narrows it to three owned jobs (persistence, transactional consistency, query execution) and three explicit exclusions (chunking, embedding, generation) → one insert and one query get traced step by step across that boundary → each step gets classified live, before/at/after, in the lab → Concept 03 covers the table/schema for these rows next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "What the database owns in a RAG architecture" deep dive</b><em>Full citations, the two-trace worked example, and The Boundary Trace lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Recap</a>
+<a href="#s03"><i>03</i> Three jobs</a>
+<a href="#s04"><i>04</i> Persistence</a>
+<a href="#s05"><i>05</i> Persistence, cont.</a>
+<a href="#s06"><i>06</i> Consistency</a>
+<a href="#s07"><i>07</i> Consistency, cont.</a>
+<a href="#s08"><i>08</i> Full lifecycle</a>
+<a href="#s09"><i>09</i> Query execution</a>
+<a href="#s10"><i>10</i> Filter strategies</a>
+<a href="#s11"><i>11</i> Primary source</a>
+<a href="#s12"><i>12</i> Checkpoint table</a>
+<a href="#s13"><i>13</i> Not chunking</a>
+<a href="#s14"><i>14</i> Not embedding</a>
+<a href="#s15"><i>15</i> Not generation</a>
+<a href="#s16"><i>16</i> Boundary map</a>
+<a href="#s17"><i>17</i> Worked setup</a>
+<a href="#s18"><i>18</i> Insert trace</a>
+<a href="#s19"><i>19</i> Insert, cont.</a>
+<a href="#s20"><i>20</i> Query trace</a>
+<a href="#s21"><i>21</i> Verification</a>
+<a href="#s22"><i>22</i> Lab intro</a>
+<a href="#s23"><i>23</i> Lab</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>From "which category" to "which responsibilities"</h2></div></header>
+<p>Concept 01 established which real product category this course runs inside -- a vector database, not a bare store or a search engine. That was a category-level claim. This concept narrows it: given that category, exactly which responsibilities does the database itself hold, as a fixed list of three, and which does it explicitly not hold. Every claim on both sides of that line is cited directly, either against this module's own already-verified sources (Module 09 Concepts 07 and 08) or against fresh sources verified for this concept.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">DEPENDENCIES</span><h2>What's carried forward, unchanged</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-01.html">Module 10 Concept 01</a></b> -- the three-way category boundary (vector store / vector database / search engine) and Oracle AI Database as this module's own exemplar, cited unchanged.</li>
+<li><b><a href="module-09-concept-07.html">Module 09 Concept 07</a></b> -- the three metadata-filtering strategies (pre-filtering, post-filtering, filtered/integrated ANN) and its own 30%-selectivity/top-17/3.4x-over-fetch numbers, reused verbatim.</li>
+<li><b><a href="module-09-concept-08.html">Module 09 Concept 08</a></b> -- the tombstone-then-compact mechanism for updates and deletes, cited unchanged.</li>
+<li><b>Explicitly out of scope:</b> table/schema layout (Concept 03) and SQL filter syntax (Concept 04) -- named forward only, zero syntax appears below.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">PREVIEW</span><h2>Three owned responsibilities, the spine of this whole concept</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>OWNED · 1</span><h3>Persistence</h3><p>A chunk's identity, embedding vector and metadata are stored together, as one durable unit.</p></article>
+<article class="info-card"><span>OWNED · 2</span><h3>Transactional consistency</h3><p>A write fully commits or fully rolls back; updates/deletes never leave the index half-changed.</p></article>
+<article class="info-card"><span>OWNED · 3</span><h3>Query execution</h3><p>Vector search and metadata filter run as one operation, not two steps the app glues together.</p></article>
+</div>
+<p>Every section from here to Section 16 maps back to exactly one of these three. Sections 13-15 then name the three things this list deliberately excludes.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">DEFINITION</span><h2>Owned responsibility 1: persistence</h2></div></header>
+<p>Persistence, here, means the database stores a chunk's identity, its embedding vector, and its metadata together, as one durable unit -- not as three separate systems the application has to keep aligned by hand. This is what turns "a place where vectors happen to be saved" into "a database" in the sense Concept 01 already defined.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">WHY IT MATTERS</span><h2>Why "together" is the whole point</h2></div></header>
+<p>If a vector and its metadata could live in two different systems and drift out of sync, a filtered query could silently return a stale or mismatched result -- a chunk whose metadata says one tenant while its vector was actually written for another. Persistence being an owned database job means the database itself guarantees that alignment; the application never has to reconcile the two on its own.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">DEFINITION</span><h2>Owned responsibility 2: transactional consistency</h2></div></header>
+<p>python-oracledb's own transaction-management documentation states it directly: "A database transaction is a grouping of SQL statements that make a logical data change... By default, python-oracledb does not commit this transaction to the database. You can explicitly commit or roll it back using the methods Connection.commit() and Connection.rollback()." A write, in other words, either fully commits or fully rolls back -- there is no partially-landed state the application has to detect and clean up itself.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">MECHANISM</span><h2>The mechanism this guarantee rides on for updates and deletes</h2></div></header>
+<p>Module 09 Concept 08 already verified the mechanism directly: Weaviate's own vector-index documentation states that on delete, "objects are marked as deleted, but they are still connected to the HNSW graph" until an asynchronous cleanup process reassigns edges; Qdrant's own Vacuum Optimizer waits for a <code>deleted_threshold</code> of 0.2 before physically compacting removed entries. Neither of those mechanisms is re-derived here -- they're cited directly as the reason transactional consistency for updates and deletes doesn't require an in-place rewrite to stay atomic.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">SYNTHESIS</span><h2>One owned job, two different underlying machines</h2></div></header>
+<p>An insert commits atomically, in the classic sense Section 06 describes. An update or delete gets the same atomicity guarantee through a different route -- mark-then-compact rather than an in-place rewrite. Both are instances of the same owned responsibility: at no point does a caller ever observe a half-written or half-deleted state. That's why "transactional consistency" is listed as a single job, even though inserts and deletes lean on different machinery underneath.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">DEFINITION</span><h2>Owned responsibility 3: query execution</h2></div></header>
+<p>At query time, the database runs the vector similarity search and applies any metadata filter (like restricting to one tenant's own chunks) as a single operation -- not as two separate steps the application has to run and then glue together itself.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">MECHANISM</span><h2>Which strategy runs underneath is the database's own choice</h2></div></header>
+<p>Module 09 Concept 07 already named three strategies a database can choose from to execute that combined operation: pre-filtering, post-filtering, and filtered/integrated ANN (Weaviate's own ACORN and sweeping approaches, Qdrant's filterable HNSW). That concept's own verified numbers are reused directly here, unchanged: on a 20-chunk, 30%-selectivity corpus, retrieving k=5 under post-filtering requires over-fetching to the top-17 candidates -- not just the top-5 -- to survive discarding the 12 that get filtered out, a 3.4x over-fetch (17 ÷ 5 = 3.40). Which of the three strategies actually runs is an internal decision the database makes; the application only ever calls one filtered search.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">SOURCE</span><h2>Grounding query execution in the database's own documented design</h2></div></header>
+<p><a href="https://docs.weaviate.io/weaviate/concepts/filtering">Weaviate's own filtering documentation</a> is the primary source behind Sections 09-10: the pre-filtering/post-filtering/integrated-ANN distinction is Weaviate's own documented design choice, not an abstraction this course invented. That's what grounds "query execution" as a real, verifiable database responsibility rather than a convenient simplification.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CHECKPOINT</span><h2>The three owned responsibilities, in one table</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Owned responsibility</th><th>One-line definition</th><th>Cited against</th></tr></thead>
+<tbody>
+<tr><td>1 · Persistence</td><td>Chunk identity + vector + metadata stored together, as one durable unit</td><td>Sections 04-05, this concept's own reasoning</td></tr>
+<tr><td>2 · Transactional consistency</td><td>A write fully commits or fully rolls back; updates/deletes via mark-then-compact</td><td>python-oracledb txn_management.html; Weaviate vector-index docs (M09C08)</td></tr>
+<tr><td>3 · Query execution</td><td>Vector search + metadata filter run as one operation, strategy chosen internally</td><td>Weaviate filtering docs; M09C07's own 3.4x over-fetch number</td></tr>
+</tbody>
+</table>
+<p>This table is the reference point both the worked example (Sections 17-21) and the lab (Section 23) hang off of.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">EXCLUSION 1</span><h2>Not owned: splitting documents into chunks</h2></div></header>
+<p>Module 07, "Chunking & document representation" (complete, 10/10), owns splitting source documents into chunks. That work is strictly out of scope for the database layer -- named here only as a forward reference, with zero re-teaching of any chunking mechanism. By the time a chunk reaches the database, this stage has already finished.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXCLUSION 2</span><h2>Not owned: turning text into a vector</h2></div></header>
+<p>Module 08 (complete, 11/11) owns turning chunk text and query text into vectors. LangChain's own embeddings documentation states it directly: "Embedding models transform raw text ... into a fixed-length vector of numbers that captures its semantic meaning ... texts with similar ideas are placed close together in the vector space." The database never runs this step itself -- it only ever receives an already-computed vector, whether that vector belongs to a chunk being inserted or a query being searched.</p>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXCLUSION 3</span><h2>Not owned: generating an answer</h2></div></header>
+<p>Phase 3 (Module 11 onward, not yet built) owns building a prompt from retrieved chunks and calling a language model. LangChain's own models documentation states it directly: "Models are the reasoning engine of agents. They drive the agent's decision-making process..." The LLM never queries the database directly -- it only ever receives whatever the database has already returned, after the database's own job is finished.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">SYNTHESIS</span><h2>The full boundary map, in one line each</h2></div></header>
+<div class="scroll-flow">
+<span>BEFORE — chunking (M07) + embedding (M08)</span><i>→</i>
+<span class="hot">AT — persistence + transactional consistency + query execution (this concept)</span><i>→</i>
+<span>AFTER — generation (Phase 3, M11+)</span>
+</div>
+<p>This three-way split is the direct bridge into the worked example and the lab below -- both reuse this exact BEFORE/AT/AFTER split, step by step.</p>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Setup: one tenant's corpus, two traces</h2></div></header>
+<p>Reuse the corpus, don't invent a new one: a 20-chunk tenant corpus with <code>tenant_id="acme"</code>, the same corpus Module 09 Concept 07 used for its own 30%-selectivity filtering numbers and Module 09 Concept 08 used for its own N=20 tombstone example. Two traces follow one chunk's round trip through the database boundary -- Request A, an insert (the write path), and Request B, a query (the read path) -- each tagged step by step as BEFORE, AT, or AFTER.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">TRACE A</span><h2>Request A -- insert, the write path</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>#</th><th>Step</th><th>Bucket</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Chunking already done (Module 07)</td><td>BEFORE</td></tr>
+<tr><td>2</td><td>Embedding already done (Module 08)</td><td>BEFORE</td></tr>
+<tr><td>3</td><td><code>write_chunk(chunk_id, tenant_id="acme", source_doc_id, chunk_text, embedding, metadata)</code> arrives</td><td>AT — persistence</td></tr>
+<tr><td>4</td><td>Database persists row + vector + metadata as one atomic commit, or none land</td><td>AT — transactional consistency</td></tr>
+<tr><td>5</td><td>Commit acknowledgment returns to the ingestion pipeline</td><td>AFTER</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">TRACE A, CONTINUED</span><h2>Six months later: the same boundary handles an edit</h2></div></header>
+<p>A later edit to that same chunk is <code>delete_chunk</code> immediately followed by <code>write_chunk</code>, at the identical boundary. Atomicity here is delivered by Module 09 Concept 08's own verified mark-then-compact mechanism, cited directly and not re-derived: Weaviate keeps a tombstoned object wired into its HNSW graph until an asynchronous cleanup process reassigns its edges; Qdrant's own Vacuum Optimizer waits for its <code>deleted_threshold=0.2</code> before physically compacting. This is what "transactional consistency of an update" concretely looks like -- not a single in-place rewrite, but a delete-then-write pair that the database's own tombstone lifecycle keeps atomic from the caller's point of view.</p>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRACE B</span><h2>Request B -- query, the read path</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>#</th><th>Step</th><th>Bucket</th></tr></thead>
+<tbody>
+<tr><td>6</td><td>Query text already embedded (Module 08)</td><td>BEFORE</td></tr>
+<tr><td>7</td><td><code>search(query_vector, filter={tenant_id:"acme"}, k=5)</code> arrives</td><td>AT — query execution</td></tr>
+<tr><td>8</td><td>Database executes vector search + tenant filter as one operation (one of M09C07's three named strategies)</td><td>AT — query execution</td></tr>
+<tr><td>9</td><td>Five matching, tenant-scoped chunks returned</td><td>AT — query execution</td></tr>
+<tr><td>10</td><td>Chunks handed to a separate generation stage (Phase 3/Module 11+); the LLM never queries the database directly</td><td>AFTER</td></tr>
+</tbody>
+</table>
+<figure class="concept-visual" aria-labelledby="c1002-s20-title">
+<strong class="concept-visual-title" id="c1002-s20-title">VISUAL · STEP 8'S OWN OVER-FETCH NUMBER, REUSED FROM M09C07</strong>
+<svg class="vector-plane" viewBox="0 0 400 150" role="img" aria-labelledby="c1002-svg-title-s c1002-svg-desc-s" style="max-width:560px">
+<title id="c1002-svg-title-s">A bar chart on a labelled axis comparing a target of 5 results against the 17 candidates post-filtering must fetch to survive a 30% filter</title>
+<desc id="c1002-svg-desc-s">A horizontal axis from 0 to 20 candidates. One short bar reaches 5, labelled k=5, the actual number of results the query needs. A second, taller bar reaches 17, labelled top-17, the number post-filtering must over-fetch at 30% selectivity so that 5 tenant-matching chunks survive after 12 are discarded. 17 divided by 5 is annotated as a 3.4x over-fetch.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<line x1="60" y1="120" x2="60" y2="20" stroke="#14241f" stroke-width="1"/>
+<line x1="60" y1="120" x2="392" y2="120" stroke="#14241f" stroke-width="1"/>
+<text x="10" y="18" font-size="6.5">candidates</text>
+<rect x="70" y="95" width="90" height="20" fill="#3a5f95" opacity="0.85"/>
+<text x="75" y="109" fill="#fff" font-size="7">k = 5 needed</text>
+<rect x="70" y="55" width="230" height="20" fill="#b3543a" opacity="0.85"/>
+<text x="75" y="69" fill="#fff" font-size="7">top-17 fetched (post-filtering, 30% selectivity)</text>
+<text x="70" y="45" font-size="7" fill="#b3543a">17 ÷ 5 = 3.40x over-fetch, so that 5 survive discarding 12</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">VERIFICATION</span><h2>Already checked -- stated, not redone</h2></div></header>
+<div class="callout"><b>Verification method</b>Arithmetic re-check confirms 17 − 12 = 5 and 17 ÷ 5 = 3.40, matching Module 09 Concept 07's own table row exactly. A manual well-formedness pass confirms every one of the 10 steps above is assigned to exactly one bucket with no double duty, no step re-teaches pre-/post-filter mechanics or tombstone mechanics from scratch, and zero SQL or schema syntax appears anywhere in either trace.</div>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Why this lab is a new mechanic</h2></div></header>
+<p>The prior five labs in this module's own arc (The Over-Fetch Simulator, The Compaction Clock, The Shard Fan-Out Console, The Capacity Planner, The Boundary Sorter) each classified systems or numbers. This lab, The Boundary Trace, classifies something new: the ordered steps of a single real request. It runs two distinct traces, insert and query, reusing the exact step lists from Sections 18 and 20 -- one step is shown at a time, and placing it correctly moves it into the matching before/at/after bin and reveals its citation.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Boundary Trace</h2></div></header>
+<div class="lab">
+<p>Pick a trace, then classify each step it shows you as Before, At the boundary (database owns), or After. Getting it right moves the step into its bin and reveals the citation behind that call; getting it wrong flashes the step and gives you a hint, without advancing.</p>
+<div class="lab-actions" role="group" aria-label="Pick which request trace to run" id="traceGroup_1002">
+<button type="button" class="secondary" id="traceBtn_1002_insert" data-trace="insert">Insert trace</button>
+<button type="button" class="secondary" id="traceBtn_1002_query" data-trace="query">Query trace</button>
+</div>
+<div class="rank-chip-row" id="currentStepRow_1002" aria-live="polite"></div>
+<div class="lab-actions" role="group" aria-label="Classify the current step" id="classifyGroup_1002">
+<button type="button" class="secondary" id="classifyBtn_1002_before" data-bin="before" disabled>Before</button>
+<button type="button" class="secondary" id="classifyBtn_1002_at" data-bin="at" disabled>At the boundary — database owns</button>
+<button type="button" class="secondary" id="classifyBtn_1002_after" data-bin="after" disabled>After</button>
+</div>
+<div class="example-grid" id="boundaryBoard_1002" style="grid-template-columns:repeat(3,1fr)">
+<article class="info-card" id="beforeBin_1002" style="border-top:4px solid #3a5f95">
+<span>BEFORE</span>
+<h3>Chunking + embedding</h3>
+<p>Finished in Module 07 and Module 08, before the database ever sees this request.</p>
+<div class="rank-chip-row" id="beforeBinChips_1002"></div>
+</article>
+<article class="info-card" id="atBin_1002" style="border-top:4px solid #2f6f5c">
+<span>AT THE BOUNDARY</span>
+<h3>Database owns it</h3>
+<p>Persistence, transactional consistency, query execution -- this concept's own three jobs.</p>
+<div class="rank-chip-row" id="atBinChips_1002"></div>
+</article>
+<article class="info-card" id="afterBin_1002" style="border-top:4px solid #b3543a">
+<span>AFTER</span>
+<h3>Generation, or app bookkeeping</h3>
+<p>Phase 3's job, or the calling app's own bookkeeping -- strictly after the database's work is done.</p>
+<div class="rank-chip-row" id="afterBinChips_1002"></div>
+</article>
+</div>
+<div class="norm-readout" id="boundaryReadout_1002">
+<div><span>STEPS PLACED</span><b id="readoutPlaced_1002">0 / 6</b></div>
+<div><span>BEFORE</span><b id="readoutBefore_1002">0</b></div>
+<div><span>AT THE BOUNDARY</span><b id="readoutAt_1002">0</b></div>
+<div><span>AFTER</span><b id="readoutAfter_1002">0</b></div>
+</div>
+<div class="callout" id="verdict_1002" aria-live="polite">Pick a trace above to begin -- Insert trace or Query trace.</div>
+<div class="lab-actions" role="group" aria-label="Reset the current trace" style="margin-top:8px">
+<button type="button" class="secondary" id="replayBtn_1002">Replay this trace</button>
+</div>
+<div class="callout warning">Each trace has its own fixed six steps, in a fixed order -- there is nothing to type or invent. The bin a step belongs in is this concept's own definition (Sections 04-16), cited live when you get it right.</div>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.weaviate.io/weaviate/concepts/filtering"><b>Filtering — Weaviate documentation</b><br><span>Source for the pre-filtering/post-filtering/integrated-ANN (ACORN/sweeping) distinction backing "query execution," reused from Module 09 Concept 07.</span></a>
+<a href="https://docs.weaviate.io/weaviate/concepts/vector-index"><b>Vector index — Weaviate documentation</b><br><span>Source for the tombstone quote backing "transactional consistency," reused from Module 09 Concept 08.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/txn_management.html"><b>Transaction Management — python-oracledb documentation</b><br><span>"A database transaction is a grouping of SQL statements that make a logical data change... commit or roll it back using Connection.commit() and Connection.rollback()."</span></a>
+<a href="https://docs.langchain.com/oss/python/integrations/embeddings"><b>Embedding models — LangChain documentation</b><br><span>"Embedding models transform raw text ... into a fixed-length vector of numbers that captures its semantic meaning..." -- backs "embedding is out of scope" (Module 08).</span></a>
+<a href="https://docs.langchain.com/oss/python/langchain/models"><b>Models — LangChain documentation</b><br><span>"Models are the reasoning engine of agents. They drive the agent's decision-making process..." -- backs "generation is out of scope" (Phase 3).</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 2/14</span>
+<h3>Three jobs the database owns. Three it never touches.</h3>
+<p>You can now name the database's three owned responsibilities (persistence, transactional consistency, query execution) and its three explicit exclusions (chunking/Module 07, embedding/Module 08, generation/Phase 3), and place any step of a real insert or query onto the before/at/after line. Concept 03 covers how a database actually lays out the table/schema for these rows next; Concept 04 covers the SQL used to filter them. Zero SQL syntax appeared in this concept.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s23">Open The Boundary Trace ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at 2 of 14 concepts. Next concept: Concept 03, table/schema structure for these rows.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 02 · Complete</p>
+<a href="module-10-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

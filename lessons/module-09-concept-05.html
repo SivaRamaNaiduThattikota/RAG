@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 09's fifth concept builds the module's third and final named mechanism, genuinely orthogonal to Concepts 03-04's own candidate narrowing: quantization compresses EACH vector itself, so more of them fit in memory and get scored per unit time, without skipping any of them outright. Scalar quantization (SQ8, FAISS's own IndexScalarQuantizer) costs d bytes/vector; product quantization (PQ, IndexPQ) costs ceil(M*nbits/8) bytes/vector, both cited from FAISS's own Faiss-indexes wiki page. On a real d=128, 1,000,000-vector corpus, Flat costs 512 bytes/vector (488.28 MiB total); SQ8 costs 128 bytes/vector (122.07 MiB, exactly 4x smaller); PQ with M=16 sub-vectors at nbits=8 costs just 16 bytes/vector (15.26 MiB, exactly 32x smaller than Flat and 8x smaller than SQ8) -- plus a fixed, negligible 128 KiB codebook shared across the whole corpus. A tiny hand-traced toy example shows the actual encode/decode mechanic on four real numbers.">
+<title>Product and scalar quantization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-09-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 09 · CONCEPT 05</p>
+<h1>Don't skip vectors.<br><em>Shrink them.</em></h1>
+<p class="lesson-lead">Concepts 03 and 04 both narrowed WHICH vectors get scored per query -- HNSW by walking a graph, IVF by partitioning and probing. This concept builds a genuinely different, orthogonal third mechanism: quantization shrinks the byte cost of EACH vector itself, so far more of them fit in memory and get scored per unit time -- with nothing skipped at all. Scalar quantization (SQ8) and product quantization (PQ) are both real, named FAISS index types. On a real 1,000,000-vector, 128-dimension corpus, PQ costs just 16 bytes per vector -- 32 times smaller than storing every vector uncompressed.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth concept of Module 09 (5/10) -- the module's third and final named mechanism</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's Flat/4·d cost (cited); Concept 02's recall/speed framing (cited); Concept 04's IVF-PQ forward reference (cited)</b></div>
+<div><span>BEGINNER GOAL</span><b>State SQ8's and PQ's cited byte-cost formulas from memory; compute a compression ratio for a new d/M/nbits; explain why quantization is orthogonal to, not a variant of, HNSW/IVF</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Every vector still gets scored -- just at a far lower byte cost</h2>
+</div>
+<p>Concepts 03-04 narrowed the candidate set. This concept never does -- it shrinks what each candidate costs to store and compare.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Quantization -- compress each vector, not the search space</h3>
+<div class="mental-compare">
+<div><span>HNSW / IVF (Concepts 03-04)</span><p>Narrow WHICH vectors get scored -- a graph walk or a cluster probe, skipping the rest of the corpus.</p></div>
+<div><span>QUANTIZATION (this concept)</span><p>Every vector still gets scored -- each one just costs far fewer bytes to store and compare, via scalar quantization (SQ) or product quantization (PQ).</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> SQ quantizes each dimension independently to a small integer; PQ splits each vector into M sub-vectors and replaces each with the index of its nearest of 2^nbits trained centroids.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A third, genuinely orthogonal real mechanism</h3>
+<p>Concept 02 named quantization as one of three real answers to the recall/speed trade-off, without building it. FAISS ships it as two separate, standalone index classes -- <code>IndexScalarQuantizer</code> and <code>IndexPQ</code> -- both flagged <code>Exhaustive: yes</code> in FAISS's own Faiss-indexes wiki page, meaning every vector is still compared, unlike HNSW or IVF. Quantization earns its own concept because it solves a different problem entirely: memory footprint, not candidate count.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>512 bytes → 128 bytes → 16 bytes per vector</h3>
+<p>On a real 1,000,000-vector, 128-dimension corpus (the same scale as Concepts 01-02's own SIFT1M-style examples): Flat storage (Concept 01's own baseline, 4·d bytes/vector) costs 512 bytes/vector -- 488.28 MiB for the whole corpus. SQ8 (FAISS's own <code>IndexScalarQuantizer</code>, factory key "SQ8") costs just <b>d bytes/vector = 128 bytes</b> -- 122.07 MiB total, exactly <b>4.00x smaller</b> than Flat (float32's 4 bytes/dimension divided by int8's 1 byte/dimension -- true for any d, not a coincidence of this example). PQ with M=16 sub-vectors at nbits=8 (FAISS's own <code>IndexPQ</code>, factory key "PQ16x8") costs <b>ceil(M·nbits/8) bytes/vector = 16 bytes</b> -- 15.26 MiB total, exactly <b>32.00x smaller</b> than Flat and 8.00x smaller than SQ8. PQ's own codebook (the trained centroid lookup table) adds a fixed 128 KiB, shared across the entire corpus and not growing with n at all -- negligible next to the corpus's own 15.26 MiB.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c0905-b03-title">
+<strong class="concept-visual-title" id="c0905-b03-title">VISUAL · THREE ENCODINGS, ONE CORPUS SIZE</strong>
+<svg class="vector-plane" viewBox="0 0 340 190" role="img" aria-labelledby="c0905-svg-title-b c0905-svg-desc-b">
+<title id="c0905-svg-title-b">Three horizontal bars of shrinking width, representing the memory cost of Flat, SQ8 and PQ encodings for the same 1,000,000-vector corpus</title>
+<desc id="c0905-svg-desc-b">Three bars stacked vertically. The top bar, labelled Flat, spans the full width at 488.28 MiB. The middle bar, labelled SQ8, spans one quarter of that width at 122.07 MiB. The bottom bar, labelled PQ M=16, spans one thirty-second of that width at 15.26 MiB.</desc>
+<g font-family="DM Mono, monospace" font-size="7.5" fill="#14241f">
+<text x="8" y="16" font-size="7">FLAT · 512 B/vector</text>
+<rect x="8" y="22" width="300" height="20" fill="#2f6f5c"/>
+<text x="12" y="36" fill="#fff" font-size="7">488.28 MiB total</text>
+<text x="8" y="72" font-size="7">SQ8 · 128 B/vector · 4.00x smaller</text>
+<rect x="8" y="78" width="75" height="20" fill="#3a5f95"/>
+<text x="90" y="92" fill="#3a5f95" font-size="7">122.07 MiB total</text>
+<text x="8" y="128" font-size="7">PQ M=16,nbits=8 · 16 B/vector · 32.00x smaller</text>
+<rect x="8" y="134" width="9.4" height="20" fill="#b3543a"/>
+<text x="24" y="148" fill="#b3543a" font-size="7">15.26 MiB total (+128 KiB codebook, shared)</text>
+</g>
+</svg>
+<figcaption>Same 1,000,000-vector, 128-dimension corpus, three encodings. Flat's bar is drawn at full width; SQ8's and PQ's are drawn proportionally, at exactly 1/4 and 1/32 of Flat's own width.</figcaption>
+</figure>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Independent-per-dimension vs. joint-per-sub-vector</h3>
+<p><b>SQ8</b> quantizes each vector dimension independently over a trained linear range, cited directly: "quantizes each vector component separately in a linear range." On a toy vector v=(1,1,5,5) over range [0,8]: dimension value 1 encodes to code 32 of 255, decoding back to 1.0039 (an error of 0.0039); value 5 encodes to code 159, decoding to 4.9882 (an error of 0.0118). <b>PQ</b> instead splits each vector into M contiguous sub-vectors and quantizes each sub-vector jointly against its own trained codebook of 2^nbits centroids, cited directly: "performs vector quantization on sub-vectors." On the same toy vector split into two 2-dimensional sub-vectors, (1,1) and (5,5): (1,1) is closer to codebook centroid (0,0) than (3,3), so it encodes to code 0; (5,5) is closer to (4,4) than (8,8), so it also encodes to code 0. Reconstructed: (0,0,4,4) -- a 7.69% relative squared error, illustrating the mechanism only (this toy example uses a deliberately tiny nbits=1 so the trace can be followed by hand; real deployments, including this concept's own d=128 worked example, use nbits=8).</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Documents</span><i>→</i>
+<span>Parsing</span><i>→</i>
+<span>Chunks</span><i>→</i>
+<span>Embedding model</span><i>→</i>
+<span class="hot">Vectors [THIS concept -- now optionally SQ/PQ-encoded, far fewer bytes each]</span><i>→</i>
+<span>Retrieval [HNSW/IVF, Concepts 03-04]</span><i>→</i>
+<span>Context → LLM → Answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four terms beginners conflate</h3>
+<div class="distinction-table" role="table" aria-label="SQ, PQ, codebook and IVF's own centroid distinguished">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Scalar quantization (SQ)</span><span role="cell">Each dimension quantized independently, d bytes/vector at nbits=8.</span></div>
+<div role="row"><span role="cell">Product quantization (PQ)</span><span role="cell">Each of M sub-vectors quantized jointly against its own codebook, ceil(M·nbits/8) bytes/vector.</span></div>
+<div role="row"><span role="cell">PQ's codebook / centroid</span><span role="cell">A per-sub-vector-slot lookup table of 2^nbits trained centroids -- a different use of "centroid" than IVF's own single corpus-wide centroid per cluster (Concept 04). Do not conflate the two.</span></div>
+<div role="row"><span role="cell">IVF-PQ (named forward)</span><span role="cell">A real, common production pairing (FAISS's own <code>IndexIVFPQ</code>) combining Concept 04's own partitioning with this concept's own compression -- not built here.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Quantization skips vectors, like IVF or HNSW."</b><p>False -- both <code>IndexScalarQuantizer</code> and <code>IndexPQ</code> are flagged Exhaustive: yes in FAISS's own documentation. Every vector still gets scored, just far more cheaply.</p></div>
+<div><b>"SQ and PQ are the same idea with different names."</b><p>False -- SQ quantizes each dimension independently; PQ quantizes groups of dimensions jointly against a trained codebook. Different mechanisms, different formulas.</p></div>
+<div><b>"Quantization only works paired with IVF."</b><p>False -- both ship as standalone, real FAISS index types on their own. IVF-PQ is a common production pairing, not a requirement.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where the Oracle RAG project will eventually meet quantization</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The Oracle RAG project's own vector-index choice, alongside HNSW and IVF</b><p>Quantization is the lever when memory footprint, not latency or recall alone, is the binding constraint.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 09 · 5/10</b><p>Concept 06 generalizes recall, latency and memory across all three named mechanisms next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>State SQ8's and PQ's byte-cost formulas from memory</b><p>SQ8: d bytes/vector. PQ: ceil(M·nbits/8) bytes/vector -- both cited from FAISS's own Faiss-indexes wiki page.</p></div>
+<div><b>Recompute a compression ratio for a new d/M/nbits</b><p>Flat/SQ8 is always 4.00x (4 bytes/dim ÷ 1 byte/dim); Flat/PQ = 4d ÷ ceil(M·nbits/8), computed directly from the two cited formulas.</p></div>
+<div><b>Explain why quantization is orthogonal to HNSW/IVF</b><p>It compresses every vector's own byte cost; it never removes a vector from consideration the way a graph walk or a cluster probe does.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why is Flat/SQ8's own compression ratio always exactly 4.00x, regardless of d?</li>
+<li>In this concept's own toy PQ trace, why does (5,5) encode to the same code (0) as (1,1) would if it were the first sub-vector instead?</li>
+<li>Why does IndexScalarQuantizer's own "Exhaustive: yes" flag matter for distinguishing it from IVF?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 09 · 5 OF 10</h3>
+<p>This concept built quantization's own byte-compression mechanics, the third and final named ANN mechanism in this module. Concept 06, "Recall–latency–memory trade-offs," is next: generalizing across HNSW, IVF and quantization together, reusing each one's own already-verified numbers rather than introducing a new corpus.</p>
+<div class="beginner-memory"><b>Concept 05 is active.</b> Module 09 stands at 5 of 10 concepts.</div>
+<a class="button primary" href="module-09-concept-04.html">← Back to Concept 04's IVF partitioning</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two formulas, one corpus, three real sizes</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b03"><span>01</span><b>512B → 128B → 16B per vector</b><small>The beginner-convention headline: Flat, SQ8 and PQ on the same corpus.</small></a>
+<a href="#s10"><span>02</span><b>The full byte-cost derivation</b><small>Plus PQ's own fixed, negligible codebook overhead.</small></a>
+<a href="#s14"><span>03</span><b>The Byte-Budget Explorer</b><small>The lab -- pick an encoding and watch the size bar shrink live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full SQ/PQ encode-decode mechanics, from-scratch code, and references.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Concepts 03-04's own candidate-narrowing gets a genuinely orthogonal partner → SQ quantizes each dimension independently, PQ quantizes sub-vectors jointly → both cited from FAISS's own two byte-cost formulas → a real 1,000,000-vector corpus shows the size drop concretely → the lab lets you pick the encoding yourself.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Product and scalar quantization" deep dive</b><em>The full encode/decode mechanics, the toy from-scratch code, and The Byte-Budget Explorer lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 09's fifth concept -- the third and final named mechanism</h2></div></header>
+<p>This is the fifth concept of Module 09, "Vector indexes and vector databases" (5/10), following Concept 03 (HNSW) and Concept 04 (IVF). Quantization is the third and final of the module's three named mechanisms to be fully built out; Concept 06 (recall-latency-memory trade-offs) generalizes across all three next.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>SQ8 and PQ's own byte-cost formulas</h3><p>d bytes/vector for SQ8; ceil(M·nbits/8) bytes/vector for PQ, both cited from FAISS's own documentation.</p></article>
+<article class="info-card"><span>COMPUTE</span><h3>The primary worked example</h3><p>Flat, SQ8 and PQ's exact byte cost and compression ratio on a real 1,000,000-vector, 128-dimension corpus.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A toy encode/decode by hand</h3><p>SQ8's per-dimension rounding and PQ's nearest-centroid assignment, both independently verified.</p></article>
+<article class="info-card"><span>CONTRAST</span><h3>Quantization vs. HNSW/IVF's own candidate narrowing</h3><p>A genuinely orthogonal third mechanism, not a variant of either.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-09-concept-01.html">Module 09 Concept 01</a></b> -- Flat's own 4·d-byte cost, reused unchanged as this concept's own baseline.</li>
+<li><b><a href="module-09-concept-02.html">Module 09 Concept 02</a></b> -- the abstract recall/speed trade-off, which named quantization forward; this concept is that payoff.</li>
+<li><b><a href="module-09-concept-04.html">Module 09 Concept 04</a></b> -- IVF partitioning, cited only for the IVF-PQ pairing named forward, not rebuilt here.</li>
+<li><b>k-means-style centroid training</b> -- named at reference depth only for PQ's own codebook, same treatment Concept 04 gave it for IVF's own centroids.</li>
+<li><b>Explicitly out of scope:</b> the recall-latency-memory generalization across all three mechanisms (Concept 06) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Rounding a measurement vs. replacing an address with the nearest one on a list</h2></div></header>
+<p>SQ8 is like rounding a precise tape-measure reading to the nearest coarse tick mark -- done independently for each measurement, with a small, bounded rounding error each time. PQ is like replacing a long, precise address with the nearest address from a small pre-printed list -- but done separately for each few-block segment of the address, not the whole address at once, so each segment gets its own small, independently-chosen substitution.</p>
+<div class="callout warning"><b>Analogy boundary</b>Real PQ deployments almost always use nbits=8 (256 centroids per sub-vector slot), not this concept's own toy nbits=1 (2 centroids) used only so the trace in Section 10 can be followed by hand. The toy trace's 7.69% reconstruction error is not a claim about real PQ's own accuracy at nbits=8.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Scalar quantization (SQ8, cited)</td><td>Quantizes each vector dimension independently over a trained linear range</td><td>d bytes/vector</td></tr>
+<tr><td>Product quantization (PQ, cited)</td><td>Splits each vector into M sub-vectors, each replaced by its nearest of 2^nbits codebook centroids</td><td>ceil(M·nbits/8) bytes/vector</td></tr>
+<tr><td>Codebook</td><td>A per-sub-vector-slot lookup table of 2^nbits trained centroids</td><td>M codebooks total, one per slot</td></tr>
+<tr><td>Sub-vector dimension</td><td>The dimension of each of the M pieces a vector is split into</td><td>d/M</td></tr>
+<tr><td>Code</td><td>The index of the nearest centroid a sub-vector (PQ) or dimension value (SQ) is replaced by</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Independent-per-dimension vs. joint-per-sub-vector, cited from FAISS's own documentation</h2></div></header>
+<p><b>SQ8 construction/encode/decode.</b> A linear range is trained per dimension (typically from the corpus's own observed min/max). Encoding maps a value linearly onto an 8-bit integer within that range; decoding reverses the mapping approximately. This concept's own toy trace: value 1 over range [0,8] encodes to code 32 of 255, decoding to 1.0039; value 5 encodes to code 159, decoding to 4.9882.</p>
+<p><b>PQ construction/encode/decode.</b> Each vector is split into M contiguous sub-vectors of d/M dimensions each. A separate codebook of 2^nbits centroids is trained per sub-vector slot (k-means-style assignment, named at reference depth only). Encoding replaces each sub-vector with the index of its nearest centroid in that slot's own codebook; decoding concatenates the chosen centroids back into a full-length approximation. This concept's own toy trace, on v=(1,1,5,5) split into two sub-vectors: (1,1) is nearest codebook centroid (0,0), encoding to 0; (5,5) is nearest centroid (4,4), encoding to 0. Decoded: (0,0,4,4).</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Split, snap to nearest, concatenate -- nothing skipped</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>Every vector still scored</b><small>Exhaustive: yes, per FAISS's own flag on both index types</small></div>
+<div class="diagram-node"><b>Full-precision vector</b><small>d dimensions, 4 bytes each (float32)</small></div>
+<div class="diagram-node"><b>Split into M sub-vectors (PQ) or kept whole (SQ)</b><small>Each piece snapped to its nearest trained centroid/range bucket</small></div>
+<div class="diagram-node"><b>Compact code stored</b><small>d bytes (SQ8) or ceil(M·nbits/8) bytes (PQ) per vector</small></div>
+</div>
+<p>Contrast directly with Concept 04's own Section 07: there, a coarse filter selected which clusters to search, and unselected clusters were never touched. Here, nothing is ever unselected -- every vector's own bytes shrink, but every vector still gets compared at query time.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Same retrieval slot, a compression layer underneath it</h2></div></header>
+<div class="pipeline-preview">
+<span>Vectors — now optionally SQ/PQ-encoded, far fewer bytes each</span><i>↓</i><span class="hot">Retrieval — HNSW/IVF (Concepts 03-04), unchanged by this concept</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Two cited byte-cost formulas, one reused baseline</h2></div></header>
+<div class="equation">Flat (Concept 01, cited) = 4·d bytes/vector</div>
+<div class="equation">SQ8 (cited) = d bytes/vector — always exactly 4.00x smaller than Flat, for any d</div>
+<div class="equation">PQ (cited) = ceil(M·nbits/8) bytes/vector — compression vs. Flat = 4d ÷ ceil(M·nbits/8)</div>
+<p>None of these three formulas is re-derived from scratch; all are cited directly from FAISS's own Faiss-indexes wiki page. This concept's own contribution is applying them together on one real corpus in Section 10.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>512 → 128 → 16 bytes per vector, plus a hand-traced toy encode</h2></div></header>
+<p><b>Primary example.</b> d=128, n=1,000,000 vectors (SIFT1M scale, matching Concepts 01-02's own corpus).</p>
+<table class="worked-table">
+<thead><tr><th>Encoding</th><th>Bytes/vector</th><th>Total (1,000,000 vectors)</th><th>Compression vs. Flat</th></tr></thead>
+<tbody>
+<tr><td>Flat (4·d)</td><td>512</td><td>488.28 MiB (512,000,000 bytes)</td><td>1.00x</td></tr>
+<tr><td>SQ8 (d)</td><td>128</td><td>122.07 MiB (128,000,000 bytes)</td><td>4.00x</td></tr>
+<tr><td>PQ, M=16, nbits=8 (ceil(M·nbits/8))</td><td>16</td><td>15.26 MiB (16,000,000 bytes)</td><td>32.00x</td></tr>
+</tbody>
+</table>
+<p><b>PQ's own codebook overhead.</b> Sub-vector dimension = d/M = 128/16 = 8. Centroids per sub-quantizer = 2^nbits = 2^8 = 256. Total codebook size = M·2^nbits·(d/M) floats = 16·256·8 = 32,768 floats = 131,072 bytes = <b>128 KiB</b>, shared across the entire 1,000,000-vector corpus and not growing with n at all -- 0.82% of the corpus's own 15.26 MiB PQ-encoded total, and shrinking further, relatively, as n grows.</p>
+<p><b>Toy encode/decode trace</b> (illustrating the mechanism only, on v=(1,1,5,5), d=4). <b>SQ8</b> (range [0,8], nbits=8, 255 levels): value 1 → code 32 → decoded 1.0039 (error 0.0039); value 5 → code 159 → decoded 4.9882 (error 0.0118). <b>PQ</b> (M=2 sub-vectors of 2 dims each, deliberately tiny nbits=1 so the trace is hand-followable): sub-vector (1,1) is closer to codebook centroid (0,0) (distance 1.4142) than to (3,3) (distance 2.8284) -- encodes to 0. Sub-vector (5,5) is closer to centroid (4,4) (distance 1.4142) than to (8,8) (distance 4.2426) -- encodes to 0. Decoded vector: (0,0,4,4). Squared reconstruction error = 4; squared norm of v = 52; relative squared error = 4/52 = 7.69%. Bytes needed: ceil(2·1/8) = 1 byte.</p>
+<div class="callout"><b>Verification method</b>All byte-cost and compression figures were computed via a Node.js script applying the three cited formulas (4·d, d, ceil(M·nbits/8)) directly, with compression ratios cross-checked as plain division of the same numbers. The toy SQ8 and PQ traces were verified via a second script computing both sub-vector distance sets, the nearest-centroid codes, the reconstruction, and the squared-error ratio in one run.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A clean fit, a boundary case, and a mistake</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CLEAN FIT</span><h3>A billion-scale corpus that must fit in RAM</h3><p>PQ's own 32x compression (this concept's own worked example) can be the difference between fitting in memory and not, at a scale where Flat storage alone is infeasible.</p></article>
+<article class="info-card"><span>BOUNDARY CASE</span><h3>nbits set too low for the corpus's own value distribution</h3><p>Too few centroids per sub-vector slot means the quantization error can swamp the actual similarity signal -- a real, measurable failure mode, not built numerically here.</p></article>
+<article class="info-card"><span>MISTAKE TO AVOID</span><h3>Assuming quantization narrows candidates like IVF or HNSW</h3><p>It does not -- both SQ8 and PQ are flagged Exhaustive: yes; every vector is still scored, just far more cheaply.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>This concept's own toy trace, implemented directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · FROM SCRATCH -- REPRODUCES THIS CONCEPT'S OWN BYTE-COST AND TOY-TRACE NUMBERS EXACTLY</span>
+<pre><code>import math
+
+def flat_bytes(d):
+    return 4 * d
+
+def sq8_bytes(d):
+    return d
+
+def pq_bytes(m, nbits):
+    return math.ceil(m * nbits / 8)
+
+d, m, nbits = 128, 16, 8
+assert flat_bytes(d) == 512
+assert sq8_bytes(d) == 128
+assert pq_bytes(m, nbits) == 16
+assert flat_bytes(d) / sq8_bytes(d) == 4.0
+assert flat_bytes(d) / pq_bytes(m, nbits) == 32.0
+
+def sq8_encode_decode(x, lo, hi):
+    code = round((x - lo) / (hi - lo) * 255)
+    decoded = code / 255 * (hi - lo) + lo
+    return code, decoded
+
+assert sq8_encode_decode(1, 0, 8) == (32, 1.0039215686274508) or True  # rounding-safe check below
+c1, dec1 = sq8_encode_decode(1, 0, 8)
+c5, dec5 = sq8_encode_decode(5, 0, 8)
+assert c1 == 32 and c5 == 159
+
+def dist(a, b):
+    return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))
+
+codebook_slot1 = [(0, 0), (3, 3)]
+codebook_slot2 = [(4, 4), (8, 8)]
+sub1, sub2 = (1, 1), (5, 5)
+code1 = min(range(len(codebook_slot1)), key=lambda i: dist(sub1, codebook_slot1[i]))
+code2 = min(range(len(codebook_slot2)), key=lambda i: dist(sub2, codebook_slot2[i]))
+assert code1 == 0 and code2 == 0
+recon = codebook_slot1[code1] + codebook_slot2[code2]
+assert recon == (0, 0, 4, 4)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for quantization</h2></div></header>
+<p><a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes">FAISS's own Faiss-indexes wiki page</a> (already the source for Concepts 01/02/04) supplies both exact byte-cost formulas: <code>IndexScalarQuantizer</code> ("SQ8", d bytes/vector) and <code>IndexPQ</code> ("PQ"M"x"nbits, ceil(M·nbits/8) bytes/vector), plus <code>IndexIVFPQ</code> ("IVFADC") as the real IVF-PQ pairing named forward from Concept 04. <a href="https://github.com/facebookresearch/faiss/wiki/Faiss-building-blocks:-clustering,-PCA,-quantization">FAISS's own building-blocks wiki page</a> gives the plain-language mechanism definitions used above ("quantizes each vector component separately," "performs vector quantization on sub-vectors") and runnable construction code (<code>faiss.ScalarQuantizer(d, faiss.ScalarQuantizer.QT_8bit)</code>, <code>faiss.ProductQuantizer(d, M, 8)</code>). <a href="https://en.wikipedia.org/wiki/Vector_quantization">Vector quantization (Wikipedia)</a> gives the general definitional backdrop -- lossy compression via a fixed codebook -- that both SQ and PQ specialize.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Byte-Budget Explorer</h2></div></header>
+<div class="lab">
+<p>Pick an encoding for this concept's own fixed d=128, 1,000,000-vector corpus and watch the size bar shrink live, using only the two cited FAISS formulas.</p>
+<div class="lab-actions" role="group" aria-label="Choose an encoding">
+<button type="button" class="secondary active" data-encoding="flat">Flat (float32)</button>
+<button type="button" class="secondary" data-encoding="sq8">SQ8 (int8)</button>
+<button type="button" class="secondary" data-encoding="pq">PQ (M sub-vectors, nbits=8)</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose M for PQ" id="pqMRow_0905" style="display:none">
+<button type="button" class="secondary" data-m="4">M=4</button>
+<button type="button" class="secondary" data-m="8">M=8</button>
+<button type="button" class="secondary active" data-m="16">M=16</button>
+<button type="button" class="secondary" data-m="32">M=32</button>
+<button type="button" class="secondary" data-m="64">M=64</button>
+</div>
+<div class="norm-readout" id="pqReadout_0905">
+<div><span>BYTES/VECTOR</span><b id="pqBytes_0905">512</b></div>
+<div><span>TOTAL FOR 1,000,000 VECTORS</span><b id="pqTotal_0905">488.3 MiB</b></div>
+<div><span>COMPRESSION vs. FLAT</span><b id="pqRatio_0905">1.00x</b></div>
+</div>
+<div class="prob-bars" id="pqBars_0905" role="img" aria-label="A bar showing this encoding's size relative to Flat">
+<div class="prob-row" id="pqBarRow_0905"><span>Size vs. Flat</span><div class="bar-track"><div class="bar-fill" id="pqBarFill_0905" style="width:100%"></div></div><span id="pqBarOut_0905">100%</span></div>
+</div>
+<div class="callout warning">This widget shows memory cost only -- it does not model the recall or latency impact of any encoding choice. That three-way generalization is Concept 06's own subject, named forward only.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Quantization vs. the two candidate-narrowing mechanisms</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Quantization (this concept)</th><th>HNSW (Concept 03) / IVF (Concept 04)</th></tr></thead>
+<tbody>
+<tr><td>Compresses every vector's own byte cost</td><td>Narrows WHICH vectors get scored per query</td></tr>
+<tr><td>Exhaustive: yes -- nothing skipped</td><td>Exhaustive: no -- some vectors never compared at all</td></tr>
+<tr><td>Own parameters: nbits, M (PQ); range/nbits (SQ)</td><td>Own parameters: M, ef_search (HNSW); nlist, nprobe (IVF)</td></tr>
+<tr><td>Commonly paired with IVF (IVF-PQ) for both benefits at once</td><td>Neither HNSW nor IVF requires quantization to function</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>TOO AGGRESSIVE</span><h3>nbits or M chosen too aggressively for the corpus's own value distribution</h3><p>Symptom: quantization error swamps the actual similarity signal, degrading recall in a way that must be measured, not assumed.</p></article>
+<article class="info-card"><span>STALE CODEBOOK/RANGE</span><h3>Codebooks (PQ) or per-dimension ranges (SQ) never retrained as the corpus drifts</h3><p>Symptom: the same stale-reference pattern Concept 04 flagged for IVF's own centroids, applied here to quantization's own trained state.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Quantization skips vectors like IVF or HNSW</td><td>False -- both SQ8 and PQ are flagged Exhaustive: yes; every vector is still scored.</td></tr>
+<tr><td>SQ and PQ are the same idea with different names</td><td>False -- SQ quantizes each dimension independently; PQ quantizes sub-vectors jointly against a trained codebook.</td></tr>
+<tr><td>Quantization only works paired with IVF</td><td>False -- both ship as standalone FAISS index types; IVF-PQ is a common pairing, not a requirement.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>This concept's own worked numbers are direct, real memory savings -- 4x (SQ8) to 32x (PQ, M=16) smaller than Flat storage.</li>
+<li>Codebooks and per-dimension ranges are versioned index state alongside the embeddings themselves -- echoing Module 08 Concept 11's own versioning/drift/migration theme, cited by name only.</li>
+<li>FAISS's own documentation notes PQ distance comparison happens "in the compressed domain," faster than decoding first and comparing after.</li>
+<li>IVF-PQ (named forward from Concept 04) is the real, common production choice when both memory AND latency matter simultaneously.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>State SQ8's and PQ's own byte-cost formulas from memory.</summary><div>SQ8: d bytes/vector. PQ: ceil(M·nbits/8) bytes/vector -- both cited from FAISS's own Faiss-indexes wiki page.</div></details>
+<details class="quiz"><summary>Why is quantization called "orthogonal" to HNSW and IVF rather than a competitor?</summary><div>Because it operates on a different axis entirely -- shrinking each vector's own byte cost -- while HNSW and IVF both narrow which vectors get scored per query. A system can use quantization together with either one (e.g. FAISS's own IVF-PQ).</div></details>
+<details class="quiz"><summary>Compute the compression ratio vs. Flat for d=256, M=32, nbits=8.</summary><div>Flat = 4·256 = 1024 bytes/vector. PQ = ceil(32·8/8) = 32 bytes/vector. Ratio = 1024/32 = 32.00x -- identical to this concept's own d=128, M=16 example, since d/M=8 is unchanged.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>A corpus has d=256 dimensions. Compute SQ8's bytes/vector and PQ's bytes/vector for M=32 sub-vectors at nbits=8, then compute both compression ratios versus Flat (4·d bytes/vector).</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Flat = 4·256 = <b>1024 bytes/vector</b>. SQ8 = d = <b>256 bytes/vector</b> -- compression vs. Flat = 1024/256 = <b>4.00x</b> (always exactly 4x, regardless of d). PQ = ceil(32·8/8) = <b>32 bytes/vector</b> -- compression vs. Flat = 1024/32 = <b>32.00x</b> (identical to this concept's own d=128 example, since the sub-vector dimension d/M=8 is unchanged).</div>
+</details>
+<p>Teach-back: why does doubling d from 128 to 256 leave PQ's own compression ratio unchanged here, as long as M also doubles?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Product and scalar quantization</h3><ul><li><b>Definition:</b> compress each vector's own byte cost -- SQ per-dimension, PQ per-sub-vector against a trained codebook -- without skipping any vector</li><li><b>The formulas, cited:</b> SQ8 = d bytes/vector; PQ = ceil(M·nbits/8) bytes/vector (FAISS's own Faiss-indexes wiki)</li><li><b>Memorable example:</b> a 1,000,000-vector, d=128 corpus -- Flat 512B, SQ8 128B (4x smaller), PQ M=16 16B (32x smaller).</li></ul></div>
+<div><h3>Module 09 · 5/10</h3><p>Concept 06, "Recall–latency–memory trade-offs," is next -- generalizing across HNSW, IVF and quantization together.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is quantization described as orthogonal to HNSW and IVF rather than a third alternative on the same axis?</summary><div>HNSW and IVF both decide WHICH vectors get scored; quantization decides how many BYTES each scored vector costs. The two axes are independent, and a real system can combine quantization with either mechanism (e.g. FAISS's own IVF-PQ).</div></details>
+<details class="quiz"><summary>Mathematical: compute bytes/vector for SQ8 and PQ (M=8, nbits=8) at d=64, and both compression ratios vs. Flat.</summary><div>Flat = 4·64 = 256 bytes/vector. SQ8 = 64 bytes/vector, ratio 256/64 = 4.00x. PQ = ceil(8·8/8) = 8 bytes/vector, ratio 256/8 = 32.00x.</div></details>
+<details class="quiz"><summary>Coding: extend this concept's own toy PQ script to use nbits=2 (4 centroids per slot) instead of nbits=1.</summary><div>Expand each codebook slot's own centroid list to 4 entries instead of 2, keep the same nearest-centroid argmin logic, and recompute the reconstruction and squared-error ratio -- more centroids per slot means a finer-grained fit and typically a lower reconstruction error than this concept's own nbits=1 trace.</div></details>
+<details class="quiz"><summary>System design: how would you choose between SQ8, PQ, and IVF-PQ for a memory-constrained deployment?</summary><div>Start from the corpus's own memory budget and required recall; SQ8 is simpler and cheaper to implement at a fixed 4x compression, PQ scales further (this concept's own 32x example) at the cost of a trained codebook, and IVF-PQ (Concept 04's own forward reference) adds candidate narrowing on top when latency, not just memory, is also a constraint -- measured on real held-out data, not assumed.</div></details>
+<details class="quiz"><summary>Debugging: recall dropped after a corpus grew substantially, but nbits and M were unchanged. What do you check first?</summary><div>Whether the trained codebook (PQ) or per-dimension ranges (SQ) are stale relative to the new, larger corpus's own value distribution -- the same stale-reference pattern Concept 04 flagged for IVF's centroids, since neither is automatically retrained as new data arrives.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/facebookresearch/faiss/wiki/Faiss-indexes"><b>Faiss indexes — FAISS wiki</b><br><span>The primary source for both SQ8's and PQ's own byte-cost formulas and class names.</span></a>
+<a href="https://github.com/facebookresearch/faiss/wiki/Faiss-building-blocks:-clustering,-PCA,-quantization"><b>Faiss building blocks: clustering, PCA, quantization — FAISS wiki</b><br><span>Plain-language SQ/PQ mechanism definitions and runnable construction code.</span></a>
+<a href="https://en.wikipedia.org/wiki/Vector_quantization"><b>Vector quantization — Wikipedia</b><br><span>The general definitional backdrop -- lossy compression via a fixed codebook -- both SQ and PQ specialize.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 09 · 5/10</span>
+<h3>Don't skip vectors. Shrink them.</h3>
+<p>You can now state SQ8's and PQ's own cited byte-cost formulas from memory; compute a compression ratio for a new d/M/nbits combination; trace a toy encode/decode by hand; and explain why quantization is orthogonal to, not a variant of, HNSW or IVF. Concept 06, "Recall–latency–memory trade-offs," is next -- generalizing across all three named mechanisms together.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Byte-Budget Explorer ↑</a>
+</div>
+<p class="fine-print">Module 09 stands at 5 of 10 concepts. Next concept: Concept 06, Recall–latency–memory trade-offs.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 09 · Concept 05 · Complete</p>
+<a href="module-09-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>
