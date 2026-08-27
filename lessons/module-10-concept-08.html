@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10 has been building a schema and a set of Oracle-real SQL statements since Concept 03. This concept is where those statements stop being strings a human types into a SQL client and become bind values a Python program sends over a connection. python-oracledb's own documentation supplies three real facts this concept leans on: standalone connections are made with oracledb.connect() in Thin mode by default; VECTOR columns are inserted using Python array.array() objects, not plain lists or numbers; and a connection does not autocommit, so an INSERT is not durable until commit() runs. The lab, The Bind Type Trap, toggles bind-value type against client path and shows which combinations work, which need a conversion step, and which need a completely different bind type.">
+<title>Python integration with python-oracledb — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-08.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 08 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 08</p>
+<h1>SQL was never the missing piece.<br><em>A program that can send it, was.</em></h1>
+<p class="lesson-lead">Concepts 03 through 06 wrote real Oracle SQL by hand: five tables, a real VECTOR(384, FLOAT32) column, a real VECTOR_DISTANCE query, a real vector index. None of it runs by itself. This concept adds the missing layer -- python-oracledb, the driver that turns a Python value into a bind variable, sends it to Oracle, and turns the rows that come back into Python values again. Three real facts anchor it: connections default to Thin mode, VECTOR columns bind through array.array() objects, and nothing is durable until you call commit().</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eighth concept in Module 10's own 14-concept list -- originally built out of sequence, ahead of Concept 07; that gap has since been closed (see Section 01)</b></div>
+<div><span>PREREQUISITE</span><b>Concept 05's real VECTOR(384, FLOAT32) type and VECTOR_DISTANCE(...,COSINE) query; Concept 03's five-table schema and doc_9f21 dataset; Concept 02's transaction-management citation (cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Open a connection, bind a VECTOR value with array.array(), execute a parameterized query, fetch the rows back, and commit</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Someone has to actually run the SQL</h2>
+</div>
+<p>Concepts 03-06 wrote real Oracle SQL by hand. But SQL text sitting in a lesson doesn't execute itself. This concept covers python-oracledb -- the library that connects to Oracle, sends bind values (including VECTOR values), and hands rows back as Python data.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The layer between the lesson and the database</h3>
+<p>python-oracledb is Oracle's own Python driver. It opens a connection, carries bind values from Python into a SQL statement, and carries rows back out. Everything Concepts 03-06 wrote as SQL text becomes runnable through exactly three objects: a Connection, a Cursor, and a bind value.</p>
+<div class="beginner-memory"><b>First memory:</b> connect() opens the door, cursor() gives you a hand to pass things through it, execute() sends the SQL and the values, and nothing is saved until commit().</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A VECTOR value is not a normal Python value</h3>
+<p>Binding a string or a number into SQL is old, well-understood territory. A VECTOR column is not old territory -- it is a typed array Oracle stores in one of four formats (Concept 05). python-oracledb has to know a Python value is meant to become a VECTOR bind, and that mapping is not automatic for every Python type. This concept exists to show exactly which Python types map cleanly and which don't.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c1008-b03-title">
+<strong class="concept-visual-title" id="c1008-b03-title">VISUAL · FOUR OBJECTS, ONE ROUND TRIP</strong>
+<div class="scroll-flow">
+<span>oracledb.connect()</span><i>→</i>
+<span>connection.cursor()</span><i>→</i>
+<span class="hot">cursor.execute(sql, binds)</span><i>→</i>
+<span>rows back via cursor.fetchall()</span><i>→</i>
+<span>connection.commit()</span>
+</div>
+</figure>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Binding this course's own chunk</h3>
+<p>Concept 03's dataset has a real chunk, <code>chk_9f21_2_03</code> ("To reset a vendor account, an admin must..."). In Python: <code>vector_data = array.array("f", [0.6, 0.8, 0.0])</code> then <code>cursor.execute("insert into embeddings (chunk_id, embedding) values (:1, :2)", ["chk_9f21_2_03", vector_data])</code>. That's a real array.array object, per python-oracledb's own documentation, standing in for the real 384-dimension embedding -- shrunk to 3 dimensions here so the numbers can be checked by hand.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>execute() takes the SQL and the values together</h3>
+<p>One call does the work: <code>cursor.execute(sql_text, bind_values)</code>. Named binds (<code>:query_embedding</code>) or positional binds (<code>:1</code>, <code>:2</code>) both work; python-oracledb matches them to the values you pass. Rows come back through the same cursor -- iterate it directly, or call <code>cursor.fetchall()</code> once all rows fit in memory.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Nothing is saved until you say so</h3>
+<div class="scroll-flow">
+<span>INSERT sent, row exists in this transaction only</span><i>→</i>
+<span class="hot">connection.commit() — now durable</span><i>→</i>
+<span>or connection.rollback() — discarded, as if it never ran</span>
+</div>
+<p>Per python-oracledb's own transaction-management documentation (already cited in Concept 02): "By default, python-oracledb does not commit this transaction to the database." An INSERT that runs without a following <code>commit()</code> is not an error -- it is just not saved yet.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>array.array is not a Python list</h3>
+<div class="distinction-table" role="table" aria-label="Bind types that do and do not work for a VECTOR column">
+<div role="row"><b role="cell">Python value</b><b role="cell">Works as a VECTOR bind in Thin mode?</b></div>
+<div role="row"><span role="cell"><code>array.array("f", [0.6, 0.8, 0.0])</code></span><span role="cell">Yes -- the documented Thin-mode bind type for a FLOAT32 vector column.</span></div>
+<div role="row"><span role="cell"><code>[0.6, 0.8, 0.0]</code> (plain Python list)</span><span role="cell">Not the documented bind type -- fetched rows can be converted to a list with an output type handler, but that is the read side, not the write side.</span></div>
+<div role="row"><span role="cell"><code>numpy.array([0.6, 0.8, 0.0], dtype=numpy.float32)</code></span><span role="cell">Only after an input type handler converts it to array.array first.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A Python list of floats is a fine VECTOR bind value."</b><p>Not in Thin mode. python-oracledb's own documentation binds VECTOR columns with array.array() objects; a plain list is not the same type and is not the documented insert path.</p></div>
+<div><b>"cursor.execute() saves the row immediately."</b><p>It doesn't. python-oracledb does not autocommit by default -- the row exists only inside the current transaction until <code>connection.commit()</code> runs.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The ingestion and retrieval code, not the schema</b><p>Every INSERT into embeddings and every VECTOR_DISTANCE query this course has written in SQL becomes one cursor.execute() call here -- the schema (Concept 03) and the syntax (Concept 05) don't change, only how they get sent.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 8/14</b><p>Position 7, Oracle Text hybrid retrieval, has not been authored yet -- this concept was built out of order. Flagged, not hidden. Concept 09 (transactions, updates, deletes, index sync) is next in sequence.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Open a connection and a cursor</b><p><code>connection = oracledb.connect(user=user, password=pwd, dsn=dsn)</code>, then <code>cursor = connection.cursor()</code>.</p></div>
+<div><b>Bind a VECTOR value correctly</b><p><code>array.array("f", [...])</code> for a FLOAT32 vector column -- not a plain list, not a bare numpy array.</p></div>
+<div><b>Know why an INSERT can silently not be saved</b><p>python-oracledb does not autocommit -- call <code>connection.commit()</code>, or the row disappears on rollback/disconnect.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What Python type does python-oracledb's own documentation use to bind a FLOAT32 VECTOR column, in Thin mode?</li>
+<li>Why can an INSERT statement run with no error, and still not be in the database a moment later?</li>
+<li>Try it: open "The Bind Type Trap" lab below and find the one combination that needs a completely different bind type.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 8 OF 14</h3>
+<p>The schema, the real syntax, and the index rules from Concepts 03-06 are only useful once a program can actually send them -- that's what python-oracledb does. Concept 09 covers transactions, updates, deletes, and index synchronization next -- named forward-only here. Position 7, Oracle Text hybrid retrieval, remains unbuilt and is not assumed by this concept.</p>
+<div class="beginner-memory"><b>Concept 08 is active.</b> Module 10 stands at position 8 of 14. This concept was originally built ahead of position 7; Concept 07 has since been authored, closing that gap.</div>
+<a class="button primary" href="module-10-concept-06.html">← Back to Concept 06's vector indexes</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Three facts, one worked round trip</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>Connect, bind, execute, fetch, commit</b><small>The five real python-oracledb calls this concept is built on.</small></a>
+<a href="#s10"><span>02</span><b>Insert and query chk_9f21_2_03</b><small>A hand-verified 3-D stand-in for the real 384-D embedding.</small></a>
+<a href="#s14"><span>03</span><b>The Bind Type Trap</b><small>The lab -- bind-value type against client path.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concepts 03-06 produced real SQL with nothing to run it → python-oracledb supplies exactly three objects, Connection, Cursor, and bind values, plus one rule (no autocommit) → VECTOR columns bind through array.array() objects in Thin mode, not plain lists, per python-oracledb's own documentation → a hand-verified worked example inserts and queries a 3-D stand-in for chk_9f21_2_03's real embedding, confirming the cosine-distance ordering by an independent node script → the lab lets you cross bind-value type against client path and see which combinations are documented to work → Concept 09 covers transactions and index sync next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Python integration with python-oracledb" deep dive</b><em>Full citations, the annotated Python/SQL, and The Bind Type Trap lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 8 of 14</h2></div></header>
+<p>This concept fills position 8 of Module 10's own 14-concept list: "Python integration with python-oracledb." It was originally authored ahead of position 7, "Oracle Text and vector hybrid retrieval," leaving a temporary gap in the built set. Concept 07 has since been authored, closing that gap -- the module's built set is now the contiguous {1,2,3,4,5,6,7,8}. Nothing here ever depended on Concept 07's content; every prerequisite cited below is Concept 02, 03, or 05.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>CONNECT</span><h3>Open a standalone connection</h3><p><code>oracledb.connect(user=, password=, dsn=)</code> -- Thin mode by default, no Oracle Client libraries required.</p></article>
+<article class="info-card"><span>BIND</span><h3>Bind a VECTOR value correctly</h3><p><code>array.array("f", [...])</code> for a FLOAT32 column -- the documented Thin-mode bind type, not a plain list.</p></article>
+<article class="info-card"><span>EXECUTE + FETCH</span><h3>Run a query and get rows back</h3><p><code>cursor.execute(sql, binds)</code>, then iterate the cursor or call <code>cursor.fetchall()</code>.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>Connection pooling and session sizing, security/RLS, and Oracle Text hybrid retrieval -- covered by Concept 07 or named forward (Concepts 09/10), never re-derived here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-05.html">Module 10 Concept 05</a></b> -- the real VECTOR(384, FLOAT32) column and VECTOR_DISTANCE(...,COSINE) query, reused verbatim as the SQL this concept's Python code actually sends.</li>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema and the doc_9f21 dataset, specifically chunk <code>chk_9f21_2_03</code>, reused as this concept's own worked-example row.</li>
+<li><b><a href="module-10-concept-02.html">Module 10 Concept 02</a></b> -- python-oracledb's own transaction-management documentation, already cited there for commit()/rollback() semantics at the conceptual level; this concept is where that citation's own deferred note ("the python-integration... detail that belongs to Module 10's later Concepts 08-09") gets paid off.</li>
+<li><b>Explicitly out of scope:</b> <a href="module-10-concept-07.html">Oracle Text hybrid retrieval (Concept 07)</a>, connection pooling and session sizing (Concept 09's own territory), and Oracle security/RLS from Python (Concept 10) -- all named forward, none re-derived here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>The waiter, not the menu</h2></div></header>
+<p>Concepts 03-06 wrote the menu -- real Oracle SQL, in a language a database engine understands. But a menu on a table doesn't cook anything. python-oracledb is the waiter: it carries your order (the SQL text and its bind values) to the kitchen (the database), and carries the finished plates (result rows) back to your table. A VECTOR column is a dish with a very specific required container -- hand it over in the wrong container (a plain Python list, say) and the waiter won't accept the order, not because the kitchen refuses vectors, but because that's not the container the menu specifies for this dish.</p>
+<div class="callout warning"><b>Analogy boundary</b>The actual mechanism comes from Section 10's own worked round trip and Section 12's own runnable code, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Connection</td><td>A live session to an Oracle database, created by <code>oracledb.connect()</code></td><td>oracledb.Connection</td></tr>
+<tr><td>Cursor</td><td>An object that executes SQL statements against a connection and manages fetched rows</td><td>connection.cursor()</td></tr>
+<tr><td>Bind variable</td><td>A named or positional placeholder (<code>:1</code>, <code>:query_embedding</code>) in SQL text, substituted with a Python value at execute time</td><td>cursor.execute(sql, binds)</td></tr>
+<tr><td>DB_TYPE_VECTOR</td><td>The python-oracledb type constant identifying a VECTOR column/bind in cursor metadata and type handlers</td><td>oracledb.DB_TYPE_VECTOR</td></tr>
+<tr><td>Input/output type handler</td><td>A callback registered on a connection or cursor that converts a Python value to or from the wire type at bind/fetch time</td><td>connection.inputtypehandler / connection.outputtypehandler</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Five calls carry the whole round trip</h2></div></header>
+<div class="core-block">
+<p>Per python-oracledb's own documentation, a standalone connection is created by calling <code>oracledb.connect()</code>, passing a username, password, and a data source name (dsn) identifying the host and service. This runs in Thin mode by default -- python-oracledb's own connection-handling guide states plainly that "python-oracledb's default Thin mode" needs no separately installed Oracle Client libraries. From that connection, <code>connection.cursor()</code> returns a cursor; <code>cursor.execute(sql, binds)</code> sends the SQL text and its bind values in one round trip; rows are read back by iterating the cursor directly or calling <code>cursor.fetchone()</code>, <code>cursor.fetchmany()</code>, or <code>cursor.fetchall()</code>. None of this is specific to VECTOR columns -- what is specific is the Python type used as the bind value, covered in Section 10.</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Connect, bind, execute, fetch, commit</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1008-s07-title">
+<strong class="concept-visual-title" id="c1008-s07-title">VISUAL · THE FIVE-CALL ROUND TRIP</strong>
+<div class="diagram-strip" role="list">
+<div class="diagram-node" role="listitem"><b>connect()</b><small>Thin mode, default</small></div>
+<div class="diagram-node" role="listitem"><b>cursor()</b><small>from the connection</small></div>
+<div class="diagram-node active" role="listitem"><b>execute(sql, binds)</b><small>array.array for VECTOR</small></div>
+<div class="diagram-node" role="listitem"><b>fetchall() / iterate</b><small>rows back as Python values</small></div>
+<div class="diagram-node" role="listitem"><b>commit()</b><small>no autocommit by default</small></div>
+</div>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>One layer added beneath the existing skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Schema — the five-table skeleton (Concept 03)</span><i>↓</i><span>Persistence — the real VECTOR(384, FLOAT32) column (Concept 05)</span><i>↓</i><span>Index layer — CREATE VECTOR INDEX (Concept 06)</span><i>↓</i><span class="hot">Python client layer — connect/bind/execute/fetch/commit (this concept)</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same cosine distance, now computed by a real query</h2></div></header>
+<div class="equation">cosine_distance(a, b) = 1 − (a · b) / (‖a‖ ‖b‖) — unchanged from Module 04 Concept 03 and Concept 05's own VECTOR_DISTANCE(...,COSINE) call; this concept adds nothing new to the formula, only the Python program that submits it as a bind-parameterized query.</div>
+<div class="callout"><b>Scope hedge</b>The worked example below uses a 3-dimension stand-in for chk_9f21_2_03's real 384-dimension, all-MiniLM-L6-v2 embedding, specifically so the distance values can be checked by hand and by an independent script -- the same shrinking python-oracledb's own documentation uses for its VECTOR examples (3-dimension float32/float64/int8 vectors throughout Section 15 of its user guide).</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Insert, query, and verify chk_9f21_2_03's own round trip</h2></div></header>
+<p>Two rows go in: <code>chk_9f21_2_03</code>, the real chunk from Concept 03's doc_9f21 dataset ("To reset a vendor account, an admin must..."), and <code>chk_9f21_2_04</code>, a second row invented for this lab only, not part of the original doc_9f21 dataset, to give the query something to rank against. Both get a small 3-D stand-in embedding in place of the real 384-D all-MiniLM-L6-v2 vector.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · CONNECT AND INSERT TWO EMBEDDINGS</span>
+<pre><code>import oracledb
+import array
+
+connection = oracledb.connect(user=user, password=pwd, dsn=dsn)  # Thin mode, default
+cursor = connection.cursor()
+
+rows = [
+    ("chk_9f21_2_03", array.array("f", [0.6, 0.8, 0.0])),  # real chunk, toy 3-D stand-in
+    ("chk_9f21_2_04", array.array("f", [0.0, 0.0, 1.0])),  # lab-only contrast row
+]
+for chunk_id, vec in rows:
+    cursor.execute(
+        "insert into embeddings (chunk_id, embedding) values (:1, :2)",
+        [chunk_id, vec],
+    )
+connection.commit()  # not durable until this line runs
+</code></pre>
+</div>
+<p>Neither INSERT is saved until <code>connection.commit()</code> runs -- per python-oracledb's own transaction-management documentation, already cited in Concept 02, this is a deliberate default, not an omission.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · QUERY WITH A BOUND VECTOR PARAMETER</span>
+<pre><code>query_embedding = array.array("f", [0.8, 0.6, 0.0])
+
+cursor.execute(
+    """
+    SELECT c.chunk_id, c.text,
+           VECTOR_DISTANCE(e.embedding, :qv, COSINE) AS dist
+    FROM chunks c
+    JOIN embeddings e ON e.chunk_id = c.chunk_id
+    WHERE c.chunk_id IN ('chk_9f21_2_03', 'chk_9f21_2_04')
+    ORDER BY dist
+    """,
+    qv=query_embedding,
+)
+for chunk_id, text, dist in cursor.fetchall():
+    print(chunk_id, round(dist, 4))
+</code></pre>
+</div>
+<table class="compare-table">
+<thead><tr><th>chunk_id</th><th>embedding (toy 3-D)</th><th>cosine distance to query_embedding</th><th>rank</th></tr></thead>
+<tbody>
+<tr><td>chk_9f21_2_03</td><td>[0.6, 0.8, 0.0]</td><td>0.04</td><td>1st</td></tr>
+<tr><td>chk_9f21_2_04</td><td>[0.0, 0.0, 1.0]</td><td>1.0</td><td>2nd</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Both distances were computed independently by a standalone node script, not typed in by hand: dot([0.8,0.6,0.0],[0.6,0.8,0.0]) = 0.96, both vectors have norm 1, so cosine distance = 1 − 0.96 = 0.04 exactly; dot([0.8,0.6,0.0],[0.0,0.0,1.0]) = 0, so cosine distance = 1 − 0 = 1 exactly. The script also re-ran both vectors through <code>Math.fround()</code> to simulate float32 rounding -- the same precision array.array("f", ...) and Oracle's own FLOAT32 storage actually use -- and got 0.03999999332428039 and 1, confirming the float32 storage format used throughout this course does not change which row ranks first. The printed output above rounds to 4 decimal places, matching the Python <code>round(dist, 4)</code> call in the code above.</div>
+<p>The result set comes back ordered exactly as VECTOR_DISTANCE was told to order it -- <code>chk_9f21_2_03</code> first, because its toy embedding sits far closer in cosine terms to the query vector than the lab-only contrast row does. Nothing about ordering changed from Concept 05 or 06; what's new here is that a Python program, not a SQL client, submitted the bound parameter and read the ranked rows back.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Binding and fetching, three real ways</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>THIN MODE, DEFAULT</span><h3>array.array() bind</h3><p><code>array.array("f", [0.6, 0.8, 0.0])</code> -- the documented bind type for a FLOAT32 vector column, no conversion needed.</p></article>
+<article class="info-card"><span>NUMPY INTEROP</span><h3>Input type handler</h3><p><code>numpy.array([...], dtype=numpy.float32)</code> becomes a valid bind only once <code>connection.inputtypehandler</code> converts it to array.array, per python-oracledb's own numpy_converter_in example.</p></article>
+<article class="info-card"><span>FETCH AS A LIST</span><h3>Output type handler</h3><p><code>outconverter=list</code> on a cursor.var(oracledb.DB_TYPE_VECTOR, ...) turns fetched array.array rows into plain Python lists, if that's the shape the rest of the code expects.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The numpy round trip, in python-oracledb's own pattern</h2></div></header>
+<p>Per python-oracledb's own "Using VECTOR Data" documentation, here is the full input/output type-handler pair that lets numpy arrays act as VECTOR binds and lets fetched VECTOR columns come back as numpy arrays -- reproduced from the docs, not this concept's own invention.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · NUMPY INPUT AND OUTPUT TYPE HANDLERS (per python-oracledb's own documentation)</span>
+<pre><code>import numpy
+import array
+
+def numpy_converter_in(value):
+    if value.dtype == numpy.float64:
+        dtype = "d"
+    elif value.dtype == numpy.float32:
+        dtype = "f"
+    elif value.dtype == numpy.uint8:
+        dtype = "B"
+    else:
+        dtype = "b"
+    return array.array(dtype, value)
+
+def input_type_handler(cursor, value, arraysize):
+    if isinstance(value, numpy.ndarray):
+        return cursor.var(
+            oracledb.DB_TYPE_VECTOR,
+            arraysize=arraysize,
+            inconverter=numpy_converter_in,
+        )
+
+def numpy_converter_out(value):
+    return numpy.array(value, copy=False, dtype=value.typecode)
+
+def output_type_handler(cursor, metadata):
+    if metadata.type_code is oracledb.DB_TYPE_VECTOR:
+        return cursor.var(
+            metadata.type_code,
+            arraysize=cursor.arraysize,
+            outconverter=numpy_converter_out,
+        )
+
+connection.inputtypehandler = input_type_handler
+connection.outputtypehandler = output_type_handler
+</code></pre>
+</div>
+<p>With both handlers registered, a numpy array can be passed directly as a bind value, and every VECTOR column comes back as a numpy array instead of array.array -- useful given Module 08's own embeddings are produced by all-MiniLM-L6-v2 as numpy arrays in the first place.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for the driver-level facts</h2></div></header>
+<p>python-oracledb's own <a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/vector_data_type.html">"Using VECTOR Data" documentation</a> is the primary citation for every bind/fetch fact in this concept -- array.array() as the Thin-mode bind type (Section 15.1.1), the numpy input/output type handlers (Section 15.6), and the string-bind requirement for Thick mode with Oracle Client 21c or earlier (Section 15.5.1). python-oracledb's own <a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/connection_handling.html">connection-handling documentation</a> supplies the real <code>oracledb.connect()</code> signature and confirms Thin mode is the documented default. python-oracledb's own <a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/sql_execution.html">SQL-execution documentation</a> supplies the real <code>cursor.execute()</code>/<code>fetchone()</code>/<code>fetchmany()</code>/<code>fetchall()</code> signatures and the named-bind-variable syntax. Concept 02's own <a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/txn_management.html">transaction-management documentation</a> is reused here for the commit()/rollback() default-behavior quote, paying off the note left on that citation in Concept 02. Concept 05's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html">vector_distance documentation</a> is reused for the SQL this concept's Python code actually sends, not re-derived.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Bind Type Trap</h2></div></header>
+<div class="lab">
+<p>Pick a Python bind-value type and a client path. Watch the INSERT code and the outcome update live -- works directly, needs a conversion step first, or needs a completely different bind type.</p>
+<div class="lab-actions">
+<button type="button" class="active" data-bind="array" id="bindTypeArray_1008">array.array("f", [...])</button>
+<button type="button" class="secondary" data-bind="numpy" id="bindTypeNumpy_1008">numpy.array([...], dtype=float32)</button>
+<button type="button" class="secondary" data-bind="string" id="bindTypeString_1008">"[0.6, 0.8, 0.0]" (string)</button>
+</div>
+<div class="lab-actions">
+<button type="button" class="active" data-client="thin" id="clientThin_1008">Thin mode (default)</button>
+<button type="button" class="secondary" data-client="thick-old" id="clientThickOld_1008">Thick mode + Oracle Client 21c or earlier</button>
+</div>
+<div class="code-block">
+<span class="code-label">CLIENT PATH</span>
+<pre><code id="clientPathCode_1008"></code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">INSERT CODE</span>
+<pre><code id="bindTypeCode_1008"></code></pre>
+</div>
+<div class="scroll-flow">
+<span>cursor.execute() called</span><i>→</i>
+<span class="hot" id="bindOutcome_1008"></span>
+</div>
+<div class="callout" id="bindVerdict_1008" aria-live="polite"></div>
+<table class="compare-table">
+<thead><tr><th>Bind value type</th><th>Thin mode (default)</th><th>Thick + Oracle Client 21c or earlier</th></tr></thead>
+<tbody>
+<tr><td><code>array.array("f", [...])</code></td><td>Works directly</td><td>Must use a string instead</td></tr>
+<tr><td><code>numpy.array([...])</code></td><td>Needs an input type handler</td><td>Must use a string instead</td></tr>
+<tr><td><code>"[0.6, 0.8, 0.0]"</code> (string)</td><td>Not the documented Thin-mode path</td><td>Works (the documented workaround)</td></tr>
+</tbody>
+</table>
+<p class="fine-print">Sparse vectors use a fourth bind type, <code>oracledb.SparseVector</code>, named here for completeness only -- not exercised by this lab since this course's own embeddings table (Concept 03) is a dense VECTOR(384, FLOAT32) column.</p>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">REPETITION</span><h2>The three facts, restated</h2></div></header>
+<ul>
+<li><code>oracledb.connect(user=, password=, dsn=)</code> opens a standalone connection in Thin mode by default -- no separately installed Oracle Client libraries required.</li>
+<li>A FLOAT32 VECTOR column binds through <code>array.array("f", [...])</code> in Thin mode -- not a plain Python list, and not a bare numpy array without a type handler.</li>
+<li>Nothing is durable until <code>connection.commit()</code> runs -- python-oracledb does not autocommit by default, per its own transaction-management documentation.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENTLY MISSING ROW</span><h3>INSERT ran with no error, but the row isn't there later</h3><p>Cause: no <code>connection.commit()</code> was called, so the row lived only inside a transaction that was later rolled back or lost on disconnect. Fix: commit explicitly, or use a <code>with</code>-block pattern that commits before closing.</p></article>
+<article class="info-card"><span>WRONG BIND TYPE FOR VECTOR</span><h3>A numpy array or plain list passed as a VECTOR bind raises a type error or is silently mishandled</h3><p>Cause: Thin mode's documented VECTOR bind type is array.array, not a bare Python list or numpy ndarray. Fix: convert explicitly, or register an input type handler per Section 12's own numpy_converter_in.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Any Python sequence of floats can bind to a VECTOR column</td><td>False -- python-oracledb's own Thin-mode documentation specifies array.array() objects; other sequence types need an explicit conversion or type handler.</td></tr>
+<tr><td>cursor.execute() saves the row the moment it runs</td><td>False -- python-oracledb does not autocommit by default; the row is only durable after connection.commit().</td></tr>
+<tr><td>python-oracledb always needs a separately installed Oracle Client library</td><td>False -- Thin mode, the documented default, needs none; Thick mode is the one that requires Oracle Client libraries, and only Thick mode with Oracle Client 21c or earlier forces the string-bind workaround.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle yet</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Ingestion and retrieval code, one connection at a time</b><p>Every example here uses a single standalone connection -- fine for this lesson's own hand-verified round trip, not the concurrency shape a real service needs. Connection pooling and session sizing are Concept 09's own territory, not decided here.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 8/14</b><p>Position 7 (<a href="module-10-concept-07.html">Oracle Text hybrid retrieval</a>) has since been built, closing the sequencing gap noted in Section 01. Concept 09 (transactions, updates, deletes, index synchronization) is next in the module's own sequence.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can open a standalone connection</b><p><code>oracledb.connect(user=, password=, dsn=)</code>, Thin mode by default.</p></div>
+<div><b>I know the documented Thin-mode VECTOR bind type</b><p>array.array("f", [...]) for FLOAT32 -- not a plain list, not a bare numpy array.</p></div>
+<div><b>I know why an INSERT can run clean and still not persist</b><p>No autocommit by default -- commit() or rollback() decides what actually happens.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using this concept's own Step-10 query shape, write the Python bind value for a query_embedding of <code>[1.0, 0.0, 0.0]</code> against a FLOAT32 vector column, in Thin mode, and state which of the two worked-example rows (chk_9f21_2_03's [0.6, 0.8, 0.0] or chk_9f21_2_04's [0.0, 0.0, 1.0]) would rank first, and why, without running any code.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div><code>array.array("f", [1.0, 0.0, 0.0])</code> is the correct Thin-mode bind. dot([1,0,0],[0.6,0.8,0.0]) = 0.6, norms are 1 and 1, so cosine distance = 1 − 0.6 = 0.4. dot([1,0,0],[0,0,1]) = 0, so cosine distance = 1 − 0 = 1.0. Since 0.4 &lt; 1.0, chk_9f21_2_03 still ranks first -- a different query vector, same winner, because chk_9f21_2_03's embedding still has a nonzero component along the query's own direction and chk_9f21_2_04's does not.</div>
+</details>
+<p>Teach-back: why does python-oracledb need to know a value is meant for a VECTOR column at all, instead of just accepting any sequence of numbers?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Python integration with python-oracledb</h3><ul><li><b>Connect:</b> oracledb.connect(user=, password=, dsn=) -- Thin mode by default, no Oracle Client libraries needed.</li><li><b>Bind a VECTOR:</b> array.array("f", [...]) in Thin mode -- not a plain list, not a bare numpy array without a type handler.</li><li><b>Commit matters:</b> no autocommit by default -- connection.commit() is what makes a row durable.</li></ul></div>
+<div><h3>Module 10 · position 8/14</h3><p>Originally built ahead of position 7 (Oracle Text hybrid retrieval); that gap has since closed. Concept 09 (transactions, updates, deletes, index sync) is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what Python type does python-oracledb use to bind a FLOAT32 VECTOR column in its default Thin mode?</summary><div>A Python array.array() object of type "f" (32-bit float) -- per python-oracledb's own "Using VECTOR Data" documentation.</div></details>
+<details class="quiz"><summary>Conceptual: does cursor.execute() on an INSERT statement save the row immediately?</summary><div>No -- python-oracledb does not autocommit by default. The row is only durable in the database after connection.commit() runs.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real code to open a connection, bind an array.array vector, and commit an insert.</summary><div>connection = oracledb.connect(user=user, password=pwd, dsn=dsn); cursor = connection.cursor(); cursor.execute("insert into embeddings (chunk_id, embedding) values (:1, :2)", ["chk_9f21_2_03", array.array("f", [0.6, 0.8, 0.0])]); connection.commit()</div></details>
+<details class="quiz"><summary>System design: why does inserting a numpy array directly as a VECTOR bind require an input type handler, rather than working out of the box?</summary><div>Because python-oracledb's documented Thin-mode bind type for vector columns is array.array, not numpy.ndarray -- an input type handler (registered via connection.inputtypehandler) is the documented conversion step that turns a numpy array into an array.array before the bind reaches the database.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/vector_data_type.html"><b>Using VECTOR Data — python-oracledb documentation</b><br><span>Primary citation, re-fetched live this session (HTTP 200) -- array.array() as the Thin-mode VECTOR bind type, the numpy input/output type-handler pair, and the string-bind requirement for Thick mode with Oracle Client 21c or earlier.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/connection_handling.html"><b>Connecting to Oracle Database — python-oracledb documentation</b><br><span>Re-fetched live this session (HTTP 200) -- the real oracledb.connect() signature and confirmation that Thin mode is the documented default.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/sql_execution.html"><b>SQL Execution — python-oracledb documentation</b><br><span>Re-fetched live this session (HTTP 200) -- the real cursor.execute()/fetchone()/fetchmany()/fetchall() signatures and named-bind-variable syntax.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/txn_management.html"><b>Transaction Management — python-oracledb documentation</b><br><span>Reused from Concept 02 -- the no-autocommit-by-default quote and Connection.commit()/Connection.rollback(), applied here at the code level as that citation's own note anticipated.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Reused from Concept 05 -- the SQL this concept's Python code sends via a bound parameter, not re-derived.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · POSITION 8/14</span>
+<h3>SQL was never the missing piece. A program that can send it, was.</h3>
+<p>You can now open a connection, bind a VECTOR value the way python-oracledb's own Thin-mode documentation specifies, execute a parameterized query against this course's own schema, fetch the ranked rows back, and commit. Concept 09 covers transactions, updates, deletes, and index synchronization next. This page was originally built ahead of position 7, Oracle Text hybrid retrieval -- that concept has since been authored, closing the gap.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Bind Type Trap ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at position 8 of 14. Position 7 (Oracle Text hybrid retrieval) has since been built. Next in sequence: Concept 09, transactions, updates, deletes and index synchronization.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 08 · Active</p>
+<a href="module-10-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

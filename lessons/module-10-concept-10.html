@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 04 named its own weak point: a WHERE-clause tenant filter is only as reliable as the caller who remembers to write it. This concept closes that gap with Oracle's real Virtual Private Database mechanism -- DBMS_RLS.ADD_POLICY, verified against Oracle's own PL/SQL Packages reference and its own Database Security Guide -- then surveys the rest of what a production Oracle deployment actually needs: GRANT/CREATE ROLE for coarse access, Unified Auditing for who-did-what, RMAN for backup and recovery, and the documented fact that TRUNCATE marks an IVF vector index UNUSABLE until it's rebuilt. A node script independently confirms the headline claim: a caller query with zero tenant predicate at all still returns only the correct tenant's rows once the VPD policy is active, and would otherwise leak 4 of 5 returned rows to the wrong tenant. Transparent Data Encryption is named but flagged as not independently re-verified this session.">
+<title>Oracle security and operational considerations for RAG — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 10 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 10</p>
+<h1>The WHERE clause was never the wall.<br><em>The database itself can be.</em></h1>
+<p class="lesson-lead">Concept 04 wrote a real tenant filter and then named its own biggest weakness out loud: "a WHERE clause is only as reliable as the caller." This concept builds the fix Concept 04 only named -- Oracle's real Virtual Private Database mechanism, DBMS_RLS.ADD_POLICY -- and shows, with an independently verified worked example, that a query with zero tenant predicate at all still can't leak another tenant's rows once the policy is active. Then it surveys the rest of what "production Oracle" actually requires: real GRANT/CREATE ROLE access control, Unified Auditing, RMAN backup and recovery, and a documented index-maintenance trap this course's own vector index (Concept 06) can walk straight into.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth concept named in Module 10's own 14-concept list -- originally built out of order, ahead of Concept 09 (transactions, updates, deletes, index synchronization); that gap has since been closed (see Section 01).</b></div>
+<div><span>PREREQUISITE</span><b>Concept 04's own tenant_id column and WHERE-clause pre/post-filter SQL -- specifically the gap this concept closes; Concept 03's five-table schema; Concept 06's vector-index citation family, reused for the TRUNCATE/UNUSABLE fact</b></div>
+<div><span>BEGINNER GOAL</span><b>Write the real DBMS_RLS.ADD_POLICY call that enforces Concept 04's own tenant filter at the database layer, and explain why it still isolates tenants even when a caller's SQL forgets the WHERE clause entirely</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two real jobs hiding under one concept title</h2>
+</div>
+<p>"Security and operational considerations" is really two different jobs. Security is who is allowed to see or change a row, enforced by the database engine itself. Operational is keeping the system correct and recoverable over time. This concept names real Oracle mechanisms for both, and builds one of them -- row-level security -- into a full worked example that closes a gap Concept 04 named but never built.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Security enforced by the engine, not by memory</h3>
+<p>Real Oracle security means the database itself refuses an unauthorized row, not a query author remembering the right predicate: grants and roles for coarse access, Virtual Private Database (VPD, via the DBMS_RLS package) for row-level isolation, Unified Auditing for who-did-what. Real operational work means the system survives the things that actually happen to it: RMAN for backup and recovery, and knowing that a vector index can go stale after certain operations.</p>
+<div class="beginner-memory"><b>First memory:</b> Concept 04's WHERE clause depends on the caller. VPD moves the same check into the table itself, so it runs whether the caller remembers or not.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 04 named this exact gap and left it open</h3>
+<p>Concept 04's own misconceptions table said it plainly: "the &lt;-&gt; operator... False" was one correction, but the sharper one was structural -- its own failure-grid named "FORGOTTEN PREDICATE" as "a real, catastrophic cross-tenant data leak," and its distinction table named row-level security as the fix, citing PostgreSQL's version and pointing forward. This concept is where that forward pointer gets paid off, on Oracle's own real mechanism.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One function, one ADD_POLICY call</h3>
+<p>A policy function returns a predicate string; <code>DBMS_RLS.ADD_POLICY</code> attaches it to a table. Per Oracle's own PL/SQL Packages reference: <code>DBMS_RLS.ADD_POLICY(object_schema, object_name, policy_name, function_schema, policy_function, statement_types, ...)</code>. Point it at Concept 03's own <code>documents</code> table with a predicate of <code>tenant_id = SYS_CONTEXT('rag_ctx','tenant_id')</code>, and every query that touches <code>documents</code> -- directly or through a join, exactly like Concept 04's own chunks-to-documents join -- gets that predicate whether its author wrote a WHERE clause or not.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Oracle rewrites the table, not the query</h3>
+<p>Per Oracle's own DBMS_RLS documentation: "the server... produces a transient view" over the protected table, filtered by the policy's own predicate -- so a plain <code>SELECT * FROM documents</code> is quietly evaluated as <code>SELECT * FROM documents WHERE tenant_id = ...</code> before anything else in the query runs. The caller's SQL text never changes. What changes is what the table itself looks like when the caller reads from it.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The narrowing happens before ORDER BY ever sees a row</h3>
+<div class="scroll-flow">
+<span>Caller writes SELECT ... FROM chunks JOIN documents JOIN embeddings — no tenant predicate anywhere</span><i>→</i>
+<span class="hot">Oracle substitutes documents' own transient, policy-filtered view</span><i>→</i>
+<span>ORDER BY / FETCH FIRST run against the already-narrowed rows</span><i>→</i>
+<span>Rows returned are isolated by tenant regardless of what the caller wrote</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Security is not the same job as operational continuity</h3>
+<div class="distinction-table" role="table" aria-label="Security mechanisms distinguished from operational mechanisms">
+<div role="row"><b role="cell">Term</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">WHERE-clause tenant filter (Concept 04)</span><span role="cell">Correctness depends on every query author remembering the predicate.</span></div>
+<div role="row"><span role="cell">VPD / DBMS_RLS row-level security (this concept)</span><span role="cell">The engine enforces the predicate on the protected table itself -- the caller's own SQL cannot opt out of it.</span></div>
+<div role="row"><span role="cell">Operational considerations (backup, index maintenance, this concept)</span><span role="cell">A different axis entirely -- not who can see a row, but whether the system stays correct and recoverable at all.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A WHERE-clause tenant filter, written carefully, is good enough."</b><p>It's good enough until exactly one query forgets it -- and Concept 04's own worked example already showed how easily that happens. VPD removes the dependency on remembering entirely.</p></div>
+<div><b>"Once row-level security is in place, the security job is done."</b><p>VPD only answers "which rows." Grants/roles answer "which actions," auditing answers "who did what," and encryption answers "readable by whom, off the wire or off the disk" -- four different real questions, not one.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The database's own defense, underneath the application code</b><p>Concepts 04 and 08 built the application-level tenant filter and the Python client that sends it. This concept adds a second, independent layer inside the database itself -- so a bug in the application code is not the only thing standing between one tenant and another tenant's rows.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 10/14</b><p>Originally built ahead of Concept 09 (transactions, updates, deletes, index synchronization); Concept 09 has since been authored. Nothing here ever depended on it -- every prerequisite cited is Concept 03, 04, or 06.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Write the ADD_POLICY call from memory</b><p><code>DBMS_RLS.ADD_POLICY(object_schema =&gt; 'RAG', object_name =&gt; 'DOCUMENTS', policy_name =&gt; 'TENANT_ISOLATION_POLICY', function_schema =&gt; 'RAG', policy_function =&gt; 'TENANT_ISOLATION_PREDICATE', statement_types =&gt; 'SELECT');</code></p></div>
+<div><b>Explain why it still works with no WHERE clause</b><p>The policy rewrites the protected table into a transient, pre-filtered view -- the caller's own SQL never needs to mention tenant_id at all.</p></div>
+<div><b>Name the other three real security/operational pillars</b><p>Grants/roles (coarse access), Unified Auditing (who-did-what), RMAN (backup/recovery) -- plus the TRUNCATE/UNUSABLE vector-index trap.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a VPD policy attached to <code>documents</code> also protect a query that only mentions <code>chunks</code> and joins to <code>documents</code>?</li>
+<li>What does Concept 04's own failure-grid entry, "FORGOTTEN PREDICATE," look like once this concept's policy is active?</li>
+<li>Try it: open "The Missing WHERE Clause" lab below and toggle the policy off, then on, over the identical caller SQL.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 10 OF 14</h3>
+<p>This concept closed the gap Concept 04 named -- a real, engine-enforced tenant isolation policy that survives a forgotten WHERE clause -- and surveyed access control, auditing, encryption, backup/recovery, and vector-index maintenance around it. This concept was originally built ahead of Concept 09, transactions/updates/deletes/index synchronization; that concept has since been authored, closing the gap.</p>
+<div class="beginner-memory"><b>Concept 10 is active.</b> Module 10 stands at position 10 of 14. Concept 09 has since been built, closing the gap this page originally flagged.</div>
+<a class="button primary" href="module-10-concept-08.html">← Back to Concept 08's python-oracledb layer</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One gap closed, four more pillars named</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>The transient-view mechanism</b><small>How DBMS_RLS actually rewrites the table, per Oracle's own docs.</small></a>
+<a href="#s10"><span>02</span><b>Closing Concept 04's own gap</b><small>A node-verified worked example: same corpus, no WHERE clause, no leak.</small></a>
+<a href="#s14"><span>03</span><b>The Missing WHERE Clause</b><small>The lab -- toggle the policy on the exact same caller SQL.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the survey of the other pillars.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> Concept 04 named row-level security as the fix for a caller-dependent WHERE clause, but never built it → Oracle's own DBMS_RLS.ADD_POLICY attaches a predicate directly to the protected table, not to the query → a node script confirms the identical outcome as Concept 04's own pre-filter shape (6 touched, 5 returned, 1 discarded) even when the caller's SQL has zero tenant predicate at all, versus a 4-of-5 wrong-tenant leak with no policy active → the lab lets you toggle the policy over that exact caller SQL → GRANT/CREATE ROLE, Unified Auditing, RMAN, and the TRUNCATE/UNUSABLE vector-index fact round out the rest of this concept, each cited to Oracle's own documentation → Concept 09 (unbuilt) covers transactions and index sync next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Oracle security and operational considerations for RAG" deep dive</b><em>Full citations, the annotated PL/SQL, and The Missing WHERE Clause lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 10 of 14</h2></div></header>
+<p>This concept fills position 10 of Module 10's own 14-concept list: "Oracle security and operational considerations for RAG." It was originally built ahead of position 9, "transactions, updates, deletes, and index synchronization," mirroring how Concept 08 disclosed its own earlier out-of-order build. Concept 09 has since been authored, closing that gap -- the module's built set is now the contiguous {1..10}. Nothing in this concept ever depended on Concept 09's content -- every prerequisite cited below is Concept 03, 04, or 06, all already built.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>ENFORCE</span><h3>Row-level tenant isolation at the engine</h3><p><code>DBMS_RLS.ADD_POLICY</code> attaches a real Virtual Private Database policy to Concept 03's own <code>documents</code> table.</p></article>
+<article class="info-card"><span>VERIFY</span><h3>The gap Concept 04 named is actually closed</h3><p>A node script confirms the policy produces Concept 04's own pre-filter numbers even with zero WHERE clause in the caller's query.</p></article>
+<article class="info-card"><span>NAME</span><h3>The other three security/operational pillars</h3><p>GRANT/CREATE ROLE, Unified Auditing, RMAN backup/recovery -- each cited to real Oracle documentation, not re-derived from first principles.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>Connection pooling and session sizing -- already named as Concept 09's own territory in Concept 08 -- and transactions/index sync (Concept 09 itself), neither re-derived here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-04.html">Module 10 Concept 04</a></b> -- the tenant_id column, the pre-filter/post-filter SQL shapes, and the "FORGOTTEN PREDICATE" failure mode this concept exists to close.</li>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema; the VPD policy in this concept attaches directly to its own <code>documents</code> table.</li>
+<li><b><a href="module-10-concept-06.html">Module 10 Concept 06</a></b> -- the real CREATE VECTOR INDEX syntax and IVF/HNSW index categories; reused here for the TRUNCATE/UNUSABLE index-maintenance fact.</li>
+<li><b>Explicitly out of scope:</b> transactions, updates, deletes, and index synchronization (<a href="#s01">Concept 09, unbuilt</a>); connection pooling and session sizing, already named as Concept 09's own territory by <a href="module-10-concept-08.html">Concept 08</a> -- named forward only, not re-derived here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A lock on the door, not a sign asking people to knock</h2></div></header>
+<p>Concept 04's WHERE clause is a sign on the door: "Please only enter your own tenant's rows." Most callers read it. One that doesn't gets in anyway. A VPD policy is a lock built into the door itself -- it doesn't matter whether the person walking up read the sign, because the door mechanically will not open onto rows outside their own tenant. The rest of this concept's territory -- who has a key at all (grants/roles), who's logged walking through (auditing), whether the building survives a fire (backup/recovery) -- are different, real questions the lock alone doesn't answer.</p>
+<div class="callout warning"><b>Analogy boundary</b>The actual enforcement mechanism comes from Section 06's own quoted Oracle documentation and Section 10's own verified worked example, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Virtual Private Database (VPD)</td><td>Oracle's own row/column-level access-control mechanism: "creates security policies to control database access at the row and column level"</td><td>DBMS_RLS package</td></tr>
+<tr><td>Policy function</td><td>A PL/SQL function that returns a predicate string, evaluated per query against the protected object</td><td>FUNCTION f(schema_var, table_var) RETURN VARCHAR2</td></tr>
+<tr><td>Transient view</td><td>The policy-filtered version of the protected table Oracle substitutes wherever that table is referenced, including through a join</td><td>SELECT * FROM t WHERE P1</td></tr>
+<tr><td>Unified Auditing</td><td>Oracle's own current auditing framework, with AUDIT_ADMIN and AUDIT_VIEWER roles for separation of duties; traditional auditing is desupported starting in Oracle AI Database 26ai</td><td>CREATE AUDIT POLICY / AUDIT POLICY</td></tr>
+<tr><td>RMAN</td><td>Oracle's own Recovery Manager utility for backup and recovery of an Oracle database</td><td>RMAN&gt; BACKUP DATABASE;</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>One function, one ADD_POLICY call, verbatim signature</h2></div></header>
+<div class="core-block">
+<p>Per Oracle's own DBMS_RLS PL/SQL Packages and Types reference, the real procedure signature is: <code>DBMS_RLS.ADD_POLICY(object_schema IN VARCHAR2 DEFAULT NULL, object_name IN VARCHAR2, policy_name IN VARCHAR2, function_schema IN VARCHAR2 DEFAULT NULL, policy_function IN VARCHAR2, statement_types IN VARCHAR2 DEFAULT NULL, update_check IN BOOLEAN DEFAULT FALSE, enable IN BOOLEAN DEFAULT TRUE, static_policy IN BOOLEAN DEFAULT FALSE, policy_type IN BINARY_INTEGER DEFAULT NULL, long_predicate IN BOOLEAN DEFAULT FALSE, sec_relevant_cols IN VARCHAR2 DEFAULT NULL, sec_relevant_cols_opt IN BINARY_INTEGER DEFAULT NULL, namespace IN VARCHAR2 DEFAULT NULL, attribute IN VARCHAR2 DEFAULT NULL)</code>. The same reference states the default <code>statement_types</code> behavior plainly: "The default is to apply to all of these types except INSERT and INDEX" -- so a policy added with no <code>statement_types</code> argument already covers SELECT, UPDATE, and DELETE, but not INSERT unless <code>update_check</code> is also set. Oracle's own Database Security Guide describes the outcome in plain terms: "Oracle Virtual Private Database (VPD) creates security policies to control database access at the row and column level," and its own Components chapter names the mechanism directly: "A VPD policy uses a function to generate the dynamic WHERE clause, and a policy to attach the function to objects to protect."</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>The rewrite happens before the caller's own clauses run</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1010-s07-title">
+<strong class="concept-visual-title" id="c1010-s07-title">VISUAL · WHAT THE ENGINE DOES TO THE CALLER'S OWN QUERY</strong>
+<div class="diagram-strip" role="list">
+<div class="diagram-node" role="listitem"><b>Caller's SELECT</b><small>no tenant predicate, by mistake</small></div>
+<div class="diagram-node active" role="listitem"><b>documents → transient view</b><small>DBMS_RLS policy predicate applied</small></div>
+<div class="diagram-node" role="listitem"><b>JOIN / ORDER BY / FETCH FIRST</b><small>run against the narrowed rows</small></div>
+<div class="diagram-node" role="listitem"><b>Rows returned</b><small>already isolated by tenant</small></div>
+</div>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>A second, independent layer beneath the application code</h2></div></header>
+<div class="pipeline-preview">
+<span>Application-level tenant filter — Concept 04's own WHERE clause</span><i>↓</i><span>Python client — connect/bind/execute (Concept 08)</span><i>↓</i><span class="hot">Engine-enforced isolation — DBMS_RLS VPD policy on documents (this concept)</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Leaked rows as a plain set difference</h2></div></header>
+<div class="equation">leaked = |returned ∖ tenant_rows| — the count of returned rows that do not belong to the caller's own tenant</div>
+<div class="callout"><b>Scope hedge</b>This concept adds no new distance mathematics -- Concept 04's own pre/post-filter row-count arithmetic and Concept 05/06's cosine-distance formulas are reused unchanged. The only new arithmetic here is the leaked-row count itself, confirmed by the node script in Section 10.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Closing Concept 04's own gap, on Concept 04's own corpus</h2></div></header>
+<p>Reusing Concept 04's own 20-chunk, 30%-selectivity corpus unchanged: 6 of 20 chunks belong to tenant "Acme," at ranks {3, 7, 9, 14, 17, 20}. Target k=5. This time, the caller's own SQL has <b>no tenant predicate anywhere</b> -- the exact "FORGOTTEN PREDICATE" scenario Concept 04's own failure-grid named as catastrophic.</p>
+<div class="code-block">
+<span class="code-label">SQL · THE POLICY, ATTACHED ONCE TO Concept 03's OWN documents TABLE</span>
+<pre><code>CREATE OR REPLACE FUNCTION tenant_isolation_predicate(
+  schema_var IN VARCHAR2, table_var IN VARCHAR2
+) RETURN VARCHAR2 IS
+BEGIN
+  RETURN 'tenant_id = SYS_CONTEXT(''rag_ctx'',''tenant_id'')';
+END;
+/
+
+BEGIN
+  DBMS_RLS.ADD_POLICY(
+    object_schema   =&gt; 'RAG',
+    object_name     =&gt; 'DOCUMENTS',
+    policy_name     =&gt; 'TENANT_ISOLATION_POLICY',
+    function_schema =&gt; 'RAG',
+    policy_function =&gt; 'TENANT_ISOLATION_PREDICATE',
+    statement_types =&gt; 'SELECT'
+  );
+END;
+/
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · THE CALLER'S OWN QUERY -- NO TENANT PREDICATE ANYWHERE</span>
+<pre><code>SELECT c.chunk_id, c.text,
+       VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE) AS dist
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+ORDER BY dist
+FETCH FIRST 5 ROWS ONLY;
+-- notice: no WHERE d.tenant_id = :tenant_id clause at all.
+</code></pre>
+</div>
+<table class="compare-table">
+<thead><tr><th>Scenario</th><th>Touched</th><th>Returned</th><th>Wrong-tenant rows in result</th></tr></thead>
+<tbody>
+<tr><td>No policy, no WHERE clause (the forgotten-predicate leak)</td><td>20</td><td>5 (global ranks 1,2,3,4,5)</td><td>4</td></tr>
+<tr><td>Concept 04's own explicit pre-filter WHERE clause</td><td>6 (Acme's own rows)</td><td>5 (ranks 3,7,9,14,17)</td><td>0</td></tr>
+<tr><td>VPD policy active, still no WHERE clause in the caller's SQL</td><td>6 (Acme's own rows)</td><td>5 (ranks 3,7,9,14,17)</td><td>0</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>A standalone node script modeled Concept 04's own 20-row corpus and its Acme rank set {3,7,9,14,17,20} unchanged. It computed the explicit pre-filter shape's own touched/returned/discarded counts (6/5/1, returned ranks [3,7,9,14,17]) and, separately, modeled the VPD transient-view mechanism as narrowing the base object to Acme's own 6 rows <i>before</i> any ORDER BY/FETCH FIRST runs -- per Section 06's own quoted transient-view mechanism -- with zero tenant predicate in the simulated caller SQL. Both computations produced byte-identical output: <code>{"touched":6,"returned":5,"discarded":1,"returnedRanks":[3,7,9,14,17]}</code>. A third run modeled the no-policy, no-WHERE baseline: the naive top-5-by-distance result is global ranks [1,2,3,4,5], of which only rank 3 is Acme -- ranks 1, 2, 4, and 5 belong to other tenants, a confirmed 4-of-5 wrong-tenant leak. This is a logical model of the documented VPD mechanism, not a live Oracle session -- no live database was queried this session.</div>
+<p>The headline claim survives the check: a caller who forgets the tenant predicate entirely gets the identical, correct, tenant-isolated result once the policy is active -- and a real, severe leak (4 of 5 rows wrong-tenant) without it. That is the concrete difference between "the caller should remember" and "the engine enforces it regardless."</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Three more real Oracle mechanisms, named plainly</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>ACCESS CONTROL</span><h3>GRANT and CREATE ROLE</h3><p>Real SQL: <code>CREATE ROLE rag_reader;</code> then <code>GRANT SELECT ON documents TO rag_reader;</code> -- per Oracle's own SQL Language Reference, a role is "a set of privileges that can be granted to users or to other roles."</p></article>
+<article class="info-card"><span>AUDITING</span><h3>Unified Auditing</h3><p>Per Oracle's own Database Security Guide: "Oracle provides two roles for users who perform auditing: AUDIT_ADMIN and AUDIT_VIEWER, to enable separation of duties." Traditional auditing is desupported starting in Oracle AI Database 26ai.</p></article>
+<article class="info-card"><span>BACKUP/RECOVERY</span><h3>RMAN</h3><p>Oracle's own Backup and Recovery User's Guide opens with exactly this: "Part I Overview of Backup and Recovery... introduce backup and recovery and explain how to devise a backup and recovery strategy," built around RMAN.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The full policy, plus the index-maintenance trap this course can walk into</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · GRANT/ROLE AND THE VPD POLICY, TOGETHER</span>
+<pre><code>-- Step 1: coarse access -- a role that can only ever read, never write.
+CREATE ROLE rag_reader;
+GRANT SELECT ON documents TO rag_reader;
+GRANT SELECT ON chunks TO rag_reader;
+GRANT SELECT ON embeddings TO rag_reader;
+
+-- Step 2: row-level isolation -- Concept 04's own gap, closed at the engine.
+CREATE OR REPLACE FUNCTION tenant_isolation_predicate(
+  schema_var IN VARCHAR2, table_var IN VARCHAR2
+) RETURN VARCHAR2 IS
+BEGIN
+  RETURN 'tenant_id = SYS_CONTEXT(''rag_ctx'',''tenant_id'')';
+END;
+/
+
+BEGIN
+  DBMS_RLS.ADD_POLICY(
+    object_schema   =&gt; 'RAG',
+    object_name     =&gt; 'DOCUMENTS',
+    policy_name     =&gt; 'TENANT_ISOLATION_POLICY',
+    function_schema =&gt; 'RAG',
+    policy_function =&gt; 'TENANT_ISOLATION_PREDICATE',
+    statement_types =&gt; 'SELECT'
+  );
+END;
+/
+</code></pre>
+</div>
+<p>Per Oracle's own Guidelines for Using Vector Indexes documentation (reused from Concept 06): "If a table is truncated, any IVF index created on the table is marked as UNUSABLE. Thus, the IVF index will not be maintained on any subsequent INSERT statements... You must rebuild or recreate the IVF index before using the index in a query again." A <code>TRUNCATE TABLE embeddings</code> followed by a bulk reload -- a realistic re-ingestion workflow for this course's own schema -- silently disables Concept 06's own vector index until someone runs <code>ALTER INDEX ... REBUILD</code> or recreates it. Nothing in the SELECT that follows would raise an error; it would simply fall back to a full scan, the same documented fallback Concept 06 already covered for a metric mismatch.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for every claim above</h2></div></header>
+<p>Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/arpls/DBMS_RLS.html">DBMS_RLS PL/SQL Packages and Types Reference</a> is the primary citation for the ADD_POLICY signature, its documented default statement_types behavior, and the transient-view mechanism quote -- re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/using-oracle-vpd-to-control-data-access.html">Using Oracle Virtual Private Database to Control Data Access</a> chapter of the Database Security Guide is the primary citation for "control database access at the row and column level" and the policy-function/dynamic-WHERE-clause description -- re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/GRANT.html">GRANT</a> and <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/CREATE-ROLE.html">CREATE ROLE</a> SQL Language Reference pages are the primary citations for the access-control statements in Section 12 -- both re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/introduction-to-auditing.html">Introduction to Auditing</a> chapter is the primary citation for Unified Auditing, AUDIT_ADMIN/AUDIT_VIEWER, and the desupport of traditional auditing starting in 26ai -- re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/bradv/part-overview-backup-recovery.html">Overview of Backup and Recovery</a> is the primary citation for RMAN as the named backup/recovery mechanism -- re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html">Guidelines for Using Vector Indexes</a> (reused from Concept 06) is the primary citation for the TRUNCATE/UNUSABLE fact -- re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/part_4.html">Securing Data on the Network</a> Part IV overview confirms TLS and Native Network Encryption as the real, documented network-encryption mechanisms -- re-fetched live this session (HTTP 200).</p>
+<div class="callout warning"><b>Flagged, not verified</b>Transparent Data Encryption (encrypting tablespaces/columns at rest) is a real, standard Oracle capability and is named in Section 15 below, but this session could not locate a live, resolving chapter URL for it in this specific 26ai documentation set to quote directly -- several plausible URLs returned HTTP 404. It is named here as a known Oracle feature, not cited as an independently re-verified fact this session. Everything else in this concept was confirmed against a live HTTP 200 response.</div>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Missing WHERE Clause</h2></div></header>
+<div class="lab">
+<p>The caller's own SQL below never changes -- it has no tenant predicate in either state. Toggle the VPD policy off and on and watch what the database itself does differently with the identical query text, over Concept 04's own 20-chunk corpus.</p>
+<div class="code-block">
+<span class="code-label">CALLER'S QUERY -- IDENTICAL IN BOTH STATES, NO TENANT PREDICATE</span>
+<pre><code>SELECT c.chunk_id, c.text, VECTOR_DISTANCE(e.embedding, :qv, COSINE) AS dist
+FROM chunks c JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+ORDER BY dist FETCH FIRST 5 ROWS ONLY;</code></pre>
+</div>
+<div class="lab-actions" role="group" aria-label="Toggle the VPD policy">
+<button type="button" class="secondary" data-policy="off" id="policyOff_1010">VPD policy: OFF</button>
+<button type="button" class="secondary active" data-policy="on" id="policyOn_1010">VPD policy: ON</button>
+</div>
+<div class="lab-actions" role="group" aria-label="Reset" style="margin-top:8px">
+<button type="button" class="secondary" id="policyReset_1010">Reset</button>
+</div>
+<p class="fine-print">FULL 20-CHUNK CORPUS (lime = Acme tenant, dimmed = never touched, dashed edge = row-limit cutoff, outlined = wrong-tenant row leaked into the result)</p>
+<div class="rank-chip-row" id="policyRow_1010"></div>
+<div class="norm-readout" id="policyReadout_1010">
+<div><span>TOUCHED</span><b id="policyTouched_1010">—</b></div>
+<div><span>RETURNED</span><b id="policyReturned_1010">—</b></div>
+<div><span>WRONG-TENANT ROWS</span><b id="policyLeaked_1010">—</b></div>
+<div><span>WHERE THE NARROWING HAPPENED</span><b id="policyWhere_1010">—</b></div>
+</div>
+<div class="callout" id="policyVerdict_1010" aria-live="polite">Click a button above to run the identical caller SQL with the policy off or on.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">TRADE-OFFS</span><h2>What each pillar costs, what it buys</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Mechanism</th><th>Cost</th><th>What it buys</th></tr></thead>
+<tbody>
+<tr><td>VPD / DBMS_RLS (built, this concept)</td><td>One function, one ADD_POLICY call, a small per-query predicate-evaluation overhead</td><td>Tenant isolation that survives a forgotten WHERE clause -- the exact Concept 04 gap</td></tr>
+<tr><td>Unified Auditing</td><td>Storage and processing for audit records; AUDIT_ADMIN/AUDIT_VIEWER role administration</td><td>A real record of who did what, independent of application-level logging</td></tr>
+<tr><td>RMAN backup/recovery</td><td>Storage for backups; a recovery strategy someone has to design and test</td><td>The system survives disk failure, corruption, or a bad deploy -- not just unauthorized access</td></tr>
+<tr><td>Transparent Data Encryption (named, not re-verified this session)</td><td>Key management overhead; some CPU cost per read/write</td><td>Data unreadable to anyone who copies the raw files without the key -- a different threat model than VPD</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT INDEX FALLBACK</span><h3>A bulk-reload workflow truncates embeddings, and queries get slow with no error</h3><p>Cause: per Section 12's own quoted fact, TRUNCATE marks an IVF vector index UNUSABLE; Oracle falls back to a full scan with no error raised. Fix: rebuild or recreate the vector index as a required step after any TRUNCATE-and-reload.</p></article>
+<article class="info-card"><span>POLICY NEVER ATTACHED</span><h3>Application code assumes VPD is protecting a table that has no policy on it</h3><p>Cause: DBMS_RLS.ADD_POLICY was never run, or was run against the wrong object_schema/object_name pair. Fix: query the data dictionary views Oracle's own VPD documentation names for exactly this purpose, before trusting a table is protected.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A careful WHERE clause is just as safe as a VPD policy</td><td>False -- Concept 04's own worked example already showed a forgotten predicate leaking rows; a VPD policy removes that dependency because the engine enforces the predicate on the table itself.</td></tr>
+<tr><td>A VPD policy automatically covers INSERT statements too</td><td>False -- per Oracle's own DBMS_RLS reference, the default statement_types covers all types except INSERT and INDEX; INSERT protection requires an explicit statement_types entry and update_check =&gt; TRUE.</td></tr>
+<tr><td>Row-level security is the only real security concern in a production Oracle deployment</td><td>False -- access control (GRANT/roles), auditing, encryption, and backup/recovery are four separate, real concerns; VPD only answers "which rows."</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle yet</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The database's own defense layer, not the whole security picture</b><p>This concept builds VPD and names GRANT/roles, auditing, and RMAN -- it does not design a full key-management strategy for encryption, or a tested disaster-recovery runbook. Those are real, separate engineering efforts this concept only points toward.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 10/14</b><p>Concept 09 (transactions, updates, deletes, index synchronization) has since been built. Connection pooling and session sizing, named as Concept 09's own territory by Concept 08, are decided there, not here.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can write the ADD_POLICY call</b><p>Object schema/name, policy name, function schema/name, statement_types -- in that real, documented order.</p></div>
+<div><b>I know why it survives a forgotten WHERE clause</b><p>The engine rewrites the protected table into a transient, pre-filtered view -- the caller's SQL text is irrelevant to whether the predicate applies.</p></div>
+<div><b>I can name the other three real pillars</b><p>GRANT/CREATE ROLE, Unified Auditing, RMAN -- plus the TRUNCATE/UNUSABLE vector-index trap.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using this concept's own Section 10 numbers, suppose a second tenant, "Globex," is added at ranks {1, 5, 11} in the same 20-row corpus (Acme keeps its own {3,7,9,14,17,20}). With the VPD policy active and a Globex session context, and the identical no-WHERE-clause caller query from Section 14, state how many rows would be touched, how many returned, and whether any Acme rows could appear in a Globex session's result -- without running any code.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>With SYS_CONTEXT('rag_ctx','tenant_id') returning 'Globex', the policy predicate becomes tenant_id = 'Globex' -- the transient view over documents (and everything joined to it) narrows to exactly Globex's own 3 rows, ranks {1, 5, 11}, before ORDER BY ever runs. Touched: 3. Returned: 3 (k=5 requested, but only 3 rows exist in the tenant-narrowed view, so all 3 come back). Acme rows cannot appear in a Globex session's result -- the policy predicate is evaluated per session against SYS_CONTEXT, and Acme's own rows never enter the transient view a Globex session reads from, regardless of what the caller's SQL says.</div>
+</details>
+<p>Teach-back: why does the answer above not depend at all on whether the caller's query happens to include a WHERE tenant_id clause?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Oracle security and operational considerations for RAG</h3><ul><li><b>The gap closed:</b> DBMS_RLS.ADD_POLICY enforces Concept 04's own tenant filter at the engine -- survives a forgotten WHERE clause.</li><li><b>The mechanism:</b> a policy function returns a predicate; Oracle rewrites the protected table into a transient, filtered view wherever it's referenced.</li><li><b>The other pillars:</b> GRANT/CREATE ROLE (access), Unified Auditing (who-did-what), RMAN (backup/recovery), TRUNCATE marks an IVF index UNUSABLE (maintenance).</li></ul></div>
+<div><h3>Module 10 · position 10/14</h3><p>Originally built ahead of Concept 09 (transactions, updates, deletes, index sync); that gap has since closed.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does a VPD policy attached only to `documents` also protect a query that joins `chunks` to `documents` and never mentions `documents` in its WHERE clause?</summary><div>Because VPD rewrites the protected table itself into a transient, policy-filtered view wherever it is referenced in the FROM clause -- including through a join -- not just when it appears in a WHERE clause. The join sees the already-narrowed view, not the raw table.</div></details>
+<details class="quiz"><summary>Conceptual: does a VPD policy with no statement_types argument protect INSERT statements?</summary><div>No -- per Oracle's own DBMS_RLS documentation, the default statement_types applies to all statement types except INSERT and INDEX. INSERT protection requires an explicit statement_types entry and update_check =&gt; TRUE.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real PL/SQL to create a policy function and attach it to a table for SELECT only.</summary><div>CREATE OR REPLACE FUNCTION pred(schema_var VARCHAR2, table_var VARCHAR2) RETURN VARCHAR2 IS BEGIN RETURN 'tenant_id = SYS_CONTEXT(''ctx'',''tenant_id'')'; END; / BEGIN DBMS_RLS.ADD_POLICY(object_schema=&gt;'RAG', object_name=&gt;'DOCUMENTS', policy_name=&gt;'TENANT_POLICY', function_schema=&gt;'RAG', policy_function=&gt;'PRED', statement_types=&gt;'SELECT'); END; /</div></details>
+<details class="quiz"><summary>System design: your team already has a correct WHERE-clause tenant filter in every application query. Why would you still add a VPD policy?</summary><div>Because "every query, today" is not the same guarantee as "every query, forever" -- a future query, a new service, an ad hoc report, or a debugging session run directly against the database can all omit the WHERE clause. A VPD policy makes the guarantee independent of which code path reaches the table.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/arpls/DBMS_RLS.html"><b>DBMS_RLS — Oracle PL/SQL Packages and Types Reference</b><br><span>Primary citation, re-fetched live this session (HTTP 200) -- the real ADD_POLICY signature, its documented default statement_types behavior, and the transient-view mechanism quote.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/using-oracle-vpd-to-control-data-access.html"><b>Using Oracle Virtual Private Database to Control Data Access — Oracle Database Security Guide</b><br><span>Re-fetched live this session (HTTP 200) -- "control database access at the row and column level" and the policy-function/dynamic-WHERE-clause description.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/GRANT.html"><b>GRANT — Oracle SQL Language Reference</b><br><span>Re-fetched live this session (HTTP 200) -- the real GRANT statement for privileges, roles, and object access.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/CREATE-ROLE.html"><b>CREATE ROLE — Oracle SQL Language Reference</b><br><span>Re-fetched live this session (HTTP 200) -- "a set of privileges that can be granted to users or to other roles."</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/introduction-to-auditing.html"><b>Introduction to Auditing — Oracle Database Security Guide</b><br><span>Re-fetched live this session (HTTP 200) -- Unified Auditing, AUDIT_ADMIN/AUDIT_VIEWER, and the desupport of traditional auditing starting in Oracle AI Database 26ai.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/bradv/part-overview-backup-recovery.html"><b>Overview of Backup and Recovery — Oracle Backup and Recovery User's Guide</b><br><span>Re-fetched live this session (HTTP 200) -- RMAN named as the backup/recovery mechanism.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html"><b>Guidelines for Using Vector Indexes — Oracle AI Vector Search User's Guide</b><br><span>Reused from Concept 06, re-fetched live this session (HTTP 200) -- the TRUNCATE/UNUSABLE IVF index fact quoted directly.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · POSITION 10/14</span>
+<h3>The WHERE clause was never the wall. The database itself can be.</h3>
+<p>You can now write a real DBMS_RLS.ADD_POLICY call that enforces Concept 04's own tenant filter at the engine, explain why it survives a forgotten WHERE clause, and name the other real Oracle mechanisms -- GRANT/roles, Unified Auditing, RMAN, and vector-index maintenance -- that round out a production deployment. This page was originally built ahead of Concept 09, transactions/updates/deletes/index synchronization -- that concept has since been authored, closing the gap.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Missing WHERE Clause ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at position 10 of 14. Concept 09 (transactions, updates, deletes, index synchronization) has since been built.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 10 · Active</p>
+<a href="module-10-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>

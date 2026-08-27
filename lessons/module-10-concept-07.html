@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10's seventh concept answers what Oracle actually does when a chunk table needs both keyword and semantic retrieval. Oracle's real mechanism is a single, unified CREATE HYBRID VECTOR INDEX plus one DBMS_HYBRID_VECTOR.SEARCH call -- not a hand-rolled UNION of CONTAINS and VECTOR_DISTANCE. Oracle fuses a normalized 0-100 semantic score with a CONTAINS/SCORE lexical score using one of three named formulas, RSF, RRF, or WRRF. The lab, Fusion Bench, toggles lexical-only, vector-only, and hybrid modes against Module 10's own six-chunk Acme dataset and watches recovery change live.">
+<title>Oracle Text and vector hybrid retrieval — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 07</p>
+<h1>Keyword search and vector search aren't rivals.<br><em>Oracle fuses them into one number per row.</em></h1>
+<p class="lesson-lead">Concept 06 resolved the index-metric cliffhanger. This concept answers a different question: what does Oracle actually do when a chunk table needs both keyword and semantic retrieval? The real answer is not a hand-rolled UNION of CONTAINS and VECTOR_DISTANCE written in application code -- it's a single, unified CREATE HYBRID VECTOR INDEX and one DBMS_HYBRID_VECTOR.SEARCH call, fusing a lexical score and a normalized semantic score with one named formula: RSF, RRF, or WRRF.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh concept of Module 10 (7/14) -- the pre-planned next concept named by Concept 06's own forward pointer</b></div>
+<div><span>PREREQUISITE</span><b>Concept 03's five-table schema, Concept 05's VECTOR(384, FLOAT32)/VECTOR_DISTANCE syntax, and Concept 06's index-metric rule (all cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name Oracle's real unified hybrid mechanism, write the minimal CREATE HYBRID VECTOR INDEX statement, and explain why vector distance is normalized before fusing with a lexical score</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One index, one query, two signals fused into one score</h2>
+</div>
+<p>Concept 05 built the VECTOR column. Concept 06 resolved when its index gets used. This concept covers what happens when a chunk table needs both keyword matching and semantic similarity at once -- and Oracle's real, current answer to that.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>What Oracle actually does with both signals</h3>
+<p>This concept answers a specific question: what does Oracle actually do when a chunk table needs both keyword and semantic retrieval at once? Oracle's real answer is a single, unified <code>CREATE HYBRID VECTOR INDEX</code> plus one <code>DBMS_HYBRID_VECTOR.SEARCH</code> call -- not a hand-rolled UNION of CONTAINS and VECTOR_DISTANCE written by hand in application code.</p>
+<div class="beginner-memory"><b>First memory:</b> keyword search catches exact terms and misses paraphrases; vector search catches paraphrases and can't privilege an exact match. Hybrid fusion is Oracle scoring both, inside the database, and merging them into one number per row.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Neither signal alone is enough</h3>
+<p>Keyword search (Oracle Text's CONTAINS/SCORE) catches exact-term matches and misses paraphrases. Vector search (Concept 05's VECTOR_DISTANCE) catches paraphrases but has no way to privilege a row that happens to share the query's exact wording. Production retrieval needs both signals combined into one ranked list, not a forced choice between them -- which is exactly what a hybrid index is for.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c1007-b03-title">
+<strong class="concept-visual-title" id="c1007-b03-title">VISUAL · SIX RELEVANT CHUNKS, TWO SEARCH MODES</strong>
+<svg class="vector-plane" viewBox="0 0 400 130" role="img" aria-labelledby="c1007-svg-title-b c1007-svg-desc-b" style="max-width:560px">
+<title id="c1007-svg-title-b">Two rows of six dots comparing how many of Acme's six relevant chunks each search mode recovers</title>
+<desc id="c1007-svg-desc-b">Top row: six dots, four lit and two unlit, labelled Oracle Text alone -- misses two paraphrases with no literal term overlap. Bottom row: six dots, all six lit, labelled hybrid fusion -- recovers all six.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<text x="10" y="16">ORACLE TEXT ALONE -- 4 of 6 lit, misses 2 paraphrases</text>
+<g>
+<circle cx="20" cy="36" r="7" fill="#b3543a"/><circle cx="55" cy="36" r="7" fill="#b3543a"/><circle cx="90" cy="36" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/><circle cx="125" cy="36" r="7" fill="#b3543a"/><circle cx="160" cy="36" r="7" fill="#b3543a"/><circle cx="195" cy="36" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/>
+</g>
+<text x="10" y="76">HYBRID FUSION -- 6 of 6 lit</text>
+<g>
+<circle cx="20" cy="96" r="7" fill="#3a5f95"/><circle cx="55" cy="96" r="7" fill="#3a5f95"/><circle cx="90" cy="96" r="7" fill="#3a5f95"/><circle cx="125" cy="96" r="7" fill="#3a5f95"/><circle cx="160" cy="96" r="7" fill="#3a5f95"/><circle cx="195" cy="96" r="7" fill="#3a5f95"/>
+</g>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Acme's six matches, two ways of finding them</h3>
+<p>Module 10's own running Acme dataset has exactly six relevant chunks. Of those six, only four contain literal query-term overlap that Oracle Text's CONTAINS/SCORE() would actually match -- the other two are paraphrases with zero lexical overlap, so Oracle Text alone misses them. Vector search alone always surfaces all six (locked in from Concepts 05 and 06) but has no exact-match confidence signal. Hybrid fusion is the only mode that both recovers all six and ranks the double-hit chunks -- the ones matched by both signals -- highest.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The minimal real syntax</h3>
+<p>Per Oracle's own documentation as of this writing, the minimal form is <code>CREATE HYBRID VECTOR INDEX my_hybrid_idx ON doc_table(text_column) PARAMETERS('MODEL my_embed_model');</code> -- one statement, naming the text column and the embedding model, that builds both Oracle Text structures and vector-search structures together inside a single domain index.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Two scores, one fusion step</h3>
+<div class="scroll-flow">
+<span>Query text</span><i>→</i>
+<span>Lexical score (CONTAINS-style)</span><i>→</i>
+<span class="hot">Fused via RSF / RRF / WRRF</span><i>→</i>
+<span>Semantic score (vector distance, normalized 0-100)</span>
+</div>
+<p>Query text feeds two scoring paths at once inside the same index: a keyword path producing a CONTAINS-style lexical score, and a vector path producing a cosine-based similarity that Oracle normalizes onto a 0-100 "semantic score" scale before it's comparable to the lexical side. One named fusion formula -- RSF, RRF, or WRRF -- merges both into the final ranked result.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Legacy Oracle Text vs. the modern unified index</h3>
+<div class="distinction-table" role="table" aria-label="Legacy Oracle Text versus the modern hybrid vector index">
+<div role="row"><b role="cell">Path</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Legacy: standalone CONTEXT index + CONTAINS/SCORE()</span><span role="cell">Still real, still documented, still useful for pure-keyword cases -- but produces one lexical score only, with nothing to fuse against.</span></div>
+<div role="row"><span role="cell">Modern: CREATE HYBRID VECTOR INDEX + DBMS_HYBRID_VECTOR.SEARCH</span><span role="cell">One domain index storing both text-search and vector-search structures together, fusing both scores internally via RSF/RRF/WRRF.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Hybrid retrieval means writing two SQL queries yourself and UNIONing the results."</b><p>False. Oracle's real mechanism is one index (CREATE HYBRID VECTOR INDEX) plus one query function (DBMS_HYBRID_VECTOR.SEARCH) that fuses both signals inside the database engine.</p></div>
+<div><b>"Vector distance and a CONTAINS score can just be added together."</b><p>False. They're on different scales -- Oracle normalizes the vector side into a comparable 0-100 semantic score before fusing it with the lexical score using RSF, RRF, or WRRF.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Before finalizing the retrieval endpoint</b><p>Decide Oracle Text alone, vector alone, or hybrid fusion on top of the tenant/chunk schema from Concepts 03-06 -- not as an afterthought once the endpoint already ships.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 7/14</b><p>Concept 08 covers python-oracledb next, named forward-only here.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>State the minimal CREATE HYBRID VECTOR INDEX syntax</b><p><code>CREATE HYBRID VECTOR INDEX my_hybrid_idx ON doc_table(text_column) PARAMETERS('MODEL my_embed_model');</code></p></div>
+<div><b>Name the three fusion scorers</b><p>RSF (weighted-sum), RRF (reciprocal-rank), and WRRF (weighted reciprocal-rank).</p></div>
+<div><b>Explain why vector distance is normalized before fusing</b><p>It's on a different scale than a CONTAINS/SCORE lexical score, so Oracle converts it to a comparable 0-100 semantic score first.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why can't you just add a raw VECTOR_DISTANCE value to a CONTAINS SCORE() value?</li>
+<li>Name Oracle's real unified hybrid mechanism in one sentence -- not a UNION of two queries.</li>
+<li>Try it: open the "Fusion Bench" lab below and toggle lexical/vector/hybrid modes against Acme's six chunks.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · 7 OF 14</h3>
+<p>Oracle's real hybrid answer is one unified index and one fused query, not a manual UNION written by hand. Module 10 stands at 7 of 14. Concept 08 is next, covering python-oracledb -- named forward-only here.</p>
+<div class="beginner-memory"><b>Concept 07 is active.</b> Module 10 stands at 7 of 14 concepts.</div>
+<a class="button primary" href="module-10-concept-06.html">← Back to Concept 06's index-metric rule</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One index, two signals, one fusion formula</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b05"><span>01</span><b>Two scores, one fusion step</b><small>Lexical and semantic scores merge via RSF/RRF/WRRF.</small></a>
+<a href="#s12"><span>02</span><b>Real CREATE HYBRID VECTOR INDEX syntax</b><small>Oracle's unified DDL and the DBMS_HYBRID_VECTOR.SEARCH JSON call.</small></a>
+<a href="#s14"><span>03</span><b>Fusion Bench</b><small>The lab -- toggle lexical/vector/hybrid against Acme's six chunks.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Concept 06 closed the index-metric cliffhanger → this concept asks what Oracle does when a chunk table needs both keyword and semantic retrieval → Oracle's real answer is one unified CREATE HYBRID VECTOR INDEX plus one DBMS_HYBRID_VECTOR.SEARCH call, not a hand-rolled UNION → a five-chunk worked example shows a lexically-tied but wrong-entity chunk demoted out of contention once vector scoring is fused in → the lab lets you toggle lexical/vector/hybrid modes against Acme's own six-chunk dataset and watch recovery change live → Concept 08 begins python-oracledb next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Oracle Text and vector hybrid retrieval" deep dive</b><em>Full citations, the annotated SQL, and the Fusion Bench lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 10's seventh concept -- the pre-planned next step</h2></div></header>
+<p>This is the seventh concept of Module 10 (7/14). Concept 06 resolved Concept 05's own cliffhanger about index-dependent default-metric behavior; its own forward pointer already named "Oracle Text hybrid retrieval" as Concept 07's territory. This concept answers a specific question: what does Oracle actually do when a chunk table needs both keyword and semantic retrieval? The real answer, confirmed against Oracle's own current documentation, is a single unified CREATE HYBRID VECTOR INDEX plus one DBMS_HYBRID_VECTOR.SEARCH call -- reframing what could have been a naive "UNION CONTAINS with VECTOR_DISTANCE" plan into Oracle's actual current mechanism. Concept 08 (python-oracledb) remains untouched, named forward-only.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Hybrid vector index, formally</h3><p>One domain index storing Oracle Text structures and vector-search structures together, queried through DBMS_HYBRID_VECTOR.SEARCH.</p></article>
+<article class="info-card"><span>NAME</span><h3>The three fusion scorers</h3><p>RSF (weighted-sum), RRF (reciprocal-rank), and WRRF (weighted reciprocal-rank), verbatim Oracle wording.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Legacy vs. modern</h3><p>Legacy standalone CONTEXT index + CONTAINS/SCORE() (still real, non-fused) versus the modern unified hybrid index (fuses internally).</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>ONNX-model-import mechanics and ranking-quality tuning beyond RSF -- named forward-only, not built out here. Also scoped out: the CREATE HYBRID VECTOR INDEX PARAMETERS clause supports only in-database ONNX models or REST-hosted embedding providers per Oracle's own docs, not directly Module 08's all-MiniLM-L6-v2 model unless imported as ONNX -- any claim of direct compatibility must be caveated, not assumed.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Concept 03's five-table schema</b> -- documents/versions/chunks/embeddings/citations, reused unchanged; this concept's worked example continues doc_9f21/ver_9f21_2 directly.</li>
+<li><b>Concept 05's real VECTOR(384, FLOAT32) type and VECTOR_DISTANCE/&lt;=&gt;/COSINE_DISTANCE syntax</b> -- cited, not re-derived.</li>
+<li><b>Concept 06's index-metric rule</b> -- cited, not re-derived; this concept's hybrid index carries its own separate fusion logic, not the plain vector-index metric-match rule.</li>
+<li><b>Explicitly out of scope:</b> ONNX-model-import mechanics, ranking-quality tuning beyond the RSF formula shown here, and Concept 08's python-oracledb client code -- named forward-only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Not a choice between two search engines -- a merge</h2></div></header>
+<p>Hybrid retrieval isn't picking a winner between keyword search and vector search. It's letting Oracle score a row both ways at once -- once for exact-term overlap, once for semantic closeness -- and merging both scores into a single number per row before ranking anything. Neither score wins outright; the fusion formula decides how much weight each one carries.</p>
+<div class="callout warning"><b>Analogy boundary</b>The actual mechanism comes from Section 10's own worked queries and Section 12's own annotated SQL, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Hybrid vector index</td><td>One domain index storing both Oracle Text structures and vector-search structures together</td><td>CREATE HYBRID VECTOR INDEX ... PARAMETERS('MODEL ...')</td></tr>
+<tr><td>Semantic score</td><td>Vector distance normalized to a 0-100 scale, directionally comparable to a CONTAINS/SCORE() lexical score -- the exact internal normalization formula is not published; only the directional statement (100 best, 0 worst) is confirmed</td><td>semantic_score ∈ [0, 100]</td></tr>
+<tr><td>RSF / RRF / WRRF</td><td>Three distinct named fusion formulas -- Weighted-Sum, Reciprocal-Rank, and Weighted Reciprocal-Rank fusion, respectively</td><td>search_scorer: "rsf" | "rrf" | "wrrf"</td></tr>
+<tr><td>search_fusion mode</td><td>How the lexical and vector candidate sets combine before scoring -- INTERSECT/UNION/TEXT_ONLY/VECTOR_ONLY/MINUS_TEXT/MINUS_VECTOR/RERANK</td><td>search_fusion: "UNION" (etc.)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>One JSON call, fused inside the engine</h2></div></header>
+<div class="core-block">
+<p>DBMS_HYBRID_VECTOR.SEARCH executes the fused ranking inside the database engine via one JSON-parameterized call and a search_fusion mode -- not a UNION written in application code. The package also exposes GET_SQL (returns the equivalent SQL text Oracle would run) and SEARCHPIPELINE, per Oracle's own package overview. The lexical side runs Oracle Text's CONTAINS-style scoring; the vector side runs a cosine-based similarity that Oracle normalizes onto its 0-100 semantic-score scale; one named formula (RSF, RRF, or WRRF) merges both into the row's final fused score.</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two paths, one merge point</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1007-s07-title">
+<strong class="concept-visual-title" id="c1007-s07-title">VISUAL · QUERY TEXT → TWO SCORING PATHS → ONE FUSED RANKING</strong>
+<svg class="vector-plane" viewBox="0 0 400 150" role="img" aria-labelledby="c1007-svg-title-s c1007-svg-desc-s" style="max-width:560px">
+<title id="c1007-svg-title-s">A flow diagram showing query text splitting into a lexical path and a semantic path that merge at one fusion step</title>
+<desc id="c1007-svg-desc-s">Stage one: query text. Stage two branches into two boxes -- a lexical CONTAINS-style score, and a semantic score normalized to 0-100. Stage three: both merge at one RSF/RRF/WRRF fusion box. Stage four: FETCH FIRST N ROWS ONLY.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<rect x="150" y="8" width="100" height="22" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="164" y="23">Query text</text>
+<line x1="200" y1="30" x2="110" y2="60" stroke="#3a5f95" stroke-width="1.2"/>
+<line x1="200" y1="30" x2="290" y2="60" stroke="#b3543a" stroke-width="1.2"/>
+<rect x="20" y="60" width="180" height="26" fill="none" stroke="#3a5f95" stroke-width="1.2"/>
+<text x="26" y="76" fill="#3a5f95">Lexical score (CONTAINS-style)</text>
+<rect x="220" y="60" width="160" height="26" fill="none" stroke="#b3543a" stroke-width="1.2"/>
+<text x="226" y="76" fill="#b3543a">Semantic score (0-100)</text>
+<line x1="110" y1="86" x2="200" y2="112" stroke="#5a5f6b" stroke-width="1.2"/>
+<line x1="300" y1="86" x2="200" y2="112" stroke="#5a5f6b" stroke-width="1.2"/>
+<rect x="130" y="112" width="140" height="24" fill="none" stroke="#14241f" stroke-width="1.4"/>
+<text x="138" y="128">RSF / RRF / WRRF fusion</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>New structures over the same chunks table</h2></div></header>
+<div class="pipeline-preview">
+<span>Schema — the five-table skeleton (Concept 03)</span><i>↓</i><span>Persistence — the real VECTOR(384, FLOAT32) column (Concept 05)</span><i>↓</i><span>Index layer — plain vector index, metric-bound (Concept 06)</span><i>↓</i><span class="hot">Hybrid layer — CREATE HYBRID VECTOR INDEX, fuses lexical + semantic (this concept)</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The RSF formula, reproduced before it's trusted</h2></div></header>
+<div class="equation">Per result: RS = score × weight, for each side (text and vector). RSF = (sum of RS across both sides) ÷ (sum of 100 × weight across both sides) × 100.</div>
+<p>This formula is derived from Oracle's own published worked Table 8-3 -- Oracle does not state it as a bare equation on the page, but three example rows with known vector/text scores, weights, and fused outputs are published. Before applying this formula to any new numbers, it was independently reproduced against Oracle's own three published rows and matched to 2 decimals (454/75.67, 345/57.5, 245/40.83) -- a correctness check, not a re-derivation from first principles.</p>
+<div class="callout warning"><b>Two undocumented internals, flagged plainly</b>The exact distance-to-semantic-score (0-100) normalization formula Oracle uses internally is not published on any reachable page -- only the directional statement (100 best, 0 worst) is confirmed. Separately, Oracle Text's real internal SCORE() weighting (Salton/inverse-frequency-based) is documented only qualitatively -- rare terms score higher, and Oracle publishes a table of occurrences-needed-to-score-100 by corpus size, but the literal formula itself is not published. Both stand-ins used in Section 10's worked example are flagged there as original, transparent substitutes, not reproductions of Oracle's actual internal algorithms.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>A lexical tie that hybrid fusion breaks</h2></div></header>
+<p>This continues Concept 03's own doc_9f21 / ver_9f21_2 (CURRENT version) directly, completing Concept 03's own deliberately truncated chunk text and adding four sibling chunks from the same version:</p>
+<ul>
+<li><b>chk_9f21_2_01</b> (idx 1): "Vendor accounts are provisioned by IT with least-privilege access scoped to one system per contract."</li>
+<li><b>chk_9f21_2_02</b> (idx 2): "Employee password resets use a separate self-service flow described in the internal IT handbook." -- wrong entity (employee, not vendor)</li>
+<li><b>chk_9f21_2_03</b> (idx 3): "To reset a vendor account, an admin must open the vendor portal, select Reset Credentials, and issue the vendor a new temporary password." -- completes Concept 03's own truncated seed text</li>
+<li><b>chk_9f21_2_04</b> (idx 4): "Vendor security policy defines third-party access requirements for internal systems."</li>
+<li><b>chk_9f21_2_05</b> (idx 5): "Vendor accounts must be revoked within 24 hours of contract termination during offboarding."</li>
+</ul>
+<p>Query: "reset vendor account password" (stemmed terms: reset, vendor, account, password). The teaching point: chk_02 (employee reset -- wrong entity) ties lexically with chk_01 and chk_05 (correct entity, vendor) -- lexical scoring alone cannot break that tie or demote the topically wrong chunk. Vector similarity can and does.</p>
+<div class="code-block">
+<span class="code-label">SQL · LEGACY ORACLE TEXT PATH</span>
+<pre><code>CREATE INDEX chunks_ctx_idx ON chunks(chunk_text) INDEXTYPE IS CTXSYS.CONTEXT;
+
+SELECT c.chunk_id, SCORE(1)
+FROM chunks c
+WHERE CONTAINS(c.chunk_text, 'vendor account reset', 1) &gt; 0
+ORDER BY SCORE(1) DESC;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · MODERN UNIFIED PATH (per Oracle's own documentation as of this writing)</span>
+<pre><code>CREATE HYBRID VECTOR INDEX my_hybrid_idx ON doc_table(text_column)
+  PARAMETERS('MODEL my_embed_model');
+
+select json_serialize(DBMS_HYBRID_VECTOR.SEARCH(json('{
+  "hybrid_index_name":"my_hybrid_idx",
+  "search_scorer":"rsf",
+  "search_fusion":"UNION",
+  "vector":{"search_text":"reset vendor account password","search_mode":"CHUNK","aggregator":"MAX","score_weight":1,"rank_penalty":5},
+  "text":{"contains":"reset AND vendor AND account","score_weight":10,"rank_penalty":1},
+  "return":{"values":["rowid","score","vector_score","text_score"],"topN":5}
+}')) RETURNING CLOB pretty);
+</code></pre>
+</div>
+<p>Scoring rule, verbatim from Oracle's docs and the key teaching point: vector similarity produces a VECTOR_DISTANCE-based score; Oracle Text produces a CONTAINS/keyword score; these are on different scales, so Oracle normalizes the vector side into a semantic score on a 100(best)-0(worst) scale before fusing with RSF, RRF, or WRRF.</p>
+<p>Independent verification method, stated plainly: a node script first reproduced Oracle's own published RSF Table 8-3 exactly using the formula from Section 09 -- all three outputs matched Oracle's own published numbers to 2 decimals, proving the RSF implementation faithful before trusting it on new numbers. That proven-correct formula was then applied to this concept's own 5-chunk example using (a) a lexical side -- a transparent, hand-checkable term/stem-matching counter (distinct terms matched × 10 + total occurrences × 5, normalized to 0-100 against the max), explicitly <b>not</b> a claim to reproduce Oracle's real Salton-based SCORE(), just a teachable, verifiable stand-in that feeds the real RSF formula -- and (b) a vector side -- real cosine-similarity math on small hand-authored 5-dimensional toy topic embeddings (topics: vendor / reset-credential / employee / security-policy / offboarding), converted to Oracle's VECTOR_DISTANCE(...,COSINE) convention (distance = 1 - similarity), then to a 0-100 "vector_score" via similarity × 100.</p>
+<table class="compare-table">
+<thead><tr><th>Chunk</th><th>Lexical score (stand-in, 0-100)</th><th>Vector cosine similarity</th></tr></thead>
+<tbody>
+<tr><td>chk_03 (completes the truncated seed)</td><td>100</td><td>0.99</td></tr>
+<tr><td>chk_01 (correct entity)</td><td>40</td><td>0.68</td></tr>
+<tr><td>chk_02 (wrong entity -- employee)</td><td>40</td><td>0.50</td></tr>
+<tr><td>chk_05 (correct entity)</td><td>40</td><td>0.58</td></tr>
+<tr><td>chk_04 (correct entity, less relevant)</td><td>20</td><td>0.56</td></tr>
+</tbody>
+</table>
+<p>Lexical-only ranking: chk_03 (100), then a three-way tie at 40 between chk_01, chk_02 (wrong entity), and chk_05, then chk_04 (20) -- the tie cannot be broken by keyword scoring alone. Vector cosine similarity, ranked: chk_03 (0.99) &gt; chk_01 (0.68) &gt; chk_05 (0.58) &gt; chk_04 (0.56) &gt; chk_02 (0.50, lowest -- correctly recognizes the wrong entity).</p>
+<table class="compare-table">
+<thead><tr><th>RSF weighting (vector : text)</th><th>Fused rank order</th></tr></thead>
+<tbody>
+<tr><td>1 : 1</td><td>chk_03 (99.63) &gt; chk_01 (53.91) &gt; chk_05 (49.22) &gt; chk_02 (44.93) &gt; chk_04 (37.78)</td></tr>
+<tr><td>5 : 1 (Oracle's own example weighting)</td><td>chk_03 (99.38) &gt; chk_01 (63.18) &gt; chk_05 (55.37) &gt; chk_04 (49.64) &gt; chk_02 (48.21, now last)</td></tr>
+</tbody>
+</table>
+<div class="callout warning"><b>Verified concretely, and hedged plainly</b>Hybrid fusion demotes chk_9f21_2_02 from a lexical three-way tie for second place down to last place in both weightings, because the vector signal -- not the keyword signal -- catches that it's about the wrong entity despite sharing "reset" and "password" with the query. No live Oracle Database instance was queried for this concept -- all SQL/PL-SQL syntax shown is real and curl-verified against Oracle's own docs, but no statement was actually executed against a running engine; the scores above are computed via the documented/derived RSF formula and the stand-in scorers described above, not observed engine output.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Three fusion modes, three JSON shapes</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>TEXT_ONLY</span><h3>Equivalent to legacy CONTAINS</h3><p>search_fusion:"TEXT_ONLY" runs only the lexical side -- the same result a standalone CONTAINS/SCORE() query would give, but through the unified API.</p></article>
+<article class="info-card"><span>VECTOR_ONLY</span><h3>Pure semantic search</h3><p>search_fusion:"VECTOR_ONLY" runs only the vector side -- equivalent in spirit to Concept 05's own VECTOR_DISTANCE query, through the unified API.</p></article>
+<article class="info-card"><span>RERANK</span><h3>One side re-orders the other's candidates</h3><p>search_fusion:"RERANK" -- one signal supplies the candidate set, the other re-orders it, distinct from a straight UNION/INTERSECT merge.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Both real paths, side by side</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · MODERN UNIFIED DDL (per Oracle's own documentation as of this writing)</span>
+<pre><code>CREATE HYBRID VECTOR INDEX my_hybrid_idx ON doc_table(text_column)
+  PARAMETERS('MODEL my_embed_model');
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · CONFIRMED HYBRID SEARCH JSON CALL (verbatim from Oracle's own docs)</span>
+<pre><code>select json_serialize(DBMS_HYBRID_VECTOR.SEARCH(json('{
+  "hybrid_index_name":"my_hybrid_idx",
+  "search_scorer":"rsf",
+  "search_fusion":"UNION",
+  "vector":{"search_text":"reset vendor account password","search_mode":"CHUNK","aggregator":"MAX","score_weight":1,"rank_penalty":5},
+  "text":{"contains":"reset AND vendor AND account","score_weight":10,"rank_penalty":1},
+  "return":{"values":["rowid","score","vector_score","text_score"],"topN":5}
+}')) RETURNING CLOB pretty);
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · LEGACY ORACLE TEXT PATH, FOR CONTRAST</span>
+<pre><code>CREATE INDEX chunks_ctx_idx ON chunks(chunk_text) INDEXTYPE IS CTXSYS.CONTEXT;
+
+SELECT c.chunk_id, SCORE(1)
+FROM chunks c
+WHERE CONTAINS(c.chunk_text, 'vendor account reset', 1) &gt; 0
+ORDER BY SCORE(1) DESC;
+</code></pre>
+</div>
+<p>The FILTER BY / filter_type enum values documented alongside DBMS_HYBRID_VECTOR.SEARCH's JSON signature (IN_WO/IN_W/PRE_WO/PRE_W/POST_WO/DEFAULT) are copied verbatim from Oracle's own SEARCH signature page but were not independently cross-checked against a second source -- named here for completeness only, not exercised in the worked example or the lab.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for hybrid retrieval</h2></div></header>
+<p>Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/create-hybrid-vector-index.html">CREATE HYBRID VECTOR INDEX DDL reference</a> supplies the real syntax -- PARAMETERS('MODEL ... VECTOR_IDXTYPE ...'), VECTORIZER, FILTER BY / ORDER BY, and MAINTENANCE/SYNC/OPTIMIZE clauses. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/understand-hybrid-vector-indexes.html">hybrid-index conceptual architecture page</a> confirms the single-domain-index framing. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/perform-hybrid-search.html">hybrid-search landing page</a>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/understand-hybrid-search.html">hybrid-search-modes page</a> (the five search modes and the RSF/RRF/WRRF formulas with worked Table 8-3), <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/dbms_hybrid_vector-vecse.html">DBMS_HYBRID_VECTOR package overview</a>, and <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/search.html">SEARCH JSON signature page</a> together supply this concept's core mechanism. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/query-hybrid-vector-indexes-end-end-example.html">end-to-end worked-example page</a> was fetched and confirmed reachable this session but not read line-by-line -- its full walkthrough content is unverified beyond the page existing. Legacy Oracle Text is cited to Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/contains.html">CONTAINS reference</a>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/score.html">SCORE reference</a>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/ctx_ddl-package.html">CTX_DDL package index</a>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/create-index.html">CREATE INDEX ... INDEXTYPE IS CTXSYS.CONTEXT reference</a>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/context-index-type.html">CONTEXT index-type page</a> (confirming CTXCAT is deprecated), and <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/oracle-text-scoring-algorithm.html">Oracle Text scoring-algorithm page</a> (qualitative Salton-formula description only, no literal formula published). Concept 05's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/vector_distance.html">vector_distance documentation</a> and Concept 06's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/manage-different-categories-vector-indexes.html">index-category page</a> are reused for continuity, not re-derived. Oracle's live default docs build now redirects /23/ paths to /26/ (confirmed this session) -- prior C05/C06 citations using /23/ URLs still 302-redirect fine but now display under a "26" label; this concept's own new citations are recorded under the /26/ path directly for consistency.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Fusion Bench</h2></div></header>
+<div class="lab">
+<p>Acme's own six relevant chunks sit at global vector-cosine ranks 3, 7, 9, 14, 17, 20 -- all six always surfaced by vector search, unchanged since Concept 05. Of those six, only four (ranks 3, 7, 9, 17) contain literal query-term overlap that Oracle Text's CONTAINS/SCORE() would actually match; the other two (ranks 14, 20) are paraphrases with zero lexical overlap, so Oracle Text alone misses them. Toggle between lexical-only, vector-only, and hybrid modes and watch the ORDER BY expression and recovery count change live.</p>
+<div class="code-block">
+<span class="code-label">SQL · ORDER BY SLOT CHANGES WITH THE MODE</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+WHERE d.tenant_id = :tenant_id
+  AND CONTAINS(c.text, :query_text, 1) &gt; 0
+ORDER BY <span id="fusionExprSlot_1007"></span>
+FETCH FIRST 6 ROWS ONLY;</code></pre>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose a retrieval mode">
+<button type="button" class="secondary" data-mode="lexical" id="fusionModeLexical_1007">Lexical only (CONTAINS/SCORE)</button>
+<button type="button" class="secondary" data-mode="vector" id="fusionModeVector_1007">Vector only</button>
+<button type="button" class="active" data-mode="hybrid" id="fusionModeHybrid_1007">Hybrid (RSF fusion)</button>
+</div>
+<p class="fine-print">ACME'S SIX CITED MATCHES (global ranks, unchanged from Concept 04/05/06)</p>
+<div class="rank-chip-row" id="fusionChipRow_1007"></div>
+<div class="metric-race" id="fusionMetricRace_1007">
+<div class="metric-race-row"><span>Found</span><div class="metric-bar-track"><div class="metric-bar-fill" id="fusionBarFound_1007"></div></div><b id="fusionValFound_1007"></b></div>
+</div>
+<div class="callout" id="fusionVerdict_1007" aria-live="polite"></div>
+<p class="fine-print">Hedges, stated plainly: the hybrid ORDER BY expression shown in this lab is illustrative fusion arithmetic invented for teaching purposes, <b>not</b> a verified Oracle-documented syntax -- it sits deliberately between the real, citable <code>SCORE(1) DESC</code> and <code>VECTOR_DISTANCE(...,COSINE) ASC</code> lines and must never be cited against verified-references.json. The outlined "boosted" chips in hybrid mode are an author-invented visual signal for double-hit chunks, not an official Oracle-side indicator.</p>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">REPETITION</span><h2>Trade-offs, restated</h2></div></header>
+<ul>
+<li>Lexical-only misses paraphrases (2 of Acme's 6) but is cheap and exact-match-confident.</li>
+<li>Vector-only never misses recall but can't privilege exact matches -- no way to boost a row just because it shares the query's exact wording.</li>
+<li>Hybrid costs one extra scoring pass but is the only mode that both recovers all 6 and ranks exact+semantic double-hits highest.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>UNNORMALIZED SUM</span><h3>Vector distance and CONTAINS score added directly</h3><p>Cause: treating VECTOR_DISTANCE and SCORE() as already comparable numbers. Fix: let Oracle's own RSF/RRF/WRRF fusion normalize the vector side to its 0-100 semantic score first -- don't hand-sum the raw values.</p></article>
+<article class="info-card"><span>ASSUMED MODEL COMPATIBILITY</span><h3>CREATE HYBRID VECTOR INDEX built assuming any embedding model plugs in</h3><p>Cause: Oracle scopes the PARAMETERS clause to in-database ONNX models or REST-hosted providers, not directly Module 08's all-MiniLM-L6-v2 model unless imported as ONNX. Fix: confirm the embedding model backing the hybrid index is a supported ONNX/REST type before assuming direct compatibility.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Hybrid retrieval means running two SQL queries and UNIONing them yourself</td><td>False -- Oracle's real mechanism is one index (CREATE HYBRID VECTOR INDEX) and one fusion function (DBMS_HYBRID_VECTOR.SEARCH), executed inside the engine.</td></tr>
+<tr><td>Oracle Text's SCORE() and RSF's fused score are the same number</td><td>False -- the fused output is a distinct blended value, and the exact distance-to-semantic-score mapping formula isn't published.</td></tr>
+<tr><td>Vector and lexical scores can just be added together</td><td>False -- Oracle normalizes the vector distance into a comparable 0-100 semantic score before fusing.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>Decide the fusion config before you ship</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Before shipping a retrieval endpoint</b><p>Decide search_fusion and search_scorer explicitly rather than accepting defaults silently, and confirm the embedding model backing the hybrid index is a supported ONNX/REST type before assuming Module 08's model plugs in directly.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 7/14</b><p>Concept 08 (python-oracledb) is next, untouched here, named forward-only.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can recall the RSF formula</b><p>RS = score × weight per side; RSF = (sum of RS) ÷ (sum of 100 × weight) × 100.</p></div>
+<div><b>I can name the three fusion scorers</b><p>RSF, RRF, and WRRF.</p></div>
+<div><b>I can identify which of Acme's 6 chunks lexical-only search would miss</b><p>The two at ranks 14 and 20 -- paraphrases with zero lexical overlap.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using a new text:vector weighting of 3:1 (instead of this concept's own 1:1 and 5:1 examples), compute the RSF-fused rank order for the five doc_9f21 chunks from Section 10 by hand, using the same lexical and vector scores already given there.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Using RS = score × weight and RSF = (sum of RS) ÷ (sum of 100 × weight) × 100 with text weight 3 and vector weight 1 (sum of weights × 100 = 400): chk_03 -- RS = 100×3 + 99×1 = 399, RSF = 399/400×100 = 99.75. chk_01 -- RS = 40×3 + 68×1 = 188, RSF = 47.00. chk_05 -- RS = 40×3 + 58×1 = 178, RSF = 44.50. chk_02 -- RS = 40×3 + 50×1 = 170, RSF = 42.50. chk_04 -- RS = 20×3 + 56×1 = 116, RSF = 29.00. Fused order: chk_03 &gt; chk_01 &gt; chk_05 &gt; chk_02 &gt; chk_04 -- checked against the same RSF formula used in Sections 09 and 10, and consistent with the pattern already shown there: heavier text weighting keeps the wrong-entity chk_02 closer to the middle of the pack than the 1:1 or 5:1 weightings did, but chk_03's lexical dominance still keeps it first.</div>
+</details>
+<p>Teach-back: why does increasing the text-side weight change chk_02's relative position less than it changes chk_04's?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Oracle Text and vector hybrid retrieval</h3><ul><li><b>The minimal syntax:</b> CREATE HYBRID VECTOR INDEX my_hybrid_idx ON doc_table(text_column) PARAMETERS('MODEL my_embed_model');</li><li><b>Three scorer names:</b> RSF (weighted-sum), RRF (reciprocal-rank), WRRF (weighted reciprocal-rank).</li><li><b>The rule:</b> normalize vector distance into a comparable 0-100 semantic score before fusing it with a lexical score -- never sum the raw values.</li></ul></div>
+<div><h3>Module 10 · 7/14</h3><p>Concept 08, python-oracledb, is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: how does Oracle fuse keyword and vector search internally, and why can't you just add the two scores?</summary><div>Via DBMS_HYBRID_VECTOR.SEARCH's fusion step -- CONTAINS-style lexical scoring and cosine-based vector scoring run on different scales, so Oracle normalizes the vector side into a comparable 0-100 semantic score before merging both with a named formula (RSF, RRF, or WRRF). Adding the raw, unnormalized values directly would be meaningless.</div></details>
+<details class="quiz"><summary>Conceptual: name Oracle's three hybrid fusion scorers and what each optimizes for.</summary><div>RSF (Weighted-Sum Fusion) blends normalized scores directly by weight; RRF (Reciprocal-Rank Fusion) blends by each side's rank position rather than raw score; WRRF (Weighted Reciprocal-Rank Fusion) adds explicit per-side weights on top of RRF's rank-based blending.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real CREATE HYBRID VECTOR INDEX statement.</summary><div>CREATE HYBRID VECTOR INDEX my_hybrid_idx ON doc_table(text_column) PARAMETERS('MODEL my_embed_model');</div></details>
+<details class="quiz"><summary>System design: why decide search_fusion and search_scorer explicitly before shipping a retrieval endpoint?</summary><div>Because accepting Oracle's defaults silently means the fusion behavior your users experience was never a deliberate choice -- and the embedding model backing the index must also be confirmed as a supported ONNX/REST type before assuming an existing model (like Module 08's all-MiniLM-L6-v2) plugs in directly.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/create-hybrid-vector-index.html"><b>CREATE HYBRID VECTOR INDEX — Oracle Documentation</b><br><span>Primary citation for the real DDL syntax -- PARAMETERS, VECTORIZER, FILTER BY / ORDER BY, MAINTENANCE/SYNC/OPTIMIZE clauses.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/understand-hybrid-vector-indexes.html"><b>Understand Hybrid Vector Indexes — Oracle Documentation</b><br><span>Conceptual architecture -- one domain index storing both Oracle Text and vector-search structures together.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/understand-hybrid-search.html"><b>Understand Hybrid Search — Oracle Documentation</b><br><span>The five search modes and the RSF/RRF/WRRF scoring formulas, with worked Table 8-3, reproduced in Section 09.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/dbms_hybrid_vector-vecse.html"><b>DBMS_HYBRID_VECTOR — Oracle Documentation</b><br><span>Package overview: SEARCH, GET_SQL, SEARCHPIPELINE.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/search.html"><b>DBMS_HYBRID_VECTOR.SEARCH — Oracle Documentation</b><br><span>Full JSON parameter signature, including search_fusion/search_scorer enum values and the FILTER BY filter_type enum.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/query-hybrid-vector-indexes-end-end-example.html"><b>Query Hybrid Vector Indexes: End-to-End Example — Oracle Documentation</b><br><span>Fetched and HTTP-200-confirmed this session but not read line-by-line; content availability confirmed, walkthrough unverified.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/contains.html"><b>CONTAINS — Oracle Documentation</b><br><span>Legacy Oracle Text CONTAINS(column, text_query, label) RETURN NUMBER operator syntax.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/score.html"><b>SCORE — Oracle Documentation</b><br><span>Legacy SCORE(label) operator syntax.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/ctx_ddl-package.html"><b>CTX_DDL — Oracle Documentation</b><br><span>Real procedure names: CREATE_PREFERENCE, SYNC_INDEX, OPTIMIZE_INDEX, CREATE_STOPLIST, CREATE_SECTION_GROUP.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/create-index.html"><b>CREATE INDEX ... INDEXTYPE IS CTXSYS.CONTEXT — Oracle Documentation</b><br><span>Real Oracle Text index-creation syntax, adapted to this concept's chunks table.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/context-index-type.html"><b>CONTEXT Index Type — Oracle Documentation</b><br><span>Confirms CONTEXT is the real, recommended Oracle Text index type; CTXCAT is documented as deprecated.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/ccref/oracle-text-scoring-algorithm.html"><b>Oracle Text Scoring Algorithm — Oracle Documentation</b><br><span>Qualitative Salton-formula description and occurrences-needed-to-score-100 table; the literal formula itself is not published.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Reused from Concept 05 for continuity -- default metric COSINE and the seven real metric tokens.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/manage-different-categories-vector-indexes.html"><b>Manage Different Categories of Vector Indexes — Oracle Documentation</b><br><span>Reused from Concept 06 for continuity -- the HNSW/IVF index-category names and exact-fallback rule.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 7/14</span>
+<h3>Keyword search and vector search aren't rivals. Oracle fuses them into one number per row.</h3>
+<p>You can now name Oracle's real unified hybrid mechanism -- CREATE HYBRID VECTOR INDEX plus DBMS_HYBRID_VECTOR.SEARCH -- name its three fusion scorers, and explain why vector distance gets normalized before fusing with a lexical score. Concept 08 is next, covering python-oracledb.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open Fusion Bench ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at 7 of 14 concepts. Next concept: Concept 08, python-oracledb.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 07 · Complete</p>
+<a href="module-10-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>

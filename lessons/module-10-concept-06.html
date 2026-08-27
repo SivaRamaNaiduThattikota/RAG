@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10's sixth concept resolves the cliffhanger Concept 05 deliberately left open: what happens to VECTOR_DISTANCE's default metric once a vector index exists on the column? Oracle supports exactly two real index categories -- In-Memory Neighbor Graph (HNSW) and Neighbor Partition (IVF) -- and the index only gets used when the query's own distance metric matches the metric the index was built with. Same metric: fast, approximate search. Different metric: Oracle silently falls back to an exact, full scan, with no error. The lab, The Metric Gatekeeper, lets you toggle index state and five real distance expressions against the same query and watch which path fires.">
+<title>Exact search and Oracle vector indexes — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 06</p>
+<h1>Having a fast column doesn't mean a fast search.<br><em>Not automatically -- and not for free.</em></h1>
+<p class="lesson-lead">Concept 05 gave this course a real VECTOR(384, FLOAT32) column and a real VECTOR_DISTANCE(...,COSINE) query, then deliberately left one question open: what happens to that default metric once a vector index exists on the column? This concept answers it. Oracle names exactly two real index categories, and an index only gets used when the query's own metric matches the metric the index was built with -- otherwise Oracle quietly falls back to an exact, full scan, with no error and no warning.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth concept of Module 10 (6/14) -- resolves Concept 05's own deferred cliffhanger about index-dependent default-metric behavior</b></div>
+<div><span>PREREQUISITE</span><b>Concept 05's real VECTOR(384, FLOAT32) type and VECTOR_DISTANCE(...,COSINE) query (cited, not re-derived); Module 09 Concepts 03/04's general HNSW/IVF mechanisms (cited, not re-derived)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name Oracle's two real index categories, write the minimal CREATE VECTOR INDEX statement, and explain why a metric mismatch triggers a silent exact fallback instead of an error</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A fast column is not the same thing as a fast search</h2>
+</div>
+<p>Concept 05 built the VECTOR column and VECTOR_DISTANCE. But does having a fast column mean fast search? Not automatically. This concept covers Oracle's real vector indexes, and the one rule that decides whether an index is even used at all.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The cliffhanger, named again</h3>
+<p>Concept 05 built the VECTOR column and VECTOR_DISTANCE. But does having a fast column mean fast search? Not automatically. Concept 05 deliberately left open what happens to VECTOR_DISTANCE's default metric once a vector index exists on the column -- this concept is that answer.</p>
+<div class="beginner-memory"><b>First memory:</b> exact search checks every row; a vector index lets Oracle skip most rows and estimate the closest ones instead -- but only when you ask it correctly.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Exact vs. approximate, in plain language</h3>
+<p>Exact search checks every row and computes a real distance for each one -- the same brute-force framing Module 09 Concept 01 already established. A vector index lets Oracle skip most rows and just estimate the closest ones, which is faster but not guaranteed to be 100% correct. Whether that estimate ever happens depends on one rule this concept exists to teach.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c1006-b03-title">
+<strong class="concept-visual-title" id="c1006-b03-title">VISUAL · ROWS TOUCHED, BEFORE AND AFTER AN INDEX</strong>
+<svg class="vector-plane" viewBox="0 0 400 130" role="img" aria-labelledby="c1006-svg-title-b c1006-svg-desc-b" style="max-width:560px">
+<title id="c1006-svg-title-b">Two rows of dots comparing how many rows a query touches with no index versus a matching-metric index</title>
+<desc id="c1006-svg-desc-b">Top row: eight dots, all lit, labelled no index -- every row touched, exact. Bottom row: eight dots, only two lit, labelled matching-metric index -- few rows touched, approximate.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<text x="10" y="16">NO INDEX -- every row touched, exact</text>
+<g>
+<circle cx="20" cy="36" r="7" fill="#b3543a"/><circle cx="45" cy="36" r="7" fill="#b3543a"/><circle cx="70" cy="36" r="7" fill="#b3543a"/><circle cx="95" cy="36" r="7" fill="#b3543a"/><circle cx="120" cy="36" r="7" fill="#b3543a"/><circle cx="145" cy="36" r="7" fill="#b3543a"/><circle cx="170" cy="36" r="7" fill="#b3543a"/><circle cx="195" cy="36" r="7" fill="#b3543a"/>
+</g>
+<text x="10" y="76">MATCHING-METRIC INDEX -- few rows touched, approximate</text>
+<g>
+<circle cx="20" cy="96" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/><circle cx="45" cy="96" r="7" fill="#3a5f95"/><circle cx="70" cy="96" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/><circle cx="95" cy="96" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/><circle cx="120" cy="96" r="7" fill="#3a5f95"/><circle cx="145" cy="96" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/><circle cx="170" cy="96" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/><circle cx="195" cy="96" r="7" fill="none" stroke="#5a5f6b" stroke-width="1"/>
+</g>
+</g>
+</svg>
+</figure>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Oracle's two real index types</h3>
+<p>Oracle names exactly two real index categories: In-Memory Neighbor Graph, for which HNSW is the only supported type, and Neighbor Partition, for which IVF is the only supported type. Both mechanisms -- how HNSW's graph and IVF's clusters actually work -- were already covered in Module 09 Concepts 03 and 04 and are not repeated here.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The minimal real syntax</h3>
+<p>Per Oracle's own documentation as of this writing, the simplest form is <code>CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE WITH TARGET ACCURACY 95;</code> -- naming the column, the organization keyword, the distance metric, and a target accuracy percentage.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The one rule that matters</h3>
+<div class="scroll-flow">
+<span>No index — every query is exact</span><i>→</i>
+<span>CREATE VECTOR INDEX ... DISTANCE COSINE</span><i>→</i>
+<span class="hot">Same metric in the query — approximate, index used</span><i>→</i>
+<span>Different metric in the query — exact fallback, index silently skipped</span>
+</div>
+<p>The index only gets used if your query's distance metric matches the metric the index was built with. Same metric = fast + approximate. Different metric = Oracle quietly falls back to exact -- no error.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Two real categories, one used here</h3>
+<div class="distinction-table" role="table" aria-label="Oracle's two real vector index categories">
+<div role="row"><b role="cell">Index category</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">In-Memory Neighbor Graph (HNSW only) -- used in this concept's worked example</span><span role="cell">Graph-based approximate search; mechanism already covered in Module 09 Concept 03, not repeated here.</span></div>
+<div role="row"><span role="cell">Neighbor Partition (IVF only) -- named for completeness</span><span role="cell">Cluster-based approximate search; mechanism already covered in Module 09 Concept 04, not repeated here.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Once a vector index exists, every query against that column becomes approximate."</b><p>False. Per Oracle's own documentation, if the query uses a different distance function than the one the index was built with, an exact match is triggered because the index cannot be used in that case.</p></div>
+<div><b>"This is the same trap as Concept 05's &lt;-&gt; operator."</b><p>Different trap. Concept 05's trap was about which operator string maps to which metric. This concept's trap is about an index-metric mismatch silently reverting an approximate query to an exact one, with no error at all.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Before shipping a retrieval endpoint</b><p>Decide index type and metric together, and lock the query's metric to match the index's build metric -- or the "fast" index quietly does nothing.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 6/14</b><p>Concept 07 covers Oracle Text hybrid retrieval next; Concept 08 covers python-oracledb after that -- both untouched here, named forward-only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name Oracle's two real index categories</b><p>In-Memory Neighbor Graph (HNSW only) and Neighbor Partition (IVF only).</p></div>
+<div><b>Know why a metric mismatch doesn't error</b><p>Oracle silently falls back to exact search instead -- per Oracle's own documented behavior.</p></div>
+<div><b>Write the minimal CREATE VECTOR INDEX statement</b><p><code>CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE WITH TARGET ACCURACY 95;</code></p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>What happens if a query's distance metric doesn't match the metric a vector index was built with?</li>
+<li>Name Oracle's two real vector index categories and the one supported type each carries.</li>
+<li>Try it: open "The Metric Gatekeeper" lab below and click through the index/expression combinations yourself.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · 6 OF 14</h3>
+<p>An index doesn't change what a query means -- it only changes how fast Oracle can answer it, and only if you ask with the same metric it was built with. That resolves Concept 05's own cliffhanger. Concept 07 is next, covering Oracle Text hybrid retrieval -- named forward-only here.</p>
+<div class="beginner-memory"><b>Concept 06 is active.</b> Module 10 stands at 6 of 14 concepts.</div>
+<a class="button primary" href="module-10-concept-05.html">← Back to Concept 05's real VECTOR syntax</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">The index that only sometimes fires</h2>
+</header>
+<div class="bridge-steps">
+<a href="#b05"><span>01</span><b>The one rule that matters</b><small>Same metric = approximate. Different metric = silent exact fallback.</small></a>
+<a href="#s12"><span>02</span><b>Real CREATE VECTOR INDEX syntax</b><small>Oracle's two real categories, HNSW and IVF.</small></a>
+<a href="#s14"><span>03</span><b>The Metric Gatekeeper</b><small>The lab -- toggle index state and five real distance expressions.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 05 left open what happens to VECTOR_DISTANCE's default metric once a vector index exists → Oracle names exactly two real index categories, In-Memory Neighbor Graph (HNSW only) and Neighbor Partition (IVF only) → a four-step SQL progression shows no-index exact search, then CREATE VECTOR INDEX, then same-metric approximate search, then different-metric silent exact fallback → the fallback is quoted verbatim from Oracle's own documentation and distinguished from Concept 05's own operator-string trap → the lab lets you toggle index state and five real distance expressions to see all three outcomes → Concept 07 begins Oracle Text hybrid retrieval next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Exact search and Oracle vector indexes" deep dive</b><em>Full citations, the annotated SQL, and The Metric Gatekeeper lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 10's sixth concept -- the cliffhanger's own answer</h2></div></header>
+<p>This is the sixth concept of Module 10 (6/14). Concept 05 built the real VECTOR(384, FLOAT32) column and VECTOR_DISTANCE(...,COSINE) query, then explicitly deferred one question: what happens to that default metric once a vector index exists on the column? This concept resolves that thread directly. Concept 07 (Oracle Text hybrid) and Concept 08 (python-oracledb) remain untouched, named forward-only.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DEFINE</span><h3>Vector index, formally</h3><p>An optional, metric-bound structure that changes HOW a distance query executes, not what VECTOR_DISTANCE returns.</p></article>
+<article class="info-card"><span>NAME</span><h3>Oracle's two real categories</h3><p>In-Memory Neighbor Graph (HNSW only) and Neighbor Partition (IVF only), verbatim Oracle wording.</p></article>
+<article class="info-card"><span>RESOLVE</span><h3>Concept 05's own cliffhanger</h3><p>A metric mismatch between query and index triggers a silent exact fallback -- no error, no warning.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>EXPLAIN PLAN operator names and optimizer cost internals, Oracle Text hybrid, and python-oracledb -- named forward-only or excluded (Concepts 07-08).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-05.html">Module 10 Concept 05</a></b> -- the real VECTOR(384, FLOAT32) column and VECTOR_DISTANCE(...,COSINE) query, reused verbatim as this concept's own baseline.</li>
+<li><b>Module 09 Concepts 03 and 04</b> -- the general HNSW and IVF mechanisms, cited by name, not re-derived here.</li>
+<li><b>Module 09 Concepts 01, 02, and 06</b> -- the exact/brute-force framing, the SIFT1M recall numbers, and the consolidated recall-latency-memory trade-off table, cited by name for the numeric trade-off, not re-measured.</li>
+<li><b>Explicitly out of scope:</b> EXPLAIN PLAN operator names or optimizer cost numbers (no live-verifiable Oracle page found after a genuine attempt), Oracle Text hybrid retrieval (Concept 07), python-oracledb client code (Concept 08) -- named forward only.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A shortcut that only works if you take the right exit</h2></div></header>
+<p>Building a vector index is like building a highway shortcut between two neighborhoods. If you get on it, you get there fast, but only approximately close to your real destination. If you take the wrong exit -- a different metric than the one the shortcut was built for -- there is no crash and no error sign. The road simply routes you back onto the slow surface streets, checking every intersection along the way, and you'd never know unless you noticed how long the trip took.</p>
+<div class="callout warning"><b>Analogy boundary</b>The actual mechanism comes from Section 10's own worked queries and Section 12's own annotated SQL, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>ORGANIZATION INMEMORY NEIGHBOR GRAPH</td><td>Oracle's real organization keyword for the HNSW-only, In-Memory Neighbor Graph index category</td><td>ORGANIZATION INMEMORY NEIGHBOR GRAPH</td></tr>
+<tr><td>ORGANIZATION NEIGHBOR PARTITIONS</td><td>Oracle's real organization keyword for the IVF-only, Neighbor Partition index category</td><td>ORGANIZATION NEIGHBOR PARTITIONS</td></tr>
+<tr><td>DISTANCE metric_name</td><td>The metric the index is built with; a query must use this same metric for the index to be used</td><td>DISTANCE {COSINE|EUCLIDEAN|...}</td></tr>
+<tr><td>TARGET ACCURACY percentage_value</td><td>The recall dial for an approximate index -- a percentage governing the accuracy/speed trade-off</td><td>WITH TARGET ACCURACY percentage_value</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>An index changes execution, not meaning</h2></div></header>
+<div class="core-block">
+<p>A vector index in Oracle AI Vector Search is an optional, metric-bound structure that changes HOW a distance query executes, not what VECTOR_DISTANCE itself returns for any given pair of vectors. Per Oracle's own guidance on using vector indexes, the minimal required clauses are the column to index and an organization keyword; DISTANCE and TARGET ACCURACY have their own documented defaults but this course writes them explicitly, matching Concept 05's own explicit-COSINE convention.</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Four stages, one branch point</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1006-s07-title">
+<strong class="concept-visual-title" id="c1006-s07-title">VISUAL · NO INDEX → INDEX BUILT → SAME METRIC → DIFFERENT METRIC</strong>
+<svg class="vector-plane" viewBox="0 0 400 150" role="img" aria-labelledby="c1006-svg-title-s c1006-svg-desc-s" style="max-width:560px">
+<title id="c1006-svg-title-s">A flow diagram showing four stages ending in a branch between approximate search and exact fallback</title>
+<desc id="c1006-svg-desc-s">Stage one: no index, exact search. Stage two: CREATE VECTOR INDEX with DISTANCE COSINE. Stage three branches into two boxes -- same metric in the query leads to approximate search, index used; different metric in the query leads to exact fallback, index silently skipped.</desc>
+<g font-family="DM Mono, monospace" font-size="7" fill="#14241f">
+<rect x="10" y="12" width="90" height="24" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="16" y="28">No index -- exact</text>
+<rect x="150" y="12" width="120" height="24" fill="none" stroke="#5a5f6b" stroke-width="1.2"/>
+<text x="156" y="28">CREATE VECTOR INDEX</text>
+<line x1="210" y1="36" x2="110" y2="70" stroke="#3a5f95" stroke-width="1.2"/>
+<line x1="210" y1="36" x2="300" y2="70" stroke="#b3543a" stroke-width="1.2"/>
+<rect x="20" y="70" width="150" height="30" fill="none" stroke="#3a5f95" stroke-width="1.2"/>
+<text x="26" y="86" fill="#3a5f95">Same metric -- approximate</text>
+<text x="26" y="96" font-size="6" fill="#3a5f95">index used, recall &lt; 100%</text>
+<rect x="220" y="70" width="160" height="30" fill="none" stroke="#b3543a" stroke-width="1.2"/>
+<text x="226" y="86" fill="#b3543a">Different metric -- exact fallback</text>
+<text x="226" y="96" font-size="6" fill="#b3543a">index silently skipped, no error</text>
+</g>
+</svg>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>One row added to the existing skeleton</h2></div></header>
+<div class="pipeline-preview">
+<span>Schema — the five-table skeleton (Concept 03)</span><i>↓</i><span>Persistence — the real VECTOR(384, FLOAT32) column (Concept 05)</span><i>↓</i><span class="hot">Index layer — CREATE VECTOR INDEX, metric-bound to the query (this concept)</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>Recall governed by a dial, not a guarantee</h2></div></header>
+<div class="equation">TARGET ACCURACY percentage_value -- higher values trade speed for recall, on the same approximate-search curve Module 09 Concept 02 already measured on SIFT1M and Module 09 Concept 06 already consolidated into a single trade-off table</div>
+<div class="callout"><b>Metric-match hedge</b>None of these accuracy numbers apply at all unless the query's own distance metric matches the index's build metric -- otherwise the path is exact fallback, not approximate, and TARGET ACCURACY never enters the picture.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The index only fires when the metric matches</h2></div></header>
+<p>Concept 05 asked plainly what happens to VECTOR_DISTANCE's default metric once a vector index exists on the column. This four-step progression answers it, using this course's own embeddings table (VECTOR(384, FLOAT32), Concepts 03 and 05), not Oracle's own literal "galaxies" example table.</p>
+<div class="code-block">
+<span class="code-label">SQL · STEP 1 -- NO INDEX, EXACT BASELINE</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+ORDER BY VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+<p>No index exists on <code>embeddings.embedding</code> yet, so every surviving row's distance is computed -- the same brute-force framing Module 09 Concept 01 already established.</p>
+<div class="code-block">
+<span class="code-label">SQL · STEP 2 -- CREATE THE VECTOR INDEX (per Oracle's own documentation as of this writing)</span>
+<pre><code>CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding)
+  ORGANIZATION INMEMORY NEIGHBOR GRAPH
+  DISTANCE COSINE
+  WITH TARGET ACCURACY 95;
+
+-- The IVF equivalent, named for completeness only, not built out further:
+CREATE VECTOR INDEX embeddings_ivf_idx ON embeddings (embedding)
+  ORGANIZATION NEIGHBOR PARTITIONS
+  DISTANCE COSINE
+  WITH TARGET ACCURACY 95;
+</code></pre>
+</div>
+<p>Oracle names exactly two real ANN index categories: In-Memory Neighbor Graph, for which HNSW is the only supported type, and Neighbor Partition, for which IVF is the only supported type -- cited to Module 09 Concepts 03 and 04 for the underlying mechanisms, not re-derived here. QUANTIZATION, OFFLOAD_CREDENTIAL_NAME, ONLINE rebuilds, and GLOBAL-vs-LOCAL partitioning also exist as real clauses/options, mentioned here for completeness only, never load-bearing in this concept.</p>
+<div class="code-block">
+<span class="code-label">SQL · STEP 3 -- SAME QUERY, SAME METRIC (COSINE = COSINE)</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+ORDER BY VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+<p>Identical query text to Step 1. The index now exists and its build metric (COSINE) matches the query's own metric (COSINE), so Oracle uses it: fewer rows touched, approximate search, recall below 100% and governed by TARGET ACCURACY 95 -- cited to Module 09 Concept 02's own SIFT1M numbers and Module 09 Concept 06's own consolidated trade-off table, not re-measured here.</p>
+<div class="code-block">
+<span class="code-label">SQL · STEP 4 -- SAME QUERY SHAPE, DIFFERENT METRIC (EUCLIDEAN AGAINST A COSINE-BUILT INDEX)</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+ORDER BY VECTOR_DISTANCE(e.embedding, :query_embedding, EUCLIDEAN)
+FETCH FIRST 5 ROWS ONLY;
+</code></pre>
+</div>
+<div class="callout warning"><b>Concept 05's own cliffhanger, resolved</b>Per Oracle's own documentation: "If you use a different distance function than the one used to create the index, an exact match is triggered because you cannot use the index in this case." The <code>embeddings_hnsw_idx</code> index built in Step 2 was built with DISTANCE COSINE. Step 4's query asks for EUCLIDEAN instead -- so Oracle silently falls back to an exact, full scan, with no error and no warning in the query result itself. This is a different trap from Concept 05's own &lt;-&gt; operator trap: that one was about which operator string maps to which metric. This one is about an index-metric MISMATCH silently reverting an approximate query to an exact one.</div>
+<table class="compare-table">
+<thead><tr><th>No index</th><th>Index + same metric</th><th>Index + different metric</th></tr></thead>
+<tbody>
+<tr><td>Rows touched: all rows</td><td>Rows touched: a small subset</td><td>Rows touched: all rows</td></tr>
+<tr><td>Search type: exact</td><td>Search type: approximate</td><td>Search type: exact (silent fallback)</td></tr>
+<tr><td>Recall: 100% by definition</td><td>Recall: &lt;100%, governed by TARGET ACCURACY 95</td><td>Recall: 100% by definition -- same as no index</td></tr>
+</tbody>
+</table>
+<p>The cliffhanger is resolved: creating a vector index changes the execution path Oracle takes, not what VECTOR_DISTANCE's default metric returns. The default stays COSINE regardless of index state -- what changes is whether the query's own metric happens to match the index the optimizer could otherwise use.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>The recall dial in practice</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>DEFAULT</span><h3>TARGET ACCURACY 95</h3><p>Oracle's own worked example on the HNSW syntax page -- a reasonable default balance of speed and recall.</p></article>
+<article class="info-card"><span>HIGHER RECALL</span><h3>TARGET ACCURACY 99</h3><p>Closer to exact, at more compute cost per query -- flavor only, not a new mechanism beyond the same dial.</p></article>
+<article class="info-card"><span>LOWER RECALL</span><h3>TARGET ACCURACY 90</h3><p>Faster, further from exact -- the same trade-off curve Module 09 Concept 06 already tabulated.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>Oracle's two real index categories, in Oracle's own words</h2></div></header>
+<div class="distinction-table" role="table" aria-label="Oracle's two real index categories, verbatim">
+<div role="row"><b role="cell">Category (verbatim Oracle wording)</b><b role="cell">Supported type</b></div>
+<div role="row"><span role="cell">In-Memory Neighbor Graph</span><span role="cell">HNSW is the only supported type -- mechanism cited to Module 09 Concept 03, not re-derived here.</span></div>
+<div role="row"><span role="cell">Neighbor Partition</span><span role="cell">IVF is the only supported type -- mechanism cited to Module 09 Concept 04, not re-derived here.</span></div>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · MINIMAL REAL HNSW SYNTAX (per Oracle's own documentation as of this writing)</span>
+<pre><code>CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding)
+  ORGANIZATION INMEMORY NEIGHBOR GRAPH
+  DISTANCE COSINE
+  WITH TARGET ACCURACY 95;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · MINIMAL REAL IVF SYNTAX (named for completeness, not built out further)</span>
+<pre><code>CREATE VECTOR INDEX embeddings_ivf_idx ON embeddings (embedding)
+  ORGANIZATION NEIGHBOR PARTITIONS
+  DISTANCE COSINE
+  WITH TARGET ACCURACY 95;
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for vector index syntax</h2></div></header>
+<p>Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/manage-different-categories-vector-indexes.html">manage-different-categories-vector-indexes documentation</a> is the primary citation for both real index categories and the exact-fallback-on-metric-mismatch quote used verbatim in Section 10. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/hierarchical-navigable-small-world-index-syntax-and-parameters.html">HNSW syntax-and-parameters documentation</a> supplies the real CREATE VECTOR INDEX HNSW grammar and its own worked example. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/inverted-file-flat-index-creation-syntax-and-parameters.html">IVF creation-syntax documentation</a> supplies the real IVF grammar, named as the equivalent statement only. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html">guidelines-using-vector-indexes documentation</a> supplies the minimal-required-clauses statement and the restated COSINE-default fact. Concept 05's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html">vector_distance documentation</a> and <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html">create-tables-using-vector-data-type documentation</a> are reused for continuity, not re-derived. Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/overview-ai-vector-search.html">AI Vector Search overview</a> (reused from Concept 01) supplies optional general framing only.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Metric Gatekeeper</h2></div></header>
+<div class="lab">
+<p>Toggle whether the HNSW index from Step 2 exists, and pick one of five real Oracle distance expressions for the ORDER BY clause. Watch the index SQL, the query's own expression, and the resulting outcome update live -- exact search, approximate search, or a silent exact fallback.</p>
+<div class="lab-actions">
+<button type="button" class="active" data-index="hnsw" id="gatekeeperIndexHnsw_1006">Index built -- DISTANCE COSINE</button>
+<button type="button" class="secondary" data-index="none" id="gatekeeperIndexNone_1006">No index built</button>
+</div>
+<div class="lab-actions">
+<button type="button" class="secondary" data-expr="op-euclidean" id="gatekeeperExprOpEuclidean_1006">&lt;-&gt; (Euclidean operator)</button>
+<button type="button" class="secondary" data-expr="op-cosine" id="gatekeeperExprOpCosine_1006">&lt;=&gt; (Cosine operator)</button>
+<button type="button" class="active" data-expr="vd-cosine" id="gatekeeperExprVdCosine_1006">VECTOR_DISTANCE(...,COSINE)</button>
+<button type="button" class="secondary" data-expr="vd-euclidean" id="gatekeeperExprVdEuclidean_1006">VECTOR_DISTANCE(...,EUCLIDEAN)</button>
+<button type="button" class="secondary" data-expr="cosine-distance" id="gatekeeperExprCosineDistance_1006">COSINE_DISTANCE(...)</button>
+</div>
+<div class="code-block">
+<span class="code-label">CURRENT INDEX STATE</span>
+<pre><code id="gatekeeperIndexCode_1006"></code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">QUERY</span>
+<pre><code>SELECT c.chunk_id, c.text
+FROM chunks c
+JOIN documents d ON c.doc_id = d.doc_id
+JOIN embeddings e ON e.chunk_id = c.chunk_id
+ORDER BY <span id="gatekeeperSlot_1006"></span>
+FETCH FIRST 5 ROWS ONLY;</code></pre>
+</div>
+<div class="scroll-flow">
+<span>Query submitted</span><i>→</i>
+<span class="hot" id="gatekeeperOutcome_1006"></span>
+</div>
+<div class="callout" id="gatekeeperVerdict_1006" aria-live="polite"></div>
+<table class="compare-table">
+<thead><tr><th>Expression</th><th>Metric</th><th>No index</th><th>Index built (COSINE)</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;-&gt;</code></td><td>Euclidean</td><td>Exact</td><td>Exact fallback</td></tr>
+<tr><td><code>&lt;=&gt;</code></td><td>Cosine</td><td>Exact</td><td>Approximate</td></tr>
+<tr><td><code>VECTOR_DISTANCE(...,COSINE)</code></td><td>Cosine</td><td>Exact</td><td>Approximate</td></tr>
+<tr><td><code>VECTOR_DISTANCE(...,EUCLIDEAN)</code></td><td>Euclidean</td><td>Exact</td><td>Exact fallback</td></tr>
+<tr><td><code>COSINE_DISTANCE(...)</code></td><td>Cosine</td><td>Exact</td><td>Approximate</td></tr>
+</tbody>
+</table>
+<p class="fine-print">IVF follows the identical match-the-metric rule (cited to Module 09 Concept 04, not re-derived here). GLOBAL/LOCAL partitioning and quantization tuning also exist as real options -- named for completeness only, not exercised by this lab.</p>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">REPETITION</span><h2>The resolved cliffhanger, restated</h2></div></header>
+<ul>
+<li>Creating a vector index changes the execution path Oracle takes, not what VECTOR_DISTANCE's default metric returns -- cited unchanged from Section 10's own worked example.</li>
+<li>The default stays COSINE regardless of index state; what changes is whether the query's own metric happens to match the index's build metric.</li>
+<li>A metric mismatch triggers a silent exact fallback -- no error, no warning -- per Oracle's own verbatim documentation.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SILENT EXACT FALLBACK</span><h3>Query is slower than expected, no error raised</h3><p>Cause: the query's distance metric does not match the metric the vector index was built with. Fix: match the query's metric to the index's DISTANCE clause, or build a second index for the second metric.</p></article>
+<article class="info-card"><span>UNEXPECTED RECALL DROP</span><h3>Results look plausible but occasionally miss a true nearest neighbor</h3><p>Cause: approximate search under TARGET ACCURACY &lt; 100 is working as designed. Fix: raise TARGET ACCURACY if recall matters more than latency, per Module 09 Concept 06's own trade-off table.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Once a vector index exists, every query against that column becomes approximate</td><td>False -- per Oracle's own documentation, a metric mismatch between query and index triggers a silent exact fallback instead.</td></tr>
+<tr><td>This concept's index-metric-mismatch trap is the same as Concept 05's &lt;-&gt; operator trap</td><td>False -- Concept 05's trap was about which operator string maps to which metric; this concept's trap is about an index-metric mismatch silently reverting an approximate query to exact.</td></tr>
+<tr><td>Oracle supports many named ANN index algorithms to choose from</td><td>False -- exactly two real categories exist, In-Memory Neighbor Graph (HNSW only) and Neighbor Partition (IVF only).</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>Lock the metric before you ship</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Before shipping a retrieval endpoint</b><p>Decide index type and metric together, and lock the query's metric to match the index's build metric -- otherwise the index silently does nothing and every query pays full-scan cost anyway.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 6/14</b><p>Concept 07 (Oracle Text hybrid retrieval) and Concept 08 (python-oracledb) are next, untouched here, named forward-only.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name Oracle's two real index categories</b><p>In-Memory Neighbor Graph (HNSW only), Neighbor Partition (IVF only).</p></div>
+<div><b>I know why a metric mismatch doesn't error</b><p>Oracle silently falls back to exact search instead, per its own documented behavior.</p></div>
+<div><b>I can write the minimal CREATE VECTOR INDEX statement</b><p>Column, ORGANIZATION keyword, DISTANCE metric, WITH TARGET ACCURACY percentage.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using this concept's own Step 2 HNSW index (built with DISTANCE COSINE), write the ORDER BY expression for a query that would trigger the exact fallback described in Step 4, and explain in one sentence why no error would be raised.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div><code>ORDER BY VECTOR_DISTANCE(e.embedding, :query_embedding, EUCLIDEAN)</code> -- this metric does not match the index's own build metric (COSINE), so per Oracle's own documentation an exact match is triggered because the index cannot be used in that case. No error is raised because this is documented, intended behavior, not a failure condition.</div>
+</details>
+<p>Teach-back: why does Oracle choose to fall back silently instead of raising an error when the metric doesn't match?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Exact search and Oracle vector indexes</h3><ul><li><b>Two real categories:</b> In-Memory Neighbor Graph (HNSW only), Neighbor Partition (IVF only).</li><li><b>The minimal syntax:</b> CREATE VECTOR INDEX ... ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE WITH TARGET ACCURACY 95;</li><li><b>The rule:</b> the index only fires when the query's metric matches the index's build metric -- otherwise a silent exact fallback, no error.</li></ul></div>
+<div><h3>Module 10 · 6/14</h3><p>Concept 07, Oracle Text hybrid retrieval, is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what happens if your query's distance metric doesn't match the index's build metric?</summary><div>Per Oracle's own documentation, an exact match is triggered because the index cannot be used in that case -- a silent fallback to exact search, with no error and no warning.</div></details>
+<details class="quiz"><summary>Conceptual: name Oracle's two real vector index categories.</summary><div>In-Memory Neighbor Graph, for which HNSW is the only supported type, and Neighbor Partition, for which IVF is the only supported type.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real CREATE VECTOR INDEX statement for an HNSW index on embeddings.embedding using COSINE.</summary><div>CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding) ORGANIZATION INMEMORY NEIGHBOR GRAPH DISTANCE COSINE WITH TARGET ACCURACY 95;</div></details>
+<details class="quiz"><summary>System design: why lock a query's metric to an index's build metric before shipping a retrieval endpoint?</summary><div>Because a mismatch doesn't error -- it silently reverts to an exact, full-scan search, which quietly erases the latency benefit the index was built for, without any visible signal that this happened.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/manage-different-categories-vector-indexes.html"><b>Manage Different Categories of Vector Indexes — Oracle Documentation</b><br><span>Primary citation, per Oracle's own documentation as of this writing -- both real index categories and the verbatim exact-fallback-on-metric-mismatch quote.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/hierarchical-navigable-small-world-index-syntax-and-parameters.html"><b>HNSW Index Syntax and Parameters — Oracle Documentation</b><br><span>Primary citation for the real HNSW CREATE VECTOR INDEX syntax and worked example, adapted to this course's embeddings table.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/inverted-file-flat-index-creation-syntax-and-parameters.html"><b>IVF Index Creation Syntax and Parameters — Oracle Documentation</b><br><span>Primary citation for the real IVF CREATE VECTOR INDEX syntax, named as the equivalent statement only.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html"><b>Guidelines for Using Vector Indexes — Oracle Documentation</b><br><span>Secondary citation for the minimal-required-clauses statement and the restated COSINE-default fact.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Reused from Concept 05 -- default metric COSINE and the seven real metric tokens, for continuity only.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html"><b>Create Tables Using the VECTOR Data Type — Oracle Documentation</b><br><span>Reused from Concept 05 -- VECTOR(384, FLOAT32) column context, not re-derived.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/overview-ai-vector-search.html"><b>Overview of AI Vector Search — Oracle Documentation</b><br><span>Reused from Concept 01 -- optional general framing only, not load-bearing here.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 6/14</span>
+<h3>Having a fast column doesn't mean a fast search. Not automatically -- and not for free.</h3>
+<p>You can now answer what happens to VECTOR_DISTANCE's default metric once an index exists: the default stays COSINE, and the index only gets used when the query's own metric matches it -- otherwise Oracle silently falls back to exact search. Concept 07 is next, covering Oracle Text hybrid retrieval.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Metric Gatekeeper ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at 6 of 14 concepts. Next concept: Concept 07, Oracle Text hybrid retrieval.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 06 · Complete</p>
+<a href="module-10-concept-05.html">← Concept</a>
+</footer>
+</body>
+</html>

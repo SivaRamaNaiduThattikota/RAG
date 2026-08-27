@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Module 10 has treated the corpus as something that only ever grows -- INSERT after INSERT since Concept 03. Real corpora also change: a bad embedding gets corrected, a row gets deleted. This concept writes real UPDATE and DELETE SQL against this course's own chunks and embeddings tables, inside real multi-statement transactions, and checks what Oracle's own documentation says happens to an already-built vector index once those statements commit. Two verified facts anchor it: Oracle's own guidelines-using-vector-indexes page states that an IVF index's accuracy 'may diminish over time due to DML operations' and names the two DBMS_VECTOR functions that check and fix it; Oracle's own error-help page confirms ORA-02292 fires when a DELETE hits a parent row that a foreign key still depends on. The lab, The Commit Boundary, runs one DML statement at a time against chk_9f21_2_03 and chk_9f21_2_04 and shows exactly what commits, what rolls back, and what never runs at all.">
+<title>Transactions, updates, deletes and index synchronization — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 09</p>
+<h1>UPDATE doesn't touch the index.<br><em>It touches the row -- and leaves the index to catch up.</em></h1>
+<p class="lesson-lead">Every INSERT since Concept 03 assumed the corpus only grows. Real corpora also change: a bad embedding gets corrected, a row gets deleted for good. This concept writes real UPDATE and DELETE SQL against this course's own chunks and embeddings tables, wraps them in real multi-statement transactions, and checks what Oracle's own documentation says happens to Concept 06's own vector index once those statements commit. Two verified facts anchor it: an IVF index's accuracy "may diminish over time due to DML operations," per Oracle's own guidelines page, and a DELETE that violates a foreign key raises ORA-02292 -- "child record found" -- before it ever reaches commit.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth concept in Module 10's own 14-concept list -- the built set is now the contiguous {1,2,3,4,5,6,7,8,9}</b></div>
+<div><span>PREREQUISITE</span><b>Concept 03's five-table schema and FK edges; Concept 06's embeddings_ivf_idx and embeddings_hnsw_idx; Concept 08's chk_9f21_2_03 / chk_9f21_2_04 dataset and cursor.execute()/commit() pattern</b></div>
+<div><span>BEGINNER GOAL</span><b>Write an UPDATE and a correctly-ordered DELETE against embeddings/chunks, explain why delete order matters, and name what Oracle's own docs say about index staleness after DML</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The corpus doesn't just grow</h2>
+</div>
+<p>Concepts 03-08 only ever added rows. This concept covers the other half of a real system's life: correcting a row that's already there (UPDATE), removing one for good (DELETE), doing both inside a real transaction, and what happens to the vector index sitting on top once that transaction commits.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The commit boundary and the index are two different things</h3>
+<p>An UPDATE or DELETE runs inside a transaction, same as the INSERTs in Concept 08 -- nothing is durable until <code>connection.commit()</code> runs, and <code>connection.rollback()</code> discards it as if it never happened. That commit boundary is a real, Oracle-enforced guarantee about the row. It says nothing at all about the vector index (Concept 06) sitting on top of that row -- Oracle's own documentation treats index freshness as a separate, asynchronous concern.</p>
+<div class="beginner-memory"><b>First memory:</b> COMMIT makes the row change durable. It does not, by itself, rebuild or refresh the vector index -- that's a second, separate step this concept names explicitly.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>An Oracle DELETE is not an ANN-library tombstone</h3>
+<p>Module 09 Concept 08 already covered updates, deletes and tombstones -- but at the generic ANN-library level: FAISS, Weaviate, Qdrant. There, a deleted row typically stays physically present, flagged invalid, until a later compaction pass. This concept is about what an Oracle-real DELETE does to rows in this course's own five tables (they're just gone, once committed -- no tombstone), and, separately, what Oracle's own documentation says happens to an already-built vector index once the rows under it mutate.</p>
+</article>
+<figure class="concept-visual" aria-labelledby="c1009-b03-title">
+<strong class="concept-visual-title" id="c1009-b03-title">VISUAL · THE STARTING STATE, INHERITED FROM CONCEPT 08</strong>
+<div class="diagram-strip" role="list">
+<div class="diagram-node active" role="listitem"><b>chk_9f21_2_03</b><small>dist 0.04 to query · rank 1</small></div>
+<div class="diagram-node" role="listitem"><b>chk_9f21_2_04</b><small>dist 1.00 to query · rank 2 · lab-only row</small></div>
+<div class="diagram-node" role="listitem"><b>embeddings_ivf_idx</b><small>built in Concept 06, before either row changes</small></div>
+</div>
+</figure>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Correcting a bad embedding, in place</h3>
+<p>Ops discovers <code>chk_9f21_2_03</code>'s embedding was produced by a defective pooling step in the embedding pipeline -- the chunk_text itself ("To reset a vendor account, an admin must...") never changed, only its vector was wrong. The fix is a real UPDATE: <code>cursor.execute("update embeddings set embedding = :1 where chunk_id = :2", [array.array("f", [0.0, 1.0, 0.0]), "chk_9f21_2_03"])</code>, then <code>connection.commit()</code>. Nothing about the chunk's identity changes -- same chunk_id, same row -- only the embedding column.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>UPDATE and DELETE, the same cursor.execute() pattern</h3>
+<p>Both statements use the exact call shape Concept 08 already established: <code>cursor.execute(sql_text, bind_values)</code>, then <code>connection.commit()</code> or <code>connection.rollback()</code>. What's new is the SQL itself -- <code>UPDATE ... SET ... WHERE chunk_id = :1</code> and <code>DELETE FROM ... WHERE chunk_id = :1</code> -- and one rule that only matters for DELETE: a foreign key means order inside the transaction is not optional.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Delete the child first, or Oracle stops you</h3>
+<div class="scroll-flow">
+<span>DELETE FROM embeddings WHERE chunk_id='chk_9f21_2_04' — child row, safe</span><i>→</i>
+<span class="hot">DELETE FROM chunks WHERE chunk_id='chk_9f21_2_04' — parent row, now safe too</span><i>→</i>
+<span>COMMIT — both gone, for good</span>
+</div>
+<p>Reverse that order and the second statement never runs. Per Oracle's own error-help documentation: "ORA-02292: integrity constraint (string.string) violated - child record found. Cause: attempted to delete a parent key value that had a foreign key dependency. Action: delete dependencies first then parent or disable constraint." <code>embeddings.chunk_id REFERENCES chunks.chunk_id</code> (Concept 03) is exactly that dependency.</p>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Three ways a row can change, and they are not the same</h3>
+<div class="distinction-table" role="table" aria-label="Three different real operations this course's schema supports">
+<div role="row"><b role="cell">Operation</b><b role="cell">What it's actually for</b></div>
+<div role="row"><span role="cell">INSERT a new document_versions row (Concept 03's own CURRENT/SUPERSEDED pattern)</span><span role="cell">The document's content changed. Old chunks/embeddings stay put, untouched, so old citations still resolve -- nothing here is an UPDATE or a DELETE.</span></div>
+<div role="row"><span role="cell">UPDATE embeddings.embedding in place (this concept)</span><span role="cell">The content didn't change -- the embedding pipeline produced a bad vector for it and needs correcting. Same chunk_id, same row.</span></div>
+<div role="row"><span role="cell">DELETE FROM embeddings / chunks (this concept)</span><span role="cell">The row itself should no longer exist at all -- not superseded, not corrected, gone. Requires child-before-parent order.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"I can delete rows in whatever order I want, as long as both statements run."</b><p>Not with a foreign key in place. <code>embeddings.chunk_id REFERENCES chunks.chunk_id</code> means the child row (embeddings) must go first -- deleting the parent (chunks) while the child still exists raises ORA-02292, per Oracle's own error-help page.</p></div>
+<div><b>"COMMIT also refreshes the vector index."</b><p>It doesn't. COMMIT is a guarantee about the row's durability. Per Oracle's own guidelines-using-vector-indexes documentation, an IVF index's accuracy "may diminish over time due to DML operations" -- checking and fixing that is a separate, explicit step, not a side effect of COMMIT.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Correction and cleanup jobs, not the ingestion pipeline</b><p>Concept 03's version-supersede pattern already handles real content edits. This concept covers the narrower, still-real cases: fixing a bad embedding batch, or permanently removing a row -- and the index-freshness check that has to follow either one.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 9/14</b><p>The built set is now the contiguous {1,...,9}. Concept 10, Oracle security and operational considerations for RAG, is next in sequence.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Write a real UPDATE against embeddings</b><p><code>UPDATE embeddings SET embedding = :1 WHERE chunk_id = :2;</code> then commit.</p></div>
+<div><b>Delete in the correct order</b><p>Child (embeddings) before parent (chunks) -- reverse it and Oracle raises ORA-02292 before either COMMIT or ROLLBACK matters.</p></div>
+<div><b>Know that COMMIT and index freshness are separate</b><p>Per Oracle's own docs, an IVF index's accuracy can diminish after DML -- COMMIT alone does not fix that.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does deleting <code>chk_9f21_2_04</code> from <code>chunks</code> before deleting it from <code>embeddings</code> fail, and with which real Oracle error?</li>
+<li>What changes about <code>chk_9f21_2_03</code>'s rank after its embedding is corrected -- does it still win, and by how much less?</li>
+<li>Try it: open "The Commit Boundary" lab below and find the one statement that never reaches COMMIT or ROLLBACK at all.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 9 OF 14</h3>
+<p>The schema (Concept 03), the real VECTOR column and index (Concepts 05-06), and the Python driver (Concept 08) are all things that a row can now be written into, corrected in, or removed from -- this concept covered the correcting and removing half, and named the one guarantee that commit does not extend to: index freshness. Concept 10 covers Oracle security and operational considerations for RAG next.</p>
+<div class="beginner-memory"><b>Concept 09 is active.</b> Module 10 stands at position 9 of 14. The built set is the contiguous {1,...,9} -- no gaps.</div>
+<a class="button primary" href="module-10-concept-08.html">← Back to Concept 08's python-oracledb</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Two statements, one commit boundary, one honest gap</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>UPDATE and DELETE, the same execute()/commit() shape</b><small>Concept 08's own pattern, applied to correction and removal.</small></a>
+<a href="#s10"><span>02</span><b>Correct chk_9f21_2_03, delete chk_9f21_2_04</b><small>A hand-verified before/after, continuing Concept 08's own two rows.</small></a>
+<a href="#s14"><span>03</span><b>The Commit Boundary</b><small>The lab -- statement against outcome, one at a time.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Concepts 03-08 only ever inserted rows → this concept adds UPDATE and DELETE against the same embeddings/chunks tables, using Concept 08's own execute()/commit() shape → a foreign key means DELETE order is not optional, verified against Oracle's own ORA-02292 error-help page → a hand-verified worked example corrects chk_9f21_2_03's own embedding (cosine distance 0.04 → 0.4, confirmed by an independent node script) and removes chk_9f21_2_04 for good → Oracle's own guidelines-using-vector-indexes page states, for its IVF index specifically, that accuracy "may diminish over time due to DML operations" and names DBMS_VECTOR's own check/rebuild functions -- a claim not extended to the HNSW index by the same page, flagged rather than assumed → the lab lets you run one statement at a time and see what commits, what rolls back, and what never runs → Concept 10 covers Oracle security next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Transactions, updates, deletes and index synchronization" deep dive</b><em>Full citations, the annotated SQL/Python, and The Commit Boundary lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 9 of 14</h2></div></header>
+<p>This concept fills position 9 of Module 10's own 14-concept list: "Transactions, updates, deletes and index synchronization." Concept 08's own Section 18 named this concept forward by exactly this title, as the thing its own single-connection, INSERT-only examples deliberately left unsettled. With this concept authored, the module's built set is the contiguous {1,2,3,4,5,6,7,8,9} -- no gaps, no out-of-order construction.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>WRITE</span><h3>UPDATE and DELETE against this course's own tables</h3><p>Correct an embeddings row in place; remove a chunks/embeddings pair for good -- both using Concept 08's own cursor.execute()/commit() shape.</p></article>
+<article class="info-card"><span>ORDER</span><h3>Respect the foreign key</h3><p><code>embeddings.chunk_id REFERENCES chunks.chunk_id</code> (Concept 03) means the child row goes first -- reverse it and Oracle raises ORA-02292 before commit is even reachable.</p></article>
+<article class="info-card"><span>BOUNDARY</span><h3>Name the commit boundary precisely</h3><p>Multiple DML statements can share one commit or one rollback -- that boundary is a guarantee about row durability, nothing more.</p></article>
+<article class="info-card"><span>SYNC</span><h3>State what Oracle's own docs say about index staleness</h3><p>An IVF index's accuracy "may diminish over time due to DML operations" -- and the two DBMS_VECTOR functions Oracle names to check and fix it.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema, its four foreign-key edges, and the CURRENT/SUPERSEDED version-history pattern this concept deliberately does not re-derive or contradict.</li>
+<li><b><a href="module-10-concept-06.html">Module 10 Concept 06</a></b> -- the real <code>embeddings_ivf_idx</code> and <code>embeddings_hnsw_idx</code> vector indexes this concept asks "what happens to you after a DML statement commits?"</li>
+<li><b><a href="module-10-concept-08.html">Module 10 Concept 08</a></b> -- the <code>chk_9f21_2_03</code> / <code>chk_9f21_2_04</code> worked-example rows and the exact cursor.execute()/commit() call shape, reused verbatim and extended to UPDATE/DELETE here.</li>
+<li><b><a href="module-10-concept-02.html">Module 10 Concept 02</a></b> -- python-oracledb's own transaction-management citation, whose own deferred note ("the python-integration... detail that belongs to Module 10's later Concepts 08-09") this concept's second half pays off.</li>
+<li><b>Explicitly out of scope:</b> Oracle security/RLS/VPD from Python (Concept 10, next), connection pooling and session sizing (Concept 08's own named-forward territory, still unbuilt) -- neither is re-derived here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>The filing-cabinet folder and the card catalog</h2></div></header>
+<p>Correcting a folder inside a filing cabinet -- swapping out the wrong document for the right one -- is a fast, local edit. The card catalog sitting in the lobby, telling visitors where to find things, doesn't know that happened. It's still accurate about which cabinet and drawer the folder lives in; it just doesn't know the contents changed. An UPDATE or DELETE against embeddings is the folder edit. Concept 06's own vector index is the card catalog -- it isn't wrong about where the row lives, but per Oracle's own documentation, its own sense of which rows are near which other rows can drift out of date the more the underlying folders get edited.</p>
+<div class="callout warning"><b>Analogy boundary</b>The actual mechanism comes from Section 10's own worked round trip and Section 13's own cited Oracle documentation, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Transaction</td><td>A grouping of one or more SQL statements that share a single commit or rollback outcome</td><td>connection.commit() / connection.rollback()</td></tr>
+<tr><td>DML (Data Manipulation Language)</td><td>SQL statements that change row data rather than schema -- INSERT, UPDATE, DELETE</td><td>UPDATE ... SET ...; DELETE FROM ...</td></tr>
+<tr><td>Referential integrity violation</td><td>An attempt to delete a parent row that a foreign key on another table still depends on</td><td>ORA-02292</td></tr>
+<tr><td>Index staleness / accuracy drift</td><td>The gap between what a vector index's own approximate answers say and what a full, exact recomputation would say, after DML on the underlying table</td><td>DBMS_VECTOR.INDEX_ACCURACY_QUERY</td></tr>
+<tr><td>Index rebuild</td><td>Recomputing a vector index's own structure from the current table contents, closing the accuracy gap</td><td>DBMS_VECTOR.REBUILD_INDEX</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Same execute()/commit() shape, two new statement types</h2></div></header>
+<div class="core-block">
+<p>Concept 08 established the round trip: <code>cursor.execute(sql, binds)</code>, then <code>connection.commit()</code> or <code>connection.rollback()</code>. UPDATE and DELETE use that exact shape -- only the SQL text changes. <code>UPDATE embeddings SET embedding = :1 WHERE chunk_id = :2</code> corrects one row without touching its identity. <code>DELETE FROM embeddings WHERE chunk_id = :1</code> followed by <code>DELETE FROM chunks WHERE chunk_id = :1</code> removes a row for good -- in that order, because <code>embeddings.chunk_id REFERENCES chunks.chunk_id</code> (Concept 03) makes chunks the parent. Per python-oracledb's own transaction-management documentation, already cited in Concepts 02 and 08: "By default, python-oracledb does not commit this transaction to the database." That is exactly as true of two DELETE statements sharing one transaction as it was of a single INSERT -- neither is durable until <code>commit()</code> runs, and both can be undone together by one <code>rollback()</code>.</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Row mutated, index not automatically told</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1009-s07-title">
+<strong class="concept-visual-title" id="c1009-s07-title">VISUAL · THE GAP THIS CONCEPT NAMES</strong>
+<div class="diagram-strip" role="list">
+<div class="diagram-node" role="listitem"><b>UPDATE / DELETE</b><small>committed, durable</small></div>
+<div class="diagram-node active" role="listitem"><b>embeddings_ivf_idx</b><small>not touched by that commit</small></div>
+<div class="diagram-node" role="listitem"><b>accuracy may diminish</b><small>per Oracle's own guidelines page</small></div>
+<div class="diagram-node" role="listitem"><b>INDEX_ACCURACY_QUERY</b><small>checks the gap</small></div>
+<div class="diagram-node" role="listitem"><b>REBUILD_INDEX</b><small>closes it</small></div>
+</div>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The same skeleton, now shown changing over time</h2></div></header>
+<div class="pipeline-preview">
+<span>Schema — the five-table skeleton (Concept 03)</span><i>↓</i><span>Persistence — the real VECTOR(384, FLOAT32) column (Concept 05)</span><i>↓</i><span>Index layer — embeddings_ivf_idx / embeddings_hnsw_idx (Concept 06)</span><i>↓</i><span>Python client layer — connect/bind/execute/fetch/commit (Concept 08)</span><i>↓</i><span class="hot">Transactions, DML and index sync — UPDATE, DELETE, and the accuracy gap they can leave behind (this concept)</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same cosine distance, recomputed after a mutation</h2></div></header>
+<div class="equation">cosine_distance(a, b) = 1 − (a · b) / (‖a‖ ‖b‖) — unchanged from Concept 08. This concept adds no new formula; it only recomputes the same distance after one bind value in one row changes, and checks whether the ranking that follows still matches what a full, exact recomputation would say.</div>
+<div class="callout"><b>Scope hedge</b>The worked example below reuses Concept 08's own toy 3-D stand-ins for chk_9f21_2_03 and chk_9f21_2_04, specifically so both the before and after distances can be checked by hand and by an independent script -- not the real 384-dimension, all-MiniLM-L6-v2 embeddings.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Correct one row, remove another, verify both</h2></div></header>
+<p>Starting state, inherited exactly from Concept 08: <code>chk_9f21_2_03</code> at <code>[0.6, 0.8, 0.0]</code> (dist 0.04 to <code>query_embedding = [0.8, 0.6, 0.0]</code>, rank 1) and <code>chk_9f21_2_04</code> at <code>[0.0, 0.0, 1.0]</code> (dist 1.00, rank 2, the lab-only contrast row Concept 08 invented). Two things happen to this state, in two separate transactions.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · TRANSACTION A — CORRECT A BAD EMBEDDING, IN PLACE</span>
+<pre><code>corrected_vec = array.array("f", [0.0, 1.0, 0.0])  # the pipeline's pooling bug is fixed upstream;
+                                                    # this vector is the re-run output for the SAME chunk_text
+cursor.execute(
+    "update embeddings set embedding = :1 where chunk_id = :2",
+    [corrected_vec, "chk_9f21_2_03"],
+)
+# not durable yet -- a second session querying right now still sees [0.6, 0.8, 0.0]
+connection.commit()
+# now durable -- and embeddings_ivf_idx has not been rebuilt by this statement
+</code></pre>
+</div>
+<table class="compare-table">
+<thead><tr><th>chunk_id</th><th>embedding, before</th><th>embedding, after UPDATE commits</th><th>cosine distance to query_embedding</th><th>rank</th></tr></thead>
+<tbody>
+<tr><td>chk_9f21_2_03</td><td>[0.6, 0.8, 0.0]</td><td>[0.0, 1.0, 0.0]</td><td>0.04 → 0.40</td><td>1st (unchanged)</td></tr>
+<tr><td>chk_9f21_2_04</td><td>[0.0, 0.0, 1.0]</td><td>[0.0, 0.0, 1.0] (untouched)</td><td>1.00</td><td>2nd (unchanged)</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Computed independently by a standalone node script, not typed in by hand: dot([0.8,0.6,0.0],[0.0,1.0,0.0]) = 0.6, both vectors have norm 1, so cosine distance = 1 − 0.6 = 0.4 exactly -- ten times farther than the pre-correction 0.04, still Concept 08's own verified figure. The script re-ran the same numbers through <code>Math.fround()</code> to simulate the float32 precision array.array("f", ...) and Oracle's own FLOAT32 storage actually use, and got 0.3999999904632572 -- rounds to the same 0.4000 at four decimal places. chk_9f21_2_03 still ranks first (0.40 &lt; 1.00) -- the correction changed how confident the ranking is, not who wins.</div>
+<div class="code-block">
+<span class="code-label">PYTHON · TRANSACTION B — DELETE chk_9f21_2_04, CHILD BEFORE PARENT</span>
+<pre><code>cursor.execute("delete from embeddings where chunk_id = :1", ["chk_9f21_2_04"])  # child row -- safe
+cursor.execute("delete from chunks where chunk_id = :1", ["chk_9f21_2_04"])      # parent row -- now safe too
+connection.commit()
+# chk_9f21_2_04 no longer exists in either table -- not tombstoned, not flagged, gone
+</code></pre>
+</div>
+<div class="callout critical"><b>Reverse the order and this happens instead</b><pre><code>cursor.execute("delete from chunks where chunk_id = :1", ["chk_9f21_2_04"])
+# raises before this line is ever reached:
+# ORA-02292: integrity constraint (...) violated - child record found
+cursor.execute("delete from embeddings where chunk_id = :1", ["chk_9f21_2_04"])</code></pre>Per Oracle's own error-help documentation for this exact code, confirmed live: "Cause: attempted to delete a parent key value that had a foreign key dependency. Action: delete dependencies first then parent or disable constraint." <code>embeddings.chunk_id REFERENCES chunks.chunk_id</code> (Concept 03) is that dependency -- the statement fails at <code>cursor.execute()</code> time, before commit or rollback ever becomes a question.</div>
+<p>After both transactions commit: one row remains, <code>chk_9f21_2_03</code>, embedding <code>[0.0, 1.0, 0.0]</code>, and it is trivially first (and only) against the same query. Neither the UPDATE nor the DELETE touched <code>embeddings_ivf_idx</code> directly -- per Oracle's own guidelines-using-vector-indexes documentation, that index's own accuracy "may diminish over time due to DML operations being performed on the underlying table," checked with the <code>INDEX_ACCURACY_QUERY</code> function and corrected with the <code>REBUILD_INDEX</code> function, both provided by the DBMS_VECTOR package. That guidance is stated for the IVF index specifically -- the same page makes no equivalent claim about <code>embeddings_hnsw_idx</code>, and this concept does not assume one without a citation.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Three real reasons a row changes, side by side</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>CONTENT CHANGED</span><h3>INSERT a new document_versions row (Concept 03)</h3><p>Old chunks/embeddings stay put, untouched -- old citations keep resolving. No UPDATE, no DELETE, at the version level.</p></article>
+<article class="info-card"><span>EMBEDDING WAS WRONG</span><h3>UPDATE embeddings.embedding in place (this concept)</h3><p>Same chunk_id, same chunk_text -- only the vector was bad and gets corrected.</p></article>
+<article class="info-card"><span>ROW SHOULDN'T EXIST</span><h3>DELETE FROM embeddings, then chunks (this concept)</h3><p>Child before parent, or Oracle raises ORA-02292 before the transaction ever reaches commit.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The full transaction, with the failure path included</h2></div></header>
+<p>A single function showing all three outcomes this concept covers -- commit, rollback, and the referential-integrity failure that never reaches either -- against this course's own two rows.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · UPDATE, DELETE, AND THE ORDER-SENSITIVE FAILURE</span>
+<pre><code>import oracledb
+import array
+
+connection = oracledb.connect(user=user, password=pwd, dsn=dsn)
+cursor = connection.cursor()
+
+# Transaction A: correct chk_9f21_2_03's own embedding
+cursor.execute(
+    "update embeddings set embedding = :1 where chunk_id = :2",
+    [array.array("f", [0.0, 1.0, 0.0]), "chk_9f21_2_03"],
+)
+connection.commit()
+
+# Transaction B: delete chk_9f21_2_04, child table first
+cursor.execute("delete from embeddings where chunk_id = :1", ["chk_9f21_2_04"])
+cursor.execute("delete from chunks where chunk_id = :1", ["chk_9f21_2_04"])
+connection.commit()
+
+# The order-sensitive failure -- do NOT run this against a live chunk that still has an embedding row
+try:
+    cursor.execute("delete from chunks where chunk_id = :1", ["chk_9f21_2_03"])
+except oracledb.DatabaseError as e:
+    connection.rollback()  # nothing partial survives -- the whole transaction is discarded
+    print("delete failed, rolled back:", e)
+</code></pre>
+</div>
+<p>python-oracledb surfaces the ORA-02292 failure as an <code>oracledb.DatabaseError</code> -- catching it and calling <code>rollback()</code> is the same pattern Concept 08 already established for any failed multi-statement transaction, applied here to a specific, real, foreign-key-shaped failure instead of a hypothetical one.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real production sources for every DML and index-sync fact</h2></div></header>
+<p>Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html">guidelines-using-vector-indexes documentation</a> (re-fetched live this session) is the primary citation for the index-synchronization half of this concept: the IVF-specific accuracy-diminishes-under-DML statement, the <code>INDEX_ACCURACY_QUERY</code> and <code>REBUILD_INDEX</code> function names from the DBMS_VECTOR package, and the separate fact that truncating a table marks any IVF index on it UNUSABLE until rebuilt or recreated. Oracle's own <a href="https://docs.oracle.com/error-help/db/ora-02292/">ORA-02292 error-help page</a> (fetched live this session, new to this course) is the primary citation for the exact cause/action text quoted in Sections 05 and 10. python-oracledb's own <a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/txn_management.html">transaction-management documentation</a>, already cited in Concepts 02 and 08, is reused here for the no-autocommit-by-default guarantee, now applied to multi-statement UPDATE/DELETE transactions rather than a single INSERT. python-oracledb's own <a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/sql_execution.html">SQL-execution documentation</a> is reused for the cursor.execute() call shape UPDATE and DELETE both use unchanged. Concept 05's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html">vector_distance documentation</a> is reused for the distance formula recomputed in Section 10, not re-derived.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Commit Boundary</h2></div></header>
+<div class="lab">
+<p>Pick one DML statement and one outcome. Each choice re-evaluates from the same starting two-row state, so you can see one statement's own effect in isolation -- watch the SQL, the commit-boundary flow, and both rows update live.</p>
+<div class="lab-actions">
+<button type="button" class="active" data-stmt="update" id="stmtUpdate_1009">UPDATE chk_9f21_2_03's embedding</button>
+<button type="button" class="secondary" data-stmt="delete-ok" id="stmtDeleteOk_1009">DELETE chk_9f21_2_04, child-first</button>
+<button type="button" class="secondary" data-stmt="delete-bad" id="stmtDeleteBad_1009">DELETE chk_9f21_2_04, parent-first</button>
+</div>
+<div class="lab-actions">
+<button type="button" class="active" data-outcome="commit" id="outcomeCommit_1009">COMMIT</button>
+<button type="button" class="secondary" data-outcome="rollback" id="outcomeRollback_1009">ROLLBACK</button>
+</div>
+<div class="code-block">
+<span class="code-label">SQL / PYTHON</span>
+<pre><code id="dmlCode_1009"></code></pre>
+</div>
+<div class="scroll-flow">
+<span>cursor.execute() called</span><i>→</i>
+<span class="hot" id="dmlOutcome_1009"></span>
+</div>
+<div class="callout" id="dmlVerdict_1009" aria-live="polite"></div>
+<div class="rank-chip-row" role="list" aria-label="Both rows' own current state">
+<div class="rank-chip" id="chipC03_1009" role="listitem"><b>chk_9f21_2_03</b><span id="chipC03Dist_1009">dist 0.04 · rank 1</span><small>real chunk</small></div>
+<div class="rank-chip" id="chipC04_1009" role="listitem"><b>chk_9f21_2_04</b><span id="chipC04Dist_1009">dist 1.00 · rank 2</span><small>lab-only row</small></div>
+</div>
+<table class="compare-table">
+<thead><tr><th>Statement</th><th>Outcome</th><th>What actually happens</th></tr></thead>
+<tbody>
+<tr><td>UPDATE chk_9f21_2_03's embedding</td><td>COMMIT</td><td>Durable. Dist 0.04 → 0.40, still rank 1. embeddings_ivf_idx's own accuracy may now diminish, per Oracle's guidelines.</td></tr>
+<tr><td>UPDATE chk_9f21_2_03's embedding</td><td>ROLLBACK</td><td>Discarded, as if it never ran. Dist stays 0.04.</td></tr>
+<tr><td>DELETE chk_9f21_2_04, child-first</td><td>COMMIT</td><td>Durable. Row gone from both tables -- not tombstoned, gone. Same accuracy caveat applies.</td></tr>
+<tr><td>DELETE chk_9f21_2_04, child-first</td><td>ROLLBACK</td><td>Discarded. Row still present, dist still 1.00.</td></tr>
+<tr><td>DELETE chk_9f21_2_04, parent-first</td><td>either</td><td>Fails at cursor.execute() with ORA-02292 -- neither commit nor rollback is ever reached.</td></tr>
+</tbody>
+</table>
+<p class="fine-print">This lab does not exercise <code>embeddings_hnsw_idx</code> (Concept 06's own HNSW index) -- Oracle's own guidelines page states the accuracy-diminishes-under-DML fact for the IVF index specifically, and this course does not assume the same behavior for HNSW without a citation to back it.</p>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">REPETITION</span><h2>The two facts, restated</h2></div></header>
+<ul>
+<li>UPDATE and DELETE use the exact same <code>cursor.execute(sql, binds)</code> / <code>commit()</code>/<code>rollback()</code> shape as Concept 08's INSERTs -- nothing is durable until commit, and multiple statements can share one commit or one rollback.</li>
+<li><code>embeddings.chunk_id REFERENCES chunks.chunk_id</code> means DELETE order matters -- child before parent, or Oracle raises ORA-02292 before the transaction ever reaches commit, per Oracle's own error-help page.</li>
+<li>Per Oracle's own guidelines-using-vector-indexes documentation, an IVF index's accuracy "may diminish over time due to DML operations" -- <code>DBMS_VECTOR.INDEX_ACCURACY_QUERY</code> checks it, <code>DBMS_VECTOR.REBUILD_INDEX</code> fixes it. COMMIT alone does neither.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>ORA-02292</span><h3>A DELETE fails, and the transaction never even reaches commit</h3><p>Cause: the parent row (chunks) still has a dependent child row (embeddings). Fix: delete embeddings for that chunk_id first, per Section 10's own verified order.</p></article>
+<article class="info-card"><span>SILENTLY STALE RANKINGS</span><h3>Queries keep running fine, but an IVF index's approximate answers quietly drift</h3><p>Cause: DML has been committed against the underlying table with no rebuild since. Fix: run <code>DBMS_VECTOR.INDEX_ACCURACY_QUERY</code> to measure the gap, then <code>DBMS_VECTOR.REBUILD_INDEX</code> if it's too large -- both named on Oracle's own guidelines page.</p></article>
+<article class="info-card"><span>UNUSABLE AFTER TRUNCATE</span><h3>A bulk wipe breaks the index outright, not just its accuracy</h3><p>Per Oracle's own guidelines page: "If a table is truncated, any IVF index created on the table is marked as UNUSABLE... You must rebuild or recreate the IVF index before using the index in a query again." A more severe version of the same underlying gap.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>COMMIT also refreshes or rebuilds the vector index</td><td>False -- COMMIT is a guarantee about row durability. Index accuracy after DML is a separate, named concern, checked and fixed with DBMS_VECTOR's own functions, per Oracle's own guidelines page.</td></tr>
+<tr><td>Any DELETE order works as long as both statements eventually run</td><td>False -- with a foreign key in place, the child row (embeddings) must be deleted before the parent (chunks), or the parent DELETE raises ORA-02292 before either statement's transaction can commit.</td></tr>
+<tr><td>An Oracle DELETE tombstones a row the same way FAISS/Weaviate/Qdrant do (Module 09 Concept 08)</td><td>False -- once committed, the row is physically gone from the table, not flagged-and-kept. It is the vector index sitting on top, not the row itself, that can go stale.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle yet</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Correction and cleanup jobs, run against a schema that mostly just grows</b><p>Concept 03's own version-supersede pattern remains the primary way this course's schema handles a real content edit -- this concept's UPDATE/DELETE cover the narrower cases: fixing a bad embedding batch, or a row that must be permanently removed.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 9/14</b><p>The built set is now the contiguous {1,...,9}. Concept 10, Oracle security and operational considerations for RAG, is next -- named forward only here, not built yet.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can write a real UPDATE against embeddings</b><p><code>UPDATE embeddings SET embedding = :1 WHERE chunk_id = :2;</code>, then commit or rollback.</p></div>
+<div><b>I know why DELETE order matters here</b><p>Child (embeddings) before parent (chunks) -- the foreign key from Concept 03 enforces it, with ORA-02292 as the consequence of getting it backwards.</p></div>
+<div><b>I know COMMIT doesn't extend to index freshness</b><p>Per Oracle's own docs, IVF accuracy can diminish after DML -- INDEX_ACCURACY_QUERY checks it, REBUILD_INDEX fixes it, neither happens automatically.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Suppose a second correction lands: <code>chk_9f21_2_03</code>'s embedding is updated again, this time to <code>[1.0, 0.0, 0.0]</code>, and this UPDATE commits. Using Section 10's own query_embedding of <code>[0.8, 0.6, 0.0]</code>, compute the new cosine distance for <code>chk_9f21_2_03</code> by hand, and state whether it still outranks <code>chk_9f21_2_04</code> (dist 1.00, untouched) -- without running any code.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>dot([0.8,0.6,0.0],[1.0,0.0,0.0]) = 0.8. Both vectors have norm 1, so cosine distance = 1 − 0.8 = 0.2. Since 0.2 &lt; 1.00, <code>chk_9f21_2_03</code> still outranks <code>chk_9f21_2_04</code> -- and this correction actually improved its distance versus the [0.0, 1.0, 0.0] state from Section 10 (0.4 → 0.2), because [1.0, 0.0, 0.0] sits closer, in cosine terms, to the query vector's own dominant direction.</div>
+</details>
+<p>Teach-back: why does neither of chk_9f21_2_03's two corrections in this lesson require touching the citations table at all?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Transactions, updates, deletes and index synchronization</h3><ul><li><b>Same shape:</b> UPDATE/DELETE use Concept 08's own cursor.execute()/commit()/rollback() pattern -- only the SQL changes.</li><li><b>Order matters:</b> delete the child (embeddings) before the parent (chunks), or Oracle raises ORA-02292 before commit is even reachable.</li><li><b>Commit isn't index sync:</b> per Oracle's own docs, an IVF index's accuracy can diminish after DML -- INDEX_ACCURACY_QUERY checks it, REBUILD_INDEX fixes it, neither is automatic.</li></ul></div>
+<div><h3>Module 10 · position 9/14</h3><p>Built set is the contiguous {1,...,9}. Concept 10, Oracle security and operational considerations for RAG, is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what real Oracle error fires when a DELETE hits a parent row that a foreign key still depends on, and what does it actually mean?</summary><div>ORA-02292, "integrity constraint (...) violated - child record found" -- per Oracle's own error-help page, it means a parent key value with a live foreign-key dependency was targeted for deletion; the fix is deleting the dependent (child) rows first.</div></details>
+<details class="quiz"><summary>Conceptual: does committing an UPDATE against an indexed vector column also refresh that vector index?</summary><div>No -- COMMIT is a guarantee about row durability only. Per Oracle's own guidelines-using-vector-indexes documentation, an IVF index's accuracy "may diminish over time due to DML operations" and has to be checked and rebuilt separately, via DBMS_VECTOR's own functions.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real code to correct one embeddings row and commit it.</summary><div>cursor.execute("update embeddings set embedding = :1 where chunk_id = :2", [array.array("f", [0.0, 1.0, 0.0]), "chk_9f21_2_03"]); connection.commit()</div></details>
+<details class="quiz"><summary>System design: why would a production system schedule periodic DBMS_VECTOR.INDEX_ACCURACY_QUERY checks rather than rebuilding a vector index after every single DML statement?</summary><div>Rebuilding on every DML would make each UPDATE/DELETE pay the full cost of restructuring the index, which does not scale; per Oracle's own guidelines page, accuracy diminishes gradually with accumulated DML, so a periodic accuracy check followed by a batched REBUILD_INDEX only when the gap is large enough is the documented, cheaper pattern -- the same defer-then-batch shape Module 09 Concept 08 already established for ANN-library tombstone compaction, now grounded in Oracle's own real functions instead.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html"><b>Guidelines for Using Vector Indexes — Oracle Documentation</b><br><span>Re-fetched live this session (HTTP 200) -- the IVF-specific "accuracy... may diminish over time due to DML operations" statement, the INDEX_ACCURACY_QUERY/REBUILD_INDEX function names from DBMS_VECTOR, and the truncate-marks-IVF-UNUSABLE fact. Already cited in Concept 06 for the minimal CREATE VECTOR INDEX clause; this concept pays off its own DML-specific section.</span></a>
+<a href="https://docs.oracle.com/error-help/db/ora-02292/"><b>ORA-02292 — Oracle Error Help</b><br><span>Fetched live this session (HTTP 200), new to this course -- the exact cause/action text for a DELETE that violates a foreign-key dependency, quoted verbatim in Sections 05 and 10.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/txn_management.html"><b>Transaction Management — python-oracledb documentation</b><br><span>Reused from Concepts 02 and 08 -- the no-autocommit-by-default guarantee, now applied to multi-statement UPDATE/DELETE transactions.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/sql_execution.html"><b>SQL Execution — python-oracledb documentation</b><br><span>Reused from Concept 08 -- the cursor.execute() call shape UPDATE and DELETE both use unchanged.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Reused from Concepts 05 and 08 -- the distance formula recomputed in Section 10 after the embedding correction, not re-derived.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · POSITION 9/14</span>
+<h3>UPDATE doesn't touch the index. It touches the row -- and leaves the index to catch up.</h3>
+<p>You can now write a real UPDATE and a correctly-ordered DELETE against this course's own embeddings and chunks tables, explain exactly why delete order matters (and what Oracle error it raises when it's wrong), and state -- with a citation, not a guess -- what happens to an IVF vector index's own accuracy once those statements commit. Concept 10 covers Oracle security and operational considerations for RAG next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Commit Boundary ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at position 9 of 14. Built set: the contiguous {1,...,9}. Next in sequence: Concept 10, Oracle security and operational considerations for RAG.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 09 · Complete</p>
+<a href="module-10-concept-08.html">← Concept</a>
+</footer>
+</body>
+</html>
