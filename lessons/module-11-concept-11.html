@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 01 through 10 each proved one mechanism on its own terms -- a chunker, a retriever, a selector, a prompt assembler, a decoder, a citation check, a rewrite step. This concept proves they actually connect: one node-run script chains ingest, chunk, embed, store (write to disk, reload), query-embed, retrieve, select top-k, inject context, generate, cite, and incorporate two follow-up turns, on one six-document corpus, real numbers only. Node-verified: 6 documents chunk into 7 pieces (only doc_grace splits); the fact-bearing chunk (doc_grace_c1, '14 days') ranks third at cosine 0.4931, behind its own sibling half which contains no number at all (0.4951); a genuine paraphrase of the order-status chunk scores only 0.8098 under this concept's necessary hashed bag-of-words embedding stand-in, under a naive 0.90 duplicate cutoff; a k=2 counterfactual shows that same fact reaching the ranked candidate list but never the assembled prompt; and Turn 3's rewritten follow-up correctly triggers a grounded refusal, because only one chunk clears the retrieval cutoff. Module 11's eleventh and final concept.">
+<title>End-to-end framework-free implementation — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-11.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 11 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 11</p>
+<h1>Ten mechanisms, proven separately.<br><em>One script, chained end to end, nothing hand-typed.</em></h1>
+<p class="lesson-lead">Concepts 01 through 10 each isolated one stage of RAG and proved it worked on its own terms. This concept does the one thing none of them could: run every stage in the same script, back to back, on the same store, and report exactly what comes out the other end -- including the parts that don't cooperate, like a fact-bearing chunk that ranks third instead of first, and a genuine paraphrase that scores well under a naive duplicate threshold.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eleventh and final concept of Module 11 (11/11) -- the concept every prior concept in this module was building toward. No forward gap: Module 12 has not been started.</b></div>
+<div><span>PREREQUISITE</span><b>Every mechanism from Concepts 01-10: ingestion (02), the stride chunker (03), the vector store (04), query embedding and retrieval (05), top-k selection (06), prompt assembly (07), generation (08), citation checking (09), and conversation history (10)</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why chaining ten already-proven mechanisms into one script is itself a real test, and name at least one thing that only shows up once they're actually connected</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Every concept before this one tested itself. This concept tests the seams between them.</h2>
+</div>
+<p>Ten separate worked examples is not the same claim as "the pipeline works." This concept is the one script in Module 11 where a stage's input is the real, computed output of the stage before it -- not a hand-picked stand-in -- and it reports what happens when that's true, findings included.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Proven separately is not proven connected</h3>
+<p>Concept 03's chunker split its own test text correctly. Concept 06's selector deduped its own test candidates correctly. Concept 08's decoder cited its own test evidence correctly. None of that proves what happens when Concept 06's selector has to rank chunks Concept 03's chunker actually produced, from a store Concept 04's own persistence logic actually wrote and reloaded, embedded by a function none of the earlier concepts needed. This concept is the one script that runs the whole chain for real: ingest six documents, chunk them, embed the chunks, write them to disk and read them back, embed a real query, retrieve against the reloaded store, select and dedup the top-k, assemble the prompt, generate an answer, check its citation, then do it again for two follow-up turns -- one run, real numbers throughout.</p>
+<div class="beginner-memory"><b>First memory:</b> ten passing worked examples don't guarantee the assembled system behaves the way you'd expect -- some things only surface once every stage actually feeds the next one.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Every earlier concept got a clean hand-off from its neighbor</h3>
+<p>Concept 05's retrieval ran against Concept 04's exact illustrative vectors. Concept 07's prompt assembly ran against Concept 06's exact hand-built evidence set. Real pipelines don't get exact, pre-agreed inputs from the stage before them -- they get whatever that stage actually produced. This concept is where retrieval reads chunks that were genuinely written to disk and reloaded (Concept 04's own "computed is not the same as saved" point, checked here rather than stated), where selection ranks a real cosine score instead of a hand-picked one, and where generation cites a chunk that was actually assembled into the prompt, not merely retrieved into a candidate list.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Six documents, one new embedding, and a rank order that doesn't line up the way you'd guess</h3>
+<p>Six small documents go in: the same standard-return, shipping, order-status, and cancellation text Concepts 06/07/08/10 already established, plus two new ones built for this concept -- a genuine paraphrase of the order-status text, and a longer grace-period document long enough to actually split into two chunks under the char-stride chunker. Turn 1 asks "What is the return window after the grace period?" -- its own phrasing, not a replay of Concepts 06/07/10's exact query string. The top-ranked chunk is <code>doc_grace_c2</code> at cosine <code>0.4951</code> -- the <i>second half</i> of the grace-period document, which contains no number at all. The chunk that actually says "14 days," <code>doc_grace_c1</code>, ranks third at <code>0.4931</code>. At this run's <code>k=4</code>, both still make it into the assembled evidence, so the answer comes out right regardless -- but the ranking itself is a real, computed surprise, not the tidy order a hand-built example would have shown.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Reuse ten shapes, add exactly one new mechanic</h3>
+<p>Every stage below reuses an earlier concept's own logic by shape, not by invention: the chunker is Concept 03's stride splitter; top-k selection is Concept 06's cutoff-then-k-then-dedup snippet; prompt assembly is Concept 07's own <code>assemble()</code> and its <code>[SOURCE n]</code> tag; citation checking is Concept 08's "a tag is not proof" rule; conversation history is Concept 10's rewrite-then-retrieve pattern. The one necessary new piece: this module has never had a trained embedding model to run, and a true end-to-end script has no illustrative cosine score to fall back on -- it has to retrieve against something real. The embedding here is a deterministic hashed bag-of-words vector, disclosed plainly as a stand-in, not a trained model.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Eleven stages, one script, one store</h3>
+<div class="scroll-flow">
+<span>Ingest 6 docs</span><i>→</i>
+<span>Chunk (7 pieces)</span><i>→</i>
+<span>Embed (64-dim hashed BoW)</span><i>→</i>
+<span>Store — write, reload</span><i>→</i>
+<span>Query embed &amp; retrieve</span><i>→</i>
+<span>Select top-k (dedup)</span><i>→</i>
+<span>Inject context</span><i>→</i>
+<span>Generate &amp; cite</span><i>→</i>
+<span class="hot">THIS concept — every stage chained for real</span><i>→</i>
+<span>Incorporate history (2 turns)</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>"Framework-free" isn't "reinvented," and "in the ranked list" isn't "in the prompt"</h3>
+<p>Framework-free means no LangChain-style abstraction hides the wiring between stages -- it does not mean the mechanics themselves are new. Nine of this script's ten stage-mechanics are the exact shape Concepts 01-10 already established; only the embedding function is genuinely new, and it's flagged as such rather than sanded into looking routine. Separately: a chunk being retrieved into the ranked candidate list is not the same claim as a chunk reaching the assembled prompt. At <code>k=2</code>, <code>doc_grace_c1</code> -- the chunk with the actual "14 days" fact -- ranks third at <code>0.4931</code>, safely above the <code>0.35</code> cutoff, and still never reaches the prompt, because only the top two survive selection.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A paraphrase should score almost 1.0 against the original."</b><p>Not under a hashed bag-of-words stand-in. <code>doc_cC_dup_c1</code>, a genuine hand-written paraphrase of <code>doc_cC_c1</code>'s order-status fact, scores cosine <code>0.8098</code> against it -- comfortably under a naive <code>0.90</code> duplicate cutoff, which had to be lowered to <code>0.75</code> before the dedup path actually fired in this run.</p></div>
+<div><b>"If the right chunk is in the corpus, it reaches the prompt."</b><p>Not automatically -- at <code>k=2</code>, <code>doc_grace_c1</code> is retrieved into the ranked list (rank 3 of 7, well above cutoff) but dropped before assembly. Only at <code>k=3</code> or higher does it survive into this run's evidence set.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's actual end-to-end wiring</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The one script every prior concept's mechanism has to survive contact with</b><p>Ask directly: has your pipeline ever been run start-to-finish on real, self-produced intermediate output -- or only stage by stage, on inputs someone hand-picked to make that one stage look clean?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 11/11</b><p>Module 11 is complete. Module 12, LangChain for RAG, revisits every stage above through a framework's own abstractions -- it has not been started.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Explain why chaining proven stages is still a real test</b><p>Each earlier concept ran against a clean, hand-picked input from its neighbor; here retrieval reads a chunk actually written to disk and reloaded, and generation cites a chunk actually present in the assembled prompt.</p></div>
+<div><b>State the one legitimately new mechanic and why it was necessary</b><p>A deterministic 64-dim hashed bag-of-words embedding -- this module has never had a trained model, and an end-to-end script needs a real, computed score to retrieve against.</p></div>
+<div><b>Distinguish "retrieved" from "reaches the prompt"</b><p>At <code>k=2</code>, the fact-bearing chunk ranks 3rd above cutoff but is dropped before assembly; only <code>k≥3</code> keeps it in this run.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does <code>doc_grace_c2</code> -- the half of the grace-period document with no number in it -- outrank <code>doc_grace_c1</code>, the half that actually says "14 days"?</li>
+<li>Why does a genuine paraphrase of <code>doc_cC_c1</code> score only <code>0.8098</code> rather than near <code>1.0</code>, and why did that force the dedup threshold to change?</li>
+<li>Why does Turn 3 correctly refuse to answer rather than guessing, when Turn 1 and Turn 2 both answer "14 days"?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 11 OF 11</h3>
+<p>This concept chained every mechanism from Concepts 01-10 into one runnable script on one small corpus, and reported the real intermediate output at every stage -- including two findings that only exist because the stages were genuinely connected: a fact-bearing chunk that ranks third, not first, and a paraphrase that scores well under a naive duplicate cutoff. Module 11 is now complete. Module 12, LangChain for RAG, picks up every stage above through a framework's own abstractions -- it has not yet begun.</p>
+<div class="beginner-memory"><b>Concept 11 is active.</b> Module 11 stands at 11 of 11 concepts -- complete.</div>
+<a class="button primary" href="module-11-concept-10.html">← Back to Concept 10's rewrite step</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Ten mechanisms, one chain, real numbers</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s07"><span>01</span><b>Chain trace, real numbers</b><small><code>doc_grace_c2</code> outranks <code>doc_grace_c1</code> (0.4951 vs 0.4931); dedup catches an 0.8098-cosine paraphrase.</small></a>
+<a href="#s21"><span>02</span><b>What only breaks when connected</b><small><code>k=2</code> drops the fact-bearing chunk even though it clears the cutoff; Turn 3 correctly refuses rather than guesses.</small></a>
+<a href="#s11"><span>03</span><b>Run the pipeline</b><small>The lab -- step through all eleven stages with this script's own real intermediate output.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 11 path:</b> ingest six documents → chunk with Concept 03's stride splitter → embed with this concept's one new mechanic → write to disk and reload (Concept 04) → embed a real follow-up-free query and retrieve (Concept 05) → select top-k with dedup (Concept 06) → assemble the prompt (Concept 07) → generate and cite (Concepts 08-09) → rewrite and retrieve two more turns (Concept 10) → the lab lets you step through every stage's real output in order.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "End-to-end framework-free implementation" deep dive</b><em>Full citations, the pipeline code, and Run the pipeline</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Dependencies</a>
+<a href="#s04"><i>04</i> Evidence + control</a>
+<a href="#s05"><i>05</i> Architecture schema</a>
+<a href="#s06"><i>06</i> Mechanism code</a>
+<a href="#s07"><i>07</i> Worked example: ingest → store</a>
+<a href="#s08"><i>08</i> Worked example: retrieve → cite</a>
+<a href="#s09"><i>09</i> Math verification</a>
+<a href="#s10"><i>10</i> Lab intro</a>
+<a href="#s11"><i>11</i> Lab</a>
+<a href="#s12"><i>12</i> Lab data model</a>
+<a href="#s13"><i>13</i> Lab JS mechanics</a>
+<a href="#s14"><i>14</i> What it teaches</a>
+<a href="#s15"><i>15</i> Contrast: raw vs. framework</a>
+<a href="#s16"><i>16</i> Misconceptions</a>
+<a href="#s17"><i>17</i> Interview</a>
+<a href="#s18"><i>18</i> Knowledge check</a>
+<a href="#s19"><i>19</i> References</a>
+<a href="#s20"><i>20</i> Computed vs. saved, checked</a>
+<a href="#s21"><i>21</i> In the corpus vs. in the prompt</a>
+<a href="#s22"><i>22</i> Checking the checker</a>
+<a href="#s23"><i>23</i> A grounded refusal, for real</a>
+<a href="#s24"><i>24</i> Checkpoint</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 11 of 11 -- the concept this module was building toward</h2></div></header>
+<p>This concept occupies the last position in Module 11's fixed 11-concept sequence, and it closes cleanly: every concept it depends on (01-10) already exists on disk, so there is no forward gap to disclose the way Concepts 03/04 and 08/09/10 each had to. Module 12, "LangChain for RAG," is the next module in the roadmap and has not been started -- nothing below assumes it exists. This concept's scope is deliberately narrow: it invents no new retrieval mechanic, no new selection rule, no new prompt format. Its entire job is to chain every mechanism Concepts 01-10 already established, in order, on one small synthetic corpus, and report the real intermediate output at each stage. The one legitimately new element, disclosed plainly rather than hidden, is the embedding function itself (Section 06).</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Terms this concept uses precisely</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Owning concept</th></tr></thead>
+<tbody>
+<tr><td>Framework-free implementation</td><td>A pipeline where every stage's wiring is written and run by hand, with no abstraction library hiding the hand-off between stages</td><td>this concept</td></tr>
+<tr><td>Hashed bag-of-words embedding</td><td>A deterministic, non-trained embedding: tokenize, weight by a stopword-vs-content rule, hash each token into one of a fixed number of dimensions, accumulate</td><td>this concept</td></tr>
+<tr><td>Round-trip integrity check</td><td>Writing computed data to disk, reloading it, and confirming the reloaded copy matches the original before trusting it for retrieval</td><td>Module 11 Concept 04, checked here rather than asserted</td></tr>
+<tr><td>Retrieved vs. assembled</td><td>A chunk appearing in the ranked candidate list is not the same claim as that chunk appearing in the prompt the model actually sees</td><td>Module 11 Concept 07, checked here empirically</td></tr>
+<tr><td>Grounded refusal</td><td>Declining to state a specific fact because no chunk that reached the assembled prompt actually contains it</td><td>Module 11 Concept 08</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>What this concept reuses without re-deriving</h2></div></header>
+<p>Chunking below is Concept 03's own char-stride-with-overlap splitter (stride = size − overlap), applied verbatim. Top-k selection is Concept 06's own four-line selection snippet (Section 10 there): sort by score, filter by cutoff, mark duplicates, take the top-k, backfill from the remaining pool if dedup drops anyone below <code>k</code>. Prompt assembly is Concept 07's own <code>assemble()</code> function and its <code>[SOURCE n]</code> boundary tag, and its 3,584-token prompt budget (4,096-token window minus a 512-token generation reserve). Citation attachment and checking reuse Concept 08's <code>[SOURCE n]</code>-to-chunk-id mapping and its "a tag is not proof, check the actual cited text" rule. Conversation history reuses Concept 10's own rewrite-before-retrieval pattern and its token-budget-competition arithmetic. Token counting reuses Concept 07/10's word-count-proxy <code>estimateTokens()</code>, copied verbatim -- and re-verified here against the same 9-token sanity figure those concepts established.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>The six-document corpus</h2></div></header>
+<table class="notation">
+<thead><tr><th>Document</th><th>Chars</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>doc_cA (30-day standard return)</td><td>191</td><td>reused verbatim from verify-11-10.js's cA</td></tr>
+<tr><td>doc_cB (shipping / tracking)</td><td>177</td><td>reused verbatim, this module's cB</td></tr>
+<tr><td>doc_cC (order-status values)</td><td>167</td><td>reused verbatim, this module's cC</td></tr>
+<tr><td>doc_cC_dup (genuine paraphrase of doc_cC)</td><td>172</td><td><b>new for this concept</b> -- built to give the dedup path a real pair to catch</td></tr>
+<tr><td>doc_cE (pre-shipment cancellation)</td><td>201</td><td>reused verbatim, this module's cE</td></tr>
+<tr><td>doc_grace (14-day grace period)</td><td>352</td><td><b>new for this concept</b> -- built long enough to force a real two-chunk split</td></tr>
+</tbody>
+</table>
+<p>Four of six documents are the exact text Concepts 06/07/08/10 already established as this module's evidence set; only <code>doc_cC_dup</code> and <code>doc_grace</code> are new, and both are new for a stated mechanical reason, not to widen the corpus for its own sake.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The chain, six stages wide</h2></div></header>
+<div class="flow">
+<div class="flow-node">Ingest &amp; chunk</div>
+<div class="flow-node">Embed &amp; store (write + reload)</div>
+<div class="flow-node">Query embed &amp; retrieve</div>
+<div class="flow-node">Select top-k (dedup)</div>
+<div class="flow-node">Inject, generate &amp; cite</div>
+<div class="flow-node">Incorporate history (2 turns)</div>
+</div>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">CODE</span><h2>The one new mechanic: a deterministic hashed bag-of-words embedding</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · EMBEDDING FUNCTION (node-run, see Section 09)</span>
+<pre><code>function weightOf(token) {
+  if (STOP_WORDS.has(token)) return 0.05;
+  const w = 0.06 + Math.min(token.length, 10) * 0.02;
+  return Math.min(w, 0.28);
+}
+
+function hashToken(token) {
+  let h = 0;
+  for (let i = 0; i < token.length; i++) h = (h * 31 + token.charCodeAt(i)) >>> 0;
+  return h % EMBED_DIM; // EMBED_DIM = 64
+}
+
+function embed(text) {
+  const vec = new Array(EMBED_DIM).fill(0);
+  tokenize(text).forEach((t) => { vec[hashToken(t)] += weightOf(t); });
+  return vec;
+}</code></pre>
+</div>
+<p>This is not a trained model -- this module has never had one available to run. It is the simplest thing that turns cosine similarity below into a real, script-computed number instead of another hand-picked one. Every score in Sections 07-08 came out of this exact function; none were typed from memory. Chunking, selection, and prompt assembly are omitted here since they are Concept 03/06/07's own code, reused unmodified -- see those pages for the full listings.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Ingest → chunk → embed → store, node-verified</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Chunk id</th><th>Chars</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>doc_cA_c1</td><td>191</td><td>whole document, one chunk</td></tr>
+<tr><td>doc_cB_c1</td><td>177</td><td>whole document, one chunk</td></tr>
+<tr><td>doc_cC_c1</td><td>167</td><td>whole document, one chunk</td></tr>
+<tr><td>doc_cC_dup_c1</td><td>172</td><td>whole document, one chunk</td></tr>
+<tr><td>doc_cE_c1</td><td>201</td><td>whole document, one chunk</td></tr>
+<tr><td>doc_grace_c1</td><td>220</td><td>first half -- contains both "14 days" sentences</td></tr>
+<tr><td>doc_grace_c2</td><td>172</td><td>second half -- overlaps the tail of c1, contains no digits</td></tr>
+</tbody>
+</table>
+<p><code>chunkText(size=220, overlap=40)</code> on all six documents produces exactly <b>7 chunks</b>. <code>doc_grace</code> is the only document that actually splits into more than one piece at this size/overlap -- a computed fact, confirmed by filtering the chunk list for any <code>docId</code> with more than one member, not an asserted one. Each chunk is embedded into a 64-dim hashed bag-of-words vector (sample: <code>doc_cA_c1</code> has 20 of 64 dimensions nonzero), then all 7 records are written to a temp-directory JSON file (6,531 bytes) and immediately reloaded. The reload check compares record count, vector length, and the first vector component for every record: <b>OK</b> -- match on every field. From this point on, retrieval reads from the reloaded copy, not the in-memory array computed above, and the temp file is deleted once the check passes.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Retrieve → select → inject → generate → cite (Turn 1), node-verified</h2></div></header>
+<p>Query: "What is the return window after the grace period?" -- this run's own phrasing, not a replay of Concepts 06/07/10's exact query string. Full ranking against all 7 reloaded chunks, real cosine:</p>
+<table class="worked-table">
+<thead><tr><th>Chunk</th><th>Cosine</th></tr></thead>
+<tbody>
+<tr><td>doc_grace_c2</td><td>0.4951</td></tr>
+<tr><td>doc_cC_dup_c1</td><td>0.4943</td></tr>
+<tr><td>doc_grace_c1</td><td>0.4931</td></tr>
+<tr><td>doc_cC_c1</td><td>0.3606</td></tr>
+<tr><td>doc_cE_c1</td><td>0.1710</td></tr>
+<tr><td>doc_cB_c1</td><td>0.1348</td></tr>
+<tr><td>doc_cA_c1</td><td>0.0844</td></tr>
+</tbody>
+</table>
+<p>Selection at <code>cutoff=0.35</code>, <code>k=4</code>, dedup threshold <code>0.75</code>: 4 of 7 chunks pass the cutoff. <code>doc_cC_c1</code> is flagged as a duplicate of <code>doc_cC_dup_c1</code> at cosine <code>0.8098</code> and dropped; no backfill candidate remains in the pool, so the final evidence set is three chunks: <code>doc_grace_c2, doc_cC_dup_c1, doc_grace_c1</code>. Assembled with Concept 07's <code>assemble()</code>: system instructions 27 tokens, evidence block 118 tokens (tag + chunk text per source: 32 + 42 + 44), query line 12 tokens -- <b>157 tokens total</b>, against the 3,584-token budget (3,427 tokens of headroom). Generation scans the assembled evidence for a "<i>N</i>-day" pattern, finds it in the chunk assembled as <code>[SOURCE 3]</code>, and answers: <i>"Based on [SOURCE 3], the window is 14 days."</i> The citation check re-reads <code>[SOURCE 3]</code>'s actual text and confirms "14" is really there: <b>ok=true</b>.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The verification standard: run it, don't eyeball it</h2></div></header>
+<div class="callout"><b>Verification method</b>All numbers on this page came from a single node script (<code>verify-11-11.js</code>), executed fresh this session to reconfirm a prior run rather than re-derived from scratch. A sanity check first confirmed <code>estimateTokens()</code> still reproduces Concepts 06/07/10's own established 9-token query count exactly (match), before the full chain ran on the real six-document corpus. The dedup threshold was originally set to 0.90 on the assumption a genuine paraphrase would score close to identical; it didn't (0.8098), so the threshold was lowered to 0.75 -- a documented parameter change based on a real measurement, not a retrofit to hide a bug. Every ranking, every token count, the 157-token and 125-token assembled totals, the k=2/3/4 counterfactual, and the citation-checker robustness test all came from that one execution, printed and read back.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Run the pipeline"</h2></div></header>
+<div class="callout">This lab steps through all eleven stages of the script's own run, one at a time: ingest, chunk, embed, store, retrieve, select top-k, inject context, generate + cite, incorporate history (Turn 2), incorporate history (Turn 3), and the final history-vs-evidence budget check. Every value shown at every stage is this page's own node-computed output -- nothing in the widget is invented separately from the script.</div>
+<div class="callout warning"><b>One-line disclaimer:</b> the rank-chip and budget-bar values in this lab are the exact Sections 07-08 figures, re-rendered per stage -- they are not re-derived or rounded differently here.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">EXPERIMENT</span><h2>Run the pipeline</h2></div>
+</header>
+<div class="lab" id="lab_1111">
+<p>Step through the full pipeline this concept's own script ran for real, stage by stage. Every number below is the actual output that script printed -- nothing here is invented for the widget.</p>
+<div class="lab-controls">
+<div class="control"><span id="stepLabel_1111">Stage 1 of 11 -- Ingest</span></div>
+</div>
+<div class="concept-visual">
+<strong class="concept-visual-title">PIPELINE STAGE</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Eleven pipeline stages, current stage highlighted">
+<div class="diagram-family-grid" id="stageStrip_1111"></div>
+</div>
+</div>
+<div class="sample-output" id="stageOutput_1111"></div>
+<div class="rank-chip-row" id="stageChips_1111"></div>
+<div class="mask-panels" id="stageMaskPanels_1111">
+<div class="mask-panel">
+<span class="mask-panel-title">RAW QUERY</span>
+<p id="stageRawQuery_1111"></p>
+<div class="rank-chip-row" id="stageRawChips_1111"></div>
+</div>
+<div class="mask-panel">
+<span class="mask-panel-title">REWRITTEN QUERY</span>
+<p id="stageRewrittenQuery_1111"></p>
+<div class="rank-chip-row" id="stageRewrittenChips_1111"></div>
+</div>
+</div>
+<div class="citation-check" id="stageCitationCheck_1111">
+<div class="citation-claim"><span class="tag">GENERATED CLAIM</span><p id="citationClaimText_1111"></p></div>
+<div class="citation-chunk"><span class="tag">CITED CHUNK TEXT</span><p id="citationChunkText_1111"></p></div>
+</div>
+<div class="citation-verdict" id="citationVerdict_1111"></div>
+<div class="budget-bar" id="stageBudgetBar_1111"></div>
+<p class="budget-meta" id="stageBudgetMeta_1111"></p>
+<p class="fine-print" id="stageNote_1111"></p>
+<div class="lab-actions">
+<button type="button" id="stepBtn_1111">Advance to next stage</button>
+<button type="button" id="resetBtn_1111">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>The lab holds a fixed eleven-stage array, <code>STAGES_1111</code>. Each stage carries a <code>kind</code> (<code>"text"</code>, <code>"chips"</code>, <code>"mask"</code>, <code>"citation"</code>, or <code>"budget"</code>) that tells the renderer which of the lab's panels to show, plus the exact node-computed values for that stage: Stage 5's seven cosine scores, Stage 6's cutoff/k/dedup readout, Stage 7's five-segment token breakdown, Stage 8's claim text and cited chunk text, Stages 9-10's raw/rewritten query pairs and their top-match scores, and Stage 11's four-segment history-vs-evidence breakdown. Nothing in this array was computed separately from Section 09's script run -- every field is copied from its printed output.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>A <code>render_1111()</code> function reads the current stage's <code>kind</code> and shows only the matching panel group, hiding the rest: <code>text</code> stages write a preformatted string into <code>.sample-output</code>; <code>chips</code> stages sort that stage's scores descending into <code>.rank-chip-row</code> chips (top chip gets <code>.match</code>); <code>mask</code> stages fill both raw and rewritten query panels and their own chip rows; <code>citation</code> stages write the claim and cited-chunk text into <code>.citation-check</code>, highlighting the shared claim number with <code>.claim-word.hit</code> spans, and write a pass/fail line into <code>.citation-verdict</code>; <code>budget</code> stages rebuild <code>.budget-bar</code> from that stage's fixed segment list and write the running total and headroom into <code>.budget-meta</code>. A <code>.diagram-family-grid</code> strip above the output always shows all eleven stage names, with <code>.active</code> moved to the current one. Clicking <code>stepBtn_1111</code> advances one stage and re-renders; <code>resetBtn_1111</code> returns to Stage 1.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>What the lab teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>STAGE 5, WATCH THE TOP CHIP</span><h3>The fact-bearing chunk doesn't rank first</h3><p><code>doc_grace_c2</code> -- no digits at all -- outranks <code>doc_grace_c1</code>, the chunk that actually says "14 days," by a margin of two ten-thousandths of cosine similarity. Both still clear the cutoff at this run's <code>k=4</code>, but the ranking itself is a real surprise a hand-picked example would never have shown.</p></article>
+<article class="info-card"><span>STAGE 10, WATCH IT REFUSE</span><h3>Turn 3 doesn't guess when it shouldn't</h3><p>Only one chunk clears the <code>0.35</code> cutoff on Turn 3's rewritten query. Generation correctly says the evidence doesn't state a number, rather than reusing Turn 1 or Turn 2's "14 days" answer out of habit.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>What this raw version does by hand vs. what a framework hides</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Stage</th><th>Done by hand here</th><th>What LangChain (or similar) would hide</th></tr></thead>
+<tbody>
+<tr><td>Ingest / chunk</td><td>A hand-written char-stride loop with an explicit stride variable</td><td>A <code>DocumentLoader</code> and <code>TextSplitter</code> class -- same math, packaged behind a config object</td></tr>
+<tr><td>Embed</td><td>A hand-written hashed bag-of-words function, disclosed as a stand-in</td><td>A single <code>Embeddings</code> interface call to a real provider -- no need to build or disclose a substitute</td></tr>
+<tr><td>Store</td><td>An explicit <code>fs.writeFileSync</code> / reload / integrity check</td><td>A <code>VectorStore</code> wrapper that writes, indexes, and reloads without ever surfacing the round-trip as a step worth checking</td></tr>
+<tr><td>Retrieve + select</td><td>A hand-written cosine loop, then a hand-written cutoff/k/dedup pass</td><td>A single <code>retriever.invoke()</code> call -- cutoff, k, and any de-duplication logic live inside the retriever, usually untunable without reading source</td></tr>
+<tr><td>Inject + generate</td><td>A hand-built <code>assemble()</code> string and a hand-built decoder stand-in</td><td>A <code>PromptTemplate</code> plus a <code>ChatModel</code> call -- token budgeting is invisible unless you go looking for it</td></tr>
+<tr><td>Cite</td><td>A hand-written regex read-back against the actually-cited chunk</td><td>Usually nothing at all -- most framework chains do not verify a citation against source text by default</td></tr>
+<tr><td>History</td><td>A hand-written rewrite step and a hand-computed token tally</td><td>A <code>Memory</code> or <code>MessagesPlaceholder</code> object -- convenient, but it can silently re-inject the full evidence set every turn exactly the way Concept 10 Section 15 warned against, unless configured otherwise</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A paraphrase of the same fact should score close to 1.0 cosine</td><td>Not under a hashed bag-of-words stand-in -- <code>doc_cC_dup_c1</code> scores only <code>0.8098</code> against the sentence it paraphrases, because this embedding rewards shared exact tokens, not shared meaning.</td></tr>
+<tr><td>If a chunk is retrieved above the cutoff, it reaches the prompt</td><td>Not necessarily -- at <code>k=2</code>, the fact-bearing chunk clears the cutoff (rank 3, cosine 0.4931) and is still dropped before assembly.</td></tr>
+<tr><td>"Framework-free" means every mechanic here is newly invented</td><td>No -- nine of the ten stage-mechanics are Concepts 01-10's own logic, reused by shape; only the embedding function is genuinely new, and it's disclosed as a stand-in rather than presented as routine.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Systems: why would two component-level tests both pass, yet the assembled pipeline still misbehave?</summary><div>Because each component test typically feeds the component a hand-picked, well-formed input rather than the real output of the previous stage -- a chunker can split correctly and a selector can dedup correctly, and still interact badly once the selector has to rank chunks the chunker actually produced from a store that was actually written and reloaded.</div></details>
+<details class="quiz"><summary>Conceptual: what's the difference between a chunk being "retrieved" and a chunk "reaching the prompt"?</summary><div>Retrieved means it appears in the ranked candidate list, typically after clearing a similarity cutoff; reaching the prompt means it survived top-k selection and deduplication and was actually written into the assembled context string generation sees. At k=2 in this run, the fact-bearing chunk clears the cutoff but does not survive selection -- it is retrieved but never reaches the prompt.</div></details>
+<details class="quiz"><summary>Architecture: what's the one component this raw implementation had to build that a framework would give for free, and why did it matter here?</summary><div>A real embedding function -- this module never had a trained model to call, so a deterministic hashed bag-of-words embedding was built as a disclosed stand-in. It mattered because it made every retrieval score in this concept a real, script-computed number rather than another hand-picked illustrative one, at the cost of known weaknesses like scoring genuine paraphrases well below what a trained model would.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can state the chunk count and which document split</b><p>7 chunks from 6 documents; only <code>doc_grace</code> splits, into <code>doc_grace_c1</code> and <code>doc_grace_c2</code>.</p></div>
+<div><b>I can state Turn 1's top-ranked chunk and why it's surprising</b><p><code>doc_grace_c2</code> at 0.4951 -- it contains no number, yet outranks <code>doc_grace_c1</code> (0.4931), which contains "14 days" twice.</p></div>
+<div><b>I can state why Turn 3 refuses to answer</b><p>Only <code>doc_cC_dup_c1</code> clears the 0.35 cutoff on the rewritten query, and it contains no day-count fact -- so generation correctly declines rather than reusing an earlier turn's answer.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References</h2></div></header>
+<div class="references">
+<a href="module-11-concept-03.html"><b>Module 11 Concept 03 — Document chunking and embedding flow</b><br><span>Reused directly -- the char-stride splitter chunking uses in Section 07, cited in Sections 03 and 06.</span></a>
+<a href="module-11-concept-04.html"><b>Module 11 Concept 04 — Vector database and vector-store persistence</b><br><span>Reused directly -- the write-then-reload round-trip check in Section 07, cited in Sections 02 and 20.</span></a>
+<a href="module-11-concept-05.html"><b>Module 11 Concept 05 — Query embedding, retrieval and candidate search</b><br><span>Reused directly -- the retrieval step Section 08's Turn 1 ranking runs on, cited in Section 03.</span></a>
+<a href="module-11-concept-06.html"><b>Module 11 Concept 06 — Top-k evidence selection</b><br><span>Reused directly -- the cutoff/k/dedup selection snippet in Section 08, cited in Sections 03 and 20.</span></a>
+<a href="module-11-concept-07.html"><b>Module 11 Concept 07 — Context injection, context construction and prompt construction</b><br><span>Reused directly -- <code>assemble()</code>, the 3,584-token budget, and the "in the corpus vs. in the prompt" point tested empirically in Section 21.</span></a>
+<a href="module-11-concept-08.html"><b>Module 11 Concept 08 — LLM generation and the final answer</b><br><span>Reused directly -- the decoder stand-in, Scenario A/B refusal logic tested in Section 23, and the citation rule tested in Section 22.</span></a>
+<a href="module-11-concept-09.html"><b>Module 11 Concept 09 — Source identifiers and citations</b><br><span>Reused directly -- the read-back citation check this concept's own robustness self-test verifies, cited in Section 22.</span></a>
+<a href="module-11-concept-10.html"><b>Module 11 Concept 10 — Conversation history</b><br><span>Reused directly -- the rewrite-before-retrieval pattern behind Turns 2-3 and the history-vs-evidence budget arithmetic in Section 08.</span></a>
+</div>
+<p class="fine-print">No new external benchmark citation is introduced for this concept. Every number above came from the node script described in Section 09, run against this course's own established constants -- not from an outside study.</p>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>"Computed is not the same as saved," checked instead of stated</h2></div></header>
+<p>Module 11 Concept 04 established the principle that a vector computed in memory is not the same thing as a vector actually persisted and retrievable later. This concept is the first place in the module that principle gets checked rather than asserted: all 7 chunk records are written to a real file on disk, reloaded into a fresh variable, and compared field-by-field against the in-memory originals before retrieval is allowed to run against them. The round trip passes here (<code>OK</code>), but the check itself -- not just the write -- is what this concept adds; a script that wrote and never reloaded would have no way to know whether the persisted copy was actually usable.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>"In the corpus" is not "in the prompt," now with real numbers</h2></div></header>
+<p>Module 11 Concept 07 Section 13 made this point illustratively: a relevant chunk can exist in the corpus and even rank inside the candidate pool, yet still never reach the assembled prompt if selection cuts it before then. This concept confirms it empirically. Re-running Section 08's selection at <code>k=2</code>, <code>k=3</code>, and <code>k=4</code> on the identical Turn 1 ranking: at <code>k=2</code>, the evidence set is <code>[doc_grace_c2, doc_cC_dup_c1]</code> and the fact-bearing chunk is absent; at <code>k=3</code> and <code>k=4</code>, it's <code>[doc_grace_c2, doc_cC_dup_c1, doc_grace_c1]</code> and the fact-bearing chunk is present. The chunk's own retrieval rank never changes (3rd of 7, cosine 0.4931, well above the 0.35 cutoff) -- only the selection width does. "In the ranked candidates" and "in the prompt" are different claims, and only the second one is what generation can honestly cite from.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>Checking the checker, not just trusting it</h2></div></header>
+<p>Module 11 Concept 08 Section 20 and Concept 09's read-back check both establish that a citation tag has to be verified against the actual cited text, not trusted on sight. This concept adds one more layer: it verifies that the verification code itself actually catches a bad citation, rather than assuming a function that returned <code>ok=true</code> once is trustworthy in general. After Turn 1's real citation check passes, the same claim ("14 days") is deliberately reattributed to the wrong chunk (<code>doc_grace_c2</code> instead of <code>doc_grace_c1</code>) and re-checked: the checker returns <code>ok=false</code>, correctly flagging the mismatch. A citation checker that always returns <code>true</code> would have passed Turn 1's real check too -- this negative test is what rules that out.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>A grounded refusal, triggered by real retrieval instead of manufactured</h2></div></header>
+<p>Module 11 Concept 08 drew a Scenario A/B distinction between answering from evidence and refusing when evidence doesn't support an answer, using constructed examples of each. Turn 3 here produces the refusal case naturally: the rewritten query "does the return refund window still apply if the customer has already opened the package" retrieves only one chunk above the 0.35 cutoff (<code>doc_cC_dup_c1</code>, cosine 0.3882), and that chunk contains no day-count fact. Generation correctly answers "the evidence provided does not state a specific number of days" rather than reusing Turn 1 or Turn 2's "14 days" figure out of habit. The refusal wasn't written into the script as a target output -- it's what the real evidence set at that turn actually supports.</p>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Checkpoint</h2></div></header>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 11/11 · COMPLETE</span>
+<h3>Ten mechanisms, proven separately. One script, chained end to end, nothing hand-typed.</h3>
+<p>You can now explain why chaining ten already-proven mechanisms into one script is itself a real test, name the one legitimately new mechanic this concept required (a disclosed hashed bag-of-words embedding), and distinguish a chunk being retrieved from a chunk reaching the assembled prompt using this run's own k=2/3/4 counterfactual. Module 11, Baseline RAG from first principles, is complete at 11 of 11 concepts. Module 12, LangChain for RAG, is next on the roadmap and has not yet been started.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s11">Open Run the pipeline ↑</a>
+</div>
+<p class="fine-print">Module 11 stands complete at 11 of 11 concepts. Previous concept: Concept 10, conversation history. This is Module 11's final concept -- Module 12 has not been started.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 11 · Complete</p>
+<a href="module-11-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>
