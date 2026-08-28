@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 01-12 built and named one fact at a time: Oracle's own hybrid index and operational costs, pgvector's portability and native row security, and four managed/specialist vendors' own tenant mechanisms and cost trade-offs. None of them chose between systems. This concept organizes those already-established facts into a two-step decision framework -- hard categorical constraints first, then a weighted score across four named axes (workload, governance, scale, cost) -- and runs it against three named workload profiles built from this course's own material. No new benchmark numbers are invented; every score cell cites the concept it comes from, and every weighted total is checked by an independent node script. The headline: the three profiles get three different, unique, defensible winners -- Oracle, then Pinecone, then Milvus -- and a fourth run without the hard-constraint step shows exactly how naive weighted scoring alone would have crowned a categorically disqualified vendor.">
+<title>Choosing a store by workload, governance, scale and cost — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-13.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 13 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 13</p>
+<h1>Six real systems.<br><em>One framework, three different winners.</em></h1>
+<p class="lesson-lead">Concepts 01-12 named facts one at a time -- Oracle's own hybrid index and its own real operational costs, pgvector's own portability and native row security, and four managed/specialist vendors' own tenant mechanisms and cost trade-offs. Not one of those twelve concepts chose between systems. This concept does, using nothing but those already-established facts: a two-step framework -- hard categorical constraints first, then a weighted score across four named axes -- run against three named workload profiles built from this course's own Oracle-shop, multi-tenant-SaaS, and open-source material. No new benchmark number is invented anywhere below. Every score cell cites the concept it comes from, and every weighted total is checked by an independent node script, the same verification method Concept 11 used for its own distance-ranking claim.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Thirteenth concept in Module 10's own 14-concept list -- the built set is now the contiguous {1..13}</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's taxonomy and cost fact; Concept 04's tenant_id/RLS; Concepts 05-07's Oracle mechanisms; Concepts 08-10's operational costs; Concept 11's pgvector portability; Concept 12's four-vendor tenant mechanisms and cost table -- every fact this concept organizes, none of it re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Apply hard constraints, then a weighted four-axis score, to three named workload profiles, and get a different, defensible winner each time -- Oracle, then Pinecone, then Milvus</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Choosing is two steps, not one number</h2>
+</div>
+<p>This concept adds no new vendor, no new SQL, and no new API. Every fact below was already established in Concepts 01-12. What's new is the method for turning twelve separate facts into one decision: first ask which systems are categorically disqualified for a given workload (a hard constraint), then, only among the survivors, compute a weighted score across four named axes -- workload fit, governance, scale, cost. Skip the first step and the second step can crown a winner that was never actually eligible.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>"Choosing a store" is a hard filter, then a weighted score -- never a weighted score alone</h3>
+<p>Step one: eliminate every system that fails a non-negotiable requirement of the workload -- for example, "must be open-source" or "must have a fully managed option," both facts Concept 12 already established per vendor. Step two: among whatever survives, score the remaining systems on four axes this course has already generated facts for -- workload fit, governance, scale, and cost -- multiply each score by how much that axis matters for this workload, and sum. The system with the highest weighted total, among the eligible pool, wins for that workload. A different workload can and does produce a different winner.</p>
+<div class="beginner-memory"><b>First memory:</b> hard constraints first, weighted score second. Reverse the order and a categorically disqualified vendor can still come out on top of the numbers -- Section 16 below shows exactly this happening.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Twelve concepts of facts, zero concepts of a decision</h3>
+<p>Concept 01 drew the store/database/search-engine boundary and priced compression. Concept 04 named tenant filtering and Postgres-native RLS. Concepts 05-10 built one full Oracle path and priced its own operational upkeep. Concept 11 found which SQL survives a port to pgvector. Concept 12 named four vendors' own tenant mechanisms and their own cost trade-offs. Every one of those is a fact about one system, or a comparison of two. None of them is a recommendation. This concept is the first to actually pick.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three named profiles, built from this course's own material</h3>
+<p><b>Profile A</b> -- a regulated complaints-handling workload on an existing Oracle estate, where engine-enforced row security and an audit trail matter more than anything else. <b>Profile B</b> -- a multi-tenant SaaS product onboarding new tenants weekly, run by a team with no dedicated database-operations staff. <b>Profile C</b> -- an open-source-mandated platform team with a billion-scale roadmap and a hard cap on vendor billing. All three profiles are scored against the same six systems: Oracle, pgvector, Pinecone, Qdrant, Weaviate, Milvus.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Four axes, six systems, one score cell each -- every cell citing its concept</h3>
+<p>Workload fit scores whether a system has a course-verified native hybrid (lexical+vector) mechanism -- only Oracle does (Concept 07's Hybrid Vector Index, recall 4/6 → 6/6). Governance scores whether tenant isolation is engine-enforced or caller-remembered, and whether audit/backup facts exist (Concepts 04, 10, 11, 12). Scale scores whether a system has an explicit, cited scale claim -- only Milvus does ("built for billion-scale search," Concept 12). Cost scores dollar structure plus whether a hands-off managed option was ever cited in this course (Concepts 11, 12). Section 06 below lays out the full six-by-four table with a citation for every cell.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Profile in, winner out, two steps in between</h3>
+<div class="pipeline-preview">
+<span>A named workload profile -- Concept 03-12's own facts, weighted by what this workload needs</span><i>↓</i><span class="hot">Step 1: hard constraint eliminates ineligible systems · Step 2: weighted score ranks what's left</span><i>↓</i><span>One winner -- Oracle, Pinecone, or Milvus, depending on the profile</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>A hard constraint is not a low score -- it's a zero chance</h3>
+<div class="distinction-table" role="table" aria-label="Hard constraint versus weighted axis">
+<div role="row"><b role="cell">Mechanism</b><b role="cell">What it does</b></div>
+<div role="row"><span role="cell">Hard constraint</span><span role="cell">A yes/no eligibility gate -- e.g. "is this system open-source, per Concept 12's own s05 citations?" Fails it, and the system is removed from the pool before any score is computed, no matter how high its axis scores would have been.</span></div>
+<div role="row"><span role="cell">Weighted axis score</span><span role="cell">A 0-2 fit rating on workload / governance / scale / cost, multiplied by a profile-specific weight and summed -- only computed for systems that survived the hard constraint.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The highest weighted score is automatically the right answer."</b><p>Not if the hard constraint step is skipped. Section 16 below runs Profile C's own weights across all six systems with no eligibility filter, and Pinecone -- a managed-only, non-open-source vendor Concept 12 itself never called open-source -- ties for first. The fix is always to filter first.</p></div>
+<div><b>"Cost means dollars."</b><p>Cost here also encodes whether a hands-off managed option was ever cited in this course. A self-hosted system can be cheap in licensing and still fail a "no ops team" workload -- that's exactly why Profile B's hard constraint removes Oracle and pgvector before any score is computed, not because either is expensive, but because no managed version of either was ever cited here.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A decision framework, not a change to the build</b><p>This concept changes nothing about Concepts 05-10's own Oracle build or Concept 11's pgvector translation. It organizes the facts those concepts and Concept 12 already established into a method for choosing among systems for a given workload -- an appendix that explains why the course's own Oracle choice fits Profile A specifically, not a claim that Oracle wins everywhere.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 13/14</b><p>The built set is the contiguous {1..13}. Concept 14 (retrieval-store interfaces and a portability lab) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the two steps in order</b><p>Hard constraint first (categorical eligibility), weighted axis score second (0-2 per axis × profile weight, summed) -- only among systems that survived step one.</p></div>
+<div><b>Name the four axes and one cited fact behind each</b><p>Workload (Oracle's own Hybrid Vector Index, Concept 07); governance (engine-enforced RLS vs. caller-remembered filter, Concepts 04/10/11/12); scale (Milvus's own cited "billion-scale" design, Concept 12); cost (dollar structure plus managed-option availability, Concepts 11/12).</p></div>
+<div><b>Name the three profiles' winners</b><p>Profile A → Oracle. Profile B → Pinecone. Profile C → Milvus. Three different winners from the same six-system table, because the weights and the eligible pool both changed.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does Profile B's hard constraint remove Oracle and pgvector before any axis is even scored?</li>
+<li>Without the hard-constraint step, which two systems tie for first on Profile C's own weights, and why is that a problem?</li>
+<li>Try it: open "The Decision Matrix" lab below and switch between the three profiles to watch the eligible pool and the winner change live.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 13 OF 14</h3>
+<p>This concept turned twelve concepts of separate facts into a two-step decision framework -- hard constraints, then a weighted four-axis score -- and ran it against three named workload profiles, getting three different, defensible winners. Concept 14, "Retrieval-store interfaces and a database portability lab," turns from choosing a store to designing a store-agnostic interface so that choice can be revisited later without a rewrite -- named forward only, not built here.</p>
+<a class="button primary" href="module-10-concept-12.html">← Back to Concept 12's four-vendor comparison</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Twelve concepts of facts, one framework, three winners</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>The six-by-four score table</b><small>Every cell cites the concept it comes from -- no invented numbers.</small></a>
+<a href="#s10"><span>02</span><b>Three profiles, three winners</b><small>Oracle, then Pinecone, then Milvus -- verified by an independent node script.</small></a>
+<a href="#s14"><span>03</span><b>The Decision Matrix</b><small>The lab -- switch profiles and watch the eligible pool and winner change live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full method, the naive-scoring pitfall, and the node verification.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 13 path:</b> Concept 12's own text names this concept's job explicitly -- "no recommendation of one vendor over another... that is Concept 13's job" -- so this concept reads back through Concepts 01-12, pulls every store-relevant fact into one six-by-four score table, and adds a hard-constraint step Concept 12 never needed → three named profiles built from this course's own regulated-Oracle, multi-tenant-SaaS, and open-source scenarios are run through the framework → each profile's hard constraint shrinks the eligible pool differently, and each profile's weights favor a different axis → the result is three different, unique, defensible winners, every weighted total checked by an independent node script → a fourth run with no hard-constraint step shows why skipping step one is a real mistake, not a theoretical one → the lab lets you switch profiles and watch it happen → Concept 14 turns to a portability interface next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Choosing a store" deep dive</b><em>Full method, every score citation, the naive-scoring pitfall, and The Decision Matrix lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 13 of 14 -- the concept Concept 12 named as forthcoming</h2></div></header>
+<p>This concept fills position 13 of Module 10's own 14-concept list: "Choosing a store by workload, governance, scale and cost." Concept 12's own scope section states its own boundary explicitly -- "no recommendation of one vendor over another -- that is Concept 13's job" -- and repeats the same line in its own worked example and concept-card sections. This concept is that job: a synthesis of Concepts 01-12's own already-established facts into a decision framework, not a re-derivation of any single fact and not a new benchmark. With this concept authored, Module 10's built set is the contiguous {1..13}.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>APPLY</span><h3>A two-step framework to six real systems</h3><p>Hard categorical constraint first, then a weighted score across four named axes -- workload, governance, scale, cost -- computed only for systems that survive step one.</p></article>
+<article class="info-card"><span>CITE</span><h3>Every score cell back to Concepts 01-12</h3><p>No invented benchmark numbers -- each of the 24 score cells (six systems × four axes) names the concept and fact it is based on.</p></article>
+<article class="info-card"><span>RUN</span><h3>Three named profiles to three named winners</h3><p>Profile A → Oracle. Profile B → Pinecone. Profile C → Milvus. Every weighted total checked by an independent node script, not typed in by hand.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>No recall/latency benchmark on real data, no claim that these scores are the only valid weighting, and no re-derivation of any Concept 01-12 fact -- only organization of facts already on record.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-01.html">Module 10 Concept 01</a></b> -- the store/database/search-engine taxonomy and the SQ8-compression cost fact, both reused in the governance and cost axes below.</li>
+<li><b><a href="module-10-concept-04.html">Module 10 Concept 04</a></b> -- tenant_id, pre/post-filter risk, and Postgres RLS, feeding the governance axis.</li>
+<li><b><a href="module-10-concept-07.html">Module 10 Concept 07</a></b> -- the Hybrid Vector Index and its own 4/6 → 6/6 recall proof, the only fact behind the workload axis's top score.</li>
+<li><b><a href="module-10-concept-10.html">Module 10 Concept 10</a></b> -- VPD, Unified Auditing, and RMAN, feeding Oracle's own governance score.</li>
+<li><b><a href="module-10-concept-11.html">Module 10 Concept 11</a></b> -- pgvector's own native CREATE POLICY and the self-hosted/open-source framing behind Profile C's own hard constraint.</li>
+<li><b><a href="module-10-concept-12.html">Module 10 Concept 12</a></b> -- all four vendors' own tenant mechanisms and their own compare-table cost row, feeding every non-Oracle, non-pgvector score cell below.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>A leaderboard is not a decision</h2></div></header>
+<p>It is tempting to rank six systems on one combined score and call the top row "the answer." Concept 12's own compare-table already priced four vendors along one shared axis (cost) without ranking them, precisely because a single number hides which trade-off matters for a given workload. This concept keeps that discipline but goes one step further: it names the axes, weights them per workload, and -- critically -- removes categorically ineligible systems before any number is computed at all. A profile that mandates open-source infrastructure was never going to choose Pinecone, no matter what its score says; the hard constraint makes that explicit instead of letting the score hide it.</p>
+<div class="mental-compare">
+<div><span>ONE COMBINED SCORE</span><p>Ranks six systems on a single number. Hides which axis mattered and can crown an ineligible system if its other axes score high enough.</p></div>
+<div><span>THIS CONCEPT'S TWO-STEP FRAMEWORK</span><p>Removes ineligible systems first (hard constraint), then ranks only the survivors on a weighted, axis-by-axis score. The eligible pool changes with the workload, and so does the winner.</p></div>
+</div>
+<div class="callout warning"><b>Scope note</b>This concept does not claim its own four weights (2/3/1/1, 1/2/1/3, 1/1/3/2 for Profiles A/B/C) are universally correct. It claims only that the method -- filter, then weight-score -- is sound, and demonstrates it with weights grounded in each profile's own stated priority.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Hard constraint</td><td>A boolean eligibility test applied before scoring; a system that fails it is removed from the pool regardless of its axis scores</td><td>eligible(system) ∈ {true, false}</td></tr>
+<tr><td>Axis score</td><td>A 0-2 fit rating for one of four named axes (workload, governance, scale, cost), assigned per system and cited to a Concept 01-12 fact</td><td>score(system, axis) ∈ {0, 1, 2}</td></tr>
+<tr><td>Profile weight</td><td>A per-profile multiplier on each axis, reflecting how much that axis matters for this specific workload</td><td>weight(profile, axis) ∈ ℤ⁺</td></tr>
+<tr><td>Weighted total</td><td>The sum, over the four axes, of axis score times profile weight, computed only for systems that passed the hard constraint</td><td>total(system, profile) = Σ score(system, axis) × weight(profile, axis)</td></tr>
+<tr><td>Winner</td><td>The eligible system with the highest weighted total for a given profile; ties are reported, not broken arbitrarily</td><td>argmax over eligible(system) = true</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The six-by-four score table, every cell cited</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>System</th><th>Workload (0-2)</th><th>Governance (0-2)</th><th>Scale (0-2)</th><th>Cost (0-2)</th></tr></thead>
+<tbody>
+<tr><td>Oracle</td><td>2 -- Hybrid Vector Index, C07</td><td>2 -- VPD + Auditing + RMAN, C10</td><td>1 -- HNSW/IVF-analog indexes, C06; no explicit scale claim cited</td><td>0 -- self-managed; REBUILD_INDEX/RMAN/VPD upkeep, C09-C10; no managed option cited</td></tr>
+<tr><td>pgvector</td><td>1 -- no hybrid mechanism verified in this course, C11</td><td>2 -- native CREATE POLICY, engine-enforced, C11</td><td>1 -- HNSW/IVFFLAT knob-level control, C11; no explicit scale claim cited</td><td>1 -- open-source, self-hosted, no license cost, C11; no managed pgvector service cited</td></tr>
+<tr><td>Pinecone</td><td>1 -- no hybrid mechanism cited, C12</td><td>1 -- namespace, structural but no audit/backup cited, C04/C12</td><td>1 -- no explicit scale claim cited, C12</td><td>2 -- "no infrastructure to run," managed, C12 compare-table</td></tr>
+<tr><td>Qdrant</td><td>1 -- no hybrid mechanism cited, C12</td><td>0 -- payload pre-filter, caller-remembered risk, C12</td><td>1 -- no explicit scale claim cited, C12</td><td>1 -- self-hosted or managed, C12 compare-table</td></tr>
+<tr><td>Weaviate</td><td>1 -- no hybrid mechanism cited, C12</td><td>1 -- native tenant object, structural, C12</td><td>1 -- no explicit scale claim cited, C12</td><td>1 -- self-hosted or managed; setup-time cost cited, C12</td></tr>
+<tr><td>Milvus</td><td>1 -- no hybrid mechanism cited, C12</td><td>0 -- filter-expression string, "weakest structural guarantee," C12</td><td>2 -- explicitly "built for billion-scale search," C12</td><td>1 -- self-hosted, embedded, or managed (Zilliz), C12</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Reading the ones</b>A score of 1 is not "bad" -- it means Concepts 01-12 never established a fact on that axis for that system, positive or negative. Only Oracle's workload score, Milvus's scale score, and the governance/cost extremes are backed by an explicit cited claim; every other cell is a deliberate, honest "unestablished here," not a hidden penalty.</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Two hard constraints, three profiles, three pools</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1013-s07-title">
+<strong class="concept-visual-title" id="c1013-s07-title">VISUAL · WHICH HARD CONSTRAINT SHRINKS WHICH POOL</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Two hard constraints removing different systems from the eligible pool">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>No hard constraint</b><small>Profile A -- all six systems eligible</small></div>
+<div class="diagram-node"><b>"Managed option cited" constraint</b><small>Profile B -- removes Oracle, pgvector</small></div>
+<div class="diagram-node"><b>"Open-source cited" constraint</b><small>Profile C -- removes Oracle, Pinecone</small></div>
+</div>
+</div>
+<ol class="diagram-key"><li><b>Profile A pool:</b> all six -- the profile's own priority (governance weight 3) does the work, no eligibility gate needed.</li><li><b>Profile B pool:</b> Pinecone, Qdrant, Weaviate, Milvus -- Oracle and pgvector never had a managed option cited in this course, so a "no ops team" workload disqualifies both before scoring.</li><li><b>Profile C pool:</b> pgvector, Qdrant, Weaviate, Milvus -- Oracle and Pinecone are proprietary per Concept 12's own s05 citations, disqualifying both under an open-source mandate.</li></ol>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits next to the course's own build</h2></div></header>
+<div class="pipeline-preview">
+<span>This course's own real build — Oracle (Concepts 05-10), pgvector (Concept 11), four vendors (Concept 12)</span><i>↓</i><span class="hot">This concept's own framework — hard constraint, then weighted score, applied to three named profiles</span><i>↓</i><span>A per-workload store choice, not a single course-wide verdict</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>One formula, computed once per system per profile</h2></div></header>
+<p>For a system s and a profile p, the weighted total is <code>total(s,p) = score(s,workload)×w(p,workload) + score(s,governance)×w(p,governance) + score(s,scale)×w(p,scale) + score(s,cost)×w(p,cost)</code>, computed only when <code>eligible(s,p)</code> is true. This concept introduces no new distance math -- Concept 09's cosine-distance derivation and Concept 11's five-vector ranking check are cited, not repeated. The only new arithmetic here is this weighted sum, applied to the Section 06 score table and the three profiles' own weights below.</p>
+<div class="callout"><b>Verification method</b>Every total reported in Sections 10-11 was computed by an independent node script this session -- the same script, not hand-arithmetic, run once per profile with its own weights and hard constraint, exactly as Concept 11 verified its own five-vector ranking claim by script rather than by typing numbers in by hand.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Profile A: a regulated complaints workload on an existing Oracle estate</h2></div></header>
+<p>Weights: workload=2, governance=3, scale=1, cost=1 -- governance dominates, because the workload's own priority is engine-enforced tenant isolation and an audit trail, not raw scale. Hard constraint: none -- every system is technically eligible to run a complaints workload, so no vendor is removed before scoring.</p>
+<table class="worked-table">
+<thead><tr><th>System</th><th>Workload×2</th><th>Governance×3</th><th>Scale×1</th><th>Cost×1</th><th>Total</th></tr></thead>
+<tbody>
+<tr><td>Oracle</td><td>4</td><td>6</td><td>1</td><td>0</td><td><b>11</b></td></tr>
+<tr><td>pgvector</td><td>2</td><td>6</td><td>1</td><td>1</td><td>10</td></tr>
+<tr><td>Pinecone</td><td>2</td><td>3</td><td>1</td><td>2</td><td>8</td></tr>
+<tr><td>Weaviate</td><td>2</td><td>3</td><td>1</td><td>1</td><td>7</td></tr>
+<tr><td>Milvus</td><td>2</td><td>0</td><td>2</td><td>1</td><td>5</td></tr>
+<tr><td>Qdrant</td><td>2</td><td>0</td><td>1</td><td>1</td><td>4</td></tr>
+</tbody>
+</table>
+<p><b>Winner: Oracle, 11, one clear point ahead of pgvector's 10.</b> The margin is thin -- it is Oracle's own workload score (its hybrid index, Concept 07) that breaks a governance tie with pgvector, not governance alone. This matches, but does not simply restate, this course's own choice of Oracle as the primary build path.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Profiles B and C, side by side</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>PROFILE B</span><h3>Multi-tenant SaaS, no ops team -- winner: Pinecone, 10</h3><p>Weights workload=1, governance=2, scale=1, cost=3. Hard constraint: "managed option cited" removes Oracle and pgvector -- neither had a hands-off deployment cited anywhere in this course. Among the remaining four, Pinecone's cost score (2, "no infrastructure to run") and governance score (1, a structural namespace) outweigh Weaviate (7), Milvus (6), and Qdrant (5).</p></article>
+<article class="info-card"><span>PROFILE C</span><h3>Open-source mandate, billion-scale roadmap -- winner: Milvus, 9</h3><p>Weights workload=1, governance=1, scale=3, cost=2. Hard constraint: "open-source cited" removes Oracle and Pinecone -- both proprietary per Concept 12's own s05 citations. Among the remaining four, Milvus's scale score (2, "built for billion-scale search") carries a scale weight of 3, edging out pgvector (8), Weaviate (7), and Qdrant (6).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The verification script, in full</h2></div></header>
+<div class="code-block">
+<span class="code-label">NODE · SCORE TABLE, HARD CONSTRAINTS, AND WEIGHTED TOTALS (run live this session)</span>
+<pre><code>const systems = ['Oracle', 'pgvector', 'Pinecone', 'Qdrant', 'Weaviate', 'Milvus'];
+
+const scores = {
+  workload:   { Oracle: 2, pgvector: 1, Pinecone: 1, Qdrant: 1, Weaviate: 1, Milvus: 1 },
+  governance: { Oracle: 2, pgvector: 2, Pinecone: 1, Qdrant: 0, Weaviate: 1, Milvus: 0 },
+  scale:      { Oracle: 1, pgvector: 1, Pinecone: 1, Qdrant: 1, Weaviate: 1, Milvus: 2 },
+  cost:       { Oracle: 0, pgvector: 1, Pinecone: 2, Qdrant: 1, Weaviate: 1, Milvus: 1 },
+};
+
+const managedOptionCited = { Oracle: false, pgvector: false, Pinecone: true, Qdrant: true, Weaviate: true, Milvus: true };
+const openSourceCited    = { Oracle: false, pgvector: true,  Pinecone: false, Qdrant: true, Weaviate: true, Milvus: true };
+
+function rank(weights, hardConstraint) {
+  const pool = hardConstraint ? systems.filter(s => hardConstraint[s]) : systems.slice();
+  return pool
+    .map(s => ({
+      system: s,
+      total: scores.workload[s]   * weights.workload
+           + scores.governance[s] * weights.governance
+           + scores.scale[s]      * weights.scale
+           + scores.cost[s]       * weights.cost,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+rank({ workload: 2, governance: 3, scale: 1, cost: 1 }, null);                    // Profile A -> Oracle, 11
+rank({ workload: 1, governance: 2, scale: 1, cost: 3 }, managedOptionCited);       // Profile B -> Pinecone, 10
+rank({ workload: 1, governance: 1, scale: 3, cost: 2 }, openSourceCited);         // Profile C -> Milvus, 9</code></pre>
+</div>
+<p>Run this session with <code>node -e</code>, no dependencies. The output matches Sections 10-11 exactly; Section 16 reruns the last line with <code>hardConstraint</code> set to <code>null</code> to show what changes.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>What's cited here, and what isn't</h2></div></header>
+<p>This concept fetches no new external source. Every fact behind Section 06's score table was already fetched live and cited in an earlier concept: Oracle's Hybrid Vector Index and its recall proof (<a href="module-10-concept-07.html">Concept 07</a>), Oracle's VPD/Auditing/RMAN and pgvector's native CREATE POLICY (<a href="module-10-concept-10.html">Concept 10</a>, <a href="module-10-concept-11.html">Concept 11</a>), and all four managed/specialist vendors' own tenant mechanisms, cost rows, and open-source-versus-proprietary status (<a href="module-10-concept-12.html">Concept 12</a>, specifically its own Section 05 vendor definitions and Section 15 compare-table). What is new in this concept is the organization -- the hard-constraint step, the axis weights, and the node script that sums them -- not any individual fact.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Decision Matrix</h2></div></header>
+<div class="lab">
+<p>Pick a profile below. Watch which systems the hard constraint removes, and how the remaining systems' weighted totals rank -- computed live from the same score table and weights as Sections 06 and 10-11, not pre-written per profile.</p>
+<div class="lab-actions" role="group" aria-label="Choose a workload profile" id="profileButtons_1013">
+<button type="button" class="secondary active" data-profile="a">Profile A — regulated Oracle shop</button>
+<button type="button" class="secondary" data-profile="b">Profile B — multi-tenant SaaS, no ops team</button>
+<button type="button" class="secondary" data-profile="c">Profile C — open-source mandate, billion-scale</button>
+</div>
+<div class="rank-chip-row" id="poolRow_1013" role="group" aria-label="Eligible and excluded systems for this profile"></div>
+<div class="metric-race" id="matrixRace_1013"></div>
+<div class="callout" id="matrixVerdict_1013" aria-live="polite">Select a profile above to compute its eligible pool and weighted winner.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">TRADE-OFFS</span><h2>What each profile's own winner costs, what it buys</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Profile → winner</th><th>Cost of this choice</th><th>What it buys</th></tr></thead>
+<tbody>
+<tr><td>A → Oracle</td><td>Self-managed operational upkeep -- REBUILD_INDEX after DML (C09), RMAN backup administration and VPD policy administration (C10)</td><td>The only system with a cited native hybrid mechanism and a cited engine-enforced audit trail together (C07, C10)</td></tr>
+<tr><td>B → Pinecone</td><td>Managed-only, usage-based billing; namespace isolation only, no audit/backup fact cited (C04, C12)</td><td>"No infrastructure to run" -- the only system in the eligible pool with the top cited cost score (C12 compare-table)</td></tr>
+<tr><td>C → Milvus</td><td>Filter-expression tenancy is caller-remembered, the weakest cited structural guarantee among the eligible pool (C12)</td><td>The only system in the eligible pool with an explicit cited billion-scale design claim (C12)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>SKIPPED HARD CONSTRAINT</span><h3>Profile C's own weights, run with no eligibility filter, tie Pinecone with Milvus at 9 each</h3><p>Cause: scoring all six systems on Profile C's weights (workload=1, governance=1, scale=3, cost=2) with no hard constraint gives Pinecone 9 and Milvus 9 -- a tie for first, even though Pinecone is proprietary and managed-only, the opposite of an open-source mandate. Fix: apply the "open-source cited" hard constraint before scoring, which removes Pinecone (and Oracle) from the pool entirely, leaving Milvus the clear winner at 9 against pgvector's 8.</p></article>
+<article class="info-card"><span>WRONG-PROFILE REUSE</span><h3>Applying Profile A's own winner (Oracle) to a Profile B workload</h3><p>Cause: assuming one workload's winner generalizes. Fix: Profile B's own hard constraint removes Oracle before scoring -- not because Oracle scored badly, but because no managed, hands-off deployment of it was ever cited in this course, and Profile B's workload explicitly has no ops team to run a self-managed system.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The highest-scoring system on any weighting is always a valid pick</td><td>False -- Section 16 shows Profile C's own naive, unfiltered scoring tying Pinecone for first despite an explicit open-source mandate. The hard-constraint step exists precisely to catch this.</td></tr>
+<tr><td>A score of 1 means "this system is mediocre at this axis"</td><td>False -- most 1s in Section 06's table mean no fact in Concepts 01-12 established a claim on that axis for that system, not that the system was tested and found average.</td></tr>
+<tr><td>Oracle "wins" this framework overall</td><td>Not established here -- Oracle wins only Profile A, whose weights and eligible pool favor it. Profiles B and C both produce a different winner from the same six-system table.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle yet</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A framework and a worked demonstration, not a benchmark</b><p>This concept organizes Concepts 01-12's own facts into scores and weights, and verifies the arithmetic by script. It does not measure real recall, latency, or dollar cost on this course's own data for any of the six systems -- none of that was run this session, and the axis scores are an editorial synthesis of cited facts, not a performance measurement.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 13/14</b><p>Concept 14 (retrieval-store interfaces and a portability lab) remains unbuilt, named forward only.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can state the two-step order correctly</b><p>Hard constraint (eligibility) first, weighted axis score second -- never score first.</p></div>
+<div><b>I can name which two systems each hard constraint removes</b><p>"Managed option cited" removes Oracle and pgvector (Profile B). "Open-source cited" removes Oracle and Pinecone (Profile C).</p></div>
+<div><b>I can explain the Profile C tie without the hard constraint</b><p>Pinecone (9) and Milvus (9) tie on Profile C's own weights with no filter applied -- exactly why the filter step is not optional.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Section 06's own score table, design a fourth profile: "A single-tenant internal tool, no compliance requirement, run by one engineer who wants to spend as little time on infrastructure as possible." Write its own four weights (workload, governance, scale, cost) and state which hard constraint, if any, applies. Then compute which of the six systems wins, showing your arithmetic.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open one reasonable worked solution</summary>
+<div>One reasonable version: weights workload=1, governance=1, scale=1, cost=3 (cost dominates; the stated priority is minimizing infrastructure time), hard constraint = "managed option cited" (one engineer, no ops time, mirrors Profile B's own reasoning). That constraint removes Oracle and pgvector, leaving Pinecone, Qdrant, Weaviate, Milvus. Pinecone's cost score of 2 (weight 3 = 6) plus workload 1, governance 1, scale 1 gives 9; Weaviate totals 1+1+1+3=6; Milvus totals 1+0+2+3=6; Qdrant totals 1+0+1+3=5. Winner: Pinecone, 9 -- the same winner as Profile B, because the two profiles share the same underlying "no ops capacity" pressure even though their stated scenarios differ.</div>
+</details>
+<p>Teach-back: why do two profiles with different stated scenarios (a startup team and a solo engineer) land on the same winner here?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Choosing a store by workload, governance, scale and cost</h3><ul><li><b>The claim:</b> a two-step framework -- hard constraint, then weighted axis score -- turns Concepts 01-12's own facts into three different, defensible winners for three named profiles.</li><li><b>The one surprise:</b> skipping the hard-constraint step lets a categorically disqualified vendor (Pinecone, under Profile C's own open-source mandate) tie for first on the numbers alone.</li><li><b>What's out of scope:</b> a real recall/latency/dollar benchmark on this course's own data -- these are cited-fact scores, not measurements.</li></ul></div>
+<div><h3>Module 10 · position 13/14</h3><p>Built set now the contiguous {1..13}. Concept 14 (a portability interface lab) is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why apply a hard constraint before a weighted score, rather than just giving an ineligible system a very low axis score?</summary><div>Because a low score can still be outweighed by high scores on other axes if the weights are large enough -- Section 16 shows exactly this, where Pinecone's high cost score under Profile C's own weights makes it tie for first despite scoring 0 on nothing in particular. A hard constraint removes it from the pool entirely, regardless of what the rest of its scores are, which is the only way to guarantee a categorically wrong answer never wins.</div></details>
+<details class="quiz"><summary>Conceptual: name one axis where this concept's score table gives most systems a 1, and explain why that isn't a hidden penalty.</summary><div>The workload axis: only Oracle scores 2 (its own cited Hybrid Vector Index, Concept 07); every other system scores 1, not 0, because Concepts 01-12 never tested or cited a hybrid mechanism for pgvector, Pinecone, Qdrant, Weaviate, or Milvus -- "untested here" is scored as neutral, not as a demonstrated weakness.</div></details>
+<details class="quiz"><summary>Coding: given the node script in Section 12, what is the one-line change needed to see Profile B's own winner without its hard constraint applied?</summary><div>Change the third argument of the corresponding rank() call from managedOptionCited to null -- e.g. rank({workload:1,governance:2,scale:1,cost:3}, null) -- which scores all six systems instead of only the four with a managed option cited.</div></details>
+<details class="quiz"><summary>System design: a team tells you "Oracle won Concept 13's own framework, so we're using Oracle." What's wrong with that reasoning, based only on what this concept established?</summary><div>Oracle won specifically Profile A, whose weights (governance weight 3) and unfiltered eligible pool favor exactly what Oracle's own cited facts are strongest at (VPD, Auditing, RMAN, plus the Hybrid Vector Index). Profiles B and C, built from different stated priorities, produce Pinecone and Milvus instead from the identical six-system score table. "Oracle won the framework" is not a fact this concept establishes -- "Oracle won one specific, named profile" is.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="module-10-concept-01.html"><b>Module 10 Concept 01 — Vector store versus vector database versus search engine</b><br><span>Reused for the taxonomy and the SQ8-compression cost fact behind the cost axis.</span></a>
+<a href="module-10-concept-04.html"><b>Module 10 Concept 04 — Metadata, tenant and authorization filters in SQL</b><br><span>Reused for tenant_id, pre/post-filter risk, and Postgres RLS, feeding the governance axis.</span></a>
+<a href="module-10-concept-07.html"><b>Module 10 Concept 07 — Oracle Text and vector hybrid retrieval</b><br><span>Reused for the Hybrid Vector Index and its own 4/6 → 6/6 recall proof, the sole basis for the workload axis's top score.</span></a>
+<a href="module-10-concept-10.html"><b>Module 10 Concept 10 — Oracle security and operational considerations for RAG</b><br><span>Reused for VPD, Unified Auditing, and RMAN, feeding Oracle's own governance and cost scores.</span></a>
+<a href="module-10-concept-11.html"><b>Module 10 Concept 11 — PostgreSQL and pgvector portability comparison</b><br><span>Reused for pgvector's native CREATE POLICY and the self-hosted/open-source framing behind Profile C's own hard constraint.</span></a>
+<a href="module-10-concept-12.html"><b>Module 10 Concept 12 — Managed and specialist stores: Pinecone, Qdrant, Weaviate and Milvus</b><br><span>Reused for all four vendors' own tenant mechanisms, open-source/proprietary status, and cost compare-table row.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · POSITION 13/14</span>
+<h3>Six real systems. One framework, three different winners.</h3>
+<p>You can now apply a two-step framework -- hard constraint, then weighted four-axis score -- to any named workload built from this course's own facts, and explain why three different profiles produce three different, defensible winners from the same six-system table. You can also name the exact failure mode of skipping the hard-constraint step, because Section 16 showed it happening.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Decision Matrix ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at position 13 of 14. Concept 14 (retrieval-store interfaces and a portability lab) is next.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 13 · Complete</p>
+<a href="module-10-concept-12.html">← Concept</a>
+</footer>
+</body>
+</html>

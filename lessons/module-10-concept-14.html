@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 13 chose a store per workload; it never asked what happens when that choice needs to change later. This concept designs a small, store-agnostic interface -- three methods, upsert/query/delete, named after the same jobs LangChain's own real VectorStore ABC (Concept 01's own citation: add_texts/similarity_search/delete) already does -- and implements it three real ways: Oracle's python-oracledb (Concept 08-09's own cited syntax), PostgreSQL's pgvector through psycopg (a new real driver, live-verified this session, since Concept 11 only ever cited raw SQL), and Pinecone's own SDK (Concept 12's own upsert/query citations, plus a new live-verified delete citation). The caller-side code -- three method calls -- never changes across all three adapters. Three real things do not survive the port and never will, because they were never part of the interface's contract in the first place: schema DDL, index DDL, and the tenant-isolation mechanism, the same three things Concept 11 and Concept 12 already found breaking, independently, twice.">
+<title>Retrieval-store interfaces and database portability lab — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-14.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 14 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 14</p>
+<h1>Three real adapters.<br><em>One caller, zero changes.</em></h1>
+<p class="lesson-lead">Concept 13 chose a store per workload -- it never asked what happens when a workload's own choice needs to change later, after real code already calls that store directly. This concept answers that: a small, store-agnostic interface -- upsert, query, delete -- named after the same jobs Concept 01's own cited LangChain <code>VectorStore</code> ABC already performs (<code>add_texts</code>/<code>similarity_search</code>/<code>delete</code>), implemented three real ways underneath: Oracle's own <code>python-oracledb</code> (Concepts 08-09), PostgreSQL's pgvector through <code>psycopg</code> (a real driver never cited before this concept, live-verified this session), and Pinecone's own SDK (Concept 12, plus one new live-verified delete citation). The caller's three method calls stay byte-for-byte identical no matter which adapter sits underneath. Three real things do not, and structurally cannot: schema DDL, index DDL, and the tenant mechanism -- the exact three things Concepts 11 and 12 already found breaking, independently, twice before this concept ever asked.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourteenth and final concept in Module 10's own 14-concept list -- the built set is now the contiguous {1..14}, closing the module</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's LangChain VectorStore ABC citation; Concept 03-04's chunk_id/tenant_id schema; Concepts 08-09's python-oracledb read/write/delete syntax; Concept 11's pgvector SQL and native RLS; Concept 12's Pinecone upsert/query syntax and open-source/proprietary status; Concept 13's own hard-constraint framing</b></div>
+<div><span>BEGINNER GOAL</span><b>Write one abstract three-method contract, implement it for Oracle, pgvector and Pinecone using each one's own real cited syntax, and name the exact three things that stay outside that contract no matter which adapter is chosen</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">An interface is a promise about the caller, not about the vendor</h2>
+</div>
+<p>This concept adds no new vendor and re-derives no fact from Concepts 01-13. What it adds is a boundary: one small contract -- <code>upsert</code>, <code>query</code>, <code>delete</code> -- that every store this module named can implement, so the code that calls a vector store never has to know or care which one is underneath. The promise is narrow on purpose: it covers exactly those three operations, and nothing about schema, indexing, or tenant isolation, because Concepts 11 and 12 already proved those three things don't share syntax across any two of these systems.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Three methods, one contract, three real bodies underneath</h3>
+<p>A store-agnostic interface names the operations a caller needs -- <code>upsert(chunk_id, embedding)</code>, <code>query(vector, tenant_id, k)</code>, <code>delete(chunk_id)</code> -- and says nothing about how any one system performs them. Concept 01 already cited a real version of exactly this idea: LangChain's own <code>VectorStore</code> abstract base class, with methods <code>add_texts</code>, <code>similarity_search</code>, and <code>delete</code>, "an abstraction other backends implement, not storage itself." This concept builds a smaller version of that same idea using this module's own three real systems -- Oracle, pgvector, Pinecone -- as the backends.</p>
+<div class="beginner-memory"><b>First memory:</b> the interface is a promise about the <em>caller's</em> code. It says nothing about the vendor's schema, index, or tenant mechanism -- those stay the adapter's own problem, every single time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 13 chose a store. Nobody asked what a later change costs.</h3>
+<p>Concept 13's own framework picked Oracle for Profile A, Pinecone for Profile B, and Milvus for Profile C -- a real, defensible choice per workload. But every one of Concepts 05-12's own code examples called that system's real SDK directly from application code. If a Profile-B team's workload later needs Profile A's governance, or a startup outgrows Pinecone's own cost curve, every caller of the vector store has to be found and rewritten. An interface moves that risk into one place -- the adapter -- instead of scattering it through the whole codebase.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same three lines, three completely different real bodies</h3>
+<p>Caller code, unchanged regardless of which adapter is wired in: <code>store.upsert("c007", embedding)</code>, then <code>store.query(query_embedding, tenant_id="acme", k=5)</code>, then <code>store.delete("c007")</code>. Underneath, Oracle's adapter runs <code>cursor.execute("insert into embeddings...", [...])</code> (Concept 08's own cited syntax); pgvector's adapter runs <code>cur.execute("INSERT INTO embeddings... VALUES (%s, %s)", (...))</code> through <code>psycopg</code>, a real Python driver never cited in this course before now; Pinecone's adapter runs <code>index.upsert(vectors=[...], namespace="acme")</code> (Concept 12's own cited syntax). Three real bodies, one caller.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>The interface hides the call shape. It cannot hide the setup.</h3>
+<p>Each adapter satisfies the same three-method contract using that vendor's own real API, so the caller's three lines never change. But three things sit above and outside every adapter's method bodies, done once at setup time, not per call: the column/type declaration for the embedding itself (Oracle's <code>VECTOR(384, FLOAT32)</code>, Concept 05; pgvector's <code>vector(384)</code>, Concept 11; Pinecone's index-level <code>dimension=384</code> parameter, Concept 12 -- not a column at all); the index that makes search fast (Oracle's <code>CREATE VECTOR INDEX</code>, Concept 06; pgvector's <code>CREATE INDEX ... USING hnsw</code>, Concept 11; Pinecone's <code>ServerlessSpec(...)</code>, Concept 12 -- no DDL, fully managed); and the tenant-isolation mechanism (Oracle's <code>DBMS_RLS.ADD_POLICY</code>, Concept 10; pgvector's native <code>CREATE POLICY</code>, Concept 11; Pinecone's <code>namespace</code> argument, Concept 12). None of those three is a method on the interface. All three must be redone by hand, in that vendor's own real syntax, every time the adapter changes.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One interface, three adapters, one real system each</h3>
+<div class="pipeline-preview">
+<span>Caller code — store.upsert(...) / store.query(...) / store.delete(...), never rewritten</span><i>↓</i><span class="hot">The interface — routes to whichever adapter is configured</span><i>↓</i><span>Oracle adapter, pgvector adapter, or Pinecone adapter — three different real SDK calls, one chosen at a time</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What the interface covers versus what it never touches</h3>
+<div class="distinction-table" role="table" aria-label="Interface-covered operations versus adapter-only setup">
+<div role="row"><b role="cell">Layer</b><b role="cell">What lives there</b></div>
+<div role="row"><span role="cell">Interface (portable)</span><span role="cell">Exactly three methods -- upsert, query, delete. Callable identically no matter which of the three real adapters is wired in.</span></div>
+<div role="row"><span role="cell">Adapter (not portable)</span><span role="cell">The real SDK call bodies (Section 12), plus the schema DDL, index DDL, and tenant mechanism (Section 04) -- rewritten from that vendor's own docs every time, never templated from another adapter.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"An interface makes the whole system vendor-neutral."</b><p>Only the three named operations port. Schema, indexing, and tenant isolation were never part of the contract -- Section 04 names exactly three things that must be rewritten by hand for every new adapter, every time, with no shortcut the interface provides.</p></div>
+<div><b>"Once one adapter is written, the next one is a quick copy."</b><p>Concept 12 already established zero shared syntax across four non-Oracle vendors. Each adapter is written from that vendor's own real documentation, the same way Concept 12 verified all four live -- not templated from a sibling adapter.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A design pattern, not a change to the build</b><p>This concept changes nothing about Concepts 05-10's own Oracle build. It shows how that build, plus Concept 11's pgvector translation and Concept 12's Pinecone citations, could sit behind one shared interface -- useful if a later workload needs Concept 13's own different winner.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 14/14 -- COMPLETE</b><p>The built set is now the contiguous {1..14}. Module 11, "Baseline RAG from first principles," is named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the interface's three methods and their real LangChain analogue</b><p>upsert/query/delete here; add_texts/similarity_search/delete in LangChain's own cited VectorStore ABC (Concept 01) -- the same three jobs, named slightly differently.</p></div>
+<div><b>Name the three things that never port, no matter the adapter</b><p>Schema DDL, index DDL, and the tenant mechanism -- outside the interface's contract entirely, and the same three things Concepts 11-12 already found breaking.</p></div>
+<div><b>Explain why the caller's code never changes across adapters</b><p>The interface's method signatures are fixed; only the adapter's method bodies (Section 12's three real code blocks) differ per vendor.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Which real, already-cited course fact does this concept's interface reuse for its three method names?</li>
+<li>Name one thing that must be redone by hand every time you swap adapters, and cite which earlier concept established that fact for Oracle.</li>
+<li>Try it: open "The Portability Lab" below and switch adapters to watch the caller code stay fixed while everything else changes.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 14 OF 14 -- MODULE COMPLETE</h3>
+<p>This concept closes Module 10 at 14 of 14 concepts. It designed a three-method store-agnostic interface, implemented it for Oracle, pgvector, and Pinecone using each system's own real cited syntax, and named the exact three things -- schema DDL, index DDL, and the tenant mechanism -- that stay outside that contract regardless of which adapter is chosen. Module 11, "Baseline RAG from first principles," is named forward only here, not scoped or built in this concept.</p>
+<a class="button primary" href="module-10-concept-13.html">← Back to Concept 13's decision framework</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One contract, three real bodies, three things that never port</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>The three-method contract</b><small>Anchored to Concept 01's own cited LangChain VectorStore ABC.</small></a>
+<a href="#s12"><span>02</span><b>Three real adapters, in full</b><small>Oracle, pgvector via psycopg, and Pinecone -- each implementing the identical contract.</small></a>
+<a href="#s14"><span>03</span><b>The Portability Lab</b><small>The lab -- swap adapters and watch the caller code stay fixed.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, the psycopg and Pinecone-delete verification, and the fact table.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 14 path:</b> Concept 01 already cited a real store-agnostic abstraction, LangChain's own VectorStore ABC, without building one → this concept designs a smaller three-method version of that same idea and implements it against this module's own three real systems → Oracle's adapter reuses Concepts 08-09's own cited python-oracledb syntax verbatim → pgvector's adapter needed a real Python driver Concept 11 never cited, so psycopg's own basic-usage documentation is fetched live this session → Pinecone's adapter reuses Concept 12's own upsert/query citations and adds one new live-verified citation for its delete method → all three adapters are checked side by side, and the caller's own three lines never change → but schema DDL, index DDL, and the tenant mechanism -- named once per adapter -- are outside the contract entirely, the same three things Concepts 11 and 12 already found breaking twice before → the lab lets you swap adapters and watch exactly this happen → Module 10 closes at 14 of 14.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Retrieval-store interfaces" deep dive</b><em>Full citations, the psycopg verification, all three adapters in full, and The Portability Lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 14 of 14 -- Module 10's own closing concept</h2></div></header>
+<p>This concept fills position 14, the last, of Module 10's own 14-concept list: "Retrieval-store interfaces and database portability lab." Concept 13's own scope section named it explicitly, forward only -- "Concept 14 (retrieval-store interfaces and a portability lab) remains unbuilt, named forward only." This concept is that build: a small store-agnostic interface, implemented against three of this module's own real, already-cited systems. With this concept authored, Module 10's built set is the full, contiguous {1..14} -- the module is complete.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>DESIGN</span><h3>A three-method store-agnostic contract</h3><p>upsert/query/delete, anchored to Concept 01's own cited LangChain VectorStore ABC (add_texts/similarity_search/delete) rather than invented from nothing.</p></article>
+<article class="info-card"><span>IMPLEMENT</span><h3>The same contract three real ways</h3><p>Oracle via python-oracledb (Concepts 08-09), pgvector via psycopg (new this session, live-verified), Pinecone via its own SDK (Concept 12, plus one new live-verified delete citation).</p></article>
+<article class="info-card"><span>NAME</span><h3>The three things that never port</h3><p>Schema DDL, index DDL, and the tenant mechanism -- outside the interface's contract entirely, in every one of the three adapters.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>No production-grade connection pooling, retry, or async handling for any of the three adapters -- each is the minimal real call shape needed to satisfy the contract, not a deployable client library.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-01.html">Module 10 Concept 01</a></b> -- LangChain's own <code>VectorStore</code> ABC citation (<code>add_texts</code>/<code>similarity_search</code>/<code>delete</code>), the real precedent this concept's own interface is modeled on.</li>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> and <b><a href="module-10-concept-04.html">Module 10 Concept 04</a></b> -- the chunk_id/tenant_id schema every adapter below writes and reads.</li>
+<li><b><a href="module-10-concept-08.html">Module 10 Concept 08</a></b> and <b><a href="module-10-concept-09.html">Module 10 Concept 09</a></b> -- python-oracledb's own real bind-variable insert/select/delete syntax, reused verbatim in the Oracle adapter.</li>
+<li><b><a href="module-10-concept-11.html">Module 10 Concept 11</a></b> -- pgvector's own real SQL (vector(384), &lt;=&gt; operator, CREATE POLICY), never previously paired with a Python driver -- this concept adds that driver.</li>
+<li><b><a href="module-10-concept-12.html">Module 10 Concept 12</a></b> -- Pinecone's own real upsert/query syntax and namespace mechanism, reused verbatim; this concept adds one new delete citation.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>The interface is the part that stops moving</h2></div></header>
+<p>Every one of Concepts 05-12's own code examples called a real vendor SDK directly. That's fine for demonstrating what each vendor's own API looks like, which was those concepts' own job. It's a real liability if that same direct-call pattern is what application code actually ships with, because Concept 13 already showed three different real workloads landing on three different real winners -- meaning a real team's own store choice can legitimately change. An interface is the one piece of the system designed to not change when that happens: the caller keeps calling <code>upsert</code>/<code>query</code>/<code>delete</code>, and only the adapter underneath is swapped.</p>
+<div class="mental-compare">
+<div><span>DIRECT SDK CALLS (Concepts 05-12's own examples)</span><p>Correct for showing one vendor's real syntax. A real liability if application code calls the vendor SDK directly everywhere, because every call site must be found and rewritten to switch vendors.</p></div>
+<div><span>THIS CONCEPT'S INTERFACE</span><p>One contract, three adapters. Switching vendors means writing or swapping one adapter, not finding every call site in the application.</p></div>
+</div>
+<div class="callout warning"><b>Scope note</b>This concept does not claim its own three-method contract is the only correct shape for a retrieval interface -- LangChain's own real ABC has more methods than these three. It claims only that the same underlying idea, kept deliberately small, is enough to prove the point: the caller's code can stay fixed while the vendor underneath changes completely.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Interface (this concept)</td><td>A fixed three-method contract a caller depends on -- upsert, query, delete -- independent of which real system implements it</td><td>store.upsert(...) / store.query(...) / store.delete(...)</td></tr>
+<tr><td>Adapter</td><td>One concrete implementation of the interface for one real system, using that system's own real SDK or driver</td><td>OracleAdapter / PgvectorAdapter / PineconeAdapter</td></tr>
+<tr><td>LangChain VectorStore (cited, Concept 01)</td><td>A real, larger abstract base class this concept's own interface is a smaller version of; per its own docs, "Interface for vector store"</td><td>add_texts(...) / similarity_search(...) / delete(...)</td></tr>
+<tr><td>psycopg</td><td>PostgreSQL's own DB-API 2.0-style Python driver; new to this course as of this concept, per its own basic-usage documentation, fetched live this session</td><td>psycopg.connect(...) / cur.execute(sql, params)</td></tr>
+<tr><td>Non-portable setup (Section 06)</td><td>The three real, cited things that sit outside the interface's contract and must be redone by hand per adapter: schema DDL, index DDL, tenant mechanism</td><td>Not a method on the interface</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The contract, and the one real precedent it's modeled on</h2></div></header>
+<div class="core-block">
+<p>The interface this concept builds has exactly three methods: <code>upsert(chunk_id, embedding)</code> writes one chunk's embedding; <code>query(vector, tenant_id, k)</code> returns the k nearest chunks for one tenant; <code>delete(chunk_id)</code> removes one chunk. Concept 01's own citation already established that a real, larger version of this idea exists and ships in production: LangChain's own <code>VectorStore</code> class, documented as "Interface for vector store," with real methods <code>add_texts</code> (write), <code>similarity_search</code> (query), and <code>delete</code> (delete) -- "an abstraction other backends implement, not storage itself." This concept's own three methods map directly onto those three real jobs, kept intentionally smaller so all three adapters below fit in one lesson.</p>
+</div>
+<table class="worked-table">
+<thead><tr><th>This concept's method</th><th>LangChain's own real ABC method (Concept 01)</th><th>Job</th></tr></thead>
+<tbody>
+<tr><td><code>upsert</code></td><td><code>add_texts</code></td><td>Write one chunk's embedding into the store</td></tr>
+<tr><td><code>query</code></td><td><code>similarity_search</code></td><td>Return the k nearest chunks for one tenant</td></tr>
+<tr><td><code>delete</code></td><td><code>delete</code></td><td>Remove one chunk by id -- the one method where the two contracts even share a name</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One interface, three adapters, three real systems</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1014-s07-title">
+<strong class="concept-visual-title" id="c1014-s07-title">VISUAL · CALLER, INTERFACE, THREE ADAPTERS</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Caller code routed through one interface to three swappable real adapters">
+<div class="diagram-hub">
+<div class="diagram-node"><b>Oracle adapter</b><small>python-oracledb, Concepts 08-09</small></div>
+<div class="diagram-node hub-center active"><b>The interface</b><small>upsert / query / delete -- fixed, never rewritten</small></div>
+<div class="diagram-node"><b>pgvector adapter</b><small>psycopg, new this session</small></div>
+<div class="diagram-node"><b>Pinecone adapter</b><small>Pinecone SDK, Concept 12</small></div>
+</div>
+</div>
+<ol class="diagram-key"><li><b>Caller code:</b> three method calls, identical no matter which adapter is wired in -- shown once in Section 10, never repeated per adapter.</li><li><b>The interface:</b> the only fixed point. Its three method signatures are the entire portable surface.</li><li><b>Each adapter:</b> a completely different real body (Section 12) plus setup work the interface never sees (Section 06) -- schema DDL, index DDL, tenant mechanism.</li></ol>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits next to the course's own build</h2></div></header>
+<div class="pipeline-preview">
+<span>This course's own real build — Oracle (Concepts 05-10), pgvector (Concept 11), Pinecone (Concept 12)</span><i>↓</i><span class="hot">This concept's own interface — one contract, three adapters over those same three real systems</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>No new math -- the one shared number is still 384</h2></div></header>
+<p>This concept introduces no new math. Every adapter below writes and reads the same 384-dimension <code>all-MiniLM-L6-v2</code> embedding Concept 03 established, passed as <code>array.array("f", embedding)</code> to Oracle (Concept 08's own binding pattern), as a plain Python sequence to psycopg (Section 12), and as a plain list to Pinecone's <code>vectors=</code> argument (Concept 12). Distance math itself -- cosine, Euclidean -- is cited, not repeated: Concept 09's derivation and Concept 11's five-vector ranking check are the concepts that verified it.</p>
+<div class="callout"><b>Verification method</b>This concept's own new citations -- psycopg's basic-usage pattern and Pinecone's delete method -- were each fetched live this session (HTTP 200) and are quoted, not paraphrased from memory, in Sections 12-13 below.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One caller, three adapters, traced side by side</h2></div></header>
+<p>The caller's own code, written once against the interface and never rewritten below:</p>
+<div class="code-block">
+<span class="code-label">PYTHON · CALLER CODE (identical for all three adapters)</span>
+<pre><code>store.upsert("c007", embedding)
+results = store.query(query_embedding, tenant_id="acme", k=5)
+store.delete("c007")</code></pre>
+</div>
+<p>What each adapter does when those three lines run:</p>
+<table class="worked-table">
+<thead><tr><th>Adapter</th><th>upsert("c007", embedding) becomes</th><th>delete("c007") becomes</th></tr></thead>
+<tbody>
+<tr><td>Oracle</td><td><code>cursor.execute("insert into embeddings (chunk_id, embedding) values (:1, :2)", ["c007", array.array("f", embedding)])</code></td><td>Two deletes, child table first (Concept 09) -- <code>embeddings</code>, then <code>chunks</code></td></tr>
+<tr><td>pgvector</td><td><code>cur.execute("INSERT INTO embeddings (chunk_id, embedding) VALUES (%s, %s)", ("c007", str(embedding)))</code></td><td>Two deletes, same child-first order, <code>%s</code> placeholders instead of <code>:1</code>/<code>:2</code></td></tr>
+<tr><td>Pinecone</td><td><code>index.upsert(vectors=[{"id": "c007", "values": embedding}], namespace="acme")</code></td><td>One call -- <code>index.delete(ids=["c007"], namespace="acme")</code>, no child table to worry about</td></tr>
+</tbody>
+</table>
+<p>The caller's three lines never appear in this table because they never change. Only the adapter's own real body does -- and even the number of real calls needed differs (Oracle and pgvector need two deletes for one logical chunk removal; Pinecone needs one), a fact the interface's single <code>delete</code> method hides from the caller entirely.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Three adapters, three real driver families</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>ORACLE ADAPTER</span><h3>python-oracledb, bind variables, two-table delete</h3><p>Reuses Concept 08's own <code>array.array</code> binding and Concept 09's own child-table-first delete order verbatim. No new citation needed.</p></article>
+<article class="info-card"><span>PGVECTOR ADAPTER</span><h3>psycopg, %s placeholders, same two-table delete order</h3><p>Concept 11 only ever cited raw SQL, never a Python driver -- psycopg's own basic-usage documentation is fetched live this session to fill that gap.</p></article>
+<article class="info-card"><span>PINECONE ADAPTER</span><h3>Pinecone SDK, namespace argument, one-call delete</h3><p>Reuses Concept 12's own upsert/query citations; adds one new live-verified citation for <code>index.delete(ids=..., namespace=...)</code>, never cited in this course before now.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>All three adapters, in full</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · ORACLE ADAPTER (python-oracledb, Concepts 08-09's own cited syntax)</span>
+<pre><code>import oracledb
+import array
+
+class OracleAdapter:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def upsert(self, chunk_id, embedding):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "insert into embeddings (chunk_id, embedding) values (:1, :2)",
+            [chunk_id, array.array("f", embedding)],
+        )
+        self.connection.commit()
+
+    def query(self, vector, tenant_id, k):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            f"""
+            SELECT c.chunk_id, VECTOR_DISTANCE(e.embedding, :qv, COSINE) AS dist
+            FROM chunks c JOIN embeddings e ON e.chunk_id = c.chunk_id
+            WHERE c.tenant_id = :tenant
+            ORDER BY dist
+            FETCH FIRST {k} ROWS ONLY
+            """,
+            qv=array.array("f", vector), tenant=tenant_id,
+        )
+        return cursor.fetchall()
+
+    def delete(self, chunk_id):
+        cursor = self.connection.cursor()
+        cursor.execute("delete from embeddings where chunk_id = :1", [chunk_id])  # child first
+        cursor.execute("delete from chunks where chunk_id = :1", [chunk_id])      # parent second
+        self.connection.commit()</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">PYTHON · PGVECTOR ADAPTER (psycopg, real driver newly cited this session)</span>
+<pre><code>import psycopg
+
+class PgvectorAdapter:
+    def __init__(self, conninfo):
+        self.conn = psycopg.connect(conninfo)
+
+    def upsert(self, chunk_id, embedding):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO embeddings (chunk_id, embedding) VALUES (%s, %s)",
+                (chunk_id, str(embedding)),
+            )
+        self.conn.commit()
+
+    def query(self, vector, tenant_id, k):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT chunk_id, embedding <=> %s AS dist
+                FROM embeddings
+                WHERE tenant_id = %s
+                ORDER BY dist
+                LIMIT %s
+                """,
+                (str(vector), tenant_id, k),
+            )
+            return cur.fetchall()
+
+    def delete(self, chunk_id):
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM embeddings WHERE chunk_id = %s", (chunk_id,))  # child first
+            cur.execute("DELETE FROM chunks WHERE chunk_id = %s", (chunk_id,))      # parent second
+        self.conn.commit()</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">PYTHON · PINECONE ADAPTER (Concept 12's own citations, plus one new delete citation)</span>
+<pre><code>class PineconeAdapter:
+    def __init__(self, index):
+        self.index = index
+
+    def upsert(self, chunk_id, embedding):
+        self.index.upsert(
+            vectors=[{"id": chunk_id, "values": embedding}],
+            namespace="acme",
+        )
+
+    def query(self, vector, tenant_id, k):
+        results = self.index.query(
+            vector=vector, top_k=k, namespace=tenant_id, include_metadata=True,
+        )
+        return results.matches
+
+    def delete(self, chunk_id):
+        self.index.delete(ids=[chunk_id], namespace="acme")</code></pre>
+</div>
+<p>All three classes satisfy the identical contract -- <code>upsert(chunk_id, embedding)</code>, <code>query(vector, tenant_id, k)</code>, <code>delete(chunk_id)</code> -- with three completely different real method bodies. The caller code from Section 10 works unmodified against any one of the three.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>What's reused, and what's newly cited this session</h2></div></header>
+<p>The Oracle adapter reuses Concept 08's own <a href="https://python-oracledb.readthedocs.io/">python-oracledb documentation</a> citation and Concept 09's own child-table-first delete order -- no new fetch. The pgvector adapter's SQL reuses Concept 11's own pgvector <a href="https://github.com/pgvector/pgvector">GitHub README</a> citation; its Python driver is new. Psycopg's own <a href="https://www.psycopg.org/psycopg3/docs/basic/usage.html">"Basic module usage" documentation page</a> was fetched live this session (HTTP 200) and quotes, verbatim, <code>import psycopg</code>, <code>with psycopg.connect("dbname=test user=postgres") as conn:</code>, <code>with conn.cursor() as cur:</code>, <code>cur.execute("INSERT INTO test (num, data) VALUES (%s, %s)", (100, "abc'def"))</code>, and <code>conn.commit()</code> -- the exact call shape this concept's own pgvector adapter uses, with <code>%s</code> placeholders standing in contrast to Oracle's own <code>:1</code>/<code>:2</code> bind-variable syntax (Concept 08). The Pinecone adapter's upsert/query reuse Concept 12's own <a href="https://github.com/pinecone-io/pinecone-python-client">Pinecone Python SDK README</a> citation, including the confirmed <code>results.matches</code> return attribute. Pinecone's own delete method is newly cited this session from its <a href="https://docs.pinecone.io/guides/manage-data/delete-data">delete-data guide</a> (HTTP 200), which quotes <code>index.delete(ids=["id-1", "id-2"], namespace='example-namespace')</code> verbatim -- never cited anywhere in this course before this concept.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Portability Lab</h2></div></header>
+<div class="lab">
+<p>The caller code below never changes. Pick an adapter to see its own real implementation, plus the three things that sit outside the interface entirely and must be redone by hand for that specific system.</p>
+<div class="code-block">
+<span class="code-label">PYTHON · CALLER CODE (fixed -- does not change when you pick an adapter below)</span>
+<pre><code>store.upsert("c007", embedding)
+results = store.query(query_embedding, tenant_id="acme", k=5)
+store.delete("c007")</code></pre>
+</div>
+<div class="lab-actions" role="group" aria-label="Choose an adapter" id="adapterButtons_1014">
+<button type="button" class="secondary active" data-adapter="oracle">Oracle adapter</button>
+<button type="button" class="secondary" data-adapter="pgvector">pgvector adapter</button>
+<button type="button" class="secondary" data-adapter="pinecone">Pinecone adapter</button>
+</div>
+<div id="adapterPanel_1014"></div>
+<div class="rank-chip-row" id="breaksRow_1014" role="group" aria-label="What does not port for this adapter"></div>
+<div class="callout" id="portabilityVerdict_1014" aria-live="polite">Select an adapter above to see its real code and its own three non-portable setup facts.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">TRADE-OFFS</span><h2>What the interface costs, what it buys</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Choice</th><th>Cost</th><th>What it buys</th></tr></thead>
+<tbody>
+<tr><td>Writing the interface at all</td><td>One extra layer of indirection; every real method call now goes through an adapter object instead of the vendor SDK directly</td><td>A store swap touches one adapter, not every call site in the application</td></tr>
+<tr><td>Keeping the contract to three methods</td><td>Vendor-specific power -- Oracle's hybrid index, Pinecone's namespace-level isolation -- has no method of its own on the interface</td><td>The contract stays small enough that all three real systems in this module can implement it without a fourth "capabilities" method</td></tr>
+<tr><td>Leaving schema/index/tenant outside the contract</td><td>Swapping adapters is never a zero-work operation -- three real things must be redone by hand every time (Section 06)</td><td>Honesty: the interface never pretends to hide work that Concepts 11-12 already proved doesn't port</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>ASSUMED FULL PORTABILITY</span><h3>A team swaps the Oracle adapter for Pinecone and expects a zero-work migration</h3><p>Cause: believing the interface makes the whole system vendor-neutral. Fix: Section 04's own three things -- schema, index, tenant mechanism -- were never part of the contract. Pinecone's own <code>ServerlessSpec</code> setup and namespace-based tenancy must be configured by hand, same as if no interface existed.</p></article>
+<article class="info-card"><span>COPIED A FILTER ACROSS ADAPTERS</span><h3>A team writes the pgvector adapter's <code>WHERE tenant_id = %s</code> clause inside the Pinecone adapter's query method</h3><p>Cause: assuming the tenant check is portable because both adapters satisfy the same interface method. Fix: Pinecone's real mechanism is the <code>namespace=</code> argument (Concept 12) -- there is no WHERE clause to write, and passing one is simply not part of Pinecone's own real API.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>An interface abstraction makes the whole system vendor-neutral</td><td>False -- only the three named operations port. Schema DDL, index DDL, and the tenant mechanism are outside the contract in every one of the three adapters built here.</td></tr>
+<tr><td>Once one adapter exists, later adapters are quick copies of it</td><td>False -- Concept 12 already found zero shared syntax across four non-Oracle vendors. Each adapter here (Section 12) was written from that vendor's own real documentation, not templated from a sibling.</td></tr>
+<tr><td>The interface should grow a method for every vendor's own special feature</td><td>Not done here -- Oracle's hybrid index and Pinecone's namespace isolation stay inside their own adapters. Adding a method per vendor feature would make the contract as vendor-specific as the code it's meant to replace.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle, and what closes here</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A design pattern and three minimal real adapters, not a production client library</b><p>None of the three adapters here handles connection pooling, retries, async execution, or error translation -- each is the smallest real call shape needed to satisfy the contract, verified against that vendor's own citations, not a deployable library.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · 14/14 -- COMPLETE</b><p>The built set is the full, contiguous {1..14}. Module 11, "Baseline RAG from first principles," is named forward only, one line, here -- not scoped or built in this concept.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name the interface's three methods and their LangChain analogue</b><p>upsert/query/delete here; add_texts/similarity_search/delete in LangChain's own cited VectorStore ABC (Concept 01).</p></div>
+<div><b>I can name psycopg's real placeholder syntax and contrast it with Oracle's</b><p>psycopg uses <code>%s</code>; python-oracledb uses <code>:1</code>/<code>:2</code> positional bind variables (Concept 08) -- confirmed different, live, this session.</p></div>
+<div><b>I can name the three things that never port between any two adapters here</b><p>Schema DDL, index DDL, and the tenant mechanism -- outside the interface's contract in all three real adapters.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Add a fourth method to this concept's own interface: <code>update(chunk_id, embedding)</code>, which replaces one chunk's embedding without touching its row in <code>chunks</code>. Using Concept 09's own already-cited UPDATE syntax, write the Oracle adapter's real method body. Then state, in one sentence, whether pgvector's own equivalent would need a different SQL verb or just a different placeholder syntax.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Oracle's real body, reusing Concept 09's own cited syntax: <code>def update(self, chunk_id, embedding): cursor = self.connection.cursor(); cursor.execute("update embeddings set embedding = :1 where chunk_id = :2", [array.array("f", embedding), chunk_id]); self.connection.commit()</code>. pgvector's own equivalent needs the identical SQL verb, UPDATE, with only the placeholder syntax changed from <code>:1</code>/<code>:2</code> to <code>%s</code>/<code>%s</code> and the value passed as <code>str(embedding)</code> instead of <code>array.array("f", embedding)</code> -- no different verb, because both are real SQL engines built on the same relational model (Concept 11's own finding).</div>
+</details>
+<p>Teach-back: why would Pinecone's own equivalent update method look identical, at the call level, to its own upsert method?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Retrieval-store interfaces and database portability lab</h3><ul><li><b>The claim:</b> a three-method contract, modeled on Concept 01's own cited LangChain VectorStore ABC, lets one caller stay fixed across three completely different real adapters.</li><li><b>The one surprise:</b> the interface's own single <code>delete</code> method hides a real difference -- Oracle and pgvector both need two real deletes (child table first, Concept 09), Pinecone needs one.</li><li><b>What's out of scope:</b> schema DDL, index DDL, and the tenant mechanism -- never part of the contract, and never portable, in any of the three adapters.</li></ul></div>
+<div><h3>Module 10 · 14/14 -- COMPLETE</h3><p>Built set now the full, contiguous {1..14}. Module 11 is named forward only.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what real, already-cited course fact is this concept's own three-method interface modeled on?</summary><div>Concept 01's own citation of LangChain's real VectorStore abstract base class, which defines add_texts, similarity_search, and delete as an "abstraction other backends implement, not storage itself" -- this concept's upsert/query/delete are a smaller version of the same three real jobs.</div></details>
+<details class="quiz"><summary>Conceptual: name the three things that stay outside this interface's contract in every one of its three real adapters.</summary><div>Schema DDL (the embedding column/type declaration), index DDL (the structure that makes search fast), and the tenant-isolation mechanism -- none is a method on the interface, and all three must be redone by hand, in that vendor's own real syntax, for every adapter.</div></details>
+<details class="quiz"><summary>Coding: what is the one real syntactic difference between Oracle's and pgvector's own bind-variable placeholders, given this concept's own two adapters?</summary><div>Oracle's python-oracledb uses positional colon-numbered placeholders, :1 and :2; psycopg (pgvector's own Python driver) uses %s for every placeholder, positionally matched to a tuple of values -- confirmed live this session against psycopg's own basic-usage documentation.</div></details>
+<details class="quiz"><summary>System design: a team says "we wrote one interface, so we're now fully vendor-neutral." What's wrong with that claim, based only on what this concept established?</summary><div>The interface only covers the three named operations -- upsert, query, delete. Schema DDL, index DDL, and the tenant mechanism were never part of the contract and must be rewritten by hand for every new adapter, in that vendor's own real syntax, exactly as Concepts 11 and 12 already found happening between Oracle/pgvector and across four non-Oracle vendors respectively. "Fully vendor-neutral" overclaims what a three-method interface can actually guarantee.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="module-10-concept-01.html"><b>Module 10 Concept 01 — Vector store versus vector database versus search engine</b><br><span>Reused for LangChain's own real VectorStore ABC citation (add_texts/similarity_search/delete), the precedent this concept's interface is modeled on.</span></a>
+<a href="module-10-concept-08.html"><b>Module 10 Concept 08 — Python integration with python-oracledb</b><br><span>Reused verbatim for the Oracle adapter's own bind-variable insert/select syntax.</span></a>
+<a href="module-10-concept-09.html"><b>Module 10 Concept 09 — Transactions, updates, deletes and index synchronization</b><br><span>Reused verbatim for the child-table-first delete order in both the Oracle and pgvector adapters.</span></a>
+<a href="module-10-concept-11.html"><b>Module 10 Concept 11 — PostgreSQL and pgvector portability comparison</b><br><span>Reused for pgvector's own real SQL (vector(384), &lt;=&gt; operator, CREATE POLICY); this concept adds the Python driver Concept 11 never cited.</span></a>
+<a href="module-10-concept-12.html"><b>Module 10 Concept 12 — Managed and specialist stores: Pinecone, Qdrant, Weaviate and Milvus</b><br><span>Reused for Pinecone's own upsert/query syntax and namespace mechanism; this concept adds one new delete citation.</span></a>
+<a href="https://www.psycopg.org/psycopg3/docs/basic/usage.html"><b>Basic module usage — psycopg 3 Documentation</b><br><span>New this session, fetched live (HTTP 200) -- the exact connect()/cursor()/execute()/commit() call shape and %s placeholder syntax used in the pgvector adapter, Section 12.</span></a>
+<a href="https://docs.pinecone.io/guides/manage-data/delete-data"><b>Delete data — Pinecone Docs</b><br><span>New this session, fetched live (HTTP 200) -- the index.delete(ids=..., namespace=...) call shape used in the Pinecone adapter, Section 12.</span></a>
+<a href="https://github.com/pinecone-io/pinecone-python-client"><b>Pinecone Python SDK — GitHub repository and README</b><br><span>Re-fetched live this session (HTTP 200) -- confirms the results.matches return attribute used in Section 12, reused from Concept 12.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · 14/14 -- COMPLETE</span>
+<h3>Three real adapters. One caller, zero changes.</h3>
+<p>You can now design a small store-agnostic interface anchored to a real precedent (LangChain's own cited VectorStore ABC), implement it against three real systems using each one's own cited syntax, and name the exact three things -- schema DDL, index DDL, tenant mechanism -- that stay outside that contract no matter which adapter is chosen. Module 10, "RAG databases and vector-store implementation," is complete at 14 of 14 concepts.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Portability Lab ↑</a>
+</div>
+<p class="fine-print">Module 10 stands complete at 14 of 14. Module 11, "Baseline RAG from first principles," is next, named forward only.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 14 · Active — Module 10 complete (14/14)</p>
+<a href="module-10-concept-13.html">← Concept</a>
+</footer>
+</body>
+</html>

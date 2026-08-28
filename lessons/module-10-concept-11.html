@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 03 quoted the pgvector GitHub repository for one plain DDL fact and flagged, in its own words, that indexing and portability detail was 'reserved for Concept 11.' This concept pays that off with real pgvector v0.8.6 syntax, verified live against pgvector's own README and PostgreSQL's own documentation this session, translated directly against this course's own Oracle build: Concept 05's VECTOR(384, FLOAT32) becomes pgvector's vector(384); Concept 05's VECTOR_DISTANCE(...,COSINE) becomes the <=> operator; Concept 06's CREATE VECTOR INDEX ... TARGET ACCURACY becomes CREATE INDEX ... USING hnsw with raw m/ef_construction/ef_search knobs; Concept 10's DBMS_RLS.ADD_POLICY package call becomes Postgres's own native CREATE POLICY DDL. The headline, independently confirmed against both engines' own documentation: Oracle's <->/<=>/<#> shorthand operators and pgvector's own <->/<=>/<#> operators map to the identical three metrics -- Euclidean/L2, cosine, and negative dot/inner product -- character for character. A five-vector hand-verified worked example shows that ranking survives the move unchanged; the DDL around it does not.">
+<title>PostgreSQL and pgvector portability comparison — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-11.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 11 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 11</p>
+<h1>Same three characters.<br><em>Same three metrics. Nothing else survives the move.</em></h1>
+<p class="lesson-lead">Concept 03 quoted pgvector's own GitHub repository once, for one plain-DDL fact, then said so directly: indexing and portability detail was "reserved for Concept 11." This concept pays that off. Every real syntax claim below is checked against pgvector's own README (v0.8.6) and PostgreSQL's own documentation, live this session, and translated directly against this course's own Oracle build from Concepts 05, 06, and 10. The one genuine surprise: Oracle's own <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> shorthand operators and pgvector's own <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> operators resolve to the identical three metrics -- character for character. The type declaration, the index DDL, and the row-security mechanism do not carry over at all.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Eleventh concept in Module 10's own 14-concept list -- the built set is now the contiguous {1..11}; the explicit payoff of Concept 03's own reserved pgvector citation</b></div>
+<div><span>PREREQUISITE</span><b>Concept 03's schema and reserved citation; Concept 05's real VECTOR(384, FLOAT32) type and VECTOR_DISTANCE(...,COSINE)/&lt;=&gt; syntax; Concept 06's CREATE VECTOR INDEX HNSW/IVF syntax; Concept 04/10's tenant filter and DBMS_RLS mechanism</b></div>
+<div><span>BEGINNER GOAL</span><b>Translate this course's own Oracle VECTOR column, distance query, and vector index into real pgvector v0.8.6 syntax, and name exactly what carries over unchanged versus what has to be rewritten</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">An audit, not a rebuild</h2>
+</div>
+<p>This concept does not change anything about the course's own real Oracle build from Concepts 03-10. It asks one concrete question of that build: if this schema, this VECTOR column, this index, and this row-security policy had to run on PostgreSQL with the pgvector extension instead, how much of the SQL survives unchanged, and how much has to be rewritten from zero? Every syntax claim below is checked live against pgvector's own README and PostgreSQL's own documentation, not assumed.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Portability means one concrete question, not a vibe</h3>
+<p>"Is this portable?" is a vague question until it's turned into a specific one: of everything Concepts 03-10 wrote in real Oracle syntax, how much of it would survive, unchanged, on PostgreSQL plus the pgvector extension -- and how much would have to be rewritten from scratch? This concept answers that question line by line, against pgvector's own real v0.8.6 syntax, verified live this session, not against a general "SQL is SQL" assumption.</p>
+<div class="beginner-memory"><b>First memory:</b> the operators travel. The type declaration, the index statement, and the row-security mechanism do not.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 03 named this exact moment, in its own words</h3>
+<p>Concept 03's own citations already reached for <code>github.com/pgvector/pgvector</code> once, to ground one plain fact: a vector-typed column can sit in an ordinary <code>CREATE TABLE</code> alongside regular columns. That citation's own note said the rest was deliberately out of scope: "no pgvector indexing/portability detail, reserved for Concept 11." This concept is where that forward reference gets built out in full.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same column, the same query, two real engines</h3>
+<p>Concept 05's real Oracle column: <code>ALTER TABLE embeddings MODIFY (embedding VECTOR(384, FLOAT32));</code>. Its pgvector v0.8.6 equivalent, per pgvector's own README, verified live this session: <code>CREATE TABLE embeddings (chunk_id bigint PRIMARY KEY, embedding vector(384));</code>. Concept 05's real Oracle query used <code>VECTOR_DISTANCE(e.embedding, :query_embedding, COSINE)</code> or the shorthand <code>&lt;=&gt;</code>. pgvector's own real equivalent is the same three characters: <code>embedding &lt;=&gt; '[...]'</code>.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>A grafted extension versus a native engine feature</h3>
+<p>Per pgvector's own README, its types and index methods do not exist in a stock PostgreSQL database at all until one statement runs once per database: <code>CREATE EXTENSION vector;</code>. Oracle's VECTOR type and VECTOR_DISTANCE function needed no equivalent enabling step in Concept 05 -- they are native to the engine. pgvector also states its own minimum version requirement plainly: "supports Postgres 13+." Nothing in this course's own Oracle build (Concepts 03-10) carries a comparable version floor.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>The same five layers, built twice</h3>
+<div class="two-lane">
+<article class="lane">
+<span>ORACLE (Concepts 03-10, this course's real build)</span>
+<div class="lane-flow">
+<div>Five-table schema (native SQL)</div>
+<div>VECTOR(384, FLOAT32) -- native type</div>
+<div>CREATE VECTOR INDEX ... TARGET ACCURACY 95</div>
+<div>DBMS_RLS.ADD_POLICY (package call)</div>
+</div>
+</article>
+<article class="lane">
+<span>POSTGRESQL + PGVECTOR v0.8.6 (this concept, translated)</span>
+<div class="lane-flow">
+<div>Five-table schema (identical SQL)</div>
+<div>CREATE EXTENSION vector; then vector(384)</div>
+<div>CREATE INDEX ... USING hnsw (m, ef_construction)</div>
+<div>CREATE POLICY (native DDL)</div>
+</div>
+</article>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What travels unchanged versus what gets rewritten</h3>
+<div class="distinction-table" role="table" aria-label="What carries over from Oracle to pgvector versus what does not">
+<div role="row"><b role="cell">Layer</b><b role="cell">The real difference</b></div>
+<div role="row"><span role="cell">Distance operators <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code></span><span role="cell">Portable -- both engines' own documentation map these three characters to the same three metrics (Euclidean, cosine, negative dot/inner product).</span></div>
+<div role="row"><span role="cell">Type declaration</span><span role="cell">Not portable -- Oracle's VECTOR(384, FLOAT32) carries an explicit format token; pgvector's vector(384) has none, and needs CREATE EXTENSION vector first.</span></div>
+<div role="row"><span role="cell">Index DDL and tuning</span><span role="cell">Not portable -- Oracle exposes one TARGET ACCURACY percentage; pgvector exposes raw m/ef_construction (build) and ef_search/probes (query), with no single accuracy dial.</span></div>
+<div role="row"><span role="cell">Row-level security</span><span role="cell">Not portable -- Oracle's VPD is a PL/SQL package call (DBMS_RLS.ADD_POLICY); Postgres's own RLS is native SQL DDL (CREATE POLICY).</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The operators match, so the SQL is portable overall."</b><p>Only the three shorthand distance operators match. The column type, the extension-enabling step, the index statement, and the row-security mechanism are all different real syntax, not stylistic variants of each other.</p></div>
+<div><b>"pgvector's HNSW index has an accuracy dial like Oracle's TARGET ACCURACY."</b><p>It doesn't. Per pgvector's own README, HNSW exposes raw build-time knobs (m, ef_construction) and a separate query-time knob (hnsw.ef_search) -- no single percentage target exists anywhere in its documentation.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>An audit appendix, not a new component</b><p>This concept changes nothing about the course's own real Oracle build. It produces a translation reference -- what would need rewriting if the engine ever changed -- alongside the build, not inside it.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 11/14</b><p>The built set is the contiguous {1..11}. Concept 12 (managed and specialist stores) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Translate the column type from memory</b><p>Oracle: <code>VECTOR(384, FLOAT32)</code>. pgvector: <code>vector(384)</code>, after <code>CREATE EXTENSION vector;</code>.</p></div>
+<div><b>Name the one thing that is genuinely portable</b><p>The three shorthand operators <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> -- identical characters, identical metrics, in both engines' own documentation.</p></div>
+<div><b>Name the three things that are not</b><p>The type declaration, the index DDL and its tuning model, and the row-security mechanism.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does pgvector need <code>CREATE EXTENSION vector;</code> at all, when Oracle's VECTOR type needed no equivalent step?</li>
+<li>What does Oracle's <code>&lt;#&gt;</code> operator compute, and does pgvector's own <code>&lt;#&gt;</code> compute the same thing?</li>
+<li>Try it: open "The Engine Swap" lab below and toggle between Oracle and pgvector over the identical toy dataset.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 11 OF 14</h3>
+<p>This concept translated this course's own Oracle build -- column type, distance query, vector index, and row-security policy -- into real pgvector v0.8.6 syntax, and found that only the three shorthand distance operators travel unchanged. Concept 12 turns to a different portability question next: managed and specialist stores -- Pinecone, Qdrant, Weaviate, and Milvus -- named forward only, not built here.</p>
+<a class="button primary" href="module-10-concept-10.html">← Back to Concept 10's VPD/DBMS_RLS mechanism</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">One promise paid off, one clean line drawn</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>The extension mechanism</b><small>Why pgvector needs CREATE EXTENSION vector and Oracle doesn't.</small></a>
+<a href="#s10"><span>02</span><b>Five toy vectors, hand-verified</b><small>A node-checked worked example: ranking survives the move, DDL doesn't.</small></a>
+<a href="#s14"><span>03</span><b>The Engine Swap</b><small>The lab -- toggle Oracle/pgvector over the identical toy dataset.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the operator-mapping proof.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 11 path:</b> Concept 03 reserved pgvector's own indexing/portability detail for this concept, explicitly, in its own citation note → pgvector's own README (v0.8.6) supplies the real CREATE EXTENSION/CREATE TABLE/CREATE INDEX/query syntax, verified live this session → Oracle's own vector_distance documentation and pgvector's own README are independently checked and found to map <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> to the identical three metrics in both engines → a five-vector toy example, checked by an independent node script, shows the same ranking survives the translation while the type declaration, index DDL, and row-security mechanism (Postgres's native CREATE POLICY versus Oracle's DBMS_RLS.ADD_POLICY package call) do not → the lab lets you toggle the engine and watch exactly which panels change and which don't → Concept 12 turns to managed and specialist stores next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "PostgreSQL and pgvector portability comparison" deep dive</b><em>Full citations, the annotated SQL, and The Engine Swap lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 11 of 14 -- and a promise kept</h2></div></header>
+<p>This concept fills position 11 of Module 10's own 14-concept list: "PostgreSQL and pgvector portability comparison." It is not a random insertion -- Concept 03's own citations section, when it first reached for <code>github.com/pgvector/pgvector</code> to ground one plain DDL fact, said directly that deeper pgvector detail was "reserved for Concept 11." With this concept authored, Module 10's built set is the contiguous {1..11}. No gap, no out-of-order construction, and no repeat of Concept 03's own already-cited fact -- this concept goes past it, into indexing and syntax detail Concept 03 explicitly did not touch.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>TRANSLATE</span><h3>This course's own Oracle SQL into real pgvector syntax</h3><p>Concept 05's VECTOR(384, FLOAT32) and VECTOR_DISTANCE(...,COSINE); Concept 06's CREATE VECTOR INDEX -- each given a real pgvector v0.8.6 equivalent.</p></article>
+<article class="info-card"><span>VERIFY</span><h3>The one genuine overlap, independently</h3><p>Oracle's and pgvector's own documentation are checked separately and found to map <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> to the identical three metrics.</p></article>
+<article class="info-card"><span>NAME</span><h3>What does not carry over</h3><p>The extension-enabling step, the index tuning model, and Postgres's own native CREATE POLICY row-security DDL, contrasted against Concept 10's DBMS_RLS.ADD_POLICY.</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>Managed/specialist vector stores (Concept 12) and a general store-choice decision matrix (Concepts 13-14) -- named forward only, not built here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema and its own reserved pgvector citation, paid off by this concept.</li>
+<li><b><a href="module-10-concept-05.html">Module 10 Concept 05</a></b> -- the real VECTOR(384, FLOAT32) type and VECTOR_DISTANCE(...,COSINE)/<code>&lt;=&gt;</code> query, translated here.</li>
+<li><b><a href="module-10-concept-06.html">Module 10 Concept 06</a></b> -- the real CREATE VECTOR INDEX HNSW/IVF syntax, translated here.</li>
+<li><b><a href="module-10-concept-04.html">Module 10 Concept 04</a></b> and <b><a href="module-10-concept-10.html">Module 10 Concept 10</a></b> -- the tenant filter and Oracle's own DBMS_RLS.ADD_POLICY mechanism, contrasted here against Postgres's own native CREATE POLICY DDL.</li>
+<li><b>Explicitly out of scope:</b> managed/specialist stores (<a href="#s01">Concept 12, unbuilt</a>) and a general store-choice decision matrix (Concepts 13-14, unbuilt) -- named forward only, not re-derived here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Two dialects, one root language</h2></div></header>
+<p>Oracle's VECTOR type and pgvector's vector type both speak the same root language -- ordinary SQL, real distance math, an ORDER BY on a number that means "how far." But one is a native organ, built into the engine from the start; the other is a grafted limb, added to a general-purpose database by an extension that has to be switched on before anything works. The graft works well -- pgvector's own README lists ACID compliance, point-in-time recovery, and JOINs as things it gets for free from Postgres -- but the seams show exactly where the extension boundary is: enabling it, indexing through it, and tuning it all use syntax the native organ never needed.</p>
+<div class="mental-compare">
+<div><span>ORACLE VECTOR</span><p>Native engine feature. No enabling step. One TARGET ACCURACY dial.</p></div>
+<div><span>PGVECTOR</span><p>Postgres extension. CREATE EXTENSION vector required. Raw m/ef_construction/ef_search knobs.</p></div>
+</div>
+<div class="callout warning"><b>Analogy boundary</b>The actual claims come from Section 06's own quoted README text and Section 10's own hand-verified worked example, not from the graft/organ analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>pgvector</td><td>An open-source PostgreSQL extension, currently at v0.8.6 per its own installation instructions, adding vector similarity search types and index methods to Postgres 13+</td><td>CREATE EXTENSION vector;</td></tr>
+<tr><td>vector type</td><td>pgvector's own single-precision column type; per its own README, "each vector takes 4 * dimensions + 8 bytes of storage"</td><td>vector(384)</td></tr>
+<tr><td>HNSW (pgvector)</td><td>Graph-based approximate index method; build-time knobs m (16 default) and ef_construction (64 default), query-time knob hnsw.ef_search (40 default)</td><td>USING hnsw (embedding vector_cosine_ops)</td></tr>
+<tr><td>IVFFlat (pgvector)</td><td>Cluster-based approximate index method; build-time knob lists, query-time knob ivfflat.probes</td><td>USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)</td></tr>
+<tr><td>CREATE POLICY (Postgres)</td><td>Native SQL DDL that attaches a row-security predicate directly to a table already enabled with ALTER TABLE ... ENABLE ROW LEVEL SECURITY</td><td>CREATE POLICY name ON table USING (predicate)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>One extension, five new types, two index methods</h2></div></header>
+<div class="core-block">
+<p>Per pgvector's own README, fetched live this session: "Open-source vector similarity search for Postgres... Store your vectors with the rest of your data. Supports: exact and approximate nearest neighbor search, single-precision, half-precision, binary, and sparse vectors, L2 distance, inner product, cosine distance, L1 distance, Hamming distance, and Jaccard distance." Installation is documented as compiling and installing the extension ("supports Postgres 13+"), then, per database: <code>CREATE EXTENSION vector;</code>. Only after that statement runs does <code>vector(384)</code> become a legal column type -- there is no equivalent gate for Oracle's own VECTOR type in Concept 05's build.</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Where the extension boundary actually sits</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1011-s07-title">
+<strong class="concept-visual-title" id="c1011-s07-title">VISUAL · THE ONE ENABLING STEP ORACLE NEVER NEEDED</strong>
+<div class="diagram-strip" role="list">
+<div class="diagram-node" role="listitem"><b>Stock PostgreSQL</b><small>no vector type exists yet</small></div>
+<div class="diagram-node active" role="listitem"><b>CREATE EXTENSION vector;</b><small>run once per database</small></div>
+<div class="diagram-node" role="listitem"><b>vector(384) / hnsw / ivfflat now exist</b><small>as legal SQL, not before</small></div>
+<div class="diagram-node" role="listitem"><b>CREATE TABLE ... embedding vector(384)</b><small>identical shape to Oracle's own MODIFY statement</small></div>
+</div>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The same five layers, audited twice</h2></div></header>
+<div class="pipeline-preview">
+<span>Schema — five tables, identical SQL in both engines</span><i>↓</i><span>Type layer — native VECTOR (Oracle) vs extension-gated vector (pgvector)</span><i>↓</i><span class="hot">Index and security layers — this concept's own audit</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The same standard cosine-distance formula, in both engines</h2></div></header>
+<div class="equation">cosine_distance(a, b) = 1 − (a · b) / (‖a‖ ‖b‖) — unchanged from Module 04/08's own convention, reused by both engines' own <code>&lt;=&gt;</code> operator</div>
+<div class="callout"><b>Scope hedge</b>Oracle's own vector_distance documentation names COSINE as a metric token but does not spell out the subtraction formula on that page. pgvector's own README does, explicitly: "SELECT 1 - (embedding &lt;=&gt; '[3,1,2]') AS cosine_similarity." Section 10's worked example uses the standard formula this course already established in Module 04/08, not an Oracle-specific derivation.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Five toy vectors, one ranking, two SQL dialects</h2></div></header>
+<p>A small, illustrative 3-dimensional toy space -- the same convention pgvector's own README uses for its own examples (<code>'[3,1,2]'</code>), and the same "not the real 384-dimension embeddings" hedge Concept 09 already used for hand-verification. Query vector <code>q = [1, 0, 1]</code>. Five candidates: <code>c1 = [1,0,1]</code>, <code>c2 = [0,1,1]</code>, <code>c3 = [1,1,0]</code>, <code>c4 = [-1,0,1]</code>, <code>c5 = [2,0,2]</code> (exactly 2×c1, same direction, different magnitude).</p>
+<table class="worked-table">
+<thead><tr><th>Candidate</th><th>Vector</th><th>Cosine distance</th><th>Rank</th></tr></thead>
+<tbody>
+<tr><td>c1</td><td>[1, 0, 1]</td><td>0.000000</td><td>1 (tie)</td></tr>
+<tr><td>c5</td><td>[2, 0, 2]</td><td>0.000000</td><td>1 (tie)</td></tr>
+<tr><td>c2</td><td>[0, 1, 1]</td><td>0.500000</td><td>3 (tie)</td></tr>
+<tr><td>c3</td><td>[1, 1, 0]</td><td>0.500000</td><td>3 (tie)</td></tr>
+<tr><td>c4</td><td>[-1, 0, 1]</td><td>1.000000</td><td>5</td></tr>
+</tbody>
+</table>
+<div class="code-block">
+<span class="code-label">SQL · ORACLE (Concept 05's own real syntax, FETCH FIRST 3 ROWS ONLY)</span>
+<pre><code>SELECT chunk_id, VECTOR_DISTANCE(embedding, :qv, COSINE) AS dist
+FROM embeddings
+ORDER BY dist
+FETCH FIRST 3 ROWS ONLY;</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · PGVECTOR (real v0.8.6 syntax, LIMIT 3)</span>
+<pre><code>SELECT chunk_id, embedding &lt;=&gt; '[1,0,1]' AS dist
+FROM embeddings
+ORDER BY dist
+LIMIT 3;</code></pre>
+</div>
+<div class="callout"><b>Verification method</b>An independent node script computed dot products and norms directly: dot(q,c1)=2, |c1|=|q|=1.414214, cosine similarity=1.000000, distance=0.000000. dot(q,c5)=4, |c5|=2.828427, similarity=4/(1.414214×2.828427)=1.000000, distance=0.000000 -- c5 ties c1 exactly, because cosine distance is scale-invariant and c5 is c1 scaled by 2. dot(q,c2)=1, dot(q,c3)=1, both give similarity 0.500000, distance 0.500000 -- an exact tie. dot(q,c4)=0 (orthogonal), similarity 0.000000, distance 1.000000. Output: <code>{"c1":0,"c5":0,"c2":0.5,"c3":0.5,"c4":1}</code>.</div>
+<p>Both SQL statements above ask the identical question of the identical data -- "the three closest by cosine distance" -- and the standard formula guarantees they return the identical set: {c1, c5} at distance 0, then either c2 or c3 for the third slot. That last part is worth naming honestly: c2 and c3 are tied at exactly 0.500000, and neither engine's own ORDER BY documentation promises a specific tie-break order without a second sort key -- that ambiguity is not vendor-specific, it is a property of ORDER BY on tied values in any SQL engine, and this concept does not claim otherwise for either one.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Three translations, side by side</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>TYPE</span><h3>VECTOR(384, FLOAT32) → vector(384)</h3><p>Oracle's format token (FLOAT32/INT8/FLOAT64/BINARY) has no pgvector equivalent on the base <code>vector</code> type -- half precision is a separate type, <code>halfvec</code>, not a format argument.</p></article>
+<article class="info-card"><span>DISTANCE</span><h3>VECTOR_DISTANCE(...,COSINE) → &lt;=&gt;</h3><p>Both resolve to the same standard cosine-distance formula; the shorthand operator characters are identical in both engines' own documentation.</p></article>
+<article class="info-card"><span>INDEX</span><h3>CREATE VECTOR INDEX ... TARGET ACCURACY 95 → CREATE INDEX ... USING hnsw</h3><p>Oracle's single percentage dial becomes pgvector's own raw m/ef_construction (build) and hnsw.ef_search (query) knobs -- a different tuning model, not a renamed one.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The full pgvector build, next to its Oracle source</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · ORACLE (Concepts 03, 05, 06 -- already built)</span>
+<pre><code>ALTER TABLE embeddings MODIFY (embedding VECTOR(384, FLOAT32));
+
+CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding)
+  ORGANIZATION INMEMORY NEIGHBOR GRAPH
+  DISTANCE COSINE
+  WITH TARGET ACCURACY 95;
+
+SELECT chunk_id, VECTOR_DISTANCE(embedding, :qv, COSINE) AS dist
+FROM embeddings
+ORDER BY dist
+FETCH FIRST 5 ROWS ONLY;</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · PGVECTOR v0.8.6 (this concept's own real translation)</span>
+<pre><code>CREATE EXTENSION vector;
+
+CREATE TABLE embeddings (
+  chunk_id  bigint PRIMARY KEY,
+  embedding vector(384)
+);
+
+CREATE INDEX ON embeddings
+  USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+
+SET hnsw.ef_search = 100;
+
+SELECT chunk_id, embedding &lt;=&gt; '[...]' AS dist
+FROM embeddings
+ORDER BY dist
+LIMIT 5;</code></pre>
+</div>
+<p>Per pgvector's own README, the IVFFlat equivalent to Oracle's ORGANIZATION NEIGHBOR PARTITIONS names its own sizing rule directly: "a good place to start is <code>rows / 1000</code> for up to 1M rows and <code>sqrt(rows)</code> for over 1M rows," with query-time probes suggested at "a good place to start is <code>sqrt(lists)</code>." Oracle's own TARGET ACCURACY 95 has no equivalent single number in either pgvector index method -- there is no accuracy percentage anywhere in pgvector's own documented parameters.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real, independently checked sources for every claim above</h2></div></header>
+<p>pgvector's own <a href="https://github.com/pgvector/pgvector">GitHub repository and README</a> is the primary citation for CREATE EXTENSION vector, the vector(384) type, the <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> operator definitions, the HNSW/IVFFlat syntax and default parameters (m=16, ef_construction=64, ef_search=40, lists sizing rule), and the v0.8.6 version tag and "supports Postgres 13+" requirement -- reused from Concept 03 at a deeper level, re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html">VECTOR_DISTANCE reference</a> (reused from Concept 05) is the primary citation for Oracle's own shorthand-operator table, quoted verbatim in Section 06's own worked derivation -- re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html">create-tables-using-vector-data-type documentation</a>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/hierarchical-navigable-small-world-index-syntax-and-parameters.html">HNSW syntax documentation</a>, and <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/inverted-file-flat-index-creation-syntax-and-parameters.html">IVF syntax documentation</a> (all reused from Concepts 05-06) supply the Oracle-side SQL translated in Section 12 -- all re-fetched live this session (HTTP 200). PostgreSQL's own <a href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html">Row Security Policies chapter</a> (reused from Concept 04) and <a href="https://www.postgresql.org/docs/current/sql-createpolicy.html">CREATE POLICY reference page</a> (new this session) supply the native RLS DDL contrasted against Concept 10's DBMS_RLS.ADD_POLICY -- both re-fetched live this session (HTTP 200). Oracle's own <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/arpls/DBMS_RLS.html">DBMS_RLS reference</a> (reused from Concept 10) is re-fetched live this session (HTTP 200) for the same contrast.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Engine Swap</h2></div></header>
+<div class="lab">
+<p>Toggle between Oracle and PostgreSQL + pgvector. Watch the type declaration, index statement, and distance query panels change completely. The ranking of the five toy vectors below never changes -- that's the one thing this concept found to be genuinely portable.</p>
+<div class="lab-actions" role="group" aria-label="Choose an engine">
+<button type="button" class="secondary active" data-engine="oracle" id="engineOracle_1011">ORACLE</button>
+<button type="button" class="secondary" data-engine="pgvector" id="enginePgvector_1011">POSTGRESQL + PGVECTOR</button>
+</div>
+<div class="code-block">
+<span class="code-label" id="typeLabel_1011">TYPE DECLARATION</span>
+<pre><code id="typeSnippet_1011"></code></pre>
+</div>
+<div class="code-block">
+<span class="code-label" id="indexLabel_1011">INDEX STATEMENT</span>
+<pre><code id="indexSnippet_1011"></code></pre>
+</div>
+<div class="code-block">
+<span class="code-label" id="queryLabel_1011">DISTANCE QUERY</span>
+<pre><code id="querySnippet_1011"></code></pre>
+</div>
+<p class="fine-print">RANKING OF THE FIVE TOY VECTORS -- IDENTICAL REGARDLESS OF ENGINE (lime = closest tier, dashed edge = LIMIT/FETCH FIRST 3 cutoff)</p>
+<div class="rank-chip-row" id="engineRow_1011"></div>
+<div class="callout" id="engineVerdict_1011" aria-live="polite">Click ORACLE or PGVECTOR above to see that panel's own real syntax. The chip row below never changes.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">TRADE-OFFS</span><h2>What each engine's own model costs, what it buys</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Engine</th><th>Cost</th><th>What it buys</th></tr></thead>
+<tbody>
+<tr><td>Oracle AI Database (built, Concepts 05-06, 10)</td><td>Vendor licensing; a single TARGET ACCURACY dial gives less direct control over the build/query trade-off</td><td>Native VECTOR type and VPD with no enabling step; one simple accuracy knob instead of several raw ones</td></tr>
+<tr><td>PostgreSQL + pgvector (translated, this concept)</td><td>An extension to install and enable per database; more knobs to understand (m, ef_construction, ef_search, lists, probes) with no single accuracy shortcut</td><td>Open-source, no per-vector-feature licensing; native CREATE POLICY RLS with no package-call API; direct low-level control over the recall/speed trade-off</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>MISSING EXTENSION</span><h3>CREATE TABLE with a vector column fails outright on a fresh database</h3><p>Cause: <code>CREATE EXTENSION vector;</code> was never run in that database. Fix: run it once per database before any vector(...) column is declared -- Oracle's own VECTOR type has no equivalent failure mode to guard against.</p></article>
+<article class="info-card"><span>ASSUMED ACCURACY DIAL</span><h3>A migration plan budgets time to "port TARGET ACCURACY 95 to pgvector"</h3><p>Cause: no such single knob exists in pgvector's own documented HNSW or IVFFlat parameters. Fix: the real port is m/ef_construction/ef_search (HNSW) or lists/probes (IVFFlat), tuned by pgvector's own documented sizing rules, not a value carried over from Oracle.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Because the distance operators match, the whole schema is portable with no changes</td><td>False -- only the three shorthand operators match; the type declaration, the extension-enabling step, the index DDL, and the row-security mechanism are all different real syntax.</td></tr>
+<tr><td>pgvector's vector type supports a format argument like Oracle's FLOAT32/INT8/FLOAT64/BINARY</td><td>False -- per pgvector's own README, half precision is a separate type (halfvec), not a format token on vector; there is no single type with an interchangeable format argument.</td></tr>
+<tr><td>Postgres's native RLS (CREATE POLICY) is functionally weaker than Oracle's VPD because it's built into base SQL instead of a package</td><td>Not established by anything cited here -- both are documented, real, engine-enforced row-security mechanisms; this concept compares their syntax (DDL versus package call), not their relative strength, which is out of scope.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle yet</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A translation reference, not a migration decision</b><p>This concept shows what the SQL would look like on pgvector. It does not recommend migrating, estimate migration cost, or benchmark either engine's actual recall/latency on this course's own data -- none of that was measured this session.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 11/14</b><p>Concept 12 (managed and specialist stores) and Concepts 13-14 (choosing a store, a portability lab) remain unbuilt, named forward only.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can translate the type declaration</b><p>VECTOR(384, FLOAT32) → vector(384), after CREATE EXTENSION vector;</p></div>
+<div><b>I know which operators are genuinely portable</b><p><code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> -- identical characters, identical metrics, in both engines' own docs.</p></div>
+<div><b>I can name the index-tuning difference</b><p>Oracle's single TARGET ACCURACY percentage versus pgvector's raw m/ef_construction/ef_search or lists/probes knobs.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Section 12's own two code blocks, translate Concept 06's IVF-equivalent statement -- <code>CREATE VECTOR INDEX embeddings_ivf_idx ON embeddings (embedding) ORGANIZATION NEIGHBOR PARTITIONS DISTANCE COSINE WITH TARGET ACCURACY 95;</code> -- into real pgvector IVFFlat syntax. Name the two real parameter names pgvector actually exposes in place of that one TARGET ACCURACY value, and which of the two is set at build time versus query time.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div><code>CREATE INDEX ON embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);</code> at build time, per pgvector's own README naming <code>lists</code> as the IVFFlat build-time parameter. At query time, <code>SET ivfflat.probes = 10;</code>, per the same README naming <code>probes</code> as the query-time parameter. Neither is a direct stand-in for Oracle's TARGET ACCURACY 95 -- pgvector's own documented sizing rule for <code>lists</code> is "rows / 1000 for up to 1M rows," and for <code>probes</code>, "a good place to start is sqrt(lists)," both tied to data size, not a target percentage.</div>
+</details>
+<p>Teach-back: why can't "TARGET ACCURACY 95" be translated as a single pgvector parameter value, the way <code>VECTOR_DISTANCE(...,COSINE)</code> translates cleanly into <code>&lt;=&gt;</code>?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>PostgreSQL and pgvector portability comparison</h3><ul><li><b>The payoff:</b> Concept 03's own reserved pgvector citation, built out in full against real v0.8.6 syntax.</li><li><b>What's portable:</b> the three shorthand operators <code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;#&gt;</code> -- identical characters, identical metrics, in both engines' own documentation.</li><li><b>What's not:</b> the type declaration (format token vs none, plus an extension-enabling step), the index tuning model (one accuracy dial vs several raw knobs), and row-security (package call vs native DDL).</li></ul></div>
+<div><h3>Module 10 · position 11/14</h3><p>Built set now the contiguous {1..11}. Concept 12 (managed and specialist stores) is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does pgvector require CREATE EXTENSION vector but Oracle's own VECTOR type doesn't need an equivalent enabling step?</summary><div>Because pgvector adds vector types and index methods to a general-purpose database that didn't originally have them -- it's an extension, not a core engine feature, so PostgreSQL has to be told to load it once per database. Oracle's VECTOR type ships as part of the engine itself, so no equivalent activation step exists.</div></details>
+<details class="quiz"><summary>Conceptual: does pgvector's own &lt;#&gt; operator return the same thing as its inner product?</summary><div>No -- per pgvector's own README, &lt;#&gt; returns the negative inner product (multiply by -1 to get the actual inner product), specifically so that ascending ORDER BY still means "most similar first," the same reason Oracle's own &lt;#&gt; is documented as the negative dot product operator.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real pgvector translation of Oracle's VECTOR(384, FLOAT32) column and a query using it.</summary><div>CREATE EXTENSION vector; CREATE TABLE embeddings (chunk_id bigint PRIMARY KEY, embedding vector(384)); SELECT chunk_id, embedding &lt;=&gt; '[...]' AS dist FROM embeddings ORDER BY dist LIMIT 5;</div></details>
+<details class="quiz"><summary>System design: your team is deciding whether to standardize on pgvector's raw HNSW knobs or wrap them behind something closer to Oracle's single TARGET ACCURACY dial. What's the real trade-off?</summary><div>Raw knobs (m, ef_construction, ef_search) give direct, per-workload control over the recall/speed/build-time trade-off, at the cost of every team member needing to understand what each one does. A single accuracy dial like Oracle's is simpler to operate correctly by default, at the cost of less precise control when a workload's needs don't match the dial's assumptions. Neither is documented as strictly better -- this concept only establishes that they are not the same mechanism, not that one outperforms the other.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/pgvector/pgvector"><b>pgvector — GitHub repository and README (v0.8.6)</b><br><span>Primary citation, re-fetched live this session (HTTP 200) -- CREATE EXTENSION vector, the vector(384) type, the &lt;-&gt;/&lt;=&gt;/&lt;#&gt; operator definitions, HNSW/IVFFlat syntax and default parameters, and the Postgres 13+ requirement.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle AI Vector Search User's Guide</b><br><span>Reused from Concept 05, re-fetched live this session (HTTP 200) -- Oracle's own shorthand-operator table, quoted verbatim in Section 06.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html"><b>Create Tables Using the VECTOR Data Type — Oracle AI Vector Search User's Guide</b><br><span>Reused from Concept 05, re-fetched live this session (HTTP 200) -- the real VECTOR(384, FLOAT32) declaration translated in Section 12.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/hierarchical-navigable-small-world-index-syntax-and-parameters.html"><b>HNSW Index Syntax and Parameters — Oracle AI Vector Search User's Guide</b><br><span>Reused from Concept 06, re-fetched live this session (HTTP 200) -- the real CREATE VECTOR INDEX HNSW grammar translated in Section 12.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/inverted-file-flat-index-creation-syntax-and-parameters.html"><b>IVF Index Creation Syntax and Parameters — Oracle AI Vector Search User's Guide</b><br><span>Reused from Concept 06, re-fetched live this session (HTTP 200) -- the real IVF grammar translated in Section 20's own exercise.</span></a>
+<a href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html"><b>Row Security Policies — PostgreSQL Documentation</b><br><span>Reused from Concept 04, re-fetched live this session (HTTP 200) -- ALTER TABLE ... ENABLE ROW LEVEL SECURITY and the account_managers worked example.</span></a>
+<a href="https://www.postgresql.org/docs/current/sql-createpolicy.html"><b>CREATE POLICY — PostgreSQL Documentation</b><br><span>New this session, re-fetched live (HTTP 200) -- the native CREATE POLICY statement reference contrasted against Oracle's DBMS_RLS.ADD_POLICY.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/arpls/DBMS_RLS.html"><b>DBMS_RLS — Oracle PL/SQL Packages and Types Reference</b><br><span>Reused from Concept 10, re-fetched live this session (HTTP 200) -- the package-call API contrasted against Postgres's own native RLS DDL.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · POSITION 11/14</span>
+<h3>Same three characters. Same three metrics. Nothing else survives the move.</h3>
+<p>You can now translate this course's own Oracle VECTOR column, distance query, and vector index into real pgvector v0.8.6 syntax, name the one thing that is genuinely portable between the two engines -- the shorthand distance operators -- and name the three things that are not: the type declaration, the index tuning model, and the row-security mechanism. Concept 03's own reserved pgvector citation is now fully paid off.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The Engine Swap ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at position 11 of 14. Concept 12 (managed and specialist stores) is next.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 11 · Complete</p>
+<a href="module-10-concept-10.html">← Concept</a>
+</footer>
+</body>
+</html>

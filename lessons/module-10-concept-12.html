@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concepts 05-10 built one real Oracle path; Concept 11 translated it into real pgvector syntax and found that only three shorthand distance operators travel unchanged. This concept turns to a different question: four named, real, non-Oracle vector stores -- Pinecone, Qdrant, Weaviate, and Milvus -- each with its own SDK, verified live this session against that SDK's own GitHub README or source, not a general blog post. The same course fact from Concepts 03-04 (one chunk, chunk_id 'c007', tenant_id 'acme', a 384-dimension all-MiniLM-L6-v2 embedding) is written and then queried back in each vendor's own real syntax, and the headline is that all four solve tenant isolation with a genuinely different real mechanism: Pinecone's namespace argument (reused from Concept 04's own citation), Qdrant's payload pre-filter (also reused from Concept 04), Weaviate's native tenant object (multi_tenancy_config plus with_tenant), and Milvus's boolean filter-expression string. No ranking, no benchmark, and no recommendation -- Concept 13 does the choosing. This concept only establishes that the four APIs are not interchangeable.">
+<title>Managed and specialist stores: Pinecone, Qdrant, Weaviate and Milvus — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-10-12.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 12 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 10 · CONCEPT 12</p>
+<h1>Four real vendors.<br><em>One operation, four incompatible syntaxes.</em></h1>
+<p class="lesson-lead">Concept 11 translated this course's own Oracle build into real pgvector syntax and found one genuine survivor: three shorthand distance operators. This concept asks the same kind of question of a different set of systems -- Pinecone, Qdrant, Weaviate, and Milvus, four real, named, non-Oracle vector stores -- but the answer is different. Take this course's own single chunk (Concept 03's <code>chunk_id</code>, Concept 04's <code>tenant_id</code>, a real 384-dimension embedding) and write it, then query it back filtered to one tenant, in each vendor's own real, live-verified SDK syntax. Nothing survives unchanged this time -- not the write call, not the query call, and not even the tenant-isolation mechanism, which turns out to be a genuinely different real feature in every single one of the four.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Twelfth concept in Module 10's own 14-concept list -- the built set is now the contiguous {1..12}</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's store/database/search-engine taxonomy and its own Pinecone/Qdrant citations; Concept 03's chunk_id/embedding schema; Concept 04's tenant_id column and its own Pinecone-namespace/Qdrant-payload-filter citations; Concept 11's portability framing</b></div>
+<div><span>BEGINNER GOAL</span><b>Write and query this course's own chunk, filtered to one tenant, in Pinecone's, Qdrant's, Weaviate's, and Milvus's own real SDK syntax, and name which mechanism each one actually uses for tenant isolation</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">One chunk, four vendors, zero shared syntax</h2>
+</div>
+<p>This concept does not add a new system to the course's own build. It takes one fact this course already has -- a single chunk with a <code>chunk_id</code>, a <code>tenant_id</code>, and a 384-dimension embedding -- and asks what writing and querying that exact chunk would look like in four real, named, non-Oracle vector stores. Every code snippet below is checked live this session against that vendor's own GitHub README, source, or documentation page, not memorized or assumed.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>"Managed and specialist stores" names four separate real products, not one category</h3>
+<p>Concept 01 already drew the store/database/search-engine boundary in the abstract, naming Qdrant as one boundary case. This concept goes further: Pinecone, Qdrant, Weaviate, and Milvus are four separately built, separately maintained, separately versioned real systems, each with its own client library and its own real API surface. None of the four APIs below is a dialect of a shared standard the way Oracle's SQL and pgvector's SQL both are (Concept 11) -- there is no common vector-store SQL.</p>
+<div class="beginner-memory"><b>First memory:</b> the operation is identical -- write one chunk, then find it again filtered to one tenant. The syntax, and even the tenant mechanism itself, is different in all four.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Most real RAG systems never touch SQL at all</h3>
+<p>Concepts 05-10 built one full real path through Oracle SQL. Concept 11 translated that path into pgvector, another SQL dialect. A large share of real production RAG systems skip SQL entirely and call a managed vector-store API instead. This concept names four of the most commonly used ones and shows, concretely, that "call the API" hides four genuinely different real API shapes underneath.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same chunk, written four different real ways</h3>
+<p>This course's own chunk: <code>chunk_id="c007"</code>, <code>tenant_id="acme"</code> (Concept 04), a 384-dimension <code>all-MiniLM-L6-v2</code> embedding (Concept 03). Per each vendor's own real, live-verified syntax: Pinecone's <code>index.upsert(vectors=[{"id":"c007","values":embedding}], namespace="acme")</code>; Qdrant's <code>client.upsert(collection_name="rag_atlas_chunks", points=[PointStruct(id="c007", vector=embedding, payload={"tenant_id":"acme"})])</code>; Weaviate's <code>acme_chunks.data.insert({"chunk_id":"c007"}, vector=embedding)</code>; Milvus's <code>client.insert(collection_name="rag_atlas_chunks", data=[{"id":"c007","vector":embedding,"tenant_id":"acme"}])</code>. Four real calls, four different shapes, one identical chunk.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Four different real answers to "how do you isolate one tenant?"</h3>
+<p>Concept 04 already cited two of these: Pinecone's own multitenancy guide recommends a <code>namespace</code> argument -- physical isolation, not a filter clause. Qdrant's own multitenancy documentation treats <code>tenant_id</code> as a mandatory, indexed payload field checked with a pre-filter. This concept verifies two more, live: Weaviate's own client source defines a native tenant object (<code>multi_tenancy_config</code> at collection creation, <code>with_tenant("acme")</code> at query time) -- a structural mechanism, not a filter or a namespace argument. Milvus's own quickstart documents a plain boolean filter-expression string, <code>filter="tenant_id == 'acme'"</code>, evaluated inside one shared collection.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>One chunk, four real pipelines</h3>
+<div class="pipeline-preview">
+<span>This course's own chunk — chunk_id "c007", tenant_id "acme", 384-dim embedding</span><i>↓</i><span class="hot">Written and queried in each vendor's own real SDK syntax</span><i>↓</i><span>Four different tenant-isolation mechanisms, one identical semantic result</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>What each vendor's own real API actually calls "isolate by tenant"</h3>
+<div class="distinction-table" role="table" aria-label="Tenant-isolation mechanism per vendor">
+<div role="row"><b role="cell">Vendor</b><b role="cell">Real tenant-isolation mechanism</b></div>
+<div role="row"><span role="cell">Pinecone</span><span role="cell">A <code>namespace</code> argument on both upsert and query -- physical isolation, cited in Concept 04, verified again here.</span></div>
+<div role="row"><span role="cell">Qdrant</span><span role="cell">A mandatory, indexed <code>payload</code> field checked with a <code>FieldCondition</code>/<code>MatchValue</code> pre-filter -- cited in Concept 04, verified again here.</span></div>
+<div role="row"><span role="cell">Weaviate</span><span role="cell">A native tenant object -- <code>multi_tenancy_config</code> at creation, <code>with_tenant(...)</code> at query time -- verified live this session from the client's own source.</span></div>
+<div role="row"><span role="cell">Milvus</span><span role="cell">A boolean filter-expression string on a shared collection -- verified live this session; database-level and partition-key-level structural alternatives are named in Milvus's own documentation but not coded here.</span></div>
+</div>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"A metadata filter is how every vendor does multi-tenancy."</b><p>Only two of the four (Qdrant, Milvus) use a filter for it. Pinecone uses a namespace argument, not a filter clause at all; Weaviate uses a dedicated tenant object, not a filter either.</p></div>
+<div><b>"If I know one vendor's filter syntax, I can guess the others'."</b><p>Pinecone's own filter DSL is a nested operator dict (<code>{"tenant_id":{"$eq":"acme"}}</code>); Qdrant's is typed Python objects (<code>FieldCondition</code>/<code>MatchValue</code>); Milvus's is a plain boolean-expression string (<code>"tenant_id == 'acme'"</code>). None of the three share syntax with either of the others.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in the Oracle RAG project</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A named-vendor reference, not a component of the build</b><p>This concept changes nothing about the course's own real Oracle build (Concepts 05-10) or its pgvector translation (Concept 11). It is a comparison appendix -- what the identical chunk-write-then-query operation would look like on four other, real, named systems.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 12/14</b><p>The built set is the contiguous {1..12}. Concept 13 (choosing a store) is next, named forward only.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the four vendors and their tenant mechanism</b><p>Pinecone (namespace), Qdrant (payload pre-filter), Weaviate (native tenant object), Milvus (filter-expression string).</p></div>
+<div><b>Explain why "the filter syntax" isn't one thing</b><p>Pinecone's nested operator dict, Qdrant's typed objects, and Milvus's boolean-expression string are three unrelated real syntaxes for the same predicate; Weaviate's default mechanism isn't a filter at all.</p></div>
+<div><b>Locate this course's own chunk in each vendor's write call</b><p><code>chunk_id="c007"</code>, <code>tenant_id="acme"</code>, and the 384-dimension embedding all appear, differently shaped, in every one of the four real calls in Section 12.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Which of the four vendors isolates a tenant without writing any filter predicate at all, and what does it use instead?</li>
+<li>Write Qdrant's real <code>FieldCondition</code>/<code>MatchValue</code> filter for <code>tenant_id == "acme"</code> from memory.</li>
+<li>Try it: open "The API Shape Swap" lab below and toggle vendors on and off to compare their real write/query calls side by side.</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 10 · POSITION 12 OF 14</h3>
+<p>This concept wrote and queried this course's own single chunk in four real, non-Oracle vector-store SDKs, and found that even tenant isolation -- the one operation all four claim to support -- uses a genuinely different real mechanism in every case. Concept 13, "Choosing a store by workload, governance, scale and cost," turns from naming these systems to actually deciding among them -- named forward only, not built here.</p>
+<a class="button primary" href="module-10-concept-11.html">← Back to Concept 11's pgvector translation</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Four real APIs, one identical operation, four different tenant mechanisms</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>Four SDKs, verified live</b><small>Pinecone, Qdrant, Weaviate, and Milvus's own real write/query calls.</small></a>
+<a href="#s10"><span>02</span><b>One chunk, four write calls</b><small>This course's own chunk_id/tenant_id/embedding, in each vendor's own real syntax.</small></a>
+<a href="#s14"><span>03</span><b>The API Shape Swap</b><small>The lab -- toggle vendors on and off to compare real code side by side.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the tenant-mechanism proof.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 12 path:</b> Concept 01 already named Pinecone and Qdrant once each, in the abstract; Concept 04 already cited Pinecone's namespace pattern and Qdrant's payload pre-filter pattern, without code → this concept re-verifies both live and adds two more real vendors, Weaviate and Milvus, neither cited anywhere in the module before now → this course's own single chunk (Concept 03's chunk_id, Concept 04's tenant_id, a real 384-dim embedding) is written and queried back in all four vendors' own real, live-fetched SDK syntax → the headline: tenant isolation is a namespace argument in one vendor, a payload pre-filter in another, a native tenant object in a third, and a filter-expression string in a fourth → the lab lets you toggle vendors and compare the real code → Concept 13 does the actual choosing next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Managed and specialist stores" deep dive</b><em>Full citations, the annotated SDK code, and The API Shape Swap lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Position 12 of 14 -- four vendors named for the first time, together</h2></div></header>
+<p>This concept fills position 12 of Module 10's own 14-concept list: "Managed and specialist stores: Pinecone, Qdrant, Weaviate and Milvus." Concept 01 already named Pinecone once (for a vendor-neutral vector-database definition) and Qdrant once (as the module's own database-versus-store boundary case); Concept 04 already cited Pinecone's own namespace-per-tenant pattern and Qdrant's own payload pre-filter pattern. This concept re-verifies both live and, for the first time in the module, names and cites Weaviate and Milvus. With this concept authored, Module 10's built set is the contiguous {1..12}.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>WRITE</span><h3>This course's own chunk into four real vendor APIs</h3><p>chunk_id "c007", tenant_id "acme", a real 384-dimension embedding -- upserted or inserted using each vendor's own live-verified syntax.</p></article>
+<article class="info-card"><span>QUERY</span><h3>The same chunk back, filtered to one tenant</h3><p>Four real query calls, each restricted to tenant "acme" by that vendor's own real mechanism.</p></article>
+<article class="info-card"><span>NAME</span><h3>Four genuinely different tenant-isolation mechanisms</h3><p>Namespace argument (Pinecone), payload pre-filter (Qdrant), native tenant object (Weaviate), filter-expression string (Milvus).</p></article>
+<article class="info-card"><span>SCOPE</span><h3>What stays out</h3><p>No benchmark, no recall/latency measurement, and no recommendation of one vendor over another -- Concept 13 (choosing a store) and Concept 14 (a portability lab) are named forward only, not built here.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-01.html">Module 10 Concept 01</a></b> -- the store/database/search-engine taxonomy, Pinecone's own vendor-neutral definition, and Qdrant's own boundary-case citation, both reused here.</li>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the chunk_id surrogate key and the VECTOR(384) placeholder, the real data written into all four vendors below.</li>
+<li><b><a href="module-10-concept-04.html">Module 10 Concept 04</a></b> -- the tenant_id column, and its own already-cited Pinecone-namespace and Qdrant-payload-filter multitenancy patterns, re-verified here.</li>
+<li><b><a href="module-10-concept-11.html">Module 10 Concept 11</a></b> -- the portability framing this concept extends past SQL, into four vendor SDKs with no shared syntax at all.</li>
+<li><b>Explicitly out of scope:</b> choosing among the four (<a href="#s01">Concept 13, unbuilt</a>) and a general portability lab (<a href="#s01">Concept 14, unbuilt</a>) -- named forward only, not re-derived here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Four separate real products, not four flavors of one thing</h2></div></header>
+<p>Oracle's SQL and pgvector's SQL both descend from the same standard -- that's why Concept 11 found real overlap (the three shorthand operators). Pinecone, Qdrant, Weaviate, and Milvus descend from no shared standard at all. Each is a separately founded company or open-source project, with its own client library, its own object model (records, points, objects, entities), and its own real API surface. Calling all four "vector stores" is accurate at the category level Concept 01 already defined, and completely unhelpful at the code level -- which is the level this concept works at.</p>
+<div class="mental-compare">
+<div><span>ORACLE / PGVECTOR (Concept 11)</span><p>Two dialects of the same root language, SQL. Real syntactic overlap exists and was found.</p></div>
+<div><span>PINECONE / QDRANT / WEAVIATE / MILVUS (this concept)</span><p>Four separate client libraries, four separate object models. No shared root language to find overlap in.</p></div>
+</div>
+<div class="callout warning"><b>Scope note</b>This concept does not claim one of the four vendors is "better" at anything. It claims only that their real APIs, verified live this session, are not interchangeable -- a narrower, checkable claim.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Notation</th></tr></thead>
+<tbody>
+<tr><td>Pinecone</td><td>A managed vector database; per its own Python SDK README, a client for "creat[ing] and manag[ing] indexes, upsert[ing] and query[ing] vectors"</td><td>index.upsert(...) / index.query(...)</td></tr>
+<tr><td>Qdrant</td><td>An open-source vector search engine with a managed cloud option; per its own client README, "Client library and SDK for the Qdrant vector search engine"</td><td>client.upsert(...) / client.query_points(...)</td></tr>
+<tr><td>Weaviate</td><td>An open-source vector database with a managed cloud option; per its own documentation, stores "objects, vectors, and inverted indexes in one system"</td><td>collection.data.insert(...) / collection.query.near_vector(...)</td></tr>
+<tr><td>Milvus</td><td>An open-source vector database built for billion-scale search; per its own documentation, "Milvus Lite (embedded)... Standalone... and Distributed"</td><td>client.insert(...) / client.search(...)</td></tr>
+<tr><td>Tenant isolation</td><td>Restricting a write or query to one tenant's own data -- a real feature in all four vendors' own documentation, implemented by four different real mechanisms (Section 06)</td><td>namespace= / payload filter / with_tenant(...) / filter=</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Four SDKs, four real object models, verified live this session</h2></div></header>
+<div class="core-block">
+<p>Per Pinecone's own Python SDK README, fetched live this session: a serverless index is created with <code>pc.indexes.create(name=..., dimension=..., metric="cosine", spec=ServerlessSpec(...))</code>, then written to with <code>index.upsert(vectors=[...], namespace=...)</code> and read with <code>index.query(vector=..., top_k=..., namespace=...)</code>. Per Qdrant's own client README, a collection is created with <code>client.create_collection(collection_name=..., vectors_config=VectorParams(size=..., distance=Distance.COSINE))</code>, written to with <code>client.upsert(collection_name=..., points=[PointStruct(id=..., vector=..., payload=...)])</code>, and read with <code>client.query_points(collection_name=..., query=..., query_filter=..., limit=...)</code>. Per Weaviate's own client source, fetched live this session, a collection is created with <code>client.collections.create(name, vector_config=Configure.Vectors.self_provided(), properties=[...])</code>, written to with <code>collection.data.insert(properties, vector=...)</code> -- confirmed directly in the client's own <code>executor.py</code> -- and read with <code>collection.query.near_vector(near_vector=..., limit=...)</code>. Per Milvus's own quickstart documentation, fetched live this session, a collection is created with <code>client.create_collection(collection_name=..., dimension=...)</code>, written to with <code>client.insert(collection_name=..., data=[...])</code>, and read with <code>client.search(collection_name=..., data=[...], filter=..., limit=...)</code>.</p>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Four real products, three axes of comparison</h2></div></header>
+<figure class="concept-visual" aria-labelledby="c1012-s07-title">
+<strong class="concept-visual-title" id="c1012-s07-title">VISUAL · FOUR VENDORS, THREE AXES</strong>
+<div class="diagram-scroll" tabindex="0" aria-label="Four vector-store vendors compared across write shape, filter DSL, and tenant mechanism">
+<div class="diagram-family-grid">
+<div class="diagram-node active"><b>Pinecone</b><small>Namespace argument for tenant isolation</small></div>
+<div class="diagram-node"><b>Qdrant</b><small>Payload pre-filter for tenant isolation</small></div>
+<div class="diagram-node"><b>Weaviate</b><small>Native tenant object for tenant isolation</small></div>
+<div class="diagram-node"><b>Milvus</b><small>Filter-expression string for tenant isolation</small></div>
+</div>
+</div>
+<ol class="diagram-key"><li><b>Write shape:</b> a flat dict-list (Pinecone), a typed PointStruct object (Qdrant), a separate insert call with a vector= kwarg (Weaviate), or a flat dict merging id/vector/scalars (Milvus).</li><li><b>Filter DSL:</b> a nested $eq operator dict (Pinecone, when filtering), typed FieldCondition/MatchValue objects (Qdrant), a fluent Filter.by_property() chain (Weaviate), or a boolean-expression string (Milvus).</li><li><b>Tenant mechanism:</b> the one axis where none of the four agree -- see Section 06 and the distinction table in Section 11.</li></ol>
+</figure>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where this sits next to the course's own build</h2></div></header>
+<div class="pipeline-preview">
+<span>This course's own real build — Oracle (Concepts 05-10), translated to pgvector (Concept 11)</span><i>↓</i><span class="hot">Four non-Oracle vendor APIs — this concept's own comparison, not a replacement</span><i>↓</i><span>Context → LLM → Answer</span>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The one shared number: 384</h2></div></header>
+<p>This concept introduces no new math. The one number every one of the four real code blocks in Section 12 shares is Concept 03's own embedding width, 384 (all-MiniLM-L6-v2) -- passed as <code>dimension=384</code> to Pinecone's and Milvus's own index/collection creation calls, as <code>size=384</code> inside Qdrant's own <code>VectorParams</code>, and implicitly, as the length of the real embedding list, to Weaviate's own <code>vector=</code> argument, which carries no separate dimension parameter at collection-creation time in the self-provided-vector mode used here.</p>
+<div class="callout"><b>Scope hedge</b>Each vendor's own documentation states a default distance metric for a freshly created index or collection -- Pinecone's own quick-start example passes <code>metric="cosine"</code> explicitly; Qdrant's own README passes <code>Distance.COSINE</code> explicitly; Milvus's own quickstart documentation states its simplified <code>create_collection(dimension=...)</code> call "set[s]... its default value (COSINE)." This concept does not independently re-derive the cosine-distance formula -- that derivation is Concept 09's own worked example, cited, not repeated.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One chunk, four vendors, three real calls each</h2></div></header>
+<p>The chunk: <code>chunk_id="c007"</code>, belonging to <code>doc_id="d042"</code> (Concept 03's own schema), owned by <code>tenant_id="acme"</code> (Concept 04's own column), embedded at 384 dimensions by <code>all-MiniLM-L6-v2</code> (Concept 03's own model choice). The operation, held constant across all four vendors: create the collection/index once, write this one chunk into it, then query it back restricted to tenant "acme". Only the real syntax changes.</p>
+<table class="worked-table">
+<thead><tr><th>Vendor</th><th>Setup call</th><th>Tenant mechanism used in the query</th></tr></thead>
+<tbody>
+<tr><td>Pinecone</td><td><code>pc.indexes.create(name=..., dimension=384, metric="cosine", spec=ServerlessSpec(...))</code></td><td><code>namespace="acme"</code> argument, no filter clause</td></tr>
+<tr><td>Qdrant</td><td><code>client.create_collection(collection_name=..., vectors_config=VectorParams(size=384, distance=Distance.COSINE))</code></td><td><code>FieldCondition(key="tenant_id", match=MatchValue(value="acme"))</code></td></tr>
+<tr><td>Weaviate</td><td><code>client.collections.create(..., vector_config=Configure.Vectors.self_provided(), multi_tenancy_config=Configure.multi_tenancy(enabled=True))</code></td><td><code>collection.with_tenant("acme")</code>, no filter clause</td></tr>
+<tr><td>Milvus</td><td><code>client.create_collection(collection_name=..., dimension=384)</code></td><td><code>filter="tenant_id == 'acme'"</code></td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Every call shape above is quoted or paraphrased directly from a live fetch this session: Pinecone's and Qdrant's own GitHub README files; Weaviate's own <code>weaviate/collections/data/executor.py</code> and <code>weaviate/collections/classes/config_vectors.py</code> source files, plus its own <code>docs.weaviate.io/weaviate/search/similarity</code> and <code>.../manage-data/multi-tenancy</code> pages; and Milvus's own <code>milvus.io/docs/quickstart.md</code> and <code>.../multi_tenancy.md</code> pages. None of the four is a general blog post or a training-data recollection -- each is that vendor's own current, fetched-this-session source.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>Three real API differences, side by side</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>WRITE SHAPE</span><h3>Dict-list vs. typed object vs. separate call vs. flat dict</h3><p>Pinecone's <code>vectors=[{"id":...,"values":...}]</code>; Qdrant's <code>points=[PointStruct(id=..., vector=..., payload=...)]</code>; Weaviate's <code>data.insert(properties, vector=...)</code>; Milvus's <code>data=[{"id":...,"vector":...,"tenant_id":...}]</code>.</p></article>
+<article class="info-card"><span>FILTER DSL</span><h3>Nested dict vs. typed objects vs. fluent chain vs. boolean string</h3><p>Pinecone's <code>{"tenant_id":{"$eq":"acme"}}</code>; Qdrant's <code>FieldCondition(key=...,match=MatchValue(value=...))</code>; Weaviate's <code>Filter.by_property("tenant_id").equal("acme")</code>; Milvus's <code>"tenant_id == 'acme'"</code> string.</p></article>
+<article class="info-card"><span>TENANT MECHANISM</span><h3>The axis where nothing agrees</h3><p>Pinecone: a namespace argument. Qdrant: a payload pre-filter. Weaviate: a native tenant object. Milvus: a filter-expression string (with database-level and partition-key-level alternatives named, not coded, in its own docs).</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>All four, in full, side by side</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · PINECONE (real SDK syntax, live-verified this session)</span>
+<pre><code>from pinecone import Pinecone, ServerlessSpec
+
+pc = Pinecone(api_key="...")
+pc.indexes.create(
+    name="rag-atlas-chunks",
+    dimension=384,
+    metric="cosine",
+    spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+)
+index = pc.index("rag-atlas-chunks")
+
+index.upsert(
+    vectors=[{"id": "c007", "values": embedding}],
+    namespace="acme",
+)
+
+results = index.query(
+    vector=query_embedding,
+    top_k=5,
+    namespace="acme",
+    include_metadata=True,
+)</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">PYTHON · QDRANT (real client syntax, live-verified this session)</span>
+<pre><code>from qdrant_client import QdrantClient, models
+
+client = QdrantClient(url="http://localhost:6333")
+client.create_collection(
+    collection_name="rag_atlas_chunks",
+    vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
+)
+
+client.upsert(
+    collection_name="rag_atlas_chunks",
+    points=[
+        models.PointStruct(id="c007", vector=embedding, payload={"tenant_id": "acme"})
+    ],
+)
+
+hits = client.query_points(
+    collection_name="rag_atlas_chunks",
+    query=query_embedding,
+    query_filter=models.Filter(
+        must=[models.FieldCondition(key="tenant_id", match=models.MatchValue(value="acme"))]
+    ),
+    limit=5,
+)</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">PYTHON · WEAVIATE (real client syntax, live-verified this session)</span>
+<pre><code>from weaviate.classes.config import Configure, Property, DataType
+from weaviate.classes.query import MetadataQuery
+
+client.collections.create(
+    "RagAtlasChunk",
+    vector_config=Configure.Vectors.self_provided(),
+    properties=[Property(name="chunk_id", data_type=DataType.TEXT)],
+    multi_tenancy_config=Configure.multi_tenancy(enabled=True),
+)
+chunks = client.collections.use("RagAtlasChunk")
+acme_chunks = chunks.with_tenant("acme")
+
+acme_chunks.data.insert({"chunk_id": "c007"}, vector=embedding)
+
+response = acme_chunks.query.near_vector(
+    near_vector=query_embedding,
+    limit=5,
+    return_metadata=MetadataQuery(distance=True),
+)</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">PYTHON · MILVUS (real MilvusClient syntax, live-verified this session)</span>
+<pre><code>from pymilvus import MilvusClient
+
+client = MilvusClient(uri="./rag_atlas.db")
+client.create_collection(collection_name="rag_atlas_chunks", dimension=384)
+
+client.insert(
+    collection_name="rag_atlas_chunks",
+    data=[{"id": "c007", "vector": embedding, "tenant_id": "acme"}],
+)
+
+res = client.search(
+    collection_name="rag_atlas_chunks",
+    data=[query_embedding],
+    filter="tenant_id == 'acme'",
+    limit=5,
+)</code></pre>
+</div>
+<p>All four blocks perform the identical semantic operation on the identical chunk. None of the four is a drop-in replacement for another -- not the setup call, not the write call, not the query call, and not the tenant mechanism.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Real, independently checked sources for every claim above</h2></div></header>
+<p>Pinecone's own <a href="https://github.com/pinecone-io/pinecone-python-client">Python SDK GitHub repository and README</a> supplies the <code>pc.indexes.create</code>/<code>index.upsert</code>/<code>index.query</code> call shapes in Sections 06 and 12, fetched live this session (HTTP 200). Pinecone's own <a href="https://docs.pinecone.io/guides/index-data/upsert-data">upsert-data guide</a> and <a href="https://docs.pinecone.io/guides/search/filter-by-metadata">filter-by-metadata guide</a> supply the dict-with-metadata upsert shape and the <code>$eq</code>/<code>$and</code>/<code>$or</code> filter-operator table in Section 11, both fetched live this session (HTTP 200). Pinecone's own <a href="https://docs.pinecone.io/guides/index-data/implement-multitenancy">multitenancy guide</a> (reused from Concept 04) is re-fetched live this session (HTTP 200) for the namespace-argument mechanism. Qdrant's own <a href="https://github.com/qdrant/qdrant-client">Python client GitHub repository and README</a> supplies the <code>create_collection</code>/<code>upsert</code>/<code>query_points</code> shapes, fetched live this session (HTTP 200). Qdrant's own <a href="https://qdrant.tech/documentation/search/filtering/">filtering documentation</a> supplies the <code>FieldCondition</code>/<code>MatchValue</code> syntax quoted in Sections 11-12, fetched live this session (HTTP 200). Qdrant's own <a href="https://qdrant.tech/documentation/manage-data/multitenancy/">multitenancy documentation</a> (reused from Concept 04) is re-fetched live this session (HTTP 200). Weaviate's own <a href="https://github.com/weaviate/weaviate-python-client">Python client GitHub repository</a>, and specifically its own <code>weaviate/collections/data/executor.py</code> (the real <code>insert(properties, vector=...)</code> signature) and <code>weaviate/collections/classes/config_vectors.py</code> (the real <code>Configure.Vectors.self_provided()</code> method) source files, are fetched live this session (HTTP 200) directly from raw.githubusercontent.com. Weaviate's own <a href="https://docs.weaviate.io/weaviate/search/similarity">similarity search documentation</a> supplies the <code>near_vector(near_vector=..., limit=..., return_metadata=...)</code> call, and its own <a href="https://docs.weaviate.io/weaviate/manage-data/multi-tenancy">multi-tenancy documentation</a> supplies <code>multi_tenancy_config</code>/<code>with_tenant(...)</code> -- both fetched live this session (HTTP 200). Milvus's own <a href="https://github.com/milvus-io/pymilvus">PyMilvus GitHub repository</a> confirms the <code>MilvusClient</code> interface as the current recommended API, fetched live this session (HTTP 200). Milvus's own <a href="https://milvus.io/docs/quickstart.md">quickstart documentation</a> supplies the <code>create_collection</code>/<code>insert</code>/<code>search</code>/<code>filter</code> call shapes, and its own <a href="https://milvus.io/docs/multi_tenancy.md">multi-tenancy documentation</a> names the database-level and partition-key-level structural alternatives -- both fetched live this session (HTTP 200).</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>The API Shape Swap</h2></div></header>
+<div class="lab">
+<p>Toggle vendors on and off below to compare their real setup/write/query code for this course's own chunk, side by side. Every panel performs the identical operation -- write chunk_id "c007" for tenant "acme", then query it back filtered to that same tenant.</p>
+<div class="system-toggle-row" role="group" aria-label="Choose which vendors to display">
+<label><input type="checkbox" id="vendorToggle_1012_pinecone" data-vendor="pinecone" checked> Pinecone</label>
+<label><input type="checkbox" id="vendorToggle_1012_qdrant" data-vendor="qdrant" checked> Qdrant</label>
+<label><input type="checkbox" id="vendorToggle_1012_weaviate" data-vendor="weaviate" checked> Weaviate</label>
+<label><input type="checkbox" id="vendorToggle_1012_milvus" data-vendor="milvus" checked> Milvus</label>
+</div>
+<div id="vendorPanels_1012"></div>
+<div class="callout" id="vendorVerdict_1012" aria-live="polite">All four vendors are showing. Uncheck one above to hide its panel and compare the rest.</div>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">TRADE-OFFS</span><h2>What each vendor's own model costs, what it buys</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Vendor</th><th>Cost</th><th>What it buys</th></tr></thead>
+<tbody>
+<tr><td>Pinecone</td><td>Managed-only, usage-based billing; namespace isolation means no cross-namespace query in one call</td><td>No infrastructure to run; namespace argument is a single, simple isolation primitive</td></tr>
+<tr><td>Qdrant</td><td>Self-hosted or managed; a payload pre-filter must be indexed and included in every query by the caller</td><td>Open-source, runs locally (":memory:" or on disk) or in the cloud; typed filter objects with IDE support</td></tr>
+<tr><td>Weaviate</td><td>Self-hosted or managed; multi-tenancy must be enabled at collection-creation time, not added later</td><td>A first-class tenant object, not a caller-remembered filter; per-tenant load/release for hot/cold data</td></tr>
+<tr><td>Milvus</td><td>Self-hosted, embedded (Lite), or managed (Zilliz); the simple boolean filter has no built-in tenant object at the API level shown here</td><td>Open-source; billion-scale design; database-level and partition-key-level structural isolation available as named alternatives</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Failure modes</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>ASSUMED FILTER PORTABILITY</span><h3>A team copies Pinecone's <code>$eq</code> filter dict into a Qdrant call</h3><p>Cause: assuming a metadata filter is a metadata filter everywhere. Fix: Qdrant needs typed <code>FieldCondition</code>/<code>MatchValue</code> objects, not a dict with a <code>$eq</code> key -- that key means nothing to Qdrant's own client.</p></article>
+<article class="info-card"><span>FORGOTTEN TENANT SETUP</span><h3>A write succeeds on Weaviate but the tenant filter at query time returns nothing</h3><p>Cause: <code>multi_tenancy_config=Configure.multi_tenancy(enabled=True)</code> was never set at collection-creation time, or <code>with_tenant("acme")</code> was omitted at write time. Fix: multi-tenancy is a structural collection property in Weaviate, not a per-call filter that can be bolted on afterward.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>All four vendors isolate tenants the same way, just with different keyword names</td><td>False -- Pinecone uses a structural namespace argument, Weaviate uses a structural tenant object, and only Qdrant and Milvus use an actual filter predicate; two of the four don't filter for it at all.</td></tr>
+<tr><td>"Vector database" (Concept 01's category) implies a shared query API</td><td>False -- Concept 01's category is about persistence, consistency, and replication as first-class features, not about API shape. Oracle, Qdrant, Weaviate, and Milvus can all qualify as vector databases under that definition while sharing zero real query syntax.</td></tr>
+<tr><td>Milvus's boolean filter-expression string is the only tenant strategy it documents</td><td>Not established here -- Milvus's own multi-tenancy documentation also names database-level and partition-key-level structural strategies; this concept verified the filter-string approach in code and named, but did not code, the other two.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">PRODUCTION</span><h2>What this concept does not settle yet</h2></div></header>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>A named-vendor API reference, not a recommendation</b><p>This concept shows what writing and querying this course's own chunk would look like on four real, non-Oracle vendors. It does not benchmark recall, latency, or cost on this course's own data, and it does not recommend one vendor over another or over the course's own Oracle build -- none of that was measured this session.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 10 · POSITION 12/14</b><p>Concept 13 (choosing a store) and Concept 14 (a portability lab) remain unbuilt, named forward only.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Self-check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name all four vendors' tenant mechanism</b><p>Pinecone (namespace), Qdrant (payload pre-filter), Weaviate (native tenant object), Milvus (filter-expression string).</p></div>
+<div><b>I can write this course's own chunk into any one of the four from memory</b><p>chunk_id "c007", tenant_id "acme", the real 384-dimension embedding -- shaped per Section 12's own four real code blocks.</p></div>
+<div><b>I know which two vendors actually use a filter predicate for tenancy</b><p>Qdrant and Milvus. Pinecone and Weaviate use a structural mechanism instead.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Using Section 12's own four code blocks, write the real query call each vendor would use to fetch chunk "c007" back for a <em>different</em> tenant, <code>"beta"</code>, instead of "acme". Name which of the four calls changes only a string literal, and which one would additionally require a setup-time change (a new tenant object, not just a new argument value).</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Pinecone: <code>index.query(vector=query_embedding, top_k=5, namespace="beta")</code> -- only the string literal changes. Qdrant: the <code>MatchValue(value="beta")</code> string changes, nothing structural. Milvus: the <code>filter="tenant_id == 'beta'"</code> string changes, nothing structural. Weaviate is the exception: <code>with_tenant("beta")</code> only works if tenant "beta" was already created with <code>chunks.tenants.create([Tenant(name="beta")])</code> -- a real setup-time step the other three don't require, because Weaviate's tenants are first-class objects, not string values passed at query time.</div>
+</details>
+<p>Teach-back: why does Weaviate need an explicit tenant-creation step that Pinecone's namespace argument does not?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>Managed and specialist stores: Pinecone, Qdrant, Weaviate and Milvus</h3><ul><li><b>The claim:</b> four real vendors, this course's own chunk, four incompatible real write/query/filter shapes.</li><li><b>The one surprise:</b> even tenant isolation -- the one thing all four claim to support -- uses a different real mechanism in each: namespace (Pinecone), payload pre-filter (Qdrant), native tenant object (Weaviate), filter-expression string (Milvus).</li><li><b>What's out of scope:</b> benchmarking and choosing among them -- Concept 13's job, not this one's.</li></ul></div>
+<div><h3>Module 10 · position 12/14</h3><p>Built set now the contiguous {1..12}. Concept 13 (choosing a store) is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why doesn't Oracle-versus-pgvector's real syntactic overlap (Concept 11) extend to Pinecone, Qdrant, Weaviate, or Milvus?</summary><div>Because Oracle and pgvector are both real SQL implementations descending from a shared relational standard, which is why their shorthand distance operators matched character-for-character. Pinecone, Qdrant, Weaviate, and Milvus are four separately designed client libraries with no shared standard underneath them -- there is no common root language for their APIs to overlap in.</div></details>
+<details class="quiz"><summary>Conceptual: which of the four vendors isolates tenants without using a filter predicate at all, and what does each use instead?</summary><div>Pinecone (a namespace argument on upsert/query) and Weaviate (a native tenant object created at collection-creation time and selected with with_tenant(...) at query time). Qdrant and Milvus both use an actual filter predicate -- a payload FieldCondition/MatchValue in Qdrant, a boolean filter-expression string in Milvus.</div></details>
+<details class="quiz"><summary>Coding: write the minimal real Qdrant filter for tenant_id equal to "acme".</summary><div>models.Filter(must=[models.FieldCondition(key="tenant_id", match=models.MatchValue(value="acme"))]) -- passed as the query_filter argument to client.query_points(...).</div></details>
+<details class="quiz"><summary>System design: your team is choosing between Weaviate's native tenant object and Milvus's boolean filter string for a new multi-tenant RAG system. What's the real trade-off, based only on what this concept established?</summary><div>Weaviate's tenant object is structural -- it must be created explicitly per tenant before any write, and it's enforced by the collection itself, which forecloses the caller ever forgetting the predicate. Milvus's filter string is enforced entirely by the caller remembering to pass it on every query -- more flexible (no setup step per tenant) but with no structural guarantee against a caller who omits the filter, the same forgotten-predicate risk Concept 04 already named for a plain SQL WHERE clause. This concept does not establish which trade-off is better for any specific workload -- only that they are different real risks.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://github.com/pinecone-io/pinecone-python-client"><b>Pinecone Python SDK — GitHub repository and README</b><br><span>Fetched live this session (HTTP 200) -- pc.indexes.create/index.upsert/index.query call shapes, Sections 06 and 12.</span></a>
+<a href="https://docs.pinecone.io/guides/index-data/upsert-data"><b>Upsert data — Pinecone Docs</b><br><span>Fetched live this session (HTTP 200) -- the dict-with-metadata upsert shape, Section 11.</span></a>
+<a href="https://docs.pinecone.io/guides/search/filter-by-metadata"><b>Filter by metadata — Pinecone Docs</b><br><span>Fetched live this session (HTTP 200) -- the $eq/$and/$or metadata filter-operator table, Section 11.</span></a>
+<a href="https://docs.pinecone.io/guides/index-data/implement-multitenancy"><b>Implement multitenancy — Pinecone Docs</b><br><span>Reused from Concept 04, re-fetched live this session (HTTP 200) -- the namespace-argument tenant mechanism.</span></a>
+<a href="https://github.com/qdrant/qdrant-client"><b>Qdrant Python client — GitHub repository and README</b><br><span>Fetched live this session (HTTP 200) -- create_collection/upsert/query_points call shapes, Sections 06 and 12.</span></a>
+<a href="https://qdrant.tech/documentation/search/filtering/"><b>Filtering — Qdrant Documentation</b><br><span>Fetched live this session (HTTP 200) -- the FieldCondition/MatchValue syntax, Sections 11-12.</span></a>
+<a href="https://qdrant.tech/documentation/manage-data/multitenancy/"><b>Multitenancy — Qdrant Documentation</b><br><span>Reused from Concept 04, re-fetched live this session (HTTP 200) -- the payload pre-filter tenant mechanism.</span></a>
+<a href="https://github.com/weaviate/weaviate-python-client"><b>Weaviate Python client — GitHub repository and source</b><br><span>Fetched live this session (HTTP 200), including weaviate/collections/data/executor.py (insert signature) and weaviate/collections/classes/config_vectors.py (self_provided()), read directly from raw.githubusercontent.com.</span></a>
+<a href="https://docs.weaviate.io/weaviate/search/similarity"><b>Similarity search — Weaviate Documentation</b><br><span>Fetched live this session (HTTP 200) -- the near_vector(near_vector=..., limit=..., return_metadata=...) call, Sections 06 and 12.</span></a>
+<a href="https://docs.weaviate.io/weaviate/manage-data/multi-tenancy"><b>Multi-tenancy — Weaviate Documentation</b><br><span>Fetched live this session (HTTP 200) -- multi_tenancy_config and with_tenant(...), new this session.</span></a>
+<a href="https://github.com/milvus-io/pymilvus"><b>PyMilvus — GitHub repository and README</b><br><span>Fetched live this session (HTTP 200) -- confirms MilvusClient as the current recommended interface.</span></a>
+<a href="https://milvus.io/docs/quickstart.md"><b>Quickstart — Milvus Documentation</b><br><span>Fetched live this session (HTTP 200) -- create_collection/insert/search/filter call shapes, Sections 06 and 12.</span></a>
+<a href="https://milvus.io/docs/multi_tenancy.md"><b>Multi-tenancy — Milvus Documentation</b><br><span>Fetched live this session (HTTP 200) -- database-level and partition-key-level structural alternatives, named, not coded, in Section 06.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 10 · POSITION 12/14</span>
+<h3>Four real vendors. One operation, four incompatible syntaxes.</h3>
+<p>You can now write and query this course's own chunk in Pinecone's, Qdrant's, Weaviate's, and Milvus's own real SDK syntax, and name which genuinely different real mechanism each one uses for tenant isolation. Concepts 01 and 04's own earlier Pinecone and Qdrant citations are now backed by live-verified code; Weaviate and Milvus are named and cited in this module for the first time.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open The API Shape Swap ↑</a>
+</div>
+<p class="fine-print">Module 10 stands at position 12 of 14. Concept 13 (choosing a store) is next.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 10 · Concept 12 · Complete</p>
+<a href="module-10-concept-11.html">← Concept</a>
+</footer>
+</body>
+</html>
