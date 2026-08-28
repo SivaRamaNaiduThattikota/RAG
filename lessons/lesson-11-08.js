@@ -1,89 +1,111 @@
 // Module 11, Concept 08 -- LLM generation and the final answer.
-// "Decode the next token" lab. One fixed set of logits per scenario --
-// child chunk intact vs. cut mid-sentence, per Module 07 Concept 06's own
-// overlap-sizing risk -- softmaxed live in the browser with the exact same
-// formula the node verification script in Section 12 ran ahead of time.
+// "Generate the next token" lab. Four fixed decode steps, each masking three
+// unsupported candidates against one token the retrieved passage actually
+// backs -- reusing Module 02 Concept 11's .mask-panels pattern, repurposed
+// from "grammar constraint" to "grounded vs. unsupported token choice."
+// Winners concatenate to "90-day grace period," a deliberately different
+// worked answer from Section 07's "14 days," per the lab's own disclaimer.
 
 (function () {
   "use strict";
 
-  // Two decoding scenarios at the same position: right after "The
-  // order-cancellation grace period is ". Logits are illustrative --
-  // flagged as such in Section 12 -- chosen only to make the mechanic
-  // (logit -> softmax -> argmax) concrete and hand-checkable.
-  var SCENARIOS_1108 = {
-    intact: {
-      label: "c007 (child), overlap intact -- number present in context",
-      logits: { "14": 5.1, "7": 1.2, "30": 0.8, "an": 0.3 },
-      winner: "14",
-      answer:
-        "The order-cancellation grace period is 14 days from the ship date [SOURCE 2]. " +
-        "The retrieved evidence does not state a separate return window after the grace period -- this cannot be answered from the provided sources.",
+  var steps_1108 = [
+    {
+      word: "90",
+      tokens: [
+        { label: "90", pct: 72, ok: true, reason: "matches retrieved passage" },
+        { label: "30", pct: 12, ok: false, reason: "not stated in evidence" },
+        { label: "60", pct: 9, ok: false, reason: "not stated in evidence" },
+        { label: "180", pct: 7, ok: false, reason: "not stated in evidence" },
+      ],
     },
-    cut: {
-      label: "c007 (child), cut mid-sentence -- number absent from context",
-      logits: { not: 4.8, "14": 1.5, "30": 1.1, "7": 0.9 },
-      winner: "not",
-      answer:
-        "The retrieved evidence names an order-cancellation grace period but does not state its length in the text provided [SOURCE 2]. " +
-        "The return window after the grace period is also not stated in the provided sources.",
+    {
+      word: "-day",
+      tokens: [
+        { label: "-day", pct: 81, ok: true, reason: "matches retrieved phrasing" },
+        { label: " days", pct: 8, ok: false, reason: "wrong tokenization of the number" },
+        { label: "-hour", pct: 6, ok: false, reason: "not stated in evidence" },
+        { label: "-week", pct: 5, ok: false, reason: "not stated in evidence" },
+      ],
     },
-  };
+    {
+      word: " grace",
+      tokens: [
+        { label: " grace", pct: 88, ok: true, reason: "matches retrieved phrasing" },
+        { label: " waiting", pct: 5, ok: false, reason: "not the retrieved term" },
+        { label: " trial", pct: 4, ok: false, reason: "not the retrieved term" },
+        { label: " notice", pct: 3, ok: false, reason: "not the retrieved term" },
+      ],
+    },
+    {
+      word: " period",
+      tokens: [
+        { label: " period", pct: 91, ok: true, reason: "matches retrieved phrasing" },
+        { label: " window", pct: 4, ok: false, reason: "plausible English, not the retrieved term" },
+        { label: " term", pct: 3, ok: false, reason: "not the retrieved term" },
+        { label: " phase", pct: 2, ok: false, reason: "not the retrieved term" },
+      ],
+    },
+  ];
 
-  var pickButtons_1108 = document.querySelectorAll("#scenarioPicker_1108 button");
-  var probBars_1108 = document.getElementById("probBars_1108");
-  var sampleOutput_1108 = document.getElementById("sampleOutput_1108");
-  var scenarioNote_1108 = document.getElementById("scenarioNote_1108");
+  var lab_1108 = document.getElementById("lab_1108");
+  var stepLabel_1108 = document.getElementById("stepLabel_1108");
+  var stepBtn_1108 = document.getElementById("stepBtn_1108");
+  var resetBtn_1108 = document.getElementById("resetBtn_1108");
+  var answer_1108 = document.getElementById("answer_1108");
+  var rows_1108 = [
+    document.getElementById("row0_1108"),
+    document.getElementById("row1_1108"),
+    document.getElementById("row2_1108"),
+    document.getElementById("row3_1108"),
+  ];
 
-  if (!pickButtons_1108.length || !probBars_1108) return;
+  if (!lab_1108 || !stepBtn_1108 || !rows_1108[0]) return;
 
-  function softmax_1108(logits) {
-    var keys = Object.keys(logits);
-    var vals = keys.map(function (k) { return logits[k]; });
-    var max = Math.max.apply(null, vals);
-    var exps = keys.map(function (k) { return Math.exp(logits[k] - max); });
-    var sum = exps.reduce(function (a, b) { return a + b; }, 0);
-    var probs = {};
-    keys.forEach(function (k, i) { probs[k] = exps[i] / sum; });
-    return probs;
+  var idx_1108 = 0;
+
+  function renderRow_1108(rowEl, token) {
+    var labelEl = rowEl.querySelector(".token-label");
+    var fillEl = rowEl.querySelector(".bar-fill");
+    var reasonEl = rowEl.querySelector(".token-reason");
+    labelEl.textContent = token.label;
+    fillEl.style.width = token.pct + "%";
+    reasonEl.textContent = token.pct + "% -- " + token.reason;
+    rowEl.classList.toggle("winner", token.ok);
+    rowEl.classList.toggle("ineligible", !token.ok);
   }
 
-  function render_1108(key) {
-    var scenario = SCENARIOS_1108[key];
-    var probs = softmax_1108(scenario.logits);
-    var entries = Object.keys(probs)
-      .map(function (tok) { return { tok: tok, p: probs[tok] }; })
-      .sort(function (a, b) { return b.p - a.p; });
+  function render_1108() {
+    var atEnd = idx_1108 >= steps_1108.length;
+    var stepNum = Math.min(idx_1108 + 1, steps_1108.length);
+    stepLabel_1108.textContent = atEnd
+      ? "Step " + steps_1108.length + " of " + steps_1108.length + " -- done"
+      : "Step " + stepNum + " of " + steps_1108.length;
 
-    probBars_1108.innerHTML = entries
-      .map(function (e) {
-        var isWinner = e.tok === scenario.winner;
-        var pct = (e.p * 100).toFixed(2);
-        return (
-          '<div class="prob-row' + (isWinner ? " winner" : "") + '">' +
-          '<span class="token-label">' + e.tok + "</span>" +
-          '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
-          "<span>" + pct + "%</span>" +
-          "</div>"
-        );
-      })
-      .join("");
-
-    sampleOutput_1108.textContent = scenario.answer;
-    scenarioNote_1108.textContent = scenario.label + " -- argmax token: \"" + scenario.winner + "\"";
-
-    pickButtons_1108.forEach(function (btn) {
-      var active = btn.getAttribute("data-scenario") === key;
-      btn.classList.toggle("active", active);
-      btn.classList.toggle("secondary", !active);
+    var step = steps_1108[atEnd ? steps_1108.length - 1 : idx_1108];
+    step.tokens.forEach(function (token, i) {
+      renderRow_1108(rows_1108[i], token);
     });
+
+    stepBtn_1108.disabled = atEnd;
+    stepBtn_1108.textContent = atEnd ? "Done" : "Generate next token";
   }
 
-  pickButtons_1108.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      render_1108(btn.getAttribute("data-scenario"));
-    });
-  });
+  function step_1108() {
+    if (idx_1108 >= steps_1108.length) return;
+    answer_1108.textContent += steps_1108[idx_1108].word;
+    idx_1108 += 1;
+    render_1108();
+  }
 
-  render_1108("intact");
+  function reset_1108() {
+    idx_1108 = 0;
+    answer_1108.textContent = "Answer: ";
+    render_1108();
+  }
+
+  stepBtn_1108.addEventListener("click", step_1108);
+  resetBtn_1108.addEventListener("click", reset_1108);
+
+  render_1108();
 })();

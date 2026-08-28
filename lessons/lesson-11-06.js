@@ -1,113 +1,150 @@
 // Module 11, Concept 06 -- Top-k evidence selection.
-// "Move the cutoff line" lab. One candidate list (already tenant-filtered,
-// already over-fetched per Module 09 Concept 07), two sliders -- score
-// cutoff and k -- and one small pure function that reproduces exactly what
-// the node verification script computed: cutoff filter, top-k slice,
-// redundancy backfill, token-budget sum.
+// "Move the cutoff line" lab. Eight candidates arrive already ranked, as if
+// handed off from Concept 05's over-fetched search. Four independent gates
+// -- k, score cutoff, a redundancy filter, and a token budget -- decide
+// what actually becomes the evidence set. This is a *separate*, purely
+// synthetic dataset from the worked example's nine c007/cA-cG candidates
+// in Sections 09-14 of the page -- none of the numbers below are sourced
+// facts, they exist only so the sliders land on clean, round values.
 
 (function () {
   "use strict";
 
-  // Same nine candidates verified in the node script cited in Section 12.
-  // c007_child/c007_parent carry the grace-period cosine figures from
-  // Module 07 Concepts 06/07 and Module 08 Concept 06 -- every other score
-  // and token count here is illustrative lab data, not a sourced fact.
   var CANDIDATES_1106 = [
-    { id: "cA", label: "cA — refund window, general", score: 0.91, tokens: 150 },
-    { id: "c007_child", label: "c007 (child) — grace-period sentence", score: 0.8944, tokens: 180 },
-    { id: "cB", label: "cB — shipping confirmation copy", score: 0.88, tokens: 200 },
-    { id: "cC", label: "cC — order status definitions", score: 0.85, tokens: 190 },
-    { id: "cD", label: "cD — order status definitions (near-dup of cC)", score: 0.83, tokens: 170, dupOf: "cC" },
-    { id: "cE", label: "cE — cancellation policy", score: 0.79, tokens: 160 },
-    { id: "cF", label: "cF — loyalty program terms", score: 0.72, tokens: 140 },
-    { id: "cG", label: "cG — warehouse contact page", score: 0.68, tokens: 130 },
-    { id: "c007_parent", label: "c007 (parent) — grace-period paragraph", score: 0.6761, tokens: 420 },
+    { id: "c1", score: 0.91, tokens: 220, isDup: false },
+    { id: "c2", score: 0.88, tokens: 240, isDup: false },
+    { id: "c3", score: 0.86, tokens: 210, isDup: true }, // near-dup of c2
+    { id: "c4", score: 0.84, tokens: 260, isDup: false },
+    { id: "c5", score: 0.79, tokens: 230, isDup: false },
+    { id: "c6", score: 0.71, tokens: 250, isDup: false },
+    { id: "c7", score: 0.63, tokens: 270, isDup: false },
+    { id: "c8", score: 0.52, tokens: 190, isDup: false }
   ];
 
-  var BUDGET_1106 = 1200;
-
-  var cutoffSlider_1106 = document.getElementById("cutoffSlider_1106");
   var kSlider_1106 = document.getElementById("kSlider_1106");
-  var cutoffValue_1106 = document.getElementById("cutoffValue_1106");
-  var kValue_1106 = document.getElementById("kValue_1106");
+  var cutoffSlider_1106 = document.getElementById("cutoffSlider_1106");
+  var dedupToggle_1106 = document.getElementById("dedupToggle_1106");
+  var budgetSlider_1106 = document.getElementById("budgetSlider_1106");
+  var kVal_1106 = document.getElementById("kVal_1106");
+  var cutoffVal_1106 = document.getElementById("cutoffVal_1106");
+  var dedupVal_1106 = document.getElementById("dedupVal_1106");
+  var budgetVal_1106 = document.getElementById("budgetVal_1106");
   var chipRow_1106 = document.getElementById("chipRow_1106");
+  var evidenceFill_1106 = document.getElementById("evidenceFill_1106");
+  var evidenceCount_1106 = document.getElementById("evidenceCount_1106");
+  var coverageFill_1106 = document.getElementById("coverageFill_1106");
+  var coverageVal_1106 = document.getElementById("coverageVal_1106");
   var budgetBar_1106 = document.getElementById("budgetBar_1106");
-  var budgetMeta_1106 = document.getElementById("budgetMeta_1106");
-  var callout_1106 = document.getElementById("selectCallout_1106");
+  var budgetUsed_1106 = document.getElementById("budgetUsed_1106");
+  var budgetFlag_1106 = document.getElementById("budgetFlag_1106");
+  var presetNaive_1106 = document.getElementById("presetNaive_1106");
+  var presetDedup_1106 = document.getElementById("presetDedup_1106");
+  var presetBudget_1106 = document.getElementById("presetBudget_1106");
+  var resetBtn_1106 = document.getElementById("resetBtn_1106");
 
-  if (!cutoffSlider_1106 || !kSlider_1106 || !chipRow_1106) return;
+  if (!kSlider_1106 || !cutoffSlider_1106 || !chipRow_1106) return;
 
-  // Pure selection function -- identical logic to the node script: sort,
-  // cutoff filter, take k, drop redundant duplicates, backfill from the
-  // remaining cutoff-passing pool.
-  function selectEvidence_1106(cutoff, k) {
-    var sorted = CANDIDATES_1106.slice().sort(function (a, b) { return b.score - a.score; });
-    var passCutoff = sorted.filter(function (c) { return c.score >= cutoff; });
-    var topk = passCutoff.slice(0, k);
-    var evidence = topk.filter(function (c) { return !c.dupOf; });
-    var droppedDup = topk.filter(function (c) { return c.dupOf; }).map(function (c) { return c.id; });
-    var pool = passCutoff.filter(function (c) {
-      return evidence.indexOf(c) === -1 && !c.dupOf;
-    });
-    while (evidence.length < k && pool.length) {
-      evidence.push(pool.shift());
-    }
-    return { sorted: sorted, passCutoff: passCutoff, evidence: evidence, droppedDup: droppedDup };
-  }
+  // Segment colors, cycled, purely for the multi-candidate budget bar --
+  // no meaning beyond telling adjacent segments apart.
+  var SEGMENT_COLORS_1106 = ["#d7ff53", "#5ee6c3", "#a7e6ff", "#ffcf7c"];
 
   function render_1106() {
-    var cutoff = parseFloat(cutoffSlider_1106.value);
     var k = parseInt(kSlider_1106.value, 10);
-    cutoffValue_1106.textContent = cutoff.toFixed(2);
-    kValue_1106.textContent = String(k);
+    var cutoff = parseInt(cutoffSlider_1106.value, 10) / 100;
+    var dedup = dedupToggle_1106.checked;
+    var budget = parseInt(budgetSlider_1106.value, 10);
 
-    var result = selectEvidence_1106(cutoff, k);
-    var evidenceIds = result.evidence.map(function (c) { return c.id; });
+    kVal_1106.textContent = String(k);
+    cutoffVal_1106.textContent = cutoff.toFixed(2);
+    dedupVal_1106.textContent = dedup ? "on" : "off";
+    budgetVal_1106.textContent = String(budget);
 
-    chipRow_1106.innerHTML = result.sorted
-      .map(function (c) {
-        var classes = ["rank-chip"];
-        if (c.score < cutoff) {
-          classes.push("excluded");
-        } else if (evidenceIds.indexOf(c.id) !== -1) {
+    // Four gates, applied in rank order: score cutoff, k cap, redundancy
+    // filter, token budget. Whatever survives all four becomes evidence.
+    var selected = [];
+    var usedTokens = 0;
+    for (var i = 0; i < CANDIDATES_1106.length; i += 1) {
+      var cand = CANDIDATES_1106[i];
+      if (cand.score < cutoff) continue;
+      if (selected.length >= k) break;
+      if (dedup && cand.isDup) continue;
+      if (usedTokens + cand.tokens > budget) continue;
+      selected.push(cand);
+      usedTokens += cand.tokens;
+    }
+    var selectedIds = {};
+    selected.forEach(function (c) { selectedIds[c.id] = true; });
+
+    // Rank-chip row -- one chip per candidate, in fixed rank order.
+    chipRow_1106.innerHTML = CANDIDATES_1106
+      .map(function (cand, idx) {
+        var classes = ["rank-chip", "sorted-in"];
+        if (idx === k - 1) classes.push("cutoff-edge");
+        if (selectedIds[cand.id]) {
           classes.push("match");
-        } else if (c.dupOf) {
-          classes.push("fp");
         } else {
           classes.push("excluded");
         }
-        return "<span class=\"" + classes.join(" ") + "\">" + c.id + " · " + c.score.toFixed(4) + "</span>";
+        if (dedup && cand.isDup) classes.push("mover");
+        var dupTag = cand.isDup ? " &middot; dup" : "";
+        return (
+          '<div class="' + classes.join(" ") + '">' +
+          "<b>" + cand.id + "</b>" +
+          "<span>score " + cand.score.toFixed(2) + "</span>" +
+          "<small>" + cand.tokens + " tok" + dupTag + "</small>" +
+          "</div>"
+        );
       })
       .join("");
 
-    var totalTokens = result.evidence.reduce(function (s, c) { return s + c.tokens; }, 0);
-    var pct = Math.min(100, Math.round((totalTokens / BUDGET_1106) * 100));
-    budgetBar_1106.innerHTML = "<div class=\"budget-segment\" style=\"width:" + pct + "%\"></div>";
-    budgetMeta_1106.textContent =
-      totalTokens + " / " + BUDGET_1106 + " tokens (" + (BUDGET_1106 - totalTokens) + " remaining) — evidence set: " +
-      result.evidence.map(function (c) { return c.id; }).join(", ");
+    // Metric race: evidence-set size, and a coverage proxy (selected score
+    // total over the raw top-k score total, i.e. how much of the raw top-k
+    // slice's own quality survived every gate).
+    var evidencePct = Math.round((selected.length / CANDIDATES_1106.length) * 100);
+    evidenceFill_1106.style.width = evidencePct + "%";
+    evidenceCount_1106.textContent = selected.length + " / " + CANDIDATES_1106.length;
 
-    if (result.evidence.length < k) {
-      callout_1106.className = "callout warning";
-      callout_1106.textContent =
-        "Only " + result.evidence.length + " of k=" + k + " candidates clear the " + cutoff.toFixed(2) +
-        " cutoff -- raising k further can't help; the cutoff is the binding constraint here.";
-    } else if (result.droppedDup.length) {
-      callout_1106.className = "callout";
-      callout_1106.textContent =
-        result.droppedDup.join(", ") + " was dropped as a near-duplicate of cC and backfilled with the next candidate below the raw top-k line.";
-    } else if (totalTokens > BUDGET_1106) {
-      callout_1106.className = "callout critical";
-      callout_1106.textContent =
-        "Evidence set fits the score cutoff and k, but exceeds the " + BUDGET_1106 + "-token budget by " + (totalTokens - BUDGET_1106) + " tokens.";
-    } else {
-      callout_1106.className = "callout";
-      callout_1106.textContent =
-        "Evidence set is clean at this cutoff and k: no redundancy dropped, " + (BUDGET_1106 - totalTokens) + " tokens still free in the budget.";
-    }
+    var rawTopKScore = CANDIDATES_1106.slice(0, k).reduce(function (s, c) { return s + c.score; }, 0);
+    var selectedScore = selected.reduce(function (s, c) { return s + c.score; }, 0);
+    var coverage = rawTopKScore > 0 ? Math.round((selectedScore / rawTopKScore) * 100) : 0;
+    coverageFill_1106.style.width = Math.min(100, coverage) + "%";
+    coverageVal_1106.textContent = coverage + "%";
+
+    // Budget bar -- one segment per selected candidate, sized by token cost.
+    budgetBar_1106.innerHTML = selected
+      .map(function (cand, idx) {
+        var color = SEGMENT_COLORS_1106[idx % SEGMENT_COLORS_1106.length];
+        var widthPct = Math.max(2, Math.round((cand.tokens / budget) * 100));
+        return (
+          '<div class="budget-segment" style="width:' + widthPct + "%;background:" + color + '">' +
+          cand.id +
+          "</div>"
+        );
+      })
+      .join("");
+    budgetUsed_1106.textContent = usedTokens + " / " + budget + " tokens";
+    budgetFlag_1106.innerHTML =
+      usedTokens >= budget * 0.9
+        ? '<span class="budget-overflow">near budget limit -- later candidates dropped</span>'
+        : "";
   }
 
-  cutoffSlider_1106.addEventListener("input", render_1106);
-  kSlider_1106.addEventListener("input", render_1106);
+  function applyPreset_1106(k, cutoff, dedup, budget) {
+    kSlider_1106.value = String(k);
+    cutoffSlider_1106.value = String(cutoff);
+    dedupToggle_1106.checked = dedup;
+    budgetSlider_1106.value = String(budget);
+    render_1106();
+  }
+
+  [kSlider_1106, cutoffSlider_1106, dedupToggle_1106, budgetSlider_1106].forEach(function (el) {
+    el.addEventListener("input", render_1106);
+  });
+
+  if (presetNaive_1106) presetNaive_1106.addEventListener("click", function () { applyPreset_1106(4, 0, false, 1600); });
+  if (presetDedup_1106) presetDedup_1106.addEventListener("click", function () { applyPreset_1106(4, 0, true, 1600); });
+  if (presetBudget_1106) presetBudget_1106.addEventListener("click", function () { applyPreset_1106(6, 0, false, 700); });
+  if (resetBtn_1106) resetBtn_1106.addEventListener("click", function () { applyPreset_1106(4, 0, false, 1600); });
+
   render_1106();
 })();

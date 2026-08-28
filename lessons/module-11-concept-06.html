@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Concept 05 hands off a ranked, tenant-filtered candidate list -- already over-fetched past the true k, per Module 09 Concept 07's own 3.4x figure. This concept is the very next step: turning that over-fetched pool into the actual evidence set the prompt sees. Node-verified on nine candidates (including the grace-period chunk c007's own 0.8944/0.6761 cosine scores): a 0.75 score cutoff leaves 6 of 9 candidates, a raw top-5 slice still includes a near-duplicate chunk, redundancy dedup drops it and backfills the next candidate, and the final 5-chunk evidence set costs 880 of a 1,200-token budget. The lab, Move the cutoff line, lets you drag both the score cutoff and k and watch the evidence set change live.">
+<meta name="description" content="Concept 05 hands off a ranked, tenant-filtered candidate list -- already over-fetched past the true k, per Module 09 Concept 07's own 3.4x figure. This concept is the very next step: turning that over-fetched pool into the actual evidence set the prompt sees. Node-verified on nine candidates (including the grace-period chunk c007's own 0.8944/0.6761 cosine scores): a 0.75 score cutoff leaves 6 of 9 candidates, a raw top-5 slice still includes a near-duplicate chunk, redundancy dedup drops it and backfills the next candidate, and the final 5-chunk evidence set costs 880 of a 1,200-token budget. The lab, Move the cutoff line, runs on its own separate 8-candidate set and adds a fourth ceiling -- a token budget -- alongside k, score cutoff, and a redundancy filter, with three presets showing naive top-k waste, dedup-aware backfill, and budget-capped admission.">
 <title>Top-k evidence selection — RAG Atlas</title>
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="../roadmap.css">
@@ -147,10 +147,10 @@
 <div class="bridge-steps">
 <a href="#s12"><span>01</span><b>Nine candidates, node-verified</b><small>Cutoff 0.75 keeps 6 of 9; raw top-5 still needs a redundancy fix.</small></a>
 <a href="#s13"><span>02</span><b>The redundancy backfill</b><small>cD drops as a near-duplicate of cC; cE backfills its place.</small></a>
-<a href="#s16"><span>03</span><b>Move the cutoff line</b><small>The lab -- drag the cutoff and k, watch the evidence set change.</small></a>
+<a href="#s16"><span>03</span><b>Move the cutoff line</b><small>The lab -- drag k, cutoff, and budget, flip the dedup filter, watch the evidence set change.</small></a>
 <a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
 </div>
-<div class="bridge-rule"><b>Concept 06 path:</b> Concept 05 hands off a ranked, tenant-filtered candidate list, already over-fetched past the true k → this concept applies a score cutoff → then takes the top k of what remains → then drops redundant near-duplicates and backfills → then checks the result against a token budget → the lab lets you drag both sliders and watch the evidence set change live → Concept 07 assembles the final prompt from exactly this output.</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 05 hands off a ranked, tenant-filtered candidate list, already over-fetched past the true k → this concept applies a score cutoff → then takes the top k of what remains → then drops redundant near-duplicates and backfills → then checks the result against a token budget → the lab runs its own separate 8-candidate set so you can drag k, cutoff, and budget, and flip a redundancy filter, and watch the evidence set change live → Concept 07 assembles the final prompt from exactly this output.</div>
 </section>
 <details class="advanced-lesson" id="advanced-lesson">
 <summary>
@@ -277,53 +277,88 @@ while (evidence.length &lt; k &amp;&amp; pool.length) evidence.push(pool.shift()
 </section>
 <section class="lesson-section" id="s15">
 <header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Move the cutoff line"</h2></div></header>
-<div class="callout">This lab runs the exact selection logic from Section 10 live, on the exact nine candidates from Section 12, as you drag two sliders -- not just read about the result.</div>
+<div class="callout">This lab runs the same three-gate selection logic as the worked example above, plus a fourth gate -- a token budget -- but on its own, separate set of eight synthetic candidates (<code>c1</code>-<code>c8</code>), not the nine-candidate <code>c007</code> dataset from Sections 09-14. The two datasets are kept distinct on purpose: the worked example is the static, node-verified walkthrough; this lab is the manipulable widget, with round numbers so the sliders have something clean to land on.</div>
 </section>
 <section class="lesson-section" id="s16">
 <header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">EXPERIMENT</span><h2>Move the cutoff line</h2></div></header>
-<div class="lab" id="selectLab_1106">
-<p>Drag the score cutoff and k below and watch which of the nine candidates become the final evidence set, whether a redundancy backfill fires, and how the token budget holds up.</p>
+<div class="lab" id="lab_1106">
+<p>Eight candidates arrive already ranked, as if handed off from Concept 05. Drag k, the score cutoff, and the token budget, flip the redundancy filter, or just tap a preset, and watch the final evidence set change.</p>
 <div class="lab-controls">
 <div class="control">
-<label for="cutoffSlider_1106">Score cutoff: <b id="cutoffValue_1106">0.75</b></label>
-<input type="range" id="cutoffSlider_1106" min="0.60" max="0.95" step="0.01" value="0.75">
+<label for="kSlider_1106">k (evidence pieces)</label>
+<input type="range" id="kSlider_1106" min="1" max="8" value="4" step="1">
+<output id="kVal_1106">4</output>
 </div>
 <div class="control">
-<label for="kSlider_1106">k (evidence set size): <b id="kValue_1106">5</b></label>
-<input type="range" id="kSlider_1106" min="1" max="8" step="1" value="5">
+<label for="cutoffSlider_1106">score cutoff</label>
+<input type="range" id="cutoffSlider_1106" min="0" max="95" value="0" step="5">
+<output id="cutoffVal_1106">0.00</output>
 </div>
+<div class="control">
+<label for="dedupToggle_1106">redundancy filter</label>
+<input type="checkbox" id="dedupToggle_1106">
+<output id="dedupVal_1106">off</output>
+</div>
+<div class="control">
+<label for="budgetSlider_1106">token budget</label>
+<input type="range" id="budgetSlider_1106" min="200" max="1600" value="1600" step="100">
+<output id="budgetVal_1106">1600</output>
+</div>
+</div>
+<div class="preset-chip-row">
+<button class="preset-chip" id="presetNaive_1106" type="button">Naive top-4</button>
+<button class="preset-chip" id="presetDedup_1106" type="button">Dedup-aware</button>
+<button class="preset-chip" id="presetBudget_1106" type="button">Budget-capped</button>
 </div>
 <div class="rank-chip-row" id="chipRow_1106"></div>
+<div class="metric-race" id="metricRace_1106">
+<div class="metric-race-row">
+<span>evidence set</span>
+<div class="metric-bar-track"><div class="metric-bar-fill" id="evidenceFill_1106" style="width:0%"></div></div>
+<span id="evidenceCount_1106">0 / 8</span>
+</div>
+<div class="metric-race-row">
+<span>coverage</span>
+<div class="metric-bar-track"><div class="metric-bar-fill" id="coverageFill_1106" style="width:0%"></div></div>
+<span id="coverageVal_1106">0%</span>
+</div>
+</div>
 <div class="budget-bar" id="budgetBar_1106"></div>
-<p class="budget-meta" id="budgetMeta_1106"></p>
-<div class="callout" id="selectCallout_1106"></div>
+<div class="budget-meta">
+<span id="budgetUsed_1106">0 / 1600 tokens</span>
+<span id="budgetFlag_1106"></span>
+</div>
+<div class="lab-actions">
+<button type="button" id="resetBtn_1106" class="secondary">Reset</button>
+</div>
 </div>
 </section>
 <section class="lesson-section" id="s17">
 <header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
-<p>The lab holds the same nine candidates as Section 12, each with a fixed score, token count, and optional <code>dupOf</code> flag on <code>cD</code>. Every render call re-runs the Section 10 selection function against the two current slider values -- nothing is precomputed or cached across positions, so any combination of cutoff and k reflects the real logic, not a lookup table.</p>
+<p>The lab holds its own fixed array of eight candidates, <code>c1</code> through <code>c8</code>, scores 0.91 down to 0.52, none of them c007 or any other sourced figure -- purely synthetic lab data, distinct from the worked example's nine. Candidate <code>c3</code> (score 0.86) carries a <code>isDup</code> flag marking it a near-duplicate of <code>c2</code>, so the redundancy filter has something concrete to catch. Token costs (220, 240, 210, 260, 230, 250, 270, 190) are sized so a tightened budget starts rejecting candidates around the sixth or seventh slot, giving the budget gate something to bind against too.</p>
 </section>
 <section class="lesson-section" id="s18">
 <header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
-<p>On every slider <code>input</code> event, one render function reruns the selection, then repaints three things from that single result: the <code>rank-chip-row</code> (each chip marked <code>.match</code> if selected, <code>.fp</code> if it's the dropped duplicate, or <code>.excluded</code> otherwise), a <code>budget-bar</code> segment sized to the evidence set's token total over the 1,200-token budget, and a callout that explains whichever of three states applies: cutoff too strict for the chosen k, a redundancy backfill fired, or a clean set with budget to spare.</p>
+<p>On every control change, one render function walks the eight candidates in rank order and applies four gates in sequence: score below the cutoff is skipped, the running count is capped at k, a checked redundancy filter skips anything flagged <code>isDup</code> regardless of rank, and a running token total that would cross the budget skips that candidate too. Whatever survives all four gates becomes the evidence set. The same result then drives three repaints: the <code>rank-chip-row</code> (each chip <code>.match</code> if selected, <code>.excluded</code> otherwise, <code>.mover</code> if the redundancy filter is the reason it moved out), the <code>metric-race</code> bars for evidence-set size and score coverage, and a <code>budget-bar</code> built from one <code>budget-segment</code> per selected candidate, sized by its token count.</p>
 </section>
 <section class="lesson-section" id="s19">
-<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What dragging each slider teaches</h2></div></header>
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What the three presets teach</h2></div></header>
 <div class="example-grid">
-<article class="info-card"><span>RAISE THE CUTOFF</span><h3>The binding constraint flips</h3><p>Push the cutoff past 0.83 and k=5 can no longer be satisfied -- fewer than 5 candidates clear the bar, and no amount of increasing k fixes that.</p></article>
-<article class="info-card"><span>LOWER k</span><h3>The duplicate can disappear from view</h3><p>At k=3, the redundant cD never enters the raw top-k slice in the first place -- the backfill only matters once k is large enough to reach it.</p></article>
-<article class="info-card"><span>DEFAULT (0.75, k=5)</span><h3>The worked example, live</h3><p>Reproduces exactly the node-verified result from Sections 12-14: cD dropped, cE backfilled, 880 of 1,200 tokens used.</p></article>
+<article class="info-card"><span>NAIVE TOP-4</span><h3>Score rank alone wastes a slot</h3><p>k=4, cutoff 0, dedup off, budget wide open -- selects c1, c2, c3, c4. c3 is a near-duplicate of c2, quietly taking a seat that a distinct fact could have filled.</p></article>
+<article class="info-card"><span>DEDUP-AWARE</span><h3>Same k, higher unique coverage</h3><p>Flip the redundancy filter on at the same k and c3 gets excluded as a <code>.mover</code>; c5 backfills the slot instead -- more unique evidence at no extra cost.</p></article>
+<article class="info-card"><span>BUDGET-CAPPED</span><h3>A second ceiling below k and score</h3><p>k=6, budget tightened to 700 tokens -- six candidates clear the score cutoff, but the budget gate stops admission around the third or fourth, firing the overflow flag even though nothing was wrong with their scores.</p></article>
 </div>
 </section>
 <section class="lesson-section" id="s20">
-<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>The three filters, restated as prose</h2></div></header>
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>Four independent gates over one ranked list</h2></div></header>
 <table class="compare-table">
-<thead><tr><th>Score cutoff</th><th>k selection</th><th>Redundancy dedup</th></tr></thead>
+<thead><tr><th>Score cutoff</th><th>k selection</th><th>Redundancy dedup</th><th>Token budget</th></tr></thead>
 <tbody>
-<tr><td>Quality floor, rank-independent</td><td>Hard size limit on the survivors</td><td>Removes duplicate evidence slots</td></tr>
-<tr><td>Can leave fewer than k candidates</td><td>Never returns more than k</td><td>Backfills to keep the count at k</td></tr>
+<tr><td>Quality floor, rank-independent</td><td>Hard size limit on the survivors</td><td>Removes duplicate evidence slots</td><td>Hard cost ceiling, independent of score or rank</td></tr>
+<tr><td>Can leave fewer than k candidates</td><td>Never returns more than k</td><td>Backfills to keep the count at k</td><td>Can force the evidence set below k even when scores look fine</td></tr>
 </tbody>
 </table>
+<p>The lab's three presets in Section 16 each isolate one of these interactions: naive top-k shows the redundancy gate binding unnoticed, dedup-aware shows the backfill fixing it at no extra cost, and budget-capped shows the token gate binding even when neither the cutoff nor k would have stopped a candidate.</p>
 </section>
 <section class="lesson-section" id="s21">
 <header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
@@ -332,6 +367,7 @@ while (evidence.length &lt; k &amp;&amp; pool.length) evidence.push(pool.shift()
 <tbody>
 <tr><td>Retrieval's over-fetch k (top-17, Module 09 Concept 07) is the same number as the evidence k</td><td>False -- the first accounts for filter loss at search time; the second is a separate, usually smaller, decision made after the filter has already run.</td></tr>
 <tr><td>Dropping a redundant duplicate just means shipping k-1 pieces of evidence</td><td>Not quite -- the standard approach backfills from the next candidate below the raw top-k line, keeping the evidence set at the full k.</td></tr>
+<tr><td>The token budget only matters at generation time, once the evidence set is already fixed</td><td>It's a fourth, independent gate on this same selection step -- the budget-capped preset in Section 16 shows it rejecting a candidate that clears both the score cutoff and k.</td></tr>
 </tbody>
 </table>
 </section>
@@ -353,11 +389,14 @@ while (evidence.length &lt; k &amp;&amp; pool.length) evidence.push(pool.shift()
 <section class="lesson-section" id="s24">
 <header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
 <div class="references">
+<a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"><b>sentence-transformers/all-MiniLM-L6-v2</b><br><span>Carried forward from Module 08 Concept 06 and reused in Module 11 Concepts 03/04 -- the 384-dim embedding model behind any score in this concept's examples; not re-fetched here.</span></a>
+<a href="https://arxiv.org/abs/1908.10084"><b>Sentence-BERT (Reimers &amp; Gurevych, 2019)</b><br><span>Cited only for the pooling-to-fixed-vector architecture point, not for any training-objective claim.</span></a>
 <a href="module-09-concept-07.html"><b>Module 09 Concept 07 — the tenant-filter over-fetch math</b><br><span>Reused directly -- the 3.4x / top-17 figures this concept's candidate list already reflects.</span></a>
 <a href="module-07-concept-06.html"><b>Module 07 Concept 06 — the grace-period chunk, child form</b><br><span>Reused directly -- chunk c007's own 0.8944 cosine score.</span></a>
 <a href="module-07-concept-07.html"><b>Module 07 Concept 07 — the grace-period chunk, parent/child fix</b><br><span>Reused directly -- chunk c007's parent-form 0.6761 cosine score.</span></a>
 <a href="module-10-concept-14.html"><b>Module 10 Concept 14 — the upsert/query/delete adapter interface</b><br><span>Reused directly -- the same store-agnostic call surface that returns the candidate list this concept consumes.</span></a>
 </div>
+<div class="callout warning"><b>Verification limits, stated plainly:</b> if this lesson ever ends up citing any <i>new</i> named tool, paper, or product-specific top-k/MMR (maximal marginal relevance) implementation detail -- e.g. a specific reranker product, a specific MMR paper claim, or a specific vendor's default k value -- that isn't in the reused list above, that individual claim still needs its own live curl-based check before publication; none of that was verified in this pass since the context package's carried-forward facts didn't require it. Separately, the node-verification behind Sections 12-14 is an internal arithmetic check of a constructed dataset, not a substitute for external fact-checking -- any new external claim in a future revision still routes through the curl-based fallback per this project's standing convention, since WebSearch/WebFetch are unavailable in this environment.</div>
 <div class="checkpoint">
 <span class="checkpoint-state">MODULE 11 · 6/11</span>
 <h3>A ranked list isn't evidence yet. Choosing which candidates the prompt actually sees.</h3>
@@ -366,7 +405,7 @@ while (evidence.length &lt; k &amp;&amp; pool.length) evidence.push(pool.shift()
 <a class="button secondary" href="#b09">Return to readiness check ↑</a>
 <a class="button primary" href="#s16">Open Move the cutoff line ↑</a>
 </div>
-<p class="fine-print">Module 11 stands at 6 of 11 concepts. Position 5 (query embedding, retrieval and candidate search) precedes this. Next concept: Concept 07, final prompt assembly.</p>
+<p class="fine-print">Module 11 stands at 6 of 11 concepts. Position 5 (query embedding, retrieval and candidate search) precedes this. Next concept: Concept 07, final prompt assembly. Fine print: only chunk c007's child (0.8944) and parent (0.6761) cosine scores, and Module 09 Concept 07's 3.4x/top-17 over-fetch figure, are external, previously-verified facts reused in this lesson -- the worked example's other seven candidates and the lab's eight candidates are both synthetic data, built separately for this lesson and node-verified only for internal arithmetic consistency, not against any real corpus.</p>
 </div>
 </section>
 </div>

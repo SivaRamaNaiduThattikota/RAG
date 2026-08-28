@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Concept 07 hands off one assembled 954-token prompt string. This concept is the step that turns that string into the model's actual response: decoding one token at a time from a softmax over logits, stopping, and attaching a citation to whatever survives. Worked example continues Concept 06/07's own evidence set (cA, c007's child, cB, cC, cE) and query, 'What is the return window after the grace period?' Two node-verified decode scenarios at the same token position -- c007's child intact (14 -> 95.97%) versus cut mid-sentence per Module 07 Concept 06's own overlap risk (not -> 92.43%) -- show mechanically why the model can say 14 days truthfully in one case and must decline in the other, using the exact same evidence set and the exact same instructions. The lab, Decode the next token, lets you flip between both and watch the probability bars and the final answer change together.">
+<meta name="description" content="Concept 07 hands off one assembled 954-token prompt string. This concept is the very next step: the model decodes it one token at a time -- logit, softmax, argmax, repeat -- and the pipeline attaches a citation to whatever survives. Worked example continues Concept 06/07's own evidence set (cA, c007's child, cB, cC, cE) and query, 'What is the return window after the grace period?' Two node-verified decode scenarios at the same token position -- c007's child intact (14 -> 95.97%) versus cut mid-sentence per Module 07 Concept 06's own overlap risk (not -> 92.43%) -- show mechanically why the model can say 14 days truthfully in one case and must decline in the other, using the exact same evidence set and the exact same instructions. The ALCE benchmark found even the best LLM systems lack complete citation support roughly half the time on ELI5, which is why this concept treats citation attachment as a checkable claim rather than a formality. The lab, Generate the next token, steps through four grounded decode choices -- 90, -day, grace, period -- masking out the tokens the retrieved evidence doesn't support.">
 <title>LLM generation and the final answer — RAG Atlas</title>
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="../roadmap.css">
@@ -34,8 +34,8 @@
 <p class="lesson-lead">Concept 07 assembled one 954-token string -- system instructions, five boundary-marked chunks, the query -- and handed it off. This concept is the very next step: the model reads that exact string, computes a probability over every possible next token, picks one, repeats until it stops, and the pipeline attaches a citation to whatever came out. Same evidence set, same instructions, two different outcomes -- because the model can only ever answer from what actually survived into the string it read.</p>
 </div>
 <div class="lesson-meta">
-<div><span>POSITION</span><b>Eighth concept of Module 11 (8/11) -- the generate stage named in Concept 01's six-stage overview</b></div>
-<div><span>PREREQUISITE</span><b>Module 11 Concept 07's assembled 954-token prompt; Concept 06's evidence set (cA, c007's child, cB, cC, cE); Module 02 Concepts 05/09 (next-token decoding, hallucination); Module 03 Concepts 01/04 (RAG = retriever + generator, grounding reduces but doesn't eliminate hallucination) -- all cited, none re-derived</b></div>
+<div><span>POSITION</span><b>Eighth concept of Module 11 (8/11) -- the generate stage named in Concept 01's six-stage overview, the close of Module 03 Concept 06's online query pipeline, and the third link in Module 03 Concept 11's retrieval/augmentation/generation failure chain</b></div>
+<div><span>PREREQUISITE</span><b>Module 11 Concept 07's assembled 954-token prompt; Concept 06's evidence set (cA, c007's child, cB, cC, cE); Module 02 Concepts 05/07/09/10/11 (decoding, context windows, hallucination, lost-in-the-middle, constrained decoding); Module 03 Concepts 01/04/06/11 -- all cited, none re-derived</b></div>
 <div><span>BEGINNER GOAL</span><b>Explain why the same model, same instructions, and same evidence set can honestly answer in one case and must decline in another</b></div>
 <div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
 </div>
@@ -66,18 +66,18 @@
 <article class="core-block core-definition" id="b01">
 <span class="core-step">01 · CONCEPT FIRST</span>
 <h3>Reading the letter, not writing it</h3>
-<p>Concept 07 wrote the letter -- instructions, cited evidence, the question, in that order. This concept is someone reading that exact letter and answering, out loud, one word at a time, based only on what's actually written on the page in front of them -- not on what they might otherwise know or guess.</p>
+<p>Concept 07 wrote the letter -- instructions, cited evidence, the question, in that order. This concept is someone reading that exact letter and answering, out loud, one word at a time, based only on what's actually written on the page in front of them -- not on what they might otherwise know or guess. Generation is the step where the LLM turns retrieved evidence plus a question into a written final answer, token by token.</p>
 <div class="beginner-memory"><b>First memory:</b> generation is decoding from the string that was actually assembled -- not from the corpus, not from the model's own general knowledge, from that one string.</div>
 </article>
 <article class="core-block" id="b02">
 <span class="core-step">02 · WHY IT EXISTS</span>
 <h3>An assembled string is not an answer</h3>
-<p>Without this concept, Concept 07's 954-token string would just sit there. Something has to turn it into a response: run it through the model, get a probability distribution over the next token, choose one, append it, and repeat until the model decides to stop. That loop, plus the final citation attachment, is this concept.</p>
+<p>Retrieval alone only finds passages -- something still has to read them and produce a human-readable sentence, and that's the generator's job. Without this concept, Concept 07's 954-token string would just sit there. Something has to turn it into a response: run it through the model, get a probability distribution over the next token, choose one, append it, and repeat until the model decides to stop. That loop, plus the final citation attachment, is this concept.</p>
 </article>
 <article class="core-block" id="b03">
 <span class="core-step">03 · CONCRETE EXAMPLE</span>
 <h3>Same question, two different evidence realities</h3>
-<p>The query, continued from Concept 06/07, is "What is the return window after the grace period?" The evidence set includes <code>c007</code>'s child chunk -- the exact grace-period sentence, per Module 07 Concept 06, but one that concept already flagged as liable to be cut mid-sentence without enough overlap. If the number survived the cut, the model can decode "14" truthfully. If it didn't, decoding "14" anyway would be a hallucination, not a grounded answer -- the same instructions and the same evidence-set label, two very different honest outcomes.</p>
+<p>The query, continued from Concept 06/07, is "What is the return window after the grace period?" The evidence set includes <code>c007</code>'s child chunk -- the exact grace-period sentence, per Module 07 Concept 06, but one that concept already flagged as liable to be cut mid-sentence without enough overlap. Given the assembled prompt from Concept 07 (query plus evidence <code>cA</code>/<code>c007_child</code>/<code>cB</code>/<code>cC</code>/<code>cE</code>), the model decodes the answer "14 days" one token at a time -- if the number survived the cut. If it didn't, decoding "14" anyway would be a hallucination, not a grounded answer -- the same instructions and the same evidence-set label, two very different honest outcomes.</p>
 </article>
 <article class="core-block" id="b04">
 <span class="core-step">04 · TECHNICAL MECHANISM</span>
@@ -88,22 +88,24 @@
 <span class="core-step">05 · ARCHITECTURE / FLOW</span>
 <h3>Where this sits in the fixed skeleton</h3>
 <div class="scroll-flow">
-<span>Concept 07 — assembles the 954-token prompt string</span><i>→</i>
-<span class="hot">THIS concept — decodes it token by token into an answer</span><i>→</i>
-<span>Citation/provenance attaches to whatever came out</span>
+<span>Assembled prompt (954 tok, Concept 07)</span><i>→</i>
+<span>Logits over the vocabulary</span><i>→</i>
+<span>Softmax → probabilities</span><i>→</i>
+<span class="hot">THIS concept — token chosen, appended, repeated</span><i>→</i>
+<span>Answer complete, citation attached</span>
 </div>
 </article>
 <article class="core-block" id="b06">
 <span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
-<h3>"Grounded" describes the prompt, not the model's intent</h3>
-<p>A model doesn't "decide" to hallucinate or "decide" to ground itself -- it always just decodes the highest-probability continuation of whatever string it was actually given. Whether that continuation happens to match reality depends entirely on whether the true answer was in the string. Module 03 Concept 04 already stated this precisely: grounding reduces hallucination risk, it does not eliminate it -- this concept is the exact mechanical reason why.</p>
+<h3>Generation is the decode loop, nothing upstream of it</h3>
+<p>Generation is not retrieval and not augmentation -- it's strictly the decode loop that happens after the prompt is already built, distinct from Concepts 05-07's upstream steps. A model doesn't "decide" to hallucinate or "decide" to ground itself -- it always just decodes the highest-probability continuation of whatever string it was actually given. Whether that continuation happens to match reality depends entirely on whether the true answer was in the string. "Grounded" is a property of the prompt and the decode, not of the model's intent.</p>
 </article>
 <article class="core-block" id="b07">
 <span class="core-step">07 · COMMON MISTAKES</span>
 <h3>What beginners often assume, and shouldn't</h3>
 <div class="mistake-list">
-<div><b>"If the answer is true, a well-instructed model will say it."</b><p>Only if the true answer's text actually survived into the assembled prompt. A model instructed to "answer only from the evidence" still has no way to state a fact that was never in the evidence -- correct behavior there is declining, not guessing correctly by luck.</p></div>
-<div><b>"Citing a source means the claim came from that source."</b><p>Not automatically -- a citation tag can be attached to a hallucinated claim just as easily as a grounded one. Section 13's read-back check exists precisely because the citation and the claim have to be verified together, not trusted on sight.</p></div>
+<div><b>"A grounded prompt guarantees a grounded answer."</b><p>Not automatically -- Module 03 Concept 04 already stated this precisely: grounding reduces hallucination risk, it does not eliminate it. A well-assembled prompt lowers the odds of a fabricated answer; it doesn't remove the model's ability to decode a wrong token anyway.</p></div>
+<div><b>"Citations are free once the evidence was retrieved."</b><p>Not automatically -- the ALCE benchmark found that even the strongest LLM systems lack complete citation support roughly half the time on open-domain QA (ELI5). Having the right chunk in the prompt is necessary for a correct citation; it isn't sufficient for one.</p></div>
 </div>
 </article>
 <article class="core-block" id="b08">
@@ -111,7 +113,7 @@
 <h3>Checking your own project's actual generation step</h3>
 <div class="project-map">
 <div><span>WHERE THIS LIVES</span><b>Right after Concept 07's prompt assembly, the last step before the answer reaches a user</b><p>Ask directly: does your pipeline check whether the model's claim actually appears in the cited chunk's text, or does it trust the citation tag on sight?</p></div>
-<div><span>MODULE STATE</span><b>MODULE 11 · 8/11</b><p>Concept 07 (context injection and prompt construction) precedes this. Concept 09, the next concept in the retrieve-generate tail of Module 11, is not yet built.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 8/11</b><p>Concept 07 (context injection and prompt construction) precedes this. This concept is the final leg of Module 03 Concept 06's online query pipeline and the generation link of Module 03 Concept 11's three-link failure chain -- the piece a real project's answer text and citations ultimately come from.</p></div>
 </div>
 </article>
 <article class="core-block core-checkpoint" id="b09">
@@ -119,8 +121,8 @@
 <h3>Readiness check before moving on</h3>
 <div class="readiness-grid">
 <div><b>Describe the decode loop</b><p>Logits over the vocabulary, softmax to probabilities, argmax (or sampling) to pick one token, append, repeat until stop.</p></div>
-<div><b>Explain why the same instructions can produce two honest outcomes</b><p>Whether the true answer's text survived into the assembled prompt -- not the model's "intent" -- decides whether stating it is grounded or hallucinated.</p></div>
-<div><b>State what a citation tag does and doesn't guarantee</b><p>It marks which source the model is claiming to draw from -- it does not, by itself, prove the claim actually appears there.</p></div>
+<div><b>Explain why the same evidence-set label can honestly produce either outcome</b><p>Whether the true answer's text survived into the assembled prompt -- not the model's "intent" -- decides whether the same evidence-set label can honestly yield a correct numeral in one case and a grounded refusal in another.</p></div>
+<div><b>State what a citation tag does and doesn't guarantee</b><p>It marks which source the model is claiming to draw from -- ALCE shows it does not, by itself, prove the claim actually appears there roughly half the time even in strong systems.</p></div>
 </div>
 <h4>Teach-back questions</h4>
 <ol>
@@ -132,7 +134,7 @@
 <article class="core-block next-preview" id="b10">
 <span class="core-step">10 · NEXT LESSON</span>
 <h3>MODULE 11 · 8 OF 11</h3>
-<p>This concept named the decode loop that turns Concept 07's assembled prompt into the model's actual response, and showed -- with a single node-verified softmax computation run twice on the same evidence set -- exactly why the honest answer changes when the underlying chunk text does. Module 11's remaining concepts continue from here.</p>
+<p>This concept named the decode loop that turns Concept 07's assembled prompt into the model's actual response, and showed -- with two node-verified softmax computations run on the same evidence set -- exactly why the honest answer changes when the underlying chunk text does. Module 11's remaining concepts continue from here; Concepts 01 through 07 already exist and are cited by number throughout this page, so the pointer above stays generic only until Concept 09 has a real title.</p>
 <div class="beginner-memory"><b>Concept 08 is active.</b> Module 11 stands at 8 of 11 concepts.</div>
 <a class="button primary" href="module-11-concept-07.html">← Back to Concept 07's prompt assembly</a>
 </article>
@@ -145,16 +147,16 @@
 <h2 id="lesson-map-title">A prompt string isn't an answer yet</h2>
 </header>
 <div class="bridge-steps">
-<a href="#s12"><span>01</span><b>Two decode scenarios, node-verified</b><small>Same logits shape, softmaxed: 14 at 95.97% intact, "not" at 92.43% cut mid-sentence.</small></a>
-<a href="#s13"><span>02</span><b>The citation attachment step</b><small>Why a [SOURCE n] tag has to be checked against the actual chunk text, not trusted on sight.</small></a>
-<a href="#s16"><span>03</span><b>Decode the next token</b><small>The lab -- flip the evidence between intact and cut, watch the answer change.</small></a>
+<a href="#s07"><span>01</span><b>Two decode scenarios, node-verified</b><small>Same logit shape, softmaxed: 14 at 95.97% intact, "not" at 92.43% cut mid-sentence.</small></a>
+<a href="#s20"><span>02</span><b>The citation attachment step</b><small>Why a [SOURCE n] tag has to be checked against the actual chunk text, not trusted on sight.</small></a>
+<a href="#s11"><span>03</span><b>Generate the next token</b><small>The lab -- decode four grounded tokens one at a time, masking out what the evidence doesn't support.</small></a>
 <a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
 </div>
-<div class="bridge-rule"><b>Concept 08 path:</b> Concept 07 assembled the 954-token prompt → the model decodes it one token at a time, logit → softmax → argmax → whether the true answer survives depends entirely on whether its text survived into the prompt, not on model "intent" → a citation tag gets attached to the output, but has to be checked against the actual cited text → the lab lets you flip the underlying chunk between intact and cut and watch the honest answer change while everything else stays fixed.</div>
+<div class="bridge-rule"><b>Concept 08 path:</b> Concept 07 assembled the 954-token prompt → the model decodes it one token at a time, logit → softmax → argmax → whether the true answer survives depends entirely on whether its text survived into the prompt, not on model "intent" → a citation tag gets attached to the output, but has to be checked against the actual cited text → the lab lets you generate a grounded answer four tokens at a time and see exactly which alternatives the evidence rules out at each step.</div>
 </section>
 <details class="advanced-lesson" id="advanced-lesson">
 <summary>
-<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "LLM generation and the final answer" deep dive</b><em>Full citations, the softmax code, and Decode the next token</em></span>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "LLM generation and the final answer" deep dive</b><em>Full citations, the softmax code, and Generate the next token</em></span>
 <i aria-hidden="true"></i>
 </summary>
 <div class="lesson-layout">
@@ -164,51 +166,54 @@
 <a href="#s02"><i>02</i> Definitions</a>
 <a href="#s03"><i>03</i> Dependencies</a>
 <a href="#s04"><i>04</i> Evidence + control</a>
-<a href="#s05"><i>05</i> Architecture</a>
-<a href="#s06"><i>06</i> Decode mechanism</a>
-<a href="#s07"><i>07</i> Stopping condition</a>
-<a href="#s08"><i>08</i> Greedy vs. sampling</a>
-<a href="#s09"><i>09</i> Worked example intro</a>
-<a href="#s10"><i>10</i> Softmax code</a>
-<a href="#s11"><i>11</i> Two scenarios, defined</a>
-<a href="#s12"><i>12</i> Softmax verification</a>
-<a href="#s13"><i>13</i> Citation attachment</a>
-<a href="#s14"><i>14</i> Read-back guarantee</a>
-<a href="#s15"><i>15</i> Lab intro</a>
-<a href="#s16"><i>16</i> Lab</a>
-<a href="#s17"><i>17</i> Lab data model</a>
-<a href="#s18"><i>18</i> Lab mechanics</a>
-<a href="#s19"><i>19</i> What it teaches</a>
-<a href="#s20"><i>20</i> Comparison table</a>
-<a href="#s21"><i>21</i> Misconceptions</a>
-<a href="#s22"><i>22</i> Interview</a>
-<a href="#s23"><i>23</i> Check</a>
-<a href="#s24"><i>24</i> References</a>
+<a href="#s05"><i>05</i> Architecture schema</a>
+<a href="#s06"><i>06</i> Mechanism code</a>
+<a href="#s07"><i>07</i> Worked example</a>
+<a href="#s08"><i>08</i> Math verification</a>
+<a href="#s09"><i>09</i> Read-back guarantee</a>
+<a href="#s10"><i>10</i> Lab intro</a>
+<a href="#s11"><i>11</i> Lab</a>
+<a href="#s12"><i>12</i> Lab data model</a>
+<a href="#s13"><i>13</i> Lab JS mechanics</a>
+<a href="#s14"><i>14</i> What it teaches</a>
+<a href="#s15"><i>15</i> Comparison table</a>
+<a href="#s16"><i>16</i> Misconceptions</a>
+<a href="#s17"><i>17</i> Interview</a>
+<a href="#s18"><i>18</i> Knowledge check</a>
+<a href="#s19"><i>19</i> References</a>
+<a href="#s20"><i>20</i> Citation mechanics</a>
+<a href="#s21"><i>21</i> Lost in the middle</a>
+<a href="#s22"><i>22</i> Over-fetch tie-in</a>
+<a href="#s23"><i>23</i> Failure attribution</a>
+<a href="#s24"><i>24</i> Checkpoint</a>
 </aside>
 <div class="lesson-content">
 <section class="lesson-section" id="s01">
 <header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where the model actually generates a response</h2></div></header>
-<p>This is the eighth concept of Module 11 (8/11), naming the step that takes Concept 07's assembled 954-token prompt string and turns it into the model's actual generated response. In Module 11 Concept 01's six-stage naming (ingest → chunk → embed → store → retrieve → generate), this concept is stage 6 -- the last stage of the six, and the one every prior concept in this module was building toward. Concept 07's own next-concept preview named this exact scope: "it takes this concept's assembled string and turns it into the model's actual response." Module 11's remaining concepts (query rewriting, citation/provenance formatting as their own dedicated treatment, etc.) are not yet built and are not covered here.</p>
+<p>This is the eighth concept of Module 11 (8/11), naming the step that takes Concept 07's assembled 954-token prompt string and turns it into the model's actual generated response. In Module 11 Concept 01's six-stage naming (ingest → chunk → embed → store → retrieve → generate), this concept is stage 6 -- the last of the six, and the one every prior concept in this module was building toward. It is also the closing leg of Module 03 Concept 06's online query pipeline, and the third and final link in Module 03 Concept 11's retrieval/augmentation/generation failure chain: a wrong final answer traces back to one of those three links, and this concept is what lets a reviewer tell a generation failure apart from the other two. Concept 07's own next-concept preview named this exact scope: "it takes this concept's assembled string and turns it into the model's actual response." Retrieval, selection, and assembly are cited as already-settled background, not re-derived.</p>
 </section>
 <section class="lesson-section" id="s02">
 <header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Terms this concept uses precisely</h2></div></header>
 <table class="notation">
-<thead><tr><th>Term</th><th>Definition</th></tr></thead>
+<thead><tr><th>Term</th><th>Definition</th><th>Owning concept</th></tr></thead>
 <tbody>
-<tr><td>Logit</td><td>The model's raw, unnormalized score for one vocabulary token at the current decoding position (Module 02 Concept 05)</td></tr>
-<tr><td>Softmax</td><td>The function that turns a vector of logits into a probability distribution that sums to exactly 1</td></tr>
-<tr><td>Argmax decoding</td><td>Choosing the single highest-probability token at each step (a specific, deterministic decoding strategy, not the only one)</td></tr>
-<tr><td>Grounded claim</td><td>A claim whose supporting text is actually present in the prompt the model read -- not merely a claim that happens to be true</td></tr>
+<tr><td>Logit</td><td>The model's raw, unnormalized score for one vocabulary token at the current decoding position</td><td>Module 02 Concept 05</td></tr>
+<tr><td>Softmax</td><td>The function that turns a vector of logits into a probability distribution that sums to exactly 1</td><td>Module 02 Concept 05</td></tr>
+<tr><td>Greedy decoding</td><td>Choosing the single highest-probability token at each step (argmax) -- one specific, deterministic strategy, not the only one</td><td>this concept</td></tr>
+<tr><td>Sampling decoding</td><td>Drawing from the probability distribution instead of always taking the max (temperature, top-k, top-p/nucleus)</td><td>this concept</td></tr>
+<tr><td>Grounding</td><td>A claim whose supporting text is actually present in the prompt the model read -- not merely a claim that happens to be true</td><td>Module 03 Concept 04</td></tr>
+<tr><td>Hallucination</td><td>A mechanical consequence of the decoding loop, not a separate malfunction -- the model always decodes some continuation, true or not</td><td>Module 02 Concept 09</td></tr>
+<tr><td>Citation/provenance</td><td>A machine-checkable pointer from a decoded claim back to a specific evidence chunk id -- attaching one is cheap; it isn't proof</td><td>this concept</td></tr>
 </tbody>
 </table>
 </section>
 <section class="lesson-section" id="s03">
 <header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>What this concept reuses without re-deriving</h2></div></header>
-<p>Module 02 Concept 05's next-token probability mechanism (logits → softmax) is the exact mechanism this concept applies at the tail of a RAG pipeline -- nothing about how softmax works is re-derived here. Module 02 Concept 09's hallucination-as-a-mechanical-decoding-consequence framing, and Module 03 Concept 04's "grounding reduces, does not eliminate, hallucination" claim, are both cited directly in Section 06 rather than re-argued. Module 03 Concept 01's framing -- RAG's generator is Module 02's own LLM, unchanged -- is the reason this concept introduces no new generation mechanism of its own.</p>
+<p>Module 02 Concept 05's next-token probability mechanism (logits → softmax) is the exact mechanism this concept applies at the tail of a RAG pipeline -- nothing about how softmax works is re-derived here. Module 02 Concept 07's context-window and in-context-learning facts explain why the model can only condition on what's actually inside the prompt string. Module 02 Concept 09's hallucination-as-a-mechanical-decoding-consequence framing, and Module 03 Concept 04's "grounding reduces, does not eliminate, hallucination" claim, are both cited directly in Section 06 rather than re-argued. Module 03 Concept 01's framing -- RAG's generator is Module 02's own LLM, unchanged -- is the reason this concept introduces no new generation mechanism of its own. Concept 06 and Concept 07's own worked examples (the five-chunk evidence set and the 954-token assembled prompt) are the fixed starting input for everything below.</p>
 </section>
 <section class="lesson-section" id="s04">
-<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>The exact prompt this concept decodes, cited</h2></div></header>
-<p>Module 11 Concept 07's own worked example is the starting input here, unchanged: a 954-token assembled string made of 35 tokens of system instructions, five boundary-marked chunks (<code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>, 880 tokens total), and a 9-token query -- "What is the return window after the grace period?" -- against a 3,584-token prompt budget. Nothing about that assembly is redone here; this concept starts from the finished string.</p>
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>What the generator can and can't control</h2></div></header>
+<p>Module 11 Concept 07's own worked example is the exact prompt this concept decodes: a 954-token assembled string made of 35 tokens of system instructions, five boundary-marked chunks (<code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>, 880 tokens total), and a 9-token query -- "What is the return window after the grace period?" -- against a 3,584-token prompt budget. The generator controls token choice, phrasing, and whether to answer or decline. It does not control what evidence actually made it into that 954-token string -- that decision was already made upstream, by Concepts 05 through 07, and this concept cannot undo it.</p>
 </section>
 <section class="lesson-section" id="s05">
 <header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The decode loop, laid out</h2></div></header>
@@ -222,157 +227,179 @@
 </div>
 </section>
 <section class="lesson-section" id="s06">
-<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Why the same prompt can decode two honest ways</h2></div></header>
-<p>Module 02 Concept 09 already established that hallucination is a mechanical consequence of the decoding loop, not a separate malfunction: the model always decodes <i>some</i> continuation, whether or not that continuation is true. Module 03 Concept 04 already stated the resulting guarantee precisely -- grounding reduces hallucination risk, it does not eliminate it. This concept's own worked example (Sections 09-12) is the mechanical reason why: if the number "14" is textually present at the decoding position, its logit is high because the model is directly copying/attending to context it can see; if the text was cut before the number, there is nothing in the prompt to raise that logit, and a well-instructed model's highest logit shifts to an honest refusal token instead. A poorly instructed model, in the same cut-text case, can still assign a high logit to a plausible number anyway -- that is exactly the hallucination risk grounding reduces without eliminating.</p>
-</section>
-<section class="lesson-section" id="s07">
-<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">MECHANISM</span><h2>Stopping the loop</h2></div></header>
-<p>Generation stops when the model decodes a designated stop token, or when a maximum output-length limit is hit -- the same 512-token generation reserve Concept 07 already carved out of the 4,096-token context window in its own worked example. Nothing about that reserve is recomputed here; it is the ceiling this concept's output has to fit inside.</p>
-</section>
-<section class="lesson-section" id="s08">
-<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">IMPORTANT DISTINCTIONS</span><h2>Argmax is one decoding strategy, not the only one</h2></div></header>
-<p>Greedy/argmax decoding, used throughout this concept's own worked example for a single, hand-checkable path, always picks the single highest-probability token. Sampling strategies (temperature, top-k, top-p/nucleus) instead draw from the distribution, trading determinism for variety. This concept intentionally uses only argmax so the worked numbers below have one unambiguous winner to verify -- it does not claim argmax is how every production system decodes.</p>
-</section>
-<section class="lesson-section" id="s09">
-<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One decoding position, two realities of the same chunk</h2></div></header>
-<p>Continuing Concept 06/07's own worked example verbatim: query "What is the return window after the grace period?", evidence set <code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>. The decoding position examined here is the token immediately after the model has generated "The order-cancellation grace period is" -- the exact point where Module 07 Concept 06's own overlap-sizing risk decides whether the number "14" is even visible in the prompt the model is reading.</p>
-</section>
-<section class="lesson-section" id="s10">
-<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">CODE</span><h2>The softmax function, verified</h2></div></header>
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">CODE</span><h2>The softmax function, and the two logit sets it runs on</h2></div></header>
 <div class="code-block">
 <span class="code-label">JAVASCRIPT · SOFTMAX (also the lab's own code)</span>
 <pre><code>function softmax(logits) {
   const keys = Object.keys(logits);
-  const vals = keys.map(k => logits[k]);
+  const vals = keys.map(k =&gt; logits[k]);
   const max = Math.max(...vals);
-  const exps = keys.map(k => Math.exp(logits[k] - max));
-  const sum = exps.reduce((a, b) => a + b, 0);
-  return Object.fromEntries(keys.map((k, i) => [k, exps[i] / sum]));
+  const exps = keys.map(k =&gt; Math.exp(logits[k] - max));
+  const sum = exps.reduce((a, b) =&gt; a + b, 0);
+  return Object.fromEntries(keys.map((k, i) =&gt; [k, exps[i] / sum]));
 }
+// Scenario A -- intact: {"14": 5.1, "7": 1.2, "30": 0.8, "an": 0.3}
+// Scenario B -- cut mid-sentence: {"not": 4.8, "14": 1.5, "30": 1.1, "7": 0.9}
 </code></pre>
 </div>
+<p>Neither logit set is a real model's output -- both are illustrative, exactly the same status Concept 06's own <code>cA</code>-<code>cG</code> scores carried. What is real and load-bearing is the softmax arithmetic run on them, verified in Section 08.</p>
 </section>
-<section class="lesson-section" id="s11">
-<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANICS</span><h2>Two logit sets, both flagged as illustrative</h2></div></header>
-<p>Neither logit set below is a real model's output -- both are illustrative, exactly the same status Concept 06's own <code>cA</code>-<code>cG</code> scores carried. What is real and load-bearing is the softmax arithmetic run on them: <b>intact scenario</b> -- <code>{"14": 5.1, "7": 1.2, "30": 0.8, "an": 0.3}</code>, reflecting a token the model can directly see in context; <b>cut scenario</b> -- <code>{"not": 4.8, "14": 1.5, "30": 1.1, "7": 0.9}</code>, reflecting a well-instructed model favoring an honest refusal continuation once the number itself isn't visible.</p>
-</section>
-<section class="lesson-section" id="s12">
-<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MATHEMATICS</span><h2>Softmax output, node-verified</h2></div></header>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>One decoding position, two realities of the same chunk</h2></div></header>
+<p>Continuing Concept 06/07's own worked example verbatim: query "What is the return window after the grace period?", evidence set <code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>. The decoding position examined here is the token immediately after the model has generated "The order-cancellation grace period is" -- the exact point where Module 07 Concept 06's own overlap-sizing risk decides whether the number "14" is even visible in the prompt the model is reading.</p>
 <table class="worked-table">
 <thead><tr><th>Scenario</th><th>Token</th><th>Probability</th></tr></thead>
 <tbody>
-<tr><td rowspan="4">Intact (number visible)</td><td><b>14</b></td><td><b>95.97%</b></td></tr>
+<tr><td rowspan="4">A — intact (number visible)</td><td><b>14</b></td><td><b>95.97%</b></td></tr>
 <tr><td>7</td><td>1.94%</td></tr>
 <tr><td>30</td><td>1.30%</td></tr>
 <tr><td>an</td><td>0.79%</td></tr>
-<tr><td rowspan="4">Cut (number not visible)</td><td><b>not</b></td><td><b>92.43%</b></td></tr>
+<tr><td rowspan="4">B — cut (number not visible)</td><td><b>not</b></td><td><b>92.43%</b></td></tr>
 <tr><td>14</td><td>3.41%</td></tr>
 <tr><td>30</td><td>2.29%</td></tr>
 <tr><td>7</td><td>1.87%</td></tr>
 </tbody>
 </table>
-<div class="callout"><b>Verification method</b>Run directly via <code>node -e</code>, executing the exact Section 10 softmax function against both logit sets and confirming each distribution sums to exactly 1 in both cases before display rounding, printed and inspected, not typed from memory.</div>
+<p>In Scenario A, the evidence chunk carries the full clause through "...14 days after the grace period ends," so the model decodes "14 days" and the answer is honestly grounded. In Scenario B, the same chunk is cut mid-sentence, matching <code>c007</code>'s known cut-mid-sentence defect, and the model decodes toward a grounded refusal ("not stated in the retrieved context") instead of guessing -- the mechanically correct behavior when evidence doesn't support a number. Same instructions, same evidence-set label, two honest outcomes.</p>
+<div class="callout"><b>Why this matters beyond a toy example:</b> the ALCE benchmark (Gao, Yen, Yu &amp; Chen, 2023) tested exactly this kind of citation-supported generation on real systems and found that even the best models lack complete citation support fifty percent of the time on ELI5. Scenario B's refusal path is the mechanical distinction ALCE's finding is really about: a grounded token versus an unsupported one -- not a toy problem, a production one.</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">MATHEMATICS</span><h2>The verification standard: run it, don't eyeball it</h2></div></header>
+<div class="callout"><b>Verification method</b>Both softmax distributions above were computed and sum-checked via <code>node -e</code>, executing the exact Section 06 softmax function against both logit sets and confirming each distribution sums to exactly 1 before display rounding -- printed and inspected, not typed from memory. That is the standard applied to every probability claim in this course: the arithmetic is verified; the logit inputs themselves (5.1, 1.2, 4.8, and so on) are explicitly illustrative, not sourced from a real model run, the same status Concept 06's own relevance scores carried. Don't read the specific logit numbers as empirical -- only the transformation from logits to probabilities is asserted as checked.</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">CONCRETE USE</span><h2>What generation guarantees, and what it doesn't</h2></div></header>
+<p>Generation guarantees a fluent answer shaped by the prompt it was given. It does not guarantee that the answer is correct, and it does not guarantee that its citations are complete. The ALCE benchmark (<code>arxiv.org/abs/2305.14627</code>) put a number on that second gap: asking strong LLM systems to answer open-domain questions with attached citations, and checking whether the cited text actually supports each claim, it found that even the best models lack complete citation support fifty percent of the time on ELI5. A model can decode a fluent, confident-sounding sentence and still fail to back half of it with a citation that actually holds up -- which is exactly why Section 20's read-back check treats a citation tag as a claim to verify, not a guarantee to trust.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Generate the next token"</h2></div></header>
+<div class="callout">This lab dramatizes constrained, grounded decoding at the final-answer step: given a retrieved passage, the model picks each next token from a small set of candidates, and tokens the evidence doesn't support get masked out -- reusing Module 02 Concept 11's <code>.mask-panels</code> pattern, repurposed here from "grammar constraint" to "grounded vs. unsupported token choice."</div>
+<div class="callout warning"><b>One-line disclaimer:</b> the lab's own worked answer -- "90-day grace period" -- is a deliberately different phrase from this section's own worked example ("14 days" for the return-window question). That's intentional, so the lab doesn't just mechanically replay the same numbers you already saw above; it walks a second, independent decode from the same document's grace-period passage instead.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">EXPERIMENT</span><h2>Generate the next token</h2></div>
+</header>
+<div class="lab" id="lab_1108">
+<p>Step through four decode positions one at a time. At each step, the retrieved passage on the left supports exactly one token; the other three candidates get masked out and labeled with why.</p>
+<div class="lab-controls">
+<div class="control"><span id="stepLabel_1108">Step 0 of 4</span></div>
+</div>
+<div class="mask-panels" id="panels_1108">
+<div class="mask-panel" id="evidencePanel_1108">
+<span class="mask-panel-title">RETRIEVED EVIDENCE (doc_9f21)</span>
+<p>"...employees become eligible for the 90-day grace period after..."</p>
+</div>
+<div class="mask-panel" id="probPanel_1108">
+<span class="mask-panel-title">NEXT-TOKEN CANDIDATES</span>
+<div class="prob-bars">
+<div class="prob-row" id="row0_1108"><span class="token-label"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="token-reason"></span></div>
+<div class="prob-row" id="row1_1108"><span class="token-label"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="token-reason"></span></div>
+<div class="prob-row" id="row2_1108"><span class="token-label"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="token-reason"></span></div>
+<div class="prob-row" id="row3_1108"><span class="token-label"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="token-reason"></span></div>
+</div>
+</div>
+</div>
+<div class="sample-output" id="answer_1108">Answer: </div>
+<div class="lab-actions">
+<button type="button" id="stepBtn_1108">Generate next token</button>
+<button type="button" id="resetBtn_1108">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>The lab holds a fixed four-step array, <code>steps_1108</code>. Each step is <code>{ tokens: [4x {label, pct, ok, reason}], winner: index, word: string-to-append }</code>. Step 0 picks <code>"90"</code> at 72% over <code>"30"</code>, <code>"60"</code>, and <code>"180"</code> (none stated in the retrieved evidence). Step 1 picks <code>"-day"</code> at 81% over <code>" days"</code> (wrong tokenization), <code>"-hour"</code>, and <code>"-week"</code>. Step 2 picks <code>" grace"</code> at 88% over <code>" waiting"</code>, <code>" trial"</code>, and <code>" notice"</code>. Step 3 picks <code>" period"</code> at 91% over <code>" window"</code>, <code>" term"</code>, and <code>" phase"</code>. Concatenating the four winners spells out "90-day grace period" -- this lab's own worked answer, and deliberately not the same phrase as Section 07's "14 days," per the disclaimer in Section 10.</p>
 </section>
 <section class="lesson-section" id="s13">
-<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Citation attachment is a separate, checkable step</h2></div></header>
-<p>Once decoding stops, the pipeline attaches a <code>[SOURCE n]</code> tag identifying which evidence chunk a claim is being attributed to -- Concept 07's own boundary-tag scheme, reused here at the output side instead of the input side. Attaching the tag is mechanical and cheap; it is not, by itself, proof the claim is supported. The check that matters is whether the cited chunk's actual text contains what the claim states -- in the intact scenario, <code>c007</code>'s child literally contains "14 days from the ship date," so <code>[SOURCE 2]</code> is a true citation. In the cut scenario, no chunk in the evidence set states a number at all, so the honest output attaches no numeric citation and says so plainly instead.</p>
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>A <code>render_1108()</code> function writes each step's four token rows into <code>row0_1108</code> through <code>row3_1108</code> -- label, a <code>bar-fill</code> sized to that candidate's percentage, and a <code>token-reason</code> string -- and toggles <code>.ineligible</code> on the three non-winning rows and <code>.winner</code> on the winning row. Clicking <code>stepBtn_1108</code> appends the current step's word to <code>answer_1108</code>'s text, advances <code>idx_1108</code>, and either re-renders the next step or disables the button and relabels it "Done" once all four steps have run. Clicking <code>resetBtn_1108</code> zeroes <code>idx_1108</code>, clears <code>answer_1108</code> back to "Answer: ", re-enables <code>stepBtn_1108</code>, and re-renders step 0 -- the same stepper-lab pattern reused across this course's other labs.</p>
 </section>
 <section class="lesson-section" id="s14">
-<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>The read-back guarantee this concept produces</h2></div></header>
-<p>The guarantee this concept can actually offer is narrow and precise: a claim is grounded if and only if its supporting text is present in the exact string decoded, and that presence is independently checkable by string-searching the cited chunk -- not by trusting the citation tag. This is the same "in the corpus" vs. "in the prompt" line Concept 07 already drew for evidence selection, now extended one step further to the generated output itself.</p>
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>What the lab teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>EACH STEP, ONE MASKED CHOICE</span><h3>Hallucination is a per-token event</h3><p>Every one of the four steps individually rules out three plausible-sounding alternatives because the retrieved text doesn't support them -- token-level choices are each their own small probabilistic decision, not one single global pass/fail.</p></article>
+<article class="info-card"><span>ALL FOUR STEPS TOGETHER</span><h3>A grounded phrase is built, not retrieved whole</h3><p>"90-day grace period" isn't looked up as a unit -- it's assembled from four separate grounded decode choices, each individually maskable by whether the evidence supports it.</p></article>
+</div>
 </section>
 <section class="lesson-section" id="s15">
-<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Decode the next token"</h2></div></header>
-<div class="callout">This lab runs the exact Section 10 softmax function live in the browser against both logit sets and shows the resulting probability bars and final generated answer side by side -- not just the precomputed table above.</div>
-</section>
-<section class="lesson-section" id="s16">
-<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">EXPERIMENT</span><h2>Decode the next token</h2></div></header>
-<div class="lab" id="decodeLab_1108">
-<p>Pick which version of <code>c007</code>'s child chunk made it into the prompt and watch the same decode position produce a different, still-honest answer.</p>
-<div class="lab-actions" id="scenarioPicker_1108">
-<button type="button" class="active" data-scenario="intact">c007 (child) intact — number visible</button>
-<button type="button" class="secondary" data-scenario="cut">c007 (child) cut mid-sentence — number missing</button>
-</div>
-<div class="mask-panels">
-<div class="mask-panel">
-<span class="mask-panel-title">NEXT-TOKEN PROBABILITY AFTER "THE GRACE PERIOD IS"</span>
-<div class="prob-bars" id="probBars_1108"></div>
-</div>
-<div class="mask-panel">
-<span class="mask-panel-title">FINAL GENERATED ANSWER</span>
-<div class="sample-output" id="sampleOutput_1108"></div>
-</div>
-</div>
-<div class="callout" id="scenarioNote_1108"></div>
-</div>
-</section>
-<section class="lesson-section" id="s17">
-<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
-<p>Two fixed scenarios, each with a small illustrative logit object and a fixed final-answer string. Nothing is precomputed and pasted in for display -- the lab's <code>softmax</code> function is the identical function shown in Section 10, run live against whichever scenario's logits are selected.</p>
-</section>
-<section class="lesson-section" id="s18">
-<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
-<p>A single <code>render</code> function runs <code>softmax</code> on the selected scenario's logits, sorts tokens by probability, repaints the <code>.prob-bars</code> block as a stack of <code>.prob-row</code> elements (the highest-probability token marked <code>.winner</code>, mirroring Module 02 Concept 11's own <code>.mask-panels</code> pattern), writes the scenario's fixed answer string into the <code>.sample-output</code> block, and toggles <code>.active</code>/<code>.secondary</code> on the two picker buttons -- no new CSS classes anywhere.</p>
-</section>
-<section class="lesson-section" id="s19">
-<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What each pick teaches</h2></div></header>
-<div class="example-grid">
-<article class="info-card"><span>INTACT</span><h3>Grounded confidence looks like a sharp distribution</h3><p>95.97% on the one token that's actually supported by visible context -- a genuinely high-confidence, genuinely correct decode.</p></article>
-<article class="info-card"><span>CUT</span><h3>Honest refusal is also a sharp distribution</h3><p>92.43% on "not" once the number itself isn't visible -- confidence and correctness both come from what's in the prompt, not from the model trying harder.</p></article>
-</div>
-</section>
-<section class="lesson-section" id="s20">
-<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>The two scenarios, restated as prose</h2></div></header>
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>The two scenarios, restated as prose</h2></div></header>
 <table class="compare-table">
-<thead><tr><th>Intact child chunk</th><th>Cut mid-sentence child chunk</th></tr></thead>
+<thead><tr><th>Scenario A — intact child chunk</th><th>Scenario B — cut mid-sentence child chunk</th></tr></thead>
 <tbody>
 <tr><td>Number "14" visible in the prompt text</td><td>Number never appears anywhere in the prompt text</td></tr>
-<tr><td>Argmax token: "14" at 95.97%</td><td>Argmax token: "not" at 92.43%</td></tr>
+<tr><td>Top logit 5.1 on "14"; argmax token "14" at 95.97%</td><td>Top logit 4.8 on "not"; argmax token "not" at 92.43%</td></tr>
 <tr><td>Citation [SOURCE 2] is verifiably true</td><td>No numeric citation attached -- correctly so</td></tr>
+<tr><td>Answer is grounded</td><td>Answer is grounded (an honest refusal, still grounded in what's absent)</td></tr>
 </tbody>
 </table>
 </section>
-<section class="lesson-section" id="s21">
-<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
 <table class="compare-table">
 <thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
 <tbody>
-<tr><td>A model that "knows" the right answer will say it regardless of the prompt</td><td>False for a properly grounded pipeline -- the decode is over the actual prompt string, not over the model's general parametric knowledge (Module 02 Concept 09).</td></tr>
-<tr><td>A citation tag on a claim proves the claim is supported</td><td>Not automatically -- the tag records what the model is claiming to cite; whether the cited text actually supports the claim has to be checked separately (Section 13).</td></tr>
+<tr><td>The model "looked up" the answer</td><td>No -- it decoded a sequence of token probabilities shaped by the prompt it was given; nothing in the pipeline performs a literal lookup at generation time.</td></tr>
+<tr><td>A grounded prompt guarantees a grounded answer</td><td>No -- Module 03 Concept 04's claim is precise: grounding reduces hallucination risk, it does not eliminate it.</td></tr>
+<tr><td>Citations are free once evidence is retrieved</td><td>No -- ALCE found even the best systems lack complete citation support about half the time on ELI5; a citation tag still has to be checked against the cited text.</td></tr>
 </tbody>
 </table>
 </section>
-<section class="lesson-section" id="s22">
-<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
 <div class="interview-grid">
-<details class="quiz"><summary>Conceptual: why can the same instructions and the same evidence-set label produce two different honest answers?</summary><div>Because "honest" is defined relative to what text actually survived into the assembled prompt, not relative to the label on the evidence set. If the supporting text didn't make it in (e.g. cut mid-chunk), decoding the true fact anyway would be a hallucination, not a correct grounded answer -- declining is the honest output in that case.</div></details>
-<details class="quiz"><summary>System design: a production RAG system's answers cite a source for every claim, yet an audit finds several citations don't actually support their claims. What's the likely fix?</summary><div>The pipeline is almost certainly attaching citation tags mechanically (per the model's own claimed attribution) without verifying the cited chunk's text actually contains the claim -- add a read-back/string-match check between the generated claim and the cited chunk before the answer ships.</div></details>
+<details class="quiz"><summary>Conceptual: why can the same evidence-set label yield two different honest answers?</summary><div>Because "honest" is defined relative to what text actually survived into the assembled prompt, not relative to the label on the evidence set. If the supporting text didn't make it in (e.g. cut mid-chunk), decoding the true fact anyway would be a hallucination, not a correct grounded answer -- declining is the honest output in that case.</div></details>
+<details class="quiz"><summary>Conceptual: what does softmax guarantee about a probability distribution?</summary><div>Only that the outputs are non-negative and sum to exactly 1 -- it says nothing about whether the highest-probability token is actually correct; that depends entirely on what the underlying logits reflect.</div></details>
+<details class="quiz"><summary>System design: what did ALCE find about citation completeness in top systems, and what's the practical fix for a pipeline that trusts citation tags on sight?</summary><div>ALCE found even the best models lack complete citation support roughly half the time on ELI5. The fix is a read-back/string-match check between each generated claim and the text of its cited chunk before the answer ships -- the citation tag alone is not proof.</div></details>
 </div>
 </section>
-<section class="lesson-section" id="s23">
-<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
 <div class="readiness-grid">
 <div><b>I can state the decode loop in order</b><p>Logits, softmax, argmax/sampling, append, repeat, stop.</p></div>
 <div><b>I can state both node-verified probabilities</b><p>14 at 95.97% intact; not at 92.43% cut mid-sentence.</p></div>
-<div><b>I can explain why a citation tag isn't proof</b><p>It records an attribution claim; the underlying chunk text has to be checked separately.</p></div>
+<div><b>I can name the three-link failure chain and place generation in it</b><p>Retrieval, augmentation, generation (Module 03 Concept 11) -- this concept is the generation link, and lets you tell it apart from the other two when an answer is wrong.</p></div>
 </div>
 </section>
-<section class="lesson-section" id="s24">
-<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References</h2></div></header>
 <div class="references">
+<a href="https://arxiv.org/abs/2305.14627"><b>ALCE — Gao, Yen, Yu &amp; Chen, 2023, "Enabling Large Language Models to Generate Text with Citations"</b><br><span>New for this concept -- even the best systems lack complete citation support 50% of the time on ELI5; grounds the citation/provenance half of generation, cited in Sections 07, 09, 16, and 17.</span></a>
 <a href="module-02-concept-05.html"><b>Module 02 Concept 05 — Next-token probability and decoding</b><br><span>Reused directly -- the logits → softmax mechanism this concept applies at the tail of the pipeline.</span></a>
 <a href="module-02-concept-09.html"><b>Module 02 Concept 09 — LLM knowledge limitations and hallucination</b><br><span>Reused directly -- hallucination as a mechanical decoding-loop consequence, cited in Section 06.</span></a>
+<a href="module-02-concept-10.html"><b>Module 02 Concept 10 — Lost in the middle</b><br><span>Reused directly -- evidence position within the assembled prompt affects whether the model attends to it strongly enough to decode the grounded token, cited in Section 21.</span></a>
 <a href="module-02-concept-11.html"><b>Module 02 Concept 11 — Structured generation and constrained outputs</b><br><span>Reused directly -- the .mask-panels/.prob-row pattern this concept's lab is built from.</span></a>
 <a href="module-03-concept-04.html"><b>Module 03 Concept 04 — Hallucination reduction, grounding, and provenance</b><br><span>Reused directly -- "grounding reduces, does not eliminate, hallucination," stated precisely in Section 06.</span></a>
+<a href="module-03-concept-06.html"><b>Module 03 Concept 06 — The online query pipeline</b><br><span>Reused directly -- this concept is the pipeline's closing leg, cited in Section 01.</span></a>
+<a href="module-03-concept-11.html"><b>Module 03 Concept 11 — Where RAG breaks: three failure chains</b><br><span>Reused directly -- the retrieval/augmentation/generation failure chain this concept is the third link of, cited in Sections 01 and 23.</span></a>
+<a href="module-09-concept-07.html"><b>Module 09 Concept 07 — Tenant-filter over-fetch math</b><br><span>Reused directly -- the 3.4x over-fetch fact behind why k reaching this concept isn't necessarily a clean k, cited in Section 22.</span></a>
 <a href="module-11-concept-07.html"><b>Module 11 Concept 07 — Context injection and prompt construction</b><br><span>Reused directly -- the 954-token assembled prompt this concept decodes.</span></a>
 </div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Citation attachment is a separate, checkable step</h2></div></header>
+<p>Once decoding stops, the pipeline attaches a <code>[SOURCE n]</code> tag identifying which evidence chunk a claim is being attributed to -- Concept 07's own boundary-tag scheme, reused here at the output side instead of the input side. Attaching a tag mechanically means pointing decoded text back to a specific evidence chunk id, such as <code>c007</code>, rather than just producing prose. Attaching the tag is mechanical and cheap; it is not, by itself, proof the claim is supported. The check that matters is whether the cited chunk's actual text contains what the claim states -- in Scenario A, <code>c007</code>'s child literally contains "14 days from the ship date," so <code>[SOURCE 2]</code> is a true citation. In Scenario B, no chunk in the evidence set states a number at all, so the honest output attaches no numeric citation and says so plainly instead.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>Position inside the 954 tokens still matters</h2></div></header>
+<p>Module 02 Concept 10 established that models don't attend to every position in a long prompt equally -- evidence buried in the middle of a long context is recalled less reliably than evidence near the start or end (the "lost in the middle" effect). That fact doesn't disappear just because Concept 07 finished assembling the prompt: where a chunk sits inside the 954-token string can still affect whether the model attends to it strongly enough to actually decode the grounded token, even when the chunk's text is fully intact. Section 08 of Module 11 Concept 07 already showed this concretely by moving <code>c007</code>'s child from the front of the evidence block to its middle; this concept is the reason that positioning risk matters at all -- it changes what actually gets decoded.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>The k reaching generation isn't necessarily a clean k</h2></div></header>
+<p>Module 09 Concept 07 established that tenant filtering forces deliberate over-fetching -- a 3.4x figure, top-17 candidates fetched to guarantee five survive filtering for k=5. Concept 06 then cut that pool down with a score cutoff and a redundancy filter before it ever reached Concept 07's assembly step. By the time a prompt reaches this concept, trimming may already have happened more than once upstream. A wrong or missing fact in the final answer is not automatically a generation failure -- it can just as easily be evidence that never survived Concept 05's over-fetch or Concept 06's cutoff, and generation should not be blamed for a defect it didn't cause.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Telling a generation failure apart from the other two</h2></div></header>
+<p>Module 03 Concept 11's three-link failure chain says a wrong final answer traces back to a retrieval failure, an augmentation failure, or a generation failure. This concept gives the concrete tool for telling them apart: check whether the correct evidence was ever retrieved (retrieval), check whether it survived selection and assembly into the prompt (augmentation, Concepts 05-07), and only if both of those check out, treat a wrong decode as a genuine generation failure. Section 07's Scenario B is a case that looks like a generation problem on the surface -- the model declined to answer -- but traces back to an augmentation failure (the chunk was cut) rather than a flaw in the decode loop itself.</p>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Checkpoint</h2></div></header>
 <div class="checkpoint">
 <span class="checkpoint-state">MODULE 11 · 8/11</span>
 <h3>A prompt string isn't an answer yet. Decoding the response the model actually reads out.</h3>
-<p>You can now describe the decode loop precisely, state both node-verified probabilities from the worked example, and explain why a citation tag is not itself proof of grounding. Concept 07 (context injection and prompt construction) precedes this. Module 11's remaining concepts continue from here.</p>
+<p>You can now describe the decode loop precisely, state both node-verified probabilities from the worked example, explain why a citation tag is not itself proof of grounding, and place a wrong answer correctly on Module 03 Concept 11's three-link failure chain. Concept 07 (context injection and prompt construction) precedes this. Module 11's remaining concepts continue from here.</p>
 <div class="checkpoint-actions">
 <a class="button secondary" href="#b09">Return to readiness check ↑</a>
-<a class="button primary" href="#s16">Open Decode the next token ↑</a>
+<a class="button primary" href="#s11">Open Generate the next token ↑</a>
 </div>
 <p class="fine-print">Module 11 stands at 8 of 11 concepts. Previous concept: Concept 07, context injection and prompt construction.</p>
 </div>
