@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 05 hands off a ranked, tenant-filtered candidate list -- already over-fetched past the true k, per Module 09 Concept 07's own 3.4x figure. This concept is the very next step: turning that over-fetched pool into the actual evidence set the prompt sees. Node-verified on nine candidates (including the grace-period chunk c007's own 0.8944/0.6761 cosine scores): a 0.75 score cutoff leaves 6 of 9 candidates, a raw top-5 slice still includes a near-duplicate chunk, redundancy dedup drops it and backfills the next candidate, and the final 5-chunk evidence set costs 880 of a 1,200-token budget. The lab, Move the cutoff line, lets you drag both the score cutoff and k and watch the evidence set change live.">
+<title>Top-k evidence selection — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-06.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 06 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 06</p>
+<h1>A ranked list isn't evidence yet.<br><em>Choosing which candidates the prompt actually sees.</em></h1>
+<p class="lesson-lead">Concept 05 hands off a ranked candidate list -- one that's already been over-fetched past the true k, on purpose, to survive tenant filtering. This concept is the step that comes right after: applying a score cutoff, picking k, dropping redundant near-duplicates, and checking the result against a token budget, so what lands in the prompt is an actual evidence set, not just "whatever ranked highest."</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Sixth concept of Module 11 (6/11) -- consumes Concept 05's ranked candidate list, hands its output to the generation step</b></div>
+<div><span>PREREQUISITE</span><b>Module 09 Concept 07's tenant-filter over-fetch math (3.4x, top-17 for k=5); Module 07 Concepts 06/07's grace-period chunk c007 (child 0.8944, parent 0.6761); Module 10 Concept 14's upsert/query/delete interface -- all cited, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why "ranked" and "selected as evidence" are two different steps, and name the three filters between them</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The list is ranked. Now someone has to decide where it ends.</h2>
+</div>
+<p>Concept 05 returns candidates sorted by score. Nothing about that ranking says how many of them belong in the prompt, or whether two near-identical chunks should both make the cut. This concept is that decision.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A sorted list of applicants, versus the ones you actually hire</h3>
+<p>Ranking candidates by score is like sorting a stack of resumes by fit -- useful, but it doesn't tell you how many to hire, or what to do when two resumes are basically the same person applying twice. Top-k evidence selection is that second, separate decision: given a ranked candidate list, which ones actually become the evidence the model gets to read.</p>
+<div class="beginner-memory"><b>First memory:</b> ranking answers "in what order," selection answers "how many, and which ones survive the cut."</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 05's list is deliberately too long</h3>
+<p>Module 09 Concept 07 already established that a tenant-filtered ANN search has to over-fetch -- at 30% tenant selectivity, getting a true k=5 back requires searching roughly top-17. Concept 05 returns that over-fetched pool. Without this concept, all 17 (or however many pass the tenant filter) would go straight into the prompt -- wasting budget and diluting the model's attention with candidates nobody actually wanted included.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Nine candidates, one grace-period chunk, one duplicate</h3>
+<p>Take nine tenant-filtered candidates for the query "what's the return window after the grace period," including chunk <code>c007</code>'s child (cosine 0.8944, the exact sentence -- Module 07 Concept 06) and its parent (cosine 0.6761, the restored context -- Module 07 Concept 07), plus a near-duplicate pair, <code>cC</code> and <code>cD</code>, both describing order-status definitions almost verbatim. A 0.75 score cutoff and k=5 selection, verified below, keeps <code>c007</code>'s child, drops <code>cD</code> as redundant, and backfills the next real candidate in its place.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three filters, applied in order</h3>
+<p><b>Score cutoff</b> -- discard anything below a minimum similarity, regardless of rank. <b>k selection</b> -- from what remains, take the top k by score. <b>Redundancy check</b> -- if two survivors are near-duplicates, keep the higher-scored one and backfill the next candidate below the raw top-k line, so the final set still has k distinct pieces of evidence.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 05 — ranked, over-fetched candidate list</span><i>→</i>
+<span class="hot">THIS concept — cutoff, k, dedup, budget check</span><i>→</i>
+<span>Concept 07 — the final prompt assembly</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>"Top-k retrieval" and "top-k evidence selection" are not the same k</h3>
+<p>Module 09 Concept 07's "top-17" was a search-time over-fetch count, chosen to survive a tenant filter -- it is not the number of chunks that end up in the prompt. This concept's k is the second, smaller, deliberate number: how many of the already-filtered candidates actually become evidence. Conflating the two hides the fact that the search-time k is inflated on purpose.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Whatever the ANN search returns is what goes in the prompt."</b><p>False -- the search result is the over-fetched candidate pool (Module 09 Concept 07); evidence selection is the separate step that trims it down.</p></div>
+<div><b>"Higher k in retrieval means more evidence in the prompt."</b><p>Not necessarily -- retrieval's k accounts for filter loss; evidence selection's k is a fresh, usually smaller, decision made after the filter has already run.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's selection step</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Right after the candidate list comes back, right before prompt assembly</b><p>Ask directly: does your pipeline apply a score cutoff and a redundancy check, or does it just slice the first k results?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 6/11</b><p>Concept 05 (query embedding, retrieval and candidate search) precedes this. Concept 07, final prompt assembly, is next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Explain why ranking and selection are separate steps</b><p>Ranking orders candidates; selection decides how many survive and whether any are redundant.</p></div>
+<div><b>Name the three filters, in order</b><p>Score cutoff, then k selection, then redundancy dedup with backfill.</p></div>
+<div><b>Distinguish retrieval's over-fetch k from selection's evidence k</b><p>Top-17 (search-time, filter-survival) is not the same number as the k pieces of evidence that reach the prompt.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>If the score cutoff removes 3 of 9 candidates, and k is still 5, how many pass the cutoff before the k slice is even applied?</li>
+<li>Why does dropping a redundant duplicate require backfilling, instead of just shipping k-1 pieces of evidence?</li>
+<li>Why is Module 09 Concept 07's "top-17" the wrong number to reuse as this concept's k?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 6 OF 11</h3>
+<p>This concept named the three filters that turn an over-fetched, ranked candidate list into an actual evidence set: score cutoff, k selection, and redundancy dedup with backfill, checked against a token budget. Concept 07, final prompt assembly, is next -- it takes this concept's evidence set and turns it into the text the model actually reads.</p>
+<div class="beginner-memory"><b>Concept 06 is active.</b> Module 11 stands at 6 of 11 concepts.</div>
+<a class="button primary" href="module-11-concept-04.html">← Back to Concept 04's persistence layer</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A ranked list isn't evidence yet</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s12"><span>01</span><b>Nine candidates, node-verified</b><small>Cutoff 0.75 keeps 6 of 9; raw top-5 still needs a redundancy fix.</small></a>
+<a href="#s13"><span>02</span><b>The redundancy backfill</b><small>cD drops as a near-duplicate of cC; cE backfills its place.</small></a>
+<a href="#s16"><span>03</span><b>Move the cutoff line</b><small>The lab -- drag the cutoff and k, watch the evidence set change.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 06 path:</b> Concept 05 hands off a ranked, tenant-filtered candidate list, already over-fetched past the true k → this concept applies a score cutoff → then takes the top k of what remains → then drops redundant near-duplicates and backfills → then checks the result against a token budget → the lab lets you drag both sliders and watch the evidence set change live → Concept 07 assembles the final prompt from exactly this output.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Top-k evidence selection" deep dive</b><em>Full citations, the selection code, and Move the cutoff line</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Dependency: over-fetch</a>
+<a href="#s04"><i>04</i> Dependency: grace-period scores</a>
+<a href="#s05"><i>05</i> Three filters</a>
+<a href="#s06"><i>06</i> Score cutoff</a>
+<a href="#s07"><i>07</i> k selection</a>
+<a href="#s08"><i>08</i> Redundancy + backfill</a>
+<a href="#s09"><i>09</i> Worked example intro</a>
+<a href="#s10"><i>10</i> Selection code</a>
+<a href="#s11"><i>11</i> Ordering rationale</a>
+<a href="#s12"><i>12</i> Node verification</a>
+<a href="#s13"><i>13</i> Redundancy result</a>
+<a href="#s14"><i>14</i> Token-budget check</a>
+<a href="#s15"><i>15</i> Lab intro</a>
+<a href="#s16"><i>16</i> Lab</a>
+<a href="#s17"><i>17</i> Lab data model</a>
+<a href="#s18"><i>18</i> Lab mechanics</a>
+<a href="#s19"><i>19</i> Lab walkthrough</a>
+<a href="#s20"><i>20</i> Comparison table</a>
+<a href="#s21"><i>21</i> Misconceptions</a>
+<a href="#s22"><i>22</i> Interview</a>
+<a href="#s23"><i>23</i> Check</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Turning a candidate list into an evidence set</h2></div></header>
+<p>This is the sixth concept of Module 11 (6/11). Concept 05, "Query embedding, retrieval and candidate search," produces a ranked, tenant-filtered candidate list -- already deliberately over-fetched, per Module 09 Concept 07's own math, to survive that filter. This concept is the very next step, and only that step: deciding, from that list, which candidates actually become the evidence the model reads. It does not re-derive candidate search, tenant filtering, or the over-fetch math -- all three are cited as already-settled background.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Ranked, filtered, and selected -- three separate claims</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td>Ranked</td><td>Ordered by similarity score -- says nothing about how many are usable</td></tr>
+<tr><td>Filtered</td><td>Restricted to candidates that pass a hard constraint (e.g. tenant_id) -- says nothing about score quality</td></tr>
+<tr><td>Selected</td><td>The final, bounded evidence set that reaches the prompt -- the output of this concept</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>The over-fetch this concept inherits, cited</h2></div></header>
+<p>Module 09 Concept 07 established that post-filtering an ANN search at 30% tenant selectivity requires fetching roughly top-17 candidates to actually return a true k=5 after the tenant filter removes 70% of what came back -- a 3.4x over-fetch, worse (3.8x) in the stated worst case. That candidate list -- already over-fetched, already tenant-filtered -- is exactly what Concept 05 hands to this concept. This concept's own k is a second, independent, usually smaller number.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">DEPENDENCIES</span><h2>The grace-period chunk's own scores, cited</h2></div></header>
+<p>Module 07 Concepts 06/07 established chunk <code>c007</code>'s two forms for the query about the 14-day grace period: the child chunk, cosine 0.8944, containing the exact sentence but liable to be cut mid-chunk without enough overlap; and the parent chunk, cosine 0.6761, lower-scoring but restoring the full context. Both scores are reused verbatim in this concept's worked example, not recomputed.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">MECHANISM</span><h2>The three filters, named precisely</h2></div></header>
+<p><b>Score cutoff</b> removes candidates below a minimum similarity regardless of rank. <b>k selection</b> takes the top k of whatever remains. <b>Redundancy dedup</b> checks the survivors for near-duplicates and, if found, drops the lower-scored copy and backfills the next candidate below the raw top-k line -- keeping the final evidence set at exactly k distinct pieces.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Why a score cutoff exists at all</h2></div></header>
+<p>A ranked list has no natural stopping point of its own -- rank 6 and rank 60 both "exist" in the sorted order. A score cutoff enforces a quality floor independent of rank, so that if only 2 candidates are actually relevant, only 2 get selected, even if k asks for 5.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">MECHANISM</span><h2>Why k selection is still needed on top of a cutoff</h2></div></header>
+<p>A cutoff alone can leave far more candidates than a prompt should carry -- a permissive threshold on a large corpus could pass dozens. k selection is the second, independent bound: never send more than k pieces of evidence, no matter how many clear the cutoff.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">IMPORTANT DISTINCTIONS</span><h2>Redundancy dedup and backfill</h2></div></header>
+<p>Two near-duplicate chunks (e.g. two passages both stating the same order-status definitions) both scoring highly is not the same as two independent pieces of evidence -- it's one fact taking up two evidence slots. Dropping the lower-scored duplicate and backfilling the next real candidate below the raw top-k line keeps the evidence set both non-redundant and at full size.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Nine candidates, ready to be filtered</h2></div></header>
+<p>Nine tenant-filtered, ranked candidates for the query "what's the return window after the grace period": <code>cA</code> through <code>cG</code> plus <code>c007</code>'s child and parent forms. <code>cC</code> and <code>cD</code> are near-duplicate passages about order-status definitions. Scores and token counts for <code>cA</code>-<code>cG</code> are illustrative lab data built for this worked example; <code>c007</code>'s two scores (0.8944, 0.6761) are the sourced figures cited in Section 04.</p>
+<div class="callout"><b>Flag:</b> only <code>c007</code>'s child/parent cosine scores are external, previously-verified facts. The other seven candidates' scores and token counts are synthetic data constructed for this lesson so the selection mechanics have a clean, hand-verifiable case -- not measurements from a real corpus.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">CODE</span><h2>The selection function, verified via node</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · SELECTION LOGIC (also the lab's own code)</span>
+<pre><code>const sorted = candidates.slice().sort((a, b) =&gt; b.score - a.score);
+const passCutoff = sorted.filter(c =&gt; c.score &gt;= cutoff);
+const topk = passCutoff.slice(0, k);
+const evidence = topk.filter(c =&gt; !c.dupOf);
+const pool = passCutoff.filter(c =&gt; !evidence.includes(c) &amp;&amp; !c.dupOf);
+while (evidence.length &lt; k &amp;&amp; pool.length) evidence.push(pool.shift());
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANISM</span><h2>Why the order is cutoff, then k, then dedup</h2></div></header>
+<p>Applying the cutoff first means k never has to "waste" a slot on a candidate that shouldn't be evidence at all. Applying dedup last, after k, means the redundancy check only has to look at the small set that actually made the cut -- not the whole candidate pool -- which is exactly what the code in Section 10 does.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MATHEMATICS</span><h2>Independently verified via node</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Candidate</th><th>Score</th><th>Tokens</th><th>Passes cutoff ≥0.75?</th></tr></thead>
+<tbody>
+<tr><td>cA</td><td>0.9100</td><td>150</td><td>Yes</td></tr>
+<tr><td>c007 (child)</td><td>0.8944</td><td>180</td><td>Yes</td></tr>
+<tr><td>cB</td><td>0.8800</td><td>200</td><td>Yes</td></tr>
+<tr><td>cC</td><td>0.8500</td><td>190</td><td>Yes</td></tr>
+<tr><td>cD (dup of cC)</td><td>0.8300</td><td>170</td><td>Yes</td></tr>
+<tr><td>cE</td><td>0.7900</td><td>160</td><td>Yes</td></tr>
+<tr><td>cF</td><td>0.7200</td><td>140</td><td>No</td></tr>
+<tr><td>c007 (parent)</td><td>0.6761</td><td>420</td><td>No</td></tr>
+<tr><td>cG</td><td>0.6800</td><td>130</td><td>No</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Run directly via <code>node -e</code> executing the exact logic in Section 10 against all nine candidates, printing the sorted order, the cutoff-passing set, the raw top-5, and the final deduped evidence set at every step -- 6 of 9 pass the 0.75 cutoff; the raw top-5 slice is <code>cA, c007_child, cB, cC, cD</code>, still containing the redundant <code>cD</code>.</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>The redundancy backfill, node-confirmed</h2></div></header>
+<p><code>cD</code> is dropped as a near-duplicate of the higher-scored <code>cC</code>. The next candidate below the raw top-5 line that still clears the cutoff and isn't itself a duplicate is <code>cE</code> (0.79) -- it backfills the dropped slot. The final, node-verified evidence set is <code>cA, c007_child, cB, cC, cE</code>: five distinct pieces, no redundancy, and it retains the exact grace-period sentence.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">MATHEMATICS</span><h2>The token-budget check, node-confirmed</h2></div></header>
+<div class="equation">total_tokens = 150 + 180 + 200 + 190 + 160 = 880 tokens</div>
+<p>Against an illustrative 1,200-token evidence budget, the final five-chunk set costs 880 tokens, leaving 320 tokens of headroom -- confirmed by summing the same evidence set's token counts in the node script cited in Section 12.</p>
+<div class="callout warning"><b>Important distinction:</b> the selected evidence set still contains only <code>c007</code>'s child, whose 0.8944 score is high enough to clear every filter here -- but Module 07 Concept 06 already established that this exact child chunk can be cut mid-sentence without enough overlap. Top-k evidence selection decides <i>which chunks</i> become evidence; it does not, by itself, decide whether a selected chunk's own boundaries were drawn well enough to contain the answer. That is Module 07's problem, not this concept's.</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Move the cutoff line"</h2></div></header>
+<div class="callout">This lab runs the exact selection logic from Section 10 live, on the exact nine candidates from Section 12, as you drag two sliders -- not just read about the result.</div>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">EXPERIMENT</span><h2>Move the cutoff line</h2></div></header>
+<div class="lab" id="selectLab_1106">
+<p>Drag the score cutoff and k below and watch which of the nine candidates become the final evidence set, whether a redundancy backfill fires, and how the token budget holds up.</p>
+<div class="lab-controls">
+<div class="control">
+<label for="cutoffSlider_1106">Score cutoff: <b id="cutoffValue_1106">0.75</b></label>
+<input type="range" id="cutoffSlider_1106" min="0.60" max="0.95" step="0.01" value="0.75">
+</div>
+<div class="control">
+<label for="kSlider_1106">k (evidence set size): <b id="kValue_1106">5</b></label>
+<input type="range" id="kSlider_1106" min="1" max="8" step="1" value="5">
+</div>
+</div>
+<div class="rank-chip-row" id="chipRow_1106"></div>
+<div class="budget-bar" id="budgetBar_1106"></div>
+<p class="budget-meta" id="budgetMeta_1106"></p>
+<div class="callout" id="selectCallout_1106"></div>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>The lab holds the same nine candidates as Section 12, each with a fixed score, token count, and optional <code>dupOf</code> flag on <code>cD</code>. Every render call re-runs the Section 10 selection function against the two current slider values -- nothing is precomputed or cached across positions, so any combination of cutoff and k reflects the real logic, not a lookup table.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>On every slider <code>input</code> event, one render function reruns the selection, then repaints three things from that single result: the <code>rank-chip-row</code> (each chip marked <code>.match</code> if selected, <code>.fp</code> if it's the dropped duplicate, or <code>.excluded</code> otherwise), a <code>budget-bar</code> segment sized to the evidence set's token total over the 1,200-token budget, and a callout that explains whichever of three states applies: cutoff too strict for the chosen k, a redundancy backfill fired, or a clean set with budget to spare.</p>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What dragging each slider teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>RAISE THE CUTOFF</span><h3>The binding constraint flips</h3><p>Push the cutoff past 0.83 and k=5 can no longer be satisfied -- fewer than 5 candidates clear the bar, and no amount of increasing k fixes that.</p></article>
+<article class="info-card"><span>LOWER k</span><h3>The duplicate can disappear from view</h3><p>At k=3, the redundant cD never enters the raw top-k slice in the first place -- the backfill only matters once k is large enough to reach it.</p></article>
+<article class="info-card"><span>DEFAULT (0.75, k=5)</span><h3>The worked example, live</h3><p>Reproduces exactly the node-verified result from Sections 12-14: cD dropped, cE backfilled, 880 of 1,200 tokens used.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>The three filters, restated as prose</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Score cutoff</th><th>k selection</th><th>Redundancy dedup</th></tr></thead>
+<tbody>
+<tr><td>Quality floor, rank-independent</td><td>Hard size limit on the survivors</td><td>Removes duplicate evidence slots</td></tr>
+<tr><td>Can leave fewer than k candidates</td><td>Never returns more than k</td><td>Backfills to keep the count at k</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Retrieval's over-fetch k (top-17, Module 09 Concept 07) is the same number as the evidence k</td><td>False -- the first accounts for filter loss at search time; the second is a separate, usually smaller, decision made after the filter has already run.</td></tr>
+<tr><td>Dropping a redundant duplicate just means shipping k-1 pieces of evidence</td><td>Not quite -- the standard approach backfills from the next candidate below the raw top-k line, keeping the evidence set at the full k.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why isn't a fixed score cutoff enough on its own, without also bounding by k?</summary><div>A permissive cutoff on a large or noisy corpus can pass far more candidates than a prompt should reasonably carry -- k enforces a hard ceiling independent of how many clear the quality bar.</div></details>
+<details class="quiz"><summary>System design: your evidence set keeps returning near-duplicate chunks from the same source document. What's the fix?</summary><div>Add an explicit redundancy check (e.g. a similarity threshold between selected candidates, or dedup by source paragraph) before finalizing the evidence set, with a backfill step so the set doesn't shrink below the target k.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name the three filters in order</b><p>Score cutoff, then k selection, then redundancy dedup with backfill.</p></div>
+<div><b>I can state the worked example's final evidence set</b><p>cA, c007_child, cB, cC, cE -- 880 of 1,200 tokens, node-verified.</p></div>
+<div><b>I can distinguish retrieval's over-fetch k from selection's evidence k</b><p>Top-17 survives a tenant filter; this concept's k=5 is the actual evidence count.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="module-09-concept-07.html"><b>Module 09 Concept 07 — the tenant-filter over-fetch math</b><br><span>Reused directly -- the 3.4x / top-17 figures this concept's candidate list already reflects.</span></a>
+<a href="module-07-concept-06.html"><b>Module 07 Concept 06 — the grace-period chunk, child form</b><br><span>Reused directly -- chunk c007's own 0.8944 cosine score.</span></a>
+<a href="module-07-concept-07.html"><b>Module 07 Concept 07 — the grace-period chunk, parent/child fix</b><br><span>Reused directly -- chunk c007's parent-form 0.6761 cosine score.</span></a>
+<a href="module-10-concept-14.html"><b>Module 10 Concept 14 — the upsert/query/delete adapter interface</b><br><span>Reused directly -- the same store-agnostic call surface that returns the candidate list this concept consumes.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 6/11</span>
+<h3>A ranked list isn't evidence yet. Choosing which candidates the prompt actually sees.</h3>
+<p>You can now name the three filters that turn a ranked, over-fetched candidate list into an actual evidence set, trace the node-verified worked example on nine candidates, and explain why retrieval's over-fetch k and this concept's evidence k are two different numbers. Concept 07, final prompt assembly, is next -- it takes this concept's output and turns it into the text the model actually reads.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s16">Open Move the cutoff line ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 6 of 11 concepts. Position 5 (query embedding, retrieval and candidate search) precedes this. Next concept: Concept 07, final prompt assembly.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 06 · Complete</p>
+<a href="module-11-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

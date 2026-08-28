@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Every concept before this one embedded a document. This concept is the first to embed a query -- the same shared bi-encoder, no cross-attention, a query: prefix instead of passage: -- and run that query vector against the persisted index from Concept 04 to get back a candidate set, not a stored row. Worked example: a toy 6-dim stand-in for the real 384-dim space, four candidate chunks from the doc_9f21 grace-period corpus, cosine similarity computed and ranked via node (c007 at 0.9405, billing cycle at 0.2261, late fee at 0.1234, refund policy at 0.0210). The lab, Rank the candidates, lets you pick top_k and watch the candidate set shrink or admit a weak match.">
+<title>Query embedding, retrieval and candidate search — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-05.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 05 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 05</p>
+<h1>Concepts 01-04 embedded a document.<br><em>This one embeds a question.</em></h1>
+<p class="lesson-lead">Every concept in this module so far has stayed on the offline path: hash, chunk, embed, and persist a document that already existed. This concept is the first to go online -- a user's question gets embedded through the same shared encoder, with a different prefix, and that single query vector is compared against every persisted vector from Concept 04 to produce a ranked candidate set, not a stored row.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fifth concept of Module 11 (5/11) -- the first concept in this module to touch the online path</b></div>
+<div><span>PREREQUISITE</span><b>Module 08 Concept 03 (bi-encoder asymmetry) and Concept 08 (query/document prefix convention); Module 09 Concepts 01-07 (ANN mechanisms, over-fetch math); Module 10 Concept 14 (upsert/query/delete); Module 11 Concept 04 (what's actually persisted)</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the three online-path steps in order: embed the query, run the search, get back candidates -- not answers</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">A question has to become a vector before it can be compared to anything</h2>
+</div>
+<p>Concepts 01-04 answered "what happens to a document before a user ever asks anything." This concept answers the very next question: the instant a user types something, what happens to their question before the system can find anything relevant to it?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Same translator, different sentence</h3>
+<p>The chunk-embedding stage (Concept 03) and this concept both run text through the exact same all-MiniLM-L6-v2 model -- no separate "query model" exists. What changes is which sentence goes in (a user's question instead of a document passage) and a one-word label attached to it. What comes out the other end is a ranked list of candidates: chunks the search thinks are relevant, not an answer.</p>
+<div class="beginner-memory"><b>First memory:</b> retrieval doesn't answer the question -- it finds candidates. Answering is a later stage's job.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 04 persisted vectors that nobody has read back yet</h3>
+<p>Without this concept, Concept 04's committed rows just sit there -- durable, but never queried. This concept is the first to actually call the <code>query(vector, k)</code> half of Module 10 Concept 14's own adapter interface, closing the loop between "a document's vector is safely stored" and "a user's question can find it."</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>"How long is the grace period?" against four stored chunks</h3>
+<p>A user asks a question about the doc_9f21 grace-period policy that Concepts 02-04 chunked, embedded, and persisted. That question gets embedded into the same vector space as chunk <code>c007</code> (the grace-period chunk itself) and three unrelated chunks -- billing cycle, late fee, refund policy. Comparing the question's vector to all four produces a ranked order, computed and verified below: <code>c007</code> first by a wide margin, the other three trailing far behind.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Embed, then search -- two calls, not one</h3>
+<p><b>Step 1 -- embed the query.</b> The question text goes through the shared encoder with a <code>"query: "</code> prefix (Module 08 Concept 08's convention, mirroring the <code>"passage: "</code> prefix Concept 02 attaches to documents). <b>Step 2 -- search.</b> That single vector is handed to <code>query(vector, k)</code> (Module 10 Concept 14), which runs a similarity comparison against every persisted vector from Concept 04 and returns the top <code>k</code> as a candidate set -- chunk ids and scores, not generated text.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 04 — persisted the document's vector</span><i>→</i>
+<span class="hot">THIS concept — embeds the question, searches, returns candidates</span><i>→</i>
+<span>Concept 06 — turns candidates into evidence</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>"Candidate" is not "answer," and "retrieval" is not "generation"</h3>
+<p>A candidate set is a ranked list of chunk ids and similarity scores -- nothing has been read for correctness yet, and nothing has been handed to a language model. Bi-encoder asymmetry (Module 08 Concept 03) is the reason this works at all: the query and the document were embedded by two separate calls to the same shared model, with no cross-attention between them, which is exactly what makes it possible to embed the query once and compare it against millions of pre-computed document vectors instead of re-running the model per pair.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Retrieval already answers the question."</b><p>False -- retrieval returns candidates ranked by similarity; nothing has verified any of them are actually correct or sufficient. That's Concept 06's job.</p></div>
+<div><b>"The query gets embedded the same way as a document, prefix and all."</b><p>Not quite -- same model, same vector space, but a different prefix (<code>"query: "</code> vs. <code>"passage: "</code>), per Module 08 Concept 08's own convention.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's retrieval call</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The instant a user submits a question, before any generation happens</b><p>Ask directly: does your code call <code>query(vector, k)</code> against the persisted store, or does it skip straight to a language model with no retrieval step at all?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 5/11</b><p>Concepts 01-04 built the offline path (ingest → chunk → embed → persist). Concept 06, evidence selection from a candidate set, is next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the two-step online mechanism</b><p>Embed the query (same shared model, "query: " prefix), then call query(vector, k) against the persisted index.</p></div>
+<div><b>Explain why one shared model can do both jobs</b><p>Bi-encoder asymmetry -- query and document are embedded independently, no cross-attention, so document vectors can be pre-computed once and reused for every future query.</p></div>
+<div><b>Distinguish a candidate set from an answer</b><p>Ranked chunk ids and similarity scores -- correctness and sufficiency are checked later, not here.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does a query get a different prefix than the documents it's being compared against, if both go through the same model?</li>
+<li>What specifically does <code>query(vector, k)</code> return -- and what does it not return?</li>
+<li>If chunk c007 scores 0.9405 and the next-best candidate scores 0.2261, what does that gap tell you about how confident the match is?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 5 OF 11</h3>
+<p>This concept named the first online-path step: embedding a query through the same shared encoder used for documents, then searching the persisted index from Concept 04 to get back a ranked candidate set. Concept 06, "evidence selection from a candidate set," picks up exactly where the candidate set this concept produces leaves off -- deciding which of those candidates actually get used.</p>
+<div class="beginner-memory"><b>Concept 05 is active.</b> Module 11 stands at 5 of 11 concepts. This is the first concept in the module to touch the online (query-time) path.</div>
+<a class="button primary" href="module-11-concept-04.html">← Back to Concept 04's persistence question</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Embed the question, search the index, get back candidates</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s11"><span>01</span><b>Cosine similarity, node-verified</b><small>c007 at 0.9405 vs. three unrelated chunks trailing far behind.</small></a>
+<a href="#s14"><span>02</span><b>Over-fetch, cited not re-derived</b><small>Module 09 Concept 07's 3.4x over-fetch fact, applied to a metadata-filtered query.</small></a>
+<a href="#s16"><span>03</span><b>Rank the candidates</b><small>The lab -- pick top_k, watch the candidate set shrink or admit a weak match.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 05 path:</b> Concept 04 persisted chunk c007's vector durably → this concept embeds a user's question through the same shared encoder with a different prefix → that query vector is compared to every persisted vector, cosine-ranked and node-verified → over-fetch math (cited from Module 09 Concept 07) explains why k alone isn't always enough when a filter is involved → the lab lets you pick top_k and watch which candidates survive → Concept 06 decides which of these candidates actually get used.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Query embedding, retrieval and candidate search" deep dive</b><em>Full citations, the cosine-ranking code, and Rank the candidates</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Dependencies reused</a>
+<a href="#s04"><i>04</i> Evidence + control</a>
+<a href="#s05"><i>05</i> Architecture / schema</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Code</a>
+<a href="#s08"><i>08</i> Distinctions</a>
+<a href="#s09"><i>09</i> Worked example intro</a>
+<a href="#s10"><i>10</i> Code</a>
+<a href="#s11"><i>11</i> Mechanism</a>
+<a href="#s12"><i>12</i> Mathematics</a>
+<a href="#s13"><i>13</i> Evidence + control</a>
+<a href="#s14"><i>14</i> Concrete use</a>
+<a href="#s15"><i>15</i> Experiment setup</a>
+<a href="#s16"><i>16</i> Experiment / lab</a>
+<a href="#s17"><i>17</i> Lab data model</a>
+<a href="#s18"><i>18</i> Lab mechanics</a>
+<a href="#s19"><i>19</i> Concrete use</a>
+<a href="#s20"><i>20</i> Contrast table</a>
+<a href="#s21"><i>21</i> Corrections</a>
+<a href="#s22"><i>22</i> Interview</a>
+<a href="#s23"><i>23</i> Recall</a>
+<a href="#s24"><i>24</i> References + checkpoint</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The first Module 11 concept to touch a live query</h2></div></header>
+<p>This is the fifth concept of Module 11 (5/11), and the first to leave the offline path entirely. Concepts 01-04 covered a document's own journey -- ingest, chunk, embed, persist -- and never once involved a user's actual question. This concept opens the online path: a question comes in, gets embedded, and gets compared against everything Concept 04 already made durable. Every mechanism cited here (bi-encoder asymmetry, the prefix convention, the adapter interface, ANN over-fetch math) comes from Modules 08-10 and is reused, not re-derived.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Query embedding, retrieval, and candidate search -- three separate words</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td>Query embedding</td><td>Running the user's question text through the shared encoder with a "query: " prefix to produce one vector</td></tr>
+<tr><td>Retrieval</td><td>The act of comparing that query vector against a persisted index to find similar vectors</td></tr>
+<tr><td>Candidate search</td><td>The specific call that returns the top-k ranked results -- ids and similarity scores, not text answers</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>What this concept reuses instead of re-deriving</h2></div></header>
+<p>Bi-encoder asymmetry (Module 08 Concept 03), the query/document prefix convention (Module 08 Concept 08), the ANN mechanisms and recall/latency trade-off table (Module 09 Concepts 01-06), the tenant-filter over-fetch fact (Module 09 Concept 07), and the store-agnostic adapter interface (Module 10 Concept 14) are all cited below at the exact numbers already established in those concepts -- none of them are recomputed here.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Bi-encoder asymmetry, cited</h2></div></header>
+<p>Module 08 Concept 03 establishes that a bi-encoder embeds the query and the document with two independent calls to the same shared model -- no cross-attention between them. That's the entire reason document vectors can be computed once at ingestion (Concept 02-03) and reused for every future query without re-running the model per pair; a cross-encoder could score a query-document pair more accurately but would have to re-run for every single candidate, which doesn't scale past a handful of documents.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Where the query vector goes to be compared</h2></div></header>
+<p>The query vector never gets written to Module 10 Concept 03's five-table schema -- it's a transient, single-use vector that exists only for the duration of one search call. What it's compared against are the already-persisted rows in the <code>embeddings</code> table (Concept 04's own subject), via the adapter's <code>query(vector, k)</code> method (Module 10 Concept 14).</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The concrete SQL this call runs, cited</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · ORACLE'S OWN COSINE-DISTANCE SEARCH (Module 10 Concept 05)</span>
+<pre><code>SELECT chunk_id, VECTOR_DISTANCE(embedding, :query_vector, COSINE) AS dist
+FROM embeddings
+ORDER BY dist ASC
+FETCH FIRST :k ROWS ONLY;
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">SQL · PGVECTOR EQUIVALENT (Module 10 Concept 11)</span>
+<pre><code>SELECT chunk_id, embedding <=> %(query_vector)s AS dist
+FROM embeddings
+ORDER BY dist ASC
+LIMIT %(k)s;
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">CODE</span><h2>The adapter call, cited</h2></div></header>
+<p>Module 10 Concept 14's own adapter interface exposes this as one call: <code>store.query(query_vector, k=5)</code>. Everything below the interface -- exact-brute-force (Module 09 Concept 01), HNSW (Concept 03), or IVF (Concept 04) -- is an implementation detail the caller doesn't need to know to use it correctly.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">DISTINCTIONS</span><h2>Prefix convention: "query: " is not "passage: "</h2></div></header>
+<p>Module 08 Concept 08 establishes the asymmetric prefix convention and its own worked ratio: a 5-token query carries a 6.0x smaller token share than a 40-token passage. The document side (Concept 02 of this module) attaches <code>"passage: "</code> at ingestion; this concept is the first in Module 11 to attach the query-side counterpart, <code>"query: "</code>, at retrieval time. Same encoder, same 384-dimensional output space, different label on the input string.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>"How long is the grace period?" against four persisted chunks</h2></div></header>
+<p>Continuing this course's own doc_9f21 grace-period corpus: a user asks <code>"query: how long is the grace period?"</code>. Four chunks are already persisted from Concepts 02-04 -- <code>c007</code> (the grace-period chunk itself) plus three unrelated chunks from the same policy document: billing cycle, late fee, and refund policy. The real 384-dimensional all-MiniLM-L6-v2 vectors from Concept 03 are not re-typed here; instead this section uses a small 6-dimensional stand-in, one axis per topic, so the ranking arithmetic is fully hand-checkable while still preserving the same relative-similarity shape a real embedding would produce. <b>This stand-in is flagged explicitly: it demonstrates the ranking mechanism, not the real model's actual output.</b></p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">CODE</span><h2>Cosine ranking, computed via node</h2></div></header>
+<div class="code-block">
+<span class="code-label">NODE · COSINE SIMILARITY OVER TOY 6-DIM VECTORS</span>
+<pre><code>function dot(a,b){return a.reduce((s,x,i)=>s+x*b[i],0)}
+function norm(a){return Math.sqrt(dot(a,a))}
+function cos(a,b){return dot(a,b)/(norm(a)*norm(b))}
+
+const q = [1,0,0,0,0,0.2];               // "how long is the grace period?"
+const candidates = {
+  c007_grace: [0.9,0.1,0,0,0.3,0.1],
+  c_billing:  [0.2,0.2,0.9,0,0.1,0.1],
+  c_latefee:  [0.1,0.9,0.2,0,0.2,0.1],
+  c_refund:   [0,0,0.1,0.9,0.2,0.1],
+};
+
+Object.entries(candidates)
+  .map(([id, v]) => [id, cos(q, v)])
+  .sort((a, b) => b[1] - a[1])
+  .forEach(([id, s]) => console.log(id, s.toFixed(4)));
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANISM</span><h2>The ranked output, printed and confirmed</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Rank</th><th>Candidate</th><th>Cosine similarity</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>c007 (grace period)</td><td>0.9405</td></tr>
+<tr><td>2</td><td>billing cycle</td><td>0.2261</td></tr>
+<tr><td>3</td><td>late fee</td><td>0.1234</td></tr>
+<tr><td>4</td><td>refund policy</td><td>0.0210</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Run directly via <code>node -e</code> with the exact cosine function above -- output printed and confirmed, not typed from memory. The 0.71-point gap between rank 1 and rank 2 is the concrete signal that c007 is a strong, unambiguous match; a real 384-dim query would show the same shape, a large gap between the true match and everything else, though the exact numbers would differ from this toy stand-in.</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MATHEMATICS</span><h2>Cosine similarity, restated as the equation actually run</h2></div></header>
+<div class="equation">cos(q, v) = (q · v) / (‖q‖ × ‖v‖)</div>
+<p>This is the identical formula behind both <code>VECTOR_DISTANCE(...,COSINE)</code> (Oracle) and <code>&lt;=&gt;</code> (pgvector) cited in Section 06 -- those operators return a <i>distance</i> (1 − cosine similarity for normalized vectors), which is why the SQL in Section 06 sorts ascending while the table above sorts descending on similarity itself. Same underlying number, opposite sort direction depending on which side of the subtraction you're looking at.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>What top_k actually controls</h2></div></header>
+<p><code>k</code> is a hard cutoff on count, not on quality -- it returns exactly the top <code>k</code> scores regardless of how weak the lowest one is. At <code>k=1</code> in the worked example, only <code>c007</code> comes back. At <code>k=4</code>, <code>refund policy</code> (cosine 0.0210, barely related) comes back too, simply because there were only four candidates to rank in the first place. This is the same "count vs. quality" distinction the lab in Section 16 makes interactive.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>Over-fetch: when k alone stops being enough, cited</h2></div></header>
+<p>Module 09 Concept 07 establishes that a metadata filter applied after the similarity search (post-filtering) can silently discard true matches before they're ever returned -- on a 20-chunk corpus with 30% tenant selectivity, returning a real k=5 requires over-fetching to top-17, a 3.4x multiplier, not top-5. That fact is cited here exactly as originally computed, not re-derived: if this concept's own worked example added a tenant filter on top of the four candidates, the same "fetch more than k, then filter" logic would apply before Concept 06 ever sees the result.</p>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Rank the candidates"</h2></div></header>
+<div class="callout">This lab lets you pick <code>top_k</code> against the exact four candidates and cosine scores verified in Section 11, and watch which chunks actually make it into the candidate set -- not just read the table.</div>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">EXPERIMENT</span><h2>Rank the candidates</h2></div></header>
+<div class="lab" id="rankLab_1105">
+<p>Pick a top_k for the query "how long is the grace period?" and see exactly which of the four persisted chunks survive into the candidate set, and which get discarded.</p>
+<div class="lab-actions" id="kPicker_1105">
+<button type="button" class="active" data-k="1">top_k = 1</button>
+<button type="button" class="secondary" data-k="2">top_k = 2</button>
+<button type="button" class="secondary" data-k="4">top_k = 4</button>
+</div>
+<div class="rank-chip-row" id="candidateChips_1105"></div>
+<div class="callout" id="candidateCallout_1105"></div>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>All four candidates and their fixed cosine scores (Section 11's own verified numbers) are held in one array, pre-sorted descending. Each <code>top_k</code> pick simply slices that same fixed array at a different length and re-renders the chip row -- no re-scoring happens on click, because the ranking itself doesn't change when <code>k</code> changes; only how much of it gets kept does.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>A single <code>renderCandidates</code> function toggles the active button, rebuilds the <code>rank-chip-row</code> with <code>.sorted-in</code> on kept chips (reusing the <code>sortIn225</code> keyframe already established in Module 10 Concept 01's own sorting lab) and <code>.excluded</code> on discarded ones, then rewrites the callout text and class -- all driven from the same small facts object, no new CSS classes anywhere.</p>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What each pick teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>TOP_K = 1</span><h3>The tightest, safest cut</h3><p>Only the strongest match returns -- best when the query is specific and a wrong candidate would be costly.</p></article>
+<article class="info-card"><span>TOP_K = 2</span><h3>A hedge against gaps</h3><p>Keeps one real backup candidate in case the top match turns out to be insufficient at the evidence-selection stage.</p></article>
+<article class="info-card"><span>TOP_K = 4</span><h3>The full corpus, weak tail included</h3><p>Demonstrates concretely that k alone doesn't guard against low-quality matches -- refund policy at 0.0210 still comes back.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>Offline path vs. this concept's online path</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Concepts 01-04 (offline)</th><th>Concept 05 (online)</th></tr></thead>
+<tbody>
+<tr><td>Embeds a document, once, at ingestion</td><td>Embeds a query, once per user question</td></tr>
+<tr><td>Uses upsert(vectors, metadata)</td><td>Uses query(vector, k)</td></tr>
+<tr><td>Result: a durably persisted row</td><td>Result: a transient, ranked candidate set</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Retrieval returns the answer to the question</td><td>False -- it returns a ranked candidate set of chunk ids and scores; nothing has verified correctness yet.</td></tr>
+<tr><td>The query needs its own separate embedding model</td><td>Not quite -- same shared bi-encoder as the document side, just a different prefix ("query: " vs. "passage: ").</td></tr>
+<tr><td>A higher top_k is always safer</td><td>Not necessarily -- it can admit weak matches (Section 13's cosine 0.0210 example) that a downstream stage now has to filter back out.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why can a single shared encoder embed both queries and documents without a separate query-specific model?</summary><div>Bi-encoder asymmetry -- the query and document are embedded by two independent calls to the same model with no cross-attention between them, so the same encoder and vector space serve both sides; only the input prefix differs.</div></details>
+<details class="quiz"><summary>System design: a RAG system returns a candidate set with a huge score gap between rank 1 and rank 2 for some queries, and a tiny gap for others. What does that gap tell you, and what would you do differently in each case?</summary><div>A large gap signals one confident, unambiguous match; a small gap signals multiple plausible candidates. The system could route small-gap queries to a stricter downstream evidence check or a re-ranking step, while large-gap queries can move forward with less scrutiny.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name the two online-path steps in order</b><p>Embed the query with the "query: " prefix, then call query(vector, k) against the persisted index.</p></div>
+<div><b>I can state the verified rank order for the worked example</b><p>c007 (0.9405) &gt; billing cycle (0.2261) &gt; late fee (0.1234) &gt; refund policy (0.0210).</p></div>
+<div><b>I can explain why k alone doesn't guarantee quality</b><p>It's a count cutoff, not a quality threshold -- a weak candidate still returns if there aren't k strong ones.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Reused from Module 10 Concept 05 -- the cosine-distance search syntax in Section 06.</span></a>
+<a href="https://github.com/pgvector/pgvector"><b>pgvector — GitHub README</b><br><span>Reused from Module 10 Concept 11 -- the &lt;=&gt; operator equivalent in Section 06.</span></a>
+<a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"><b>sentence-transformers/all-MiniLM-L6-v2 — Hugging Face</b><br><span>Reused from Module 08 Concept 06 -- the shared 384-dim encoder both query and document embeddings pass through.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 5/11</span>
+<h3>Concepts 01-04 embedded a document. This one embeds a question.</h3>
+<p>You can now name the two-step online mechanism, explain why one shared bi-encoder handles both queries and documents, and trace the exact node-verified cosine ranking behind this concept's own worked example. Concept 06, "evidence selection from a candidate set," is next -- deciding which of these ranked candidates actually get used.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s16">Open Rank the candidates ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 5 of 11 concepts. This is the first concept in the module to touch the online (query-time) path. Next concept: Concept 06, Evidence selection from a candidate set.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 05 · Complete</p>
+<a href="module-11-concept-04.html">← Concept</a>
+</footer>
+</body>
+</html>

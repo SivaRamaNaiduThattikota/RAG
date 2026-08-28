@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 06 hands off a final evidence set -- cA, c007's child, cB, cC, cE, 880 tokens, node-verified. This concept is the very next step: turning that evidence set into the one string the model actually reads. Node-verified: system instructions (35 tokens) plus five boundary-delimited chunks (880 + 30 boundary tokens) plus the query (9 tokens) assembles to 954 tokens, against a 3,584-token prompt budget (4,096-token context window minus a 512-token generation reserve) -- 2,630 tokens of headroom. The lab, Fill the context window, lets you shrink the generation reserve and reorder the chunks, and watch truncation and lost-in-the-middle risk happen live.">
+<title>Context injection and prompt construction — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-07.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 07 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 07</p>
+<h1>An evidence set isn't a prompt yet.<br><em>Assembling the string the model actually reads.</em></h1>
+<p class="lesson-lead">Concept 06 hands off a final evidence set: five chunks, chosen, deduped, and budget-checked. Nothing about that set is text the model can read yet -- it's still a list of separate objects. This concept is the step that turns it into one string: system instructions, the evidence chunks in some order with clear boundaries between them, and the user's query, all concatenated and checked against what's left of the context window after the model's own answer needs room to be generated.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Seventh concept of Module 11 (7/11) -- consumes Concept 06's evidence set, hands its output to Concept 08's generation step</b></div>
+<div><span>PREREQUISITE</span><b>Module 11 Concept 06's evidence set (cA, c007_child, cB, cC, cE — 880 tokens); Module 11 Concept 01's six-stage pipeline naming; Module 02 Concepts 07/10's lost-in-the-middle and context-window-ceiling facts; Module 03 Concept 04's grounding/provenance distinction</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why "the chunks we picked" and "the prompt string the model reads" are two different things, and name the three parts that get assembled</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">The evidence is picked. Now someone has to write the letter.</h2>
+</div>
+<p>Concept 06 returns a short list of chunks that survived a cutoff, a k, and a dedup check. None of that list is readable by the model on its own -- it's five separate pieces of text sitting in five separate variables. This concept is the step that glues them, in some order, with instructions and the user's question, into the single string that actually gets sent.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A stack of source printouts, versus the letter you actually mail</h3>
+<p>Choosing which five printouts to cite is Concept 06's job. Turning them into one coherent letter -- with an opening line, the citations in some order, and the question you're actually answering -- is a separate act of writing. Context injection and prompt construction are that second act: given a fixed evidence set, produce the one string the model reads.</p>
+<div class="beginner-memory"><b>First memory:</b> selection answers "which five," assembly answers "in what shape, with what glue, and does the result even fit."</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Five chunks are five variables, not one input</h3>
+<p>Module 11 Concept 06 leaves you holding a JavaScript array of chunk objects. An LLM API call takes a string (or a small number of message strings) -- not an array. Without this concept, there is no defined way to turn "here are five relevant chunks" into "here is the text the model will condition its answer on." Someone has to decide the order, the separators, and where the instructions and the question go.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>The same five chunks, now one 954-token string</h3>
+<p>Take Concept 06's exact evidence set -- <code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>, 880 tokens total -- and wrap it: a 35-token system instruction, five chunks each preceded by a <code>[SOURCE n]</code> boundary tag, and a 9-token query. Node-verified below: the assembled string costs 954 tokens against a 3,584-token prompt budget, leaving 2,630 tokens of headroom.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three parts, glued in a fixed shape</h3>
+<p><b>System instructions</b> -- fixed text telling the model how to use what follows (e.g. "answer only from the evidence below"). <b>Ordered, boundary-marked evidence</b> -- the selected chunks, concatenated with a visible separator between each so the model can tell where one source ends and the next begins. <b>The query</b> -- the user's actual question, placed last so it reads as "given all that, answer this."</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 06 — final evidence set, 5 chunks, 880 tokens</span><i>→</i>
+<span class="hot">THIS concept — assemble instructions + boundaries + evidence + query</span><i>→</i>
+<span>Concept 08 — send the string, get the generated answer</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>"In the prompt" and "in the corpus" are different claims</h3>
+<p>A fact can be true and sitting in the corpus somewhere and still never make it into the assembled string -- if it wasn't selected, or if it got truncated to fit the budget. Module 03 Concept 04 already drew this line for grounding and provenance: what the model can cite is only what is actually in the prompt it read, not everything that exists in the index. This concept is exactly where that boundary gets drawn in code.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"If the evidence set fits Concept 06's token budget, the final prompt fits too."</b><p>Not automatically -- the system instructions, boundary tags, and query all add tokens on top of the evidence total; those have to be counted too, against the model's real context window minus a generation reserve.</p></div>
+<div><b>"Order doesn't matter -- the model reads the whole prompt anyway."</b><p>Position still matters for how much attention a given chunk gets; Module 02 Concepts 07/10 already documented that models don't weight all positions in a long prompt equally (the "lost in the middle" effect).</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's assembly step</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Right after the evidence set is finalized, right before the generation call</b><p>Ask directly: does your pipeline count the tokens of the whole assembled string, or only the evidence chunks?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 7/11</b><p>Concept 06 (top-k evidence selection) precedes this. Concept 08, LLM generation and the final answer, is next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Explain why an evidence set and a prompt string are different things</b><p>The evidence set is data (an array of chunk objects); the prompt is one glued string with instructions, boundaries, and the query added on top.</p></div>
+<div><b>Name the three assembled parts, in order</b><p>System instructions, then ordered boundary-marked evidence, then the query.</p></div>
+<div><b>State why the whole assembled string, not just the evidence, must be checked against budget</b><p>System instructions, boundary tags, and the query all cost tokens too -- the check has to cover the total, not just the 880-token evidence figure.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>If the evidence set alone is 880 tokens and comfortably under Concept 06's 1,200-token budget, why can the assembled prompt still be a separate number to check?</li>
+<li>Why does each chunk get a boundary tag instead of just being concatenated back to back?</li>
+<li>What does it mean for a fact to be "in the corpus but not in the prompt," and why does that distinction matter for what the model can honestly cite?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 7 OF 11</h3>
+<p>This concept named the three parts that get assembled into one prompt string -- system instructions, ordered boundary-marked evidence, and the query -- and the separate token check that has to cover all three, not just the evidence total. Concept 08, LLM generation and the final answer, is next -- it takes this concept's assembled string and turns it into the model's actual response.</p>
+<div class="beginner-memory"><b>Concept 07 is active.</b> Module 11 stands at 7 of 11 concepts.</div>
+<a class="button primary" href="module-11-concept-06.html">← Back to Concept 06's evidence selection</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">An evidence set isn't a prompt yet</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s12"><span>01</span><b>954 tokens, node-verified</b><small>System (35) + 5 boundary-marked chunks (880 + 30) + query (9) = 954.</small></a>
+<a href="#s14"><span>02</span><b>The budget that actually matters</b><small>3,584-token prompt budget = 4,096-token window minus a 512-token generation reserve.</small></a>
+<a href="#s16"><span>03</span><b>Fill the context window</b><small>The lab -- shrink the reserve, reorder chunks, watch truncation and lost-in-the-middle risk.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 07 path:</b> Concept 06 hands off a final, five-chunk evidence set → this concept writes fixed system instructions → then orders the chunks and wraps each in a boundary tag → then appends the query → then checks the whole assembled string against the real prompt budget, not just the evidence total → the lab lets you shrink that budget and reorder the chunks and watch truncation and lost-in-the-middle risk happen live → Concept 08 sends exactly this string to the model.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Context injection and prompt construction" deep dive</b><em>Full citations, the assembly code, and Fill the context window</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Dependency: evidence set</a>
+<a href="#s04"><i>04</i> Dependency: window facts</a>
+<a href="#s05"><i>05</i> Three parts</a>
+<a href="#s06"><i>06</i> System instructions</a>
+<a href="#s07"><i>07</i> Boundary tags</a>
+<a href="#s08"><i>08</i> Ordering and position risk</a>
+<a href="#s09"><i>09</i> Worked example intro</a>
+<a href="#s10"><i>10</i> Assembly code</a>
+<a href="#s11"><i>11</i> Why this order</a>
+<a href="#s12"><i>12</i> Node verification</a>
+<a href="#s13"><i>13</i> Grounding vs. corpus</a>
+<a href="#s14"><i>14</i> Prompt-budget check</a>
+<a href="#s15"><i>15</i> Lab intro</a>
+<a href="#s16"><i>16</i> Lab</a>
+<a href="#s17"><i>17</i> Lab data model</a>
+<a href="#s18"><i>18</i> Lab mechanics</a>
+<a href="#s19"><i>19</i> Lab walkthrough</a>
+<a href="#s20"><i>20</i> Comparison table</a>
+<a href="#s21"><i>21</i> Misconceptions</a>
+<a href="#s22"><i>22</i> Interview</a>
+<a href="#s23"><i>23</i> Check</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Turning a fixed evidence set into a prompt string</h2></div></header>
+<p>This is the seventh concept of Module 11 (7/11). Concept 06, "Top-k evidence selection," produces a final evidence set -- score-cutoff-filtered, k-bounded, deduped, and already under its own token budget. This concept is the very next step, and only that step: writing the system instructions, ordering and boundary-marking the evidence, appending the query, and checking the resulting string against the model's real prompt budget. It does not re-derive candidate ranking, filtering, or evidence selection -- all three are cited as already-settled background. In Module 11 Concept 01's six-stage naming (ingest → chunk → embed → store → retrieve → generate), this concept is the seam between stage 5 (retrieve, which Concept 06 finished) and stage 6 (generate, which Concept 08 begins).</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Selected, assembled, and injected -- three separate claims</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td>Selected</td><td>Chosen as evidence by Concept 06 -- still a list of separate chunk objects, not text ready to send</td></tr>
+<tr><td>Assembled</td><td>Glued into one string: system instructions + ordered, boundary-marked evidence + query</td></tr>
+<tr><td>Injected</td><td>The assembled string actually placed inside the model's context window for this call -- the output of this concept</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>The evidence set this concept inherits, cited</h2></div></header>
+<p>Module 11 Concept 06's node-verified worked example produced a final evidence set of five chunks -- <code>cA</code> (150 tokens), <code>c007</code>'s child (180 tokens), <code>cB</code> (200 tokens), <code>cC</code> (190 tokens), and <code>cE</code> (160 tokens) -- totalling 880 tokens, ordered by descending similarity score. This concept takes that exact list, in that exact order, as its starting input; it does not re-run the cutoff, k, or dedup logic.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">DEPENDENCIES</span><h2>The context-window facts this concept inherits, cited</h2></div></header>
+<p>Module 02 Concept 07 established that models do not attend to every position in a long prompt equally -- evidence buried in the middle of a long context is recalled less reliably than evidence near the start or end (the "lost in the middle" effect). Module 02 Concept 10 and Module 03 Concept 07 established that context windows have a hard token ceiling, and that filling them is not free -- attention cost scales worse than linearly with length. Both facts are reused here as the reason ordering and budget-checking matter, not re-derived.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">MECHANISM</span><h2>The three parts, named precisely</h2></div></header>
+<p><b>System instructions</b> are fixed text, written once per application, telling the model its role and constraints (e.g. answer only from evidence, cite sources). <b>Ordered, boundary-marked evidence</b> is Concept 06's chunk list, concatenated in a chosen order with an explicit tag before each chunk so the model can tell where one source ends and the next begins. <b>The query</b> is the user's live question, appended last so the assembled string reads as instructions, then evidence, then "now answer this."</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Why system instructions are fixed, not per-query</h2></div></header>
+<p>The instruction text ("answer only using the evidence below; say you don't know if it isn't there; cite the source id for any claim") is the same for every request this application makes -- it is not derived from the retrieved chunks or the user's question. Fixing it once means every call gets the same grounding contract, and its token cost (35 tokens in the worked example below) is a known constant, not a variable to recompute per request.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">MECHANISM</span><h2>Why boundary tags exist at all</h2></div></header>
+<p>Concatenating five chunks with nothing between them leaves the model no way to tell where <code>cA</code> ends and <code>c007</code>'s child begins -- and no way to cite "source 2" instead of "somewhere in that wall of text." A boundary tag like <code>[SOURCE n]</code> before each chunk costs a small, fixed number of extra tokens (6 in the worked example below) and buys back exactly that: a citable, separable structure.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">IMPORTANT DISTINCTIONS</span><h2>Ordering is a real decision, not a formality</h2></div></header>
+<p>Concept 06's list already arrives sorted by descending score -- keeping that order puts the single highest-scoring chunk first, not buried. Reordering it so a high-value chunk lands in the middle of a five-chunk block reintroduces exactly the lost-in-the-middle risk Module 02 Concept 07 documented, even though the evidence set itself hasn't changed at all. The lab in Section 16 makes this concrete by moving <code>c007</code>'s child between the front and the middle of the same five chunks.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The same five chunks, now being assembled</h2></div></header>
+<p>Continuing Concept 06's worked example: the query is "What is the return window after the grace period?" and the evidence set is the same five chunks, 880 tokens. This concept adds fixed system instructions and the query text on top, and wraps each chunk in a boundary tag. Every token count below comes from a node script counted by word-count proxy on the actual instruction and query strings -- flagged clearly as an approximation, not a real tokenizer run.</p>
+<div class="callout"><b>Flag:</b> the 880-token evidence total and the two grace-period cosine scores are the only previously-verified external facts here. The system-instruction and query token counts are computed in this lesson's own node script (word-count proxy, not a real BPE tokenizer) and are flagged as an approximation; the 6-token boundary-tag cost, the 4,096-token context window, and the 512-token generation reserve are illustrative constants chosen for this worked example.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">CODE</span><h2>The assembly function, verified via node</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · PROMPT ASSEMBLY (also the lab's own code)</span>
+<pre><code>function assemble(system, evidence, query) {
+  const blocks = evidence.map((c, i) =&gt; `[SOURCE ${i + 1}: ${c.id}]\n${c.text}`);
+  const prompt = [system, ...blocks, `Question: ${query}`].join("\n\n");
+  return prompt;
+}
+// token accounting mirrors the string above, chunk by chunk:
+const total = sysTokens + evidence.reduce((s, c) =&gt; s + c.tokens + BOUNDARY_TOKENS, 0) + queryTokens;
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANISM</span><h2>Why instructions come first and the query comes last</h2></div></header>
+<p>Placing system instructions first means the model reads its constraints before it reads any evidence, rather than retroactively reinterpreting evidence it already read. Placing the query last means the final thing the model reads before generating is the exact question it needs to answer -- both are ordering conventions carried over unchanged from ordinary prompt-engineering practice, not something specific to RAG.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MATHEMATICS</span><h2>Independently verified via node</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Component</th><th>Tokens</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>System instructions</td><td>35</td><td>Word-count proxy on the fixed instruction string (this lesson's node script)</td></tr>
+<tr><td>Evidence (5 chunks)</td><td>880</td><td>Module 11 Concept 06's node-verified evidence-set total</td></tr>
+<tr><td>Boundary tags (5 × 6)</td><td>30</td><td>Illustrative fixed per-chunk overhead</td></tr>
+<tr><td>Query</td><td>9</td><td>Word-count proxy on "What is the return window after the grace period?"</td></tr>
+<tr><td><b>Assembled total</b></td><td><b>954</b></td><td>Sum, node-verified</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Run directly via <code>node -e</code>: word-count the system-instruction and query strings, sum the five evidence-chunk token counts from Section 03, add 6 boundary tokens per chunk, and add all four totals -- output was 35 + 880 + 30 + 9 = 954.</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Grounding vs. corpus, restated at the assembly seam</h2></div></header>
+<p>Module 03 Concept 04 established that a model's answer is grounded only in what it actually read, not in everything true that exists somewhere in the corpus. This concept is where that line becomes literal: if <code>c007</code>'s parent form (the 420-token, 0.6761-scoring version with fuller context) never made it into Concept 06's evidence set, it is not in this assembled string either -- no matter how true or well-indexed it is. "In the corpus" and "in the prompt" are different sets, and this is the exact step that fixes which chunks cross from one to the other.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">MATHEMATICS</span><h2>The prompt-budget check, node-confirmed</h2></div></header>
+<div class="equation">prompt_budget = context_window − generation_reserve = 4096 − 512 = 3584 tokens</div>
+<div class="equation">headroom = prompt_budget − assembled_total = 3584 − 954 = 2630 tokens</div>
+<p>Against an illustrative 4,096-token context window with a 512-token reserve set aside for the model's own generated answer, the 954-token assembled prompt leaves 2,630 tokens of headroom -- confirmed by the same node script cited in Section 12.</p>
+<div class="callout warning"><b>Important distinction:</b> Concept 06's 880-token figure was checked against its own 1,200-token evidence budget and passed. That check says nothing about the assembled string's 954-token total against the model's real 3,584-token prompt budget -- they are two different sums against two different ceilings. A pipeline that only checks the evidence budget and skips this one can still overflow the model's actual context window once instructions, boundaries, and the query are added.</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Fill the context window"</h2></div></header>
+<div class="callout">This lab runs the exact assembly and token-accounting logic from Sections 10 and 12 live, on the exact five chunks from Section 03, as you shrink the generation reserve and switch chunk ordering -- not just read about the result.</div>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">EXPERIMENT</span><h2>Fill the context window</h2></div></header>
+<div class="lab" id="assembleLab_1107">
+<p>Shrink the generation reserve to see when the assembled prompt starts getting truncated, and switch the chunk order to see <code>c007</code>'s child move from the front of the evidence block to its middle.</p>
+<div class="lab-controls">
+<div class="control">
+<label for="reserveSlider_1107">Generation reserve: <b id="reserveValue_1107">512</b> tokens</label>
+<input type="range" id="reserveSlider_1107" min="128" max="3800" step="4" value="512">
+</div>
+<div class="control">
+<label for="orderToggle_1107">Chunk order</label>
+<select id="orderToggle_1107">
+<option value="score">Descending score (Concept 06's order)</option>
+<option value="buried">Reordered — c007's child moved to the middle</option>
+</select>
+</div>
+</div>
+<div class="boundary-strip" id="boundaryStrip_1107"></div>
+<div class="budget-bar" id="assembleBudgetBar_1107"></div>
+<p class="budget-meta" id="assembleBudgetMeta_1107"></p>
+<div class="callout" id="assembleCallout_1107"></div>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>The lab holds the same five chunks as Section 12 (fixed token counts, fixed 35-token system instructions, fixed 9-token query, fixed 6-token boundary overhead per chunk) plus a fixed 4,096-token context window. The only two things a user changes are the generation reserve and which of two fixed orderings is applied to the five chunks -- every render call re-runs the Section 10 assembly and Section 12 accounting against those two inputs, nothing is precomputed.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>On every control change, one render function computes <code>prompt_budget = 4096 − reserve</code>, applies the selected ordering to the five chunks, and, if the assembled 954-token total exceeds that budget, truncates chunks from the end of the current order (lowest-priority position first) until the total fits or no chunks remain. It then repaints the <code>boundary-strip</code> (each surviving chunk a <code>.boundary-chunk</code>, alternating <code>.shade-a</code>/<code>.shade-b</code>, with <code>c007</code>'s child marked distinctly and flagged if it lands in the middle position), a <code>budget-bar</code> segment sized to the surviving total over the prompt budget, and a callout naming whichever state applies: comfortable headroom, truncation in progress, or the buried-middle risk.</p>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What each control teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>SHRINK THE RESERVE PAST ~488</span><h3>Truncation starts</h3><p>Below roughly a 488-token reserve, the prompt budget drops under 954 and the lab starts dropping chunks from the end of the current order to fit -- the evidence set itself hasn't changed, only what's left of the window has.</p></article>
+<article class="info-card"><span>SWITCH TO "REORDERED"</span><h3>Same evidence, worse position</h3><p><code>c007</code>'s child -- the chunk holding the exact grace-period sentence -- moves from position 2 of 5 to the literal middle of the block, with no change to the token totals at all.</p></article>
+<article class="info-card"><span>DEFAULT (512, score order)</span><h3>The worked example, live</h3><p>Reproduces exactly the node-verified result from Sections 12-14: 954 of 3,584 tokens used, no truncation, no reordering risk.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>The three parts, restated as prose</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>System instructions</th><th>Evidence block</th><th>Query</th></tr></thead>
+<tbody>
+<tr><td>Fixed per application, not per request</td><td>Ordered, boundary-marked, from Concept 06</td><td>The live user question</td></tr>
+<tr><td>Read first, sets the grounding contract</td><td>Position affects recall (lost in the middle)</td><td>Read last, states what to answer</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>If the evidence set passed Concept 06's own token-budget check, the final prompt is automatically safe too</td><td>False -- system instructions, boundary tags, and the query add tokens on top of the evidence total; the assembled string needs its own check against the model's real prompt budget.</td></tr>
+<tr><td>Chunk order inside the prompt doesn't matter as long as all the right chunks are present</td><td>Not quite -- Module 02 Concept 07's lost-in-the-middle effect means the same evidence set can be recalled less reliably depending on where each chunk sits in the assembled string.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why check the assembled prompt's token count separately from the evidence set's token count?</summary><div>System instructions, boundary tags between chunks, and the user's query all add tokens on top of the evidence total -- a pipeline that only checks the evidence budget can still overflow the model's real context window once those are added.</div></details>
+<details class="quiz"><summary>System design: your evidence set is unchanged between two requests, but the model's answer quality drops. What assembly-side change could explain that without touching retrieval at all?</summary><div>A change in chunk ordering (or a shrinking generation reserve forcing truncation) can move a critical chunk into a lower-recall position, or drop it entirely, even though the exact same chunks were selected as evidence.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name the three assembled parts in order</b><p>System instructions, then ordered boundary-marked evidence, then the query.</p></div>
+<div><b>I can state the worked example's assembled total and budget</b><p>954 tokens assembled, against a 3,584-token prompt budget -- 2,630 tokens of headroom, node-verified.</p></div>
+<div><b>I can explain why the evidence budget and the prompt budget are two separate checks</b><p>The evidence total (880) excludes instructions, boundaries, and the query; the prompt budget (3,584) has to cover the full 954-token assembled string.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="module-11-concept-06.html"><b>Module 11 Concept 06 — top-k evidence selection</b><br><span>Reused directly -- the exact five-chunk, 880-token evidence set this concept assembles.</span></a>
+<a href="module-11-concept-01.html"><b>Module 11 Concept 01 — the six-stage pipeline overview</b><br><span>Reused directly -- this concept is the seam between the retrieve and generate stages.</span></a>
+<a href="module-02-concept-07.html"><b>Module 02 Concept 07 — lost in the middle</b><br><span>Reused directly -- the position-dependent recall risk that makes chunk ordering a real decision.</span></a>
+<a href="module-03-concept-04.html"><b>Module 03 Concept 04 — grounding and provenance</b><br><span>Reused directly -- the "in the prompt, not just in the corpus" distinction this concept enforces in code.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 7/11</span>
+<h3>An evidence set isn't a prompt yet. Assembling the string the model actually reads.</h3>
+<p>You can now name the three parts that get assembled into one prompt string, trace the node-verified worked example at 954 of 3,584 tokens, and explain why the evidence budget and the prompt budget are two separate checks. Concept 08, LLM generation and the final answer, is next -- it takes this concept's assembled string and turns it into the model's actual response.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s16">Open Fill the context window ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 7 of 11 concepts. Position 6 (top-k evidence selection) precedes this. Next concept: Concept 08, LLM generation and the final answer.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 07 · Complete</p>
+<a href="module-11-concept-06.html">← Concept</a>
+</footer>
+</body>
+</html>
