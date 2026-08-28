@@ -355,3 +355,19 @@ html[data-theme=dark] .boundary-chunk.shade-b{background:#0c1f18}
 .rank-chip.sorted-in{animation:sortIn225 .25s ease}
 @keyframes sortIn225{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .lab button.sorted{opacity:.4;cursor:default}
+
+/* Check the Citation lab (Module 11, Concept 09) */
+.citation-check{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0}
+.citation-claim,.citation-chunk{padding:18px;border:1px solid var(--line);background:var(--white)}
+.citation-claim span.tag,.citation-chunk span.tag{display:block;margin-bottom:12px;font:11px DM Mono;color:var(--orange)}
+.claim-word{padding:1px 2px}
+.claim-word.hit{background:#d7ff53}
+.claim-word.miss{background:var(--orange);color:#fff;text-decoration:line-through}
+.citation-verdict{margin:16px 0;padding:14px 16px;font:13px DM Mono;border-left:4px solid var(--green);background:var(--paper)}
+.citation-verdict.fail{border-color:var(--orange)}
+.ref-list{display:grid;gap:10px;margin-top:12px}
+.ref-list div{padding:14px 16px;border:1px solid var(--line);background:var(--paper);font-size:14px!important}
+.ref-list div.flagged{border-color:var(--orange);border-style:dashed;background:transparent}
+.ref-list div span{display:block;font:10px DM Mono;color:var(--orange);margin-bottom:5px}
+html[data-theme=dark] .citation-claim,html[data-theme=dark] .citation-chunk{background:#0c1f19}
+@media(max-width:480px){.citation-check{grid-template-columns:1fr;gap:10px}}

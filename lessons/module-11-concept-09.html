@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 08's Section 20 stopped at one sentence: a [SOURCE n] tag points a claim back to a chunk id, cheap to attach, not proof. This concept finishes that story. Continuing Concept 06/07/08's own five-chunk evidence set (cA, c007's child, cB, cC, cE), a generated four-sentence answer carries four [SOURCE n] tags. A node-run read-back check -- comparing each claim's content words against its cited chunk's actual text -- passes three at 100% support and fails one at 50%, where the cited chunk is real and on-topic but the claim inverts what it actually says. The three passing chunk-level citations, resolved through Module 10 Concept 03's own five-table schema, merge by document into two rendered, user-facing references; the failing one is suppressed, not shown. A genuine schema gap surfaces along the way: that schema has no page, section, or URL column at all -- only char_start/char_end -- so every locator on this page was resolved from a separate, ingestion-time section index, not read off a stored row. The lab, Trace a citation, steps through all four citations one at a time and rebuilds the same merge live.">
+<title>Source identifiers and citations — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-09.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 09 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 09</p>
+<h1>A tag isn't a source.<br><em>What a citation actually points at, and what checking it actually means.</em></h1>
+<p class="lesson-lead">Concept 08 named citation attachment as a mechanical, checkable step, then stopped at one sentence: a <code>[SOURCE n]</code> tag pointing at a chunk id is cheap, and it isn't proof. This concept goes one level deeper on exactly that gap -- what the identifier behind the tag actually is, how several citations to the same document get merged into one thing a person sees, how that merged thing gets rendered as a bracket, a footnote, or a link, and what a concrete pass/fail check against the cited chunk's real text looks like when it's actually run.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Ninth concept of Module 11 (9/11) -- picks up exactly where Concept 08's Section 20 left off. Concept 10, "Conversation history," already exists on disk, built ahead of this one; this concept closes that numbering gap (see Section 01).</b></div>
+<div><span>PREREQUISITE</span><b>Module 11 Concept 08 Section 20's citation-attachment claim; Concept 06/07/08's own five-chunk evidence set (cA, c007's child, cB, cC, cE) and query; Module 10 Concept 03's five-table schema (documents, document_versions, chunks, embeddings, citations); Module 03 Concept 04's citation/provenance definition</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the four different identifiers a citation actually involves, and describe a concrete check that would catch a citation tag pointing at the wrong claim</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Concept 08 attached a tag. This concept is what the tag is made of, and how to check it.</h2>
+</div>
+<p>Concept 08 ended with a citation tag attached to a generated answer and one honest warning: attaching the tag is cheap, checking it is the part that matters. This concept unpacks the tag itself -- the internal id it actually points to, the document and locator a person would need to go find that id, what happens when several tags point at the same document, how the result gets shown to a user, and the concrete check that separates a citation that holds up from one that doesn't.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>An identifier is an address, not a receipt</h3>
+<p>A <code>[SOURCE 2]</code> tag resolves to a chunk id, <code>c007</code> -- an address the pipeline can follow. Following that address to the actual chunk row and reading what it says is a second, separate act. Knowing where a claim is supposed to come from and confirming the claim is actually supported by what's there are two different checks, and Concept 08 already flagged that only the first one is cheap.</p>
+<div class="beginner-memory"><b>First memory:</b> a source identifier gets you to the right row. It does not tell you, by itself, whether that row backs the sentence attached to it.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>"Attach a citation" was never one identifier</h3>
+<p>Concept 08 treated the citation tag as a single black box -- <code>[SOURCE n]</code> pointing at some chunk. In a real pipeline that box unpacks into at least four separate things: a chunk id (which exact passage), a document id and version id (which source, which edit of it -- Module 10 Concept 03's own schema), and a human-facing locator (a page, a section, a URL) that a reader could actually go check. Without naming these separately, "the pipeline attaches a citation" hides exactly where a reviewer should look when a citation turns out to be wrong.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Four tags, three that hold up</h3>
+<p>Continuing Concept 06/07/08's own evidence set and query, the generated answer carries four citation tags: <code>[SOURCE 2]</code> (grace period is 14 days), <code>[SOURCE 4]</code> (order locks to CLOSED after), <code>[SOURCE 1]</code> (standard 30-day refund window), and <code>[SOURCE 5]</code> (claims cancellations after the grace period convert into a free-shipping return). A node-run check against each cited chunk's actual text passes the first three at full word support and fails the fourth at half -- the cited chunk is real and on-topic, but it says cancellations after the grace period are refused outright, not converted into anything. Section 07 runs this for real.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Four identifiers, one chain</h3>
+<p>A citation's identifier chain has four links: <code>chunk_id</code> (the exact passage the model was actually shown), <code>doc_id</code> (which source document that passage came from), <code>version_id</code> (which edit of that document -- CURRENT or SUPERSEDED, Module 10 Concept 03's own version-history pattern), and a resolved locator (page, section, or URL -- whatever lets a human find the same passage without touching the database). The first three are foreign keys that already exist in Module 10 Concept 03's schema. The fourth, as Section 20 shows, doesn't live in that schema as a column at all.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 08 — tag attached</span><i>→</i>
+<span class="hot">THIS concept — resolve id, check, merge, render</span><i>→</i>
+<span>Pass → merged, rendered reference</span><i>→</i>
+<span>Fail → suppressed, flagged for review</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Four identifiers, easy to collapse into one</h3>
+<p><code>chunk_id</code> identifies one passage inside one version of one document -- the narrowest, most internal identifier. <code>doc_id</code> survives every edit; it's what "the same source, cited twice" actually means when two different chunk ids merge into one reference. <code>version_id</code> answers "which edit" -- a citation to a SUPERSEDED version is a real, distinct fact from a citation to CURRENT. A locator answers none of those; it's a separate, human-facing coordinate, resolved after the fact, not one of the three foreign keys.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Every cited chunk gets its own footnote."</b><p>Not in this worked example -- <code>c007</code> and <code>c008</code> both come from <code>doc_9f21</code>, so their two chunk-level citations merge into one rendered, numbered reference. A user sees one footnote for one document, not one per chunk.</p></div>
+<div><b>"A resolvable locator is proof enough."</b><p>Not automatically -- <code>[SOURCE 5]</code> resolves cleanly to a real chunk in a real document at a real page. It still fails the read-back check, because resolving is not the same claim as supporting.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's actual citation identifiers</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Right after Concept 08's tag attachment, before anything renders to a user</b><p>Ask directly: does your schema actually store a page or section anywhere, or does your UI just guess one from a byte offset? If two chunks from the same document both get cited, does your UI show two footnotes or one?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 9/11</b><p>Concept 08 (LLM generation) precedes this. Concept 10 (conversation history) already exists on disk, built ahead of this concept; it disclosed the gap this concept now closes.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name the four identifiers in a citation's chain</b><p>chunk_id, doc_id, version_id, and a separately resolved human-facing locator.</p></div>
+<div><b>Explain why two citations can render as one reference</b><p>When both cited chunks share the same doc_id, the rendering step groups them into a single numbered footnote rather than one per chunk.</p></div>
+<div><b>Describe a concrete read-back check</b><p>Compare the claim's own content words against the cited chunk's actual text and require a minimum overlap fraction before the citation is allowed to render.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does <code>[SOURCE 5]</code> resolve to a real, on-topic chunk and still fail the read-back check?</li>
+<li>If a citation's chunk id resolves but its locator doesn't, which of the four identifiers is actually broken?</li>
+<li>What would happen to the rendered reference list if <code>c008</code> belonged to a different document than <code>c007</code>?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 9 OF 11</h3>
+<p>This concept named the four identifiers behind a citation tag, ran a real pass/fail check against cited chunk text, and showed exactly how passing citations merge by document before they ever reach a reader. Concept 10, "Conversation history," already exists on disk and is next -- it was built ahead of this concept and disclosed the gap this concept now closes.</p>
+<div class="beginner-memory"><b>Concept 09 is active.</b> Module 11 stands at 9 of 11 concepts.</div>
+<a class="button primary" href="module-11-concept-08.html">← Back to Concept 08's decode loop</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A tag isn't a source</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s07"><span>01</span><b>Read-back check, node-verified</b><small>3 of 4 citations pass at 100% word support; one fails at 50% -- a real chunk, an inverted claim.</small></a>
+<a href="#s08"><span>02</span><b>Dedup + render, node-verified</b><small>4 chunk-level citations → 3 pass → merge by document → 2 rendered references.</small></a>
+<a href="#s11"><span>03</span><b>Trace a citation</b><small>The lab -- step through all four citations and watch the same merge build live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 09 path:</b> Concept 08 attaches a <code>[SOURCE n]</code> tag to a generated claim → the tag resolves to a chunk id, then a document id, a version id, and a separately resolved locator → a read-back check compares the claim's own words against the cited chunk's actual text → citations that pass get merged by document into numbered references; citations that fail get suppressed and flagged instead → the lab lets you step through all four citations and watch the same resolve/check/merge pipeline run one citation at a time.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Source identifiers and citations" deep dive</b><em>Full citations, the read-back code, and Trace a citation</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Dependencies</a>
+<a href="#s04"><i>04</i> Evidence + control</a>
+<a href="#s05"><i>05</i> Architecture schema</a>
+<a href="#s06"><i>06</i> Mechanism code</a>
+<a href="#s07"><i>07</i> Worked example: read-back</a>
+<a href="#s08"><i>08</i> Worked example: dedup + render</a>
+<a href="#s09"><i>09</i> Math verification</a>
+<a href="#s10"><i>10</i> Lab intro</a>
+<a href="#s11"><i>11</i> Lab</a>
+<a href="#s12"><i>12</i> Lab data model</a>
+<a href="#s13"><i>13</i> Lab JS mechanics</a>
+<a href="#s14"><i>14</i> What it teaches</a>
+<a href="#s15"><i>15</i> Rendering forms compared</a>
+<a href="#s16"><i>16</i> Misconceptions</a>
+<a href="#s17"><i>17</i> Interview</a>
+<a href="#s18"><i>18</i> Knowledge check</a>
+<a href="#s19"><i>19</i> References</a>
+<a href="#s20"><i>20</i> The locator isn't a column</a>
+<a href="#s21"><i>21</i> Cross-reference: history's own unchecked claim</a>
+<a href="#s22"><i>22</i> Cross-reference: a fourth checkable failure</a>
+<a href="#s23"><i>23</i> Interpretable vs. attributable</a>
+<a href="#s24"><i>24</i> Checkpoint</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where this concept sits, and the gap it closes</h2></div></header>
+<p>This is the ninth concept of Module 11 (9/11), and the true numeric successor to Concept 08 -- it picks up exactly where Concept 08's Section 20 stopped: "attaching the tag is mechanical and cheap; it is not, by itself, proof the claim is supported." Concept 10, "Conversation history," was authored before this concept and disclosed a real gap at this position (its own Section 01: "Concept 09 ... has not yet been authored ... this concept builds directly off Concept 08 instead"), matching the out-of-order precedent Concepts 03 and 04 already set. That gap closes here. Nothing in this concept depends on Concept 10 for anything -- it finishes the citation story Concept 08 opened, on its own axis, before Concept 10's different axis (multi-turn conversation) continues. Module 03 Concept 04's citation/provenance definition and Module 10 Concept 03's five-table persistence schema are both cited directly below, never re-derived.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Terms this concept uses precisely</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Owning concept</th></tr></thead>
+<tbody>
+<tr><td>chunk_id</td><td>The internal identifier for one exact passage inside one document version -- what a <code>[SOURCE n]</code> tag actually resolves to first</td><td>Module 10 Concept 03</td></tr>
+<tr><td>doc_id / version_id</td><td>Which source document, and which CURRENT/SUPERSEDED edit of it, a chunk belongs to</td><td>Module 10 Concept 03</td></tr>
+<tr><td>Locator</td><td>A human-facing coordinate (page, section, URL) that lets a reader find the same passage without touching the database; not a schema column in this course's chunks table</td><td>this concept</td></tr>
+<tr><td>Read-back check</td><td>A programmatic comparison of a generated claim's own words against its cited chunk's actual text, run before the citation is allowed to render</td><td>this concept</td></tr>
+<tr><td>Merge by document</td><td>Grouping multiple chunk-level citations that share a doc_id into one rendered, numbered reference</td><td>this concept</td></tr>
+<tr><td>Suppression</td><td>Withholding a citation that fails the read-back check from the rendered output, flagging it for review instead of showing it as if it were sound</td><td>this concept</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>What this concept reuses without re-deriving</h2></div></header>
+<p>Module 10 Concept 03's five-table schema (<code>documents → document_versions → chunks → embeddings → citations</code>) and its worked <code>doc_9f21</code>/<code>ver_9f21_2</code>/<code>c007</code> rows are reused verbatim below for two of this concept's five evidence chunks, rather than inventing a new schema. Module 11 Concept 06/07/08's own five-chunk evidence set (<code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>) and query ("What is the return window after the grace period?") are the fixed starting point -- this concept assigns each of those five informal labels a real row instead of re-picking a new example. Concept 08's Section 20 citation-attachment claim is cited directly, not re-argued: attaching a tag is cheap, checking it is not.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>What an identifier can and can't guarantee</h2></div></header>
+<p>A source identifier guarantees exactly one thing: that a specific, resolvable row exists, and the tag points at it. It guarantees nothing about whether the claim attached to that tag is actually what the row says. <code>[SOURCE 5]</code> below resolves perfectly -- a real chunk id, a real document, a real page -- and still fails the check that matters. The identifier is necessary for a citation to be checkable at all; it is never sufficient for the citation to be correct.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Resolve, check, merge, render</h2></div></header>
+<div class="flow">
+<div class="flow-node">[SOURCE n] tag</div>
+<div class="flow-node">Resolve chunk_id → doc_id, version_id</div>
+<div class="flow-node hot">Read-back check vs. chunk text</div>
+<div class="flow-node">Pass → group by doc_id</div>
+<div class="flow-node">Resolve locator, render footnote</div>
+<div class="flow-node">Fail → suppress, flag for review</div>
+</div>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">CODE</span><h2>Locator resolution and the read-back check</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · LOCATOR RESOLUTION + READ-BACK CHECK (node-run, see Section 09)</span>
+<pre><code>// chunks.char_start/char_end are the only locator fields the schema
+// actually persists (Module 10 Concept 03's own CREATE TABLE -- no
+// page/section/url column exists). A locator is resolved separately,
+// against a per-document section index keyed by character ranges.
+function resolveLocator(chunk) {
+  const ranges = sectionIndex[chunk.doc_id] || [];
+  const hit = ranges.find(r =&gt; chunk.char_start &gt;= r.from &amp;&amp; chunk.char_start &lt;= r.to);
+  return { page: hit ? hit.page : null, section: hit ? hit.section : null };
+}
+
+// Word-overlap heuristic, not real entailment/NLI -- flagged as such
+// in Section 09. Numbers are kept as content words; stopwords dropped.
+function readBackCheck(claim, chunkText) {
+  const claimWords = contentWords(claim);
+  const chunkWords = new Set(contentWords(chunkText));
+  const missing = claimWords.filter(w =&gt; !chunkWords.has(w));
+  const fraction = (claimWords.length - missing.length) / claimWords.length;
+  return { fraction, missing };
+}
+</code></pre>
+</div>
+<p>Both functions ran for real against the five rows in Section 07 -- neither is illustrative pseudocode. The threshold applied to <code>fraction</code> (0.8) and the exact stopword list are this concept's own design choices, named explicitly rather than hidden inside the function.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Four citations, one read-back check each</h2></div></header>
+<p>Continuing Concept 06/07/08's evidence set exactly: <code>cA</code>=<code>c_a01</code> (doc_4b12, "Refund &amp; Returns Policy"), <code>c007</code>'s child=<code>c007</code> (doc_9f21, "Order &amp; Account Management Policy"), <code>cB</code>=<code>c_b01</code> (doc_6c88, "Shipping Confirmation Template"), <code>cC</code>=<code>c008</code> (doc_9f21), <code>cE</code>=<code>c_e01</code> (doc_c390, "Cancellations FAQ"). The generated answer cites four of the five -- <code>cB</code>/SOURCE 3 was retrieved but never quoted, the same "retrieved isn't cited" distinction Concept 08's own schema section already drew.</p>
+<table class="worked-table">
+<thead><tr><th>Tag</th><th>Claim</th><th>Cited chunk text</th><th>Support</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>[SOURCE 2]</td><td>"The order-cancellation grace period is 14 days from the ship date."</td><td>c007: "The order-cancellation grace period is 14 days from the ship date."</td><td>7/7 = 100.0%</td><td><b>PASS</b></td></tr>
+<tr><td>[SOURCE 4]</td><td>"Once that period elapses, the order status locks to CLOSED and refunds stop processing automatically."</td><td>c008: "Once the grace period elapses, the order status locks to CLOSED and refunds stop processing automatically."</td><td>10/10 = 100.0%</td><td><b>PASS</b></td></tr>
+<tr><td>[SOURCE 1]</td><td>"Standard purchases may still be refunded in full within 30 days of the ship date."</td><td>c_a01: "Standard purchases may be refunded in full within 30 days of the ship date, provided the item is unused."</td><td>9/9 = 100.0%</td><td><b>PASS</b></td></tr>
+<tr><td>[SOURCE 5]</td><td>"Cancellation requests submitted after the grace period are automatically converted into a return with free shipping."</td><td>c_e01: "Cancellation requests submitted after the grace period will not be honored; the customer must initiate a standard return instead."</td><td>5/10 = 50.0%</td><td><b>FAIL</b></td></tr>
+</tbody>
+</table>
+<div class="callout warning"><b>The failure, precisely:</b> <code>[SOURCE 5]</code> is not a broken link -- <code>c_e01</code> is a real chunk, in a real document, exactly on topic (post-grace-period cancellation). The claim inverts what it says: the chunk states cancellation requests <i>will not be honored</i>, the claim says they get <i>automatically converted into a return with free shipping</i>. Five content words in the claim -- "automatically," "converted," "into," "free," "shipping" -- never appear anywhere in the cited chunk's text. A tag that resolves cleanly and a claim that's actually supported are two different things, and this is the case that proves it.</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Merging by document, rendering the survivors</h2></div></header>
+<p>Of the four cited chunks, three pass. <code>c007</code> and <code>c008</code> both belong to <code>doc_9f21</code> and both resolve to the same locator (page 3, "4.2 Cancellations" -- both chunks' <code>char_start</code> values fall inside the same section-index range), so they merge into a single rendered reference rather than two. <code>c_a01</code> belongs to a different document (<code>doc_4b12</code>) and gets its own reference.</p>
+<div class="equation">4 chunk-level citations → 3 pass read-back → grouped by doc_id → 2 rendered references
+[1] Order &amp; Account Management Policy, p.3, "4.2 Cancellations"  (SOURCE 2, 4 → c007, c008)
+[2] Refund &amp; Returns Policy, p.1, "2.1 Standard Refund Window"  (SOURCE 1 → c_a01)
+[SOURCE 5] → suppressed, flagged for review, not assigned a reference number</div>
+<p>Four internal chunk-level citations collapse to two things a reader ever sees. The internal chunk id never appears in the rendered output at all -- only the merged document-level reference does.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The verification standard: run it, don't eyeball it</h2></div></header>
+<div class="callout"><b>Verification method</b>Every number in Sections 07-08 came from a throwaway node script (kept outside this course's <code>lessons/</code> folder, run once, discarded) that modeled all five rows across <code>documents</code>, <code>document_versions</code>, and <code>chunks</code> exactly as Module 10 Concept 03's own DDL defines them, plus a small per-document section index used only to resolve locators. For each of the four cited claims it split both the claim and its cited chunk's text into lowercased content words (stopwords dropped, numbers kept), measured what fraction of the claim's words appear in the chunk's word set, and printed the exact support fraction, the missing-word list, and a pass/fail verdict against a 0.8 threshold -- printed and read back, not asserted. It then grouped the passing citations by <code>doc_id</code>, resolved each surviving group's locator, and printed the final two-reference render plus five sanity assertions (3 pass, 1 fails, the failure is SOURCE 5, exactly 2 references remain, doc_9f21's two citations merge) -- all five passed on the run this page's numbers are drawn from.</div>
+<div class="callout warning"><b>A caveat this check does not close:</b> word overlap is not entailment. A claim that reused nearly all of a chunk's own words while flipping a single negation -- "will be honored" instead of "will not be honored" -- would score almost identically high under this exact check and pass when it shouldn't. SOURCE 5 happens to fail here because it substitutes vocabulary, not because this check can catch every way a claim can misrepresent its source. That's a real limitation of a lexical check, not a rounding error, and it's why Section 23 treats "resolves and passes this check" as still short of a formal attribution guarantee.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Trace a citation"</h2></div></header>
+<div class="callout">This lab steps through Section 07's four citations one at a time: at each step it resolves the tag to a chunk, document, and locator, runs the same read-back check live, and rebuilds Section 08's merged reference list from whatever has passed so far.</div>
+<div class="callout warning"><b>One-line disclaimer:</b> the four support percentages and the merge behavior in this lab are the exact Section 07/08 numbers, re-run in the browser rather than re-derived differently -- clicking through does not compute anything new, it replays the same checked arithmetic one step at a time.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">EXPERIMENT</span><h2>Trace a citation</h2></div>
+</header>
+<div class="lab" id="lab_1109">
+<p>Step through the generated answer's four citations one at a time. Each step resolves the tag's chunk, document, and locator, runs the read-back check, and updates the rendered-references row below.</p>
+<div class="lab-controls">
+<div class="control"><span id="stepLabel_1109">Step 1 of 4</span></div>
+</div>
+<div class="mask-panels" id="panels_1109">
+<div class="mask-panel" id="claimPanel_1109">
+<span class="mask-panel-title">CLAIM + SOURCE TAG</span>
+<p id="claimText_1109"></p>
+<p class="fine-print" id="chunkResolve_1109"></p>
+</div>
+<div class="mask-panel" id="checkPanel_1109">
+<span class="mask-panel-title">READ-BACK CHECK</span>
+<div class="prob-bars">
+<div class="prob-row" id="supportRow_1109"><span class="token-label"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="token-reason"></span></div>
+</div>
+</div>
+</div>
+<p class="fine-print">RENDERED REFERENCES SO FAR (merged by document; failed checks are flagged, not rendered)</p>
+<div class="rank-chip-row" id="renderRow_1109"></div>
+<div class="lab-actions">
+<button type="button" id="stepBtn_1109">Check this citation</button>
+<button type="button" id="resetBtn_1109">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>The lab holds a fixed four-step array, <code>steps_1109</code>, one entry per Section 07 citation in order (SOURCE 2, 4, 1, 5). Each step carries <code>{ source, claim, chunkId, docId, docTitle, page, section, pct, missing, pass }</code> -- the exact values from Sections 07-08, not re-picked. A running <code>checked_1109</code> array accumulates one entry per step already clicked through, and is what the merge-by-<code>docId</code> logic in Section 13 actually groups.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>A <code>render_1109()</code> function writes the current step's claim and tag into <code>claimText_1109</code>, its resolved chunk/document/version/locator into <code>chunkResolve_1109</code>, and its support percentage, bar width, and missing-word reason into <code>supportRow_1109</code> -- toggling <code>.winner</code> for a pass and <code>.ineligible</code> for a fail, the same classes Concept 08's lab used for supported versus masked tokens. Clicking <code>stepBtn_1109</code> pushes the current step into <code>checked_1109</code>, advances to the next step, and rebuilds <code>renderRow_1109</code>: passing entries in <code>checked_1109</code> are grouped by <code>docId</code> into one <code>.rank-chip.tp</code> chip per document (label = doc title + locator, small text = merged chunk ids), and failing entries each get their own <code>.rank-chip.fn</code> chip labeled "flagged." Clicking <code>resetBtn_1109</code> empties <code>checked_1109</code> and returns to step 1.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>What the lab teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>STEP 2, WATCH THE CHIPS MERGE</span><h3>A second citation to the same document doesn't add a second chip</h3><p>Checking SOURCE 4 right after SOURCE 2 doesn't create a new reference chip -- it grows the existing doc_9f21 chip's internal chunk-id list, because both citations share one doc_id.</p></article>
+<article class="info-card"><span>STEP 4, WATCH THE FLAG APPEAR</span><h3>A resolvable citation can still get flagged</h3><p>SOURCE 5 resolves to a real chunk with a real locator just like the other three, and still lands as a <code>.fn</code>-flagged chip instead of a numbered reference, because the percentage in the left panel falls under 0.8.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">COMPARISON</span><h2>The same merged reference, rendered three ways</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Rendering form</th><th>What a reader sees</th></tr></thead>
+<tbody>
+<tr><td>Inline numbered bracket</td><td>"...the grace period is 14 days [1]. The order then locks to CLOSED [1]. Standard purchases keep a 30-day window [2]."</td></tr>
+<tr><td>Footnote / reference list</td><td>[1] Order &amp; Account Management Policy, p.3, "4.2 Cancellations" -- [2] Refund &amp; Returns Policy, p.1, "2.1 Standard Refund Window"</td></tr>
+<tr><td>Hyperlink</td><td>[1] and [2] become clickable links to a rendered document view at the resolved page/section -- or the source URL directly, when <code>source_type</code> is a web page rather than a KB article</td></tr>
+</tbody>
+</table>
+<p>All three forms show the same two merged references. None of them ever display <code>chunk_id</code>, <code>doc_id</code>, or <code>version_id</code> to the reader -- those stay internal to the pipeline, the same way Concept 08's own decode loop never surfaces a logit to a user either.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A citation identifier is one thing</td><td>No -- it's a chain of at least four: chunk_id, doc_id, version_id, and a separately resolved locator, only the first three of which are actual foreign keys.</td></tr>
+<tr><td>Every cited chunk becomes its own footnote</td><td>No -- Section 08 shows two chunk-level citations from the same document merging into one rendered reference.</td></tr>
+<tr><td>A word-overlap read-back check is a complete correctness guarantee</td><td>No -- Section 09's caveat shows a claim that flips a single negation while reusing almost all the same words could pass this exact check undetected; it catches vocabulary mismatches, not all forms of misrepresentation.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: what four identifiers actually sit behind a single citation tag?</summary><div>chunk_id (the exact cited passage), doc_id (which source document), version_id (which edit of it), and a separately resolved human-facing locator (page/section/URL) -- only the first three are schema foreign keys.</div></details>
+<details class="quiz"><summary>Conceptual: why does SOURCE 5 fail the read-back check even though its identifier resolves cleanly?</summary><div>Because resolving to a real, on-topic chunk only proves the identifier is valid -- it says nothing about whether the specific claim attached to that identifier matches what the chunk's text actually says. SOURCE 5's claim inverts the chunk's meaning while the identifier itself is completely sound.</div></details>
+<details class="quiz"><summary>System design: how would you design the merge step so two citations to the same document don't render as two separate footnotes?</summary><div>Group passing chunk-level citations by doc_id before assigning reference numbers, combine each group's locators (a page range or a joined section list), and assign one reference number per group -- not per underlying chunk id.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name all four identifiers in the chain</b><p>chunk_id, doc_id, version_id, resolved locator.</p></div>
+<div><b>I can state the read-back numbers</b><p>7/7, 10/10, and 9/9 pass at 100%; 5/10 fails at 50%.</p></div>
+<div><b>I can state the merge result</b><p>4 chunk-level citations, 3 pass, 2 rendered references after merging doc_9f21's two citations.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References</h2></div></header>
+<div class="references">
+<a href="https://arxiv.org/abs/2212.08037"><b>Bohnet, Tran, Verga, et al., 2022 — "Attributed Question Answering: Evaluation and Modeling for Attributed Large Language Models"</b><br><span>New for this concept -- introduces the AIS (Attributable to Identified Sources) framework, cited in Section 23 to formalize why "resolves" and "supports" are two separate requirements.</span></a>
+<a href="module-10-concept-03.html"><b>Module 10 Concept 03 — Schema design for documents, versions, chunks, embeddings and citations</b><br><span>Reused directly -- the five-table FK chain and the doc_9f21/ver_9f21_2/c007 rows this concept builds on, cited throughout.</span></a>
+<a href="module-11-concept-06.html"><b>Module 11 Concept 06 — Top-k evidence selection</b><br><span>Reused directly -- the five-chunk evidence set (cA, c007's child, cB, cC, cE) this concept's citations are drawn from.</span></a>
+<a href="module-11-concept-07.html"><b>Module 11 Concept 07 — Context injection and prompt construction</b><br><span>Reused directly -- the [SOURCE n] boundary-tag numbering scheme this concept resolves.</span></a>
+<a href="module-11-concept-08.html"><b>Module 11 Concept 08 — LLM generation and the final answer</b><br><span>Reused directly -- Section 20's own "attaching a tag is cheap, not proof" claim this concept finishes, cited in Sections 01, 03 and 04.</span></a>
+<a href="module-03-concept-04.html"><b>Module 03 Concept 04 — Hallucination reduction, grounding and provenance</b><br><span>Reused directly -- the citation/provenance definition this concept makes concrete.</span></a>
+<a href="module-11-concept-10.html"><b>Module 11 Concept 10 — Conversation history</b><br><span>Cited for precedent -- built ahead of this concept, disclosed the gap this concept closes; cited in Sections 01 and 21.</span></a>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>The locator isn't a column -- and neither is the document title</h2></div></header>
+<p>Module 10 Concept 03's own <code>CREATE TABLE chunks</code> statement has exactly seven columns: <code>chunk_id</code>, <code>doc_id</code>, <code>version_id</code>, <code>chunk_index</code>, <code>char_start</code>, <code>char_end</code>, <code>chunk_text</code>. No page, section, or URL column exists anywhere in that schema. Every locator on this page was resolved after the fact, against a small per-document section index keyed by character-range -- <code>c007</code>'s <code>char_start</code> of 920 and <code>c008</code>'s <code>char_start</code> of 987 both happen to fall inside the same indexed range, which is the actual, mechanical reason they resolve to the identical page and section in Section 08. The same is true of the document <i>title</i> a reader sees: Module 10 Concept 03's <code>documents</code> table stores <code>doc_id</code>, <code>source_id</code>, <code>source_type</code>, and <code>author</code> -- no <code>title</code> column. "Order &amp; Account Management Policy" is resolved from <code>source_id</code>/<code>source_type</code> by a lookup this concept's worked example keeps separately, the same category of derived-not-stored fact as the locator.</p>
+<div class="callout warning"><b>A real caveat this creates:</b> a section index built once at ingestion can go stale. If a document is re-chunked after an edit and section boundaries shift, a chunk's <code>char_start</code> can end up on the wrong side of an old index boundary -- the foreign keys (<code>chunk_id → doc_id → version_id</code>) stay perfectly valid the whole time, but the page number shown to a reader can quietly point at the wrong section. A broken locator and a broken citation are two different failure modes, and only one of them shows up as a database error.</div>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>History's own citation was never checked either</h2></div></header>
+<p>Concept 10 -- built ahead of this concept, on the far side of the gap this page closes -- carries forward its own unresolved example of exactly this problem. Its Turn 1 assistant message states the grace period is "90 days," reusing Concept 08's deliberately illustrative lab figure rather than that concept's actual worked answer ("14 days"), and Concept 10's own Section 20 already flags that this unchecked figure sits in conversation history without ever passing a check like the one this concept just ran. Running this concept's read-back check against that specific claim -- "90 days" against a chunk that actually says "14 days" -- would fail it exactly the way <code>[SOURCE 5]</code> fails above: a real, on-topic source, a claim its text doesn't support.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>A citation-accuracy failure is its own checkable thing</h2></div></header>
+<p>Module 03 Concept 11's three-link failure chain -- retrieval, augmentation, generation -- and Concept 08's Section 23 already used it to localize a wrong answer to one of three stages. <code>[SOURCE 5]</code> above doesn't fit cleanly into any of the three: retrieval found a real, on-topic chunk; augmentation assembled it correctly into the prompt; generation decoded a fluent, plausible-sounding sentence. The defect is narrower than all three -- one specific claim's relationship to one specific cited chunk, catchable by checking that one pair without re-auditing retrieval, augmentation, or the rest of the decode loop at all.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Interpretable and attributable are two different requirements</h2></div></header>
+<p>Bohnet et al.'s AIS framework (Attributable to Identified Sources, 2022) splits exactly the distinction this concept has been drawing all along into two named requirements: a citation is <i>interpretable</i> if a person can actually find the source it points to, and <i>attributable</i> if that source actually supports the claim. <code>[SOURCE 5]</code> is fully interpretable -- the chunk id resolves, the document is real, the locator is resolvable -- and fails attribution outright. An identifier chain, no matter how many links it has, only ever buys interpretability. The read-back check in Sections 07-09 is this concept's own concrete attempt at the second, harder requirement -- and Section 09's negation caveat is exactly why AIS treats attribution as something that needs real evaluation, not something a resolvable link can grant for free.</p>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Checkpoint</h2></div></header>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 9/11</span>
+<h3>A tag isn't a source. What a citation actually points at, and what checking it actually means.</h3>
+<p>You can now name the four identifiers behind a citation tag, state the node-verified read-back numbers for all four citations in this concept's worked example, explain why two chunk-level citations can merge into one rendered reference, and separate "interpretable" from "attributable" using Bohnet et al.'s own terms. Concept 08 (LLM generation and the final answer) precedes this. Concept 10 (conversation history) already exists on disk and is next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s11">Open Trace a citation ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 9 of 11 concepts. Previous concept: Concept 08, LLM generation and the final answer. Next concept: Concept 10, conversation history (already built).</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 09 · Complete</p>
+<a href="module-11-concept-08.html">← Concept</a>
+<a href="module-11-concept-10.html">Concept →</a>
+</footer>
+</body>
+</html>

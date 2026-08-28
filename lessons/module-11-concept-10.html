@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 08 closed the online path with a single-turn answer. This concept is the very next complication: a real conversation has follow-up turns, and a follow-up like 'does that still apply if it's a gift' shares almost no vocabulary with the chunk that actually answers it. Node-verified: the raw Turn 2 follow-up scores 0.000 against all five evidence chunks under a lexical-overlap retrieval proxy; rewritten against Turn 1's history it scores 1.000 on the correct chunk, c007's child. Turn 3 only partially fixes itself the same way -- its rewritten query still ranks the wrong chunk first (cC at 0.176) ahead of the more relevant cA (0.050), because the proxy has no stemming and 'package' never matches 'packaging.' Conversation history then has to compete for Concept 07's own 3,584-token prompt budget: this exact 3-turn conversation costs only 74 tokens (2.8% of the budget left over for history), but simulating unbounded growth at this conversation's own average turn size overflows that allowance after turn 107 -- and a naive policy that re-snapshots the full assembled prompt every turn overflows after only turn 3. This concept was originally built ahead of Concept 09 (source identifiers and citations); that gap has since been closed.">
+<title>Conversation history — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-10.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 10 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 10</p>
+<h1>A follow-up isn't a fresh query.<br><em>Rewriting turns before they retrieve, and paying for history once they're kept.</em></h1>
+<p class="lesson-lead">Concept 08 closed the online path with one answer to one question. Real conversations don't stop there -- the next turn is often "does that still apply if it's a gift," which shares almost no words with the chunk that actually answers it. This concept rewrites a follow-up against prior turns before retrieval ever runs, node-verifies exactly how much that changes which chunk ranks first, and then treats the growing conversation itself as a second thing -- alongside evidence -- competing for Concept 07's fixed prompt budget.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Tenth concept of Module 11 (10/11) -- originally built ahead of Concept 09, "Source identifiers and citations"; that gap has since been closed (see Section 01).</b></div>
+<div><span>PREREQUISITE</span><b>Module 11 Concept 08's decode loop and its Turn-1-shaped worked answer; Concept 07's 3,584-token prompt budget and 5-chunk, 880-token evidence set; Concept 06's cutoff/dedup evidence set (cA, c007's child, cB, cC, cE); Concept 05's retrieval step, which is what a follow-up query actually feeds into next</b></div>
+<div><span>BEGINNER GOAL</span><b>Explain why a follow-up query has to be rewritten before it retrieves, and why conversation history has a token cost that competes with evidence for the same fixed budget</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Concept 08 answered one question. This concept is what happens on the second one.</h2>
+</div>
+<p>Everything through Concept 08 handles exactly one query: embed it, retrieve, select, assemble, generate, cite. A real conversation doesn't hand the pipeline one query -- it hands it a sequence of turns, and most follow-up turns lean on words the user never actually says again ("that," "it," "still"). This concept is the step that rewrites a follow-up against what was already said, before retrieval runs on it, and then accounts for what keeping that conversation around actually costs.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>The second question was never asked in full</h3>
+<p>Turn 1 asks "what's the return window after the grace period." Turn 2 asks "does that still apply if it's a gift." Read on its own, Turn 2 has no subject -- "that" points nowhere without Turn 1 in view. Conversation history is the mechanism that lets a follow-up turn borrow the missing subject from prior turns, either by rewriting the query text itself before retrieval, or by feeding both the rewritten query and the prior exchanges into the same prompt Concept 07 assembles.</p>
+<div class="beginner-memory"><b>First memory:</b> a follow-up query is elliptical on purpose -- humans don't repeat themselves -- so something has to fill in what it's actually asking before retrieval can find the right chunk.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Retrieval can't rank what it can't read</h3>
+<p>Concept 05's retrieval step embeds a query and ranks chunks by similarity to it. If that query is "does that still apply if it's a gift," there is no "that" in the vector space -- the embedding has nothing to anchor to, and retrieval either returns nothing useful or returns whatever happens to share a stray word. Without this concept, every follow-up after the first turn would retrieve close to randomly. Conversation history exists to fix the query itself before it ever reaches Concept 05, and separately, to track what's already been said so the model isn't re-told things or asked to contradict its own prior answer.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Three turns, one node-verified conversation</h3>
+<p>Turn 1: "what's the return window after the grace period" -- Concept 06/07's own established query. Turn 1's answer deliberately reuses Concept 08's lab scenario, not its worked example: "the order-cancellation grace period is 90 days" (Concept 08 flagged this as its lab's own illustrative answer, distinct from Section 07's "14 days"). Turn 2: "does that still apply if it's a gift" -- raw, this scores <code>0.000</code> against every one of the five evidence chunks under a lexical-overlap retrieval proxy; rewritten to "does the order-cancellation return window and grace period still apply if the order is a gift order," it scores <code>1.000</code> on <code>c007</code>'s child, the correct chunk. Turn 3: "what about if I already opened the package" behaves less cleanly -- see Section 07.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Rewrite first, then retrieve; track cost the whole time</h3>
+<p>Two separate jobs share the name "conversation history." First: before retrieval, expand or rewrite the raw follow-up into a self-contained query using prior turns -- either a rule-based template or a small model call, verified here with a plain lexical-overlap scorer standing in for a real embedding comparison. Second: after rewriting, decide how much of the actual conversation transcript gets carried into the prompt itself, because every kept turn is tokens that compete with retrieved evidence for the same fixed budget Concept 07 defined.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Raw follow-up turn</span><i>→</i>
+<span class="hot">THIS concept — rewrite against history</span><i>→</i>
+<span>Concept 05 — embed &amp; retrieve</span><i>→</i>
+<span>Concepts 06-07 — select &amp; assemble (history now competes for budget)</span><i>→</i>
+<span>Concept 08 — generate</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Rewriting isn't retrieval, and history isn't evidence</h3>
+<p>Rewriting a query and retrieving with it are two different steps -- this concept only owns the first one; Concept 05 still does the actual ranking, unchanged. Conversation history is also not evidence: evidence comes from the corpus and gets cited; history is what the user and the model already said to each other in this session, and it can be wrong (Turn 1's own "90 days" is deliberately not the corrected figure) without ever being "un-cited," because nothing about a citation claim applies to a turn of chat.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Rewriting always finds the ideal chunk."</b><p>Not automatically -- Turn 3's own rewritten query still ranks the wrong chunk (<code>cC</code>, 0.176) ahead of the actually-relevant one (<code>cA</code>, 0.050), because the overlap scorer has no stemming and never matches "package" to "packaging." Rewriting fixes the zero-recall failure Turn 2 had; it doesn't guarantee an optimal ranking.</p></div>
+<div><b>"Unbounded history is fine for a short conversation."</b><p>It is, right up until it isn't -- this exact 3-turn conversation only costs 74 tokens, but the same average turn size, left untrimmed, overflows the remaining history allowance by turn 107. Small conversations hide the problem; they don't remove it.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's actual history handling</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Right before Concept 05's retrieval, on every turn after the first</b><p>Ask directly: does your pipeline rewrite a follow-up before embedding it, or does it hand the raw "does that still apply" straight to the retriever?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 10/11</b><p>Concept 09 (source identifiers and citations) precedes this now that the gap is closed. Concept 08 (LLM generation) is the concept this page's own worked example still reuses directly.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Explain why a raw follow-up can fail retrieval</b><p>It shares no vocabulary with the answering chunk -- Turn 2's raw query scores 0.000 against all five evidence chunks.</p></div>
+<div><b>State what rewriting does and doesn't fix</b><p>It fixes zero-recall failures caused by missing referents (Turn 2); it doesn't guarantee the resulting ranking is optimal (Turn 3, due to the scorer's own stemming gap).</p></div>
+<div><b>Do the budget arithmetic for history vs. evidence</b><p>This conversation's full lean history costs 74 of the 3,584-token budget; unbounded growth at this size overflows the remaining history allowance after turn 107.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does Turn 2's raw query score exactly 0.000 against every evidence chunk, and what single change fixes that?</li>
+<li>Why does Turn 3's rewritten query still rank the wrong chunk first, even though rewriting "worked" in the sense that it removed the ellipsis?</li>
+<li>What's the difference between trimming history with a sliding window and a naive policy that re-snapshots the full assembled prompt every turn?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 10 OF 11</h3>
+<p>This concept named the rewrite step a follow-up turn needs before it can retrieve correctly, and quantified -- node-verified, not asserted -- how much conversation history costs against the same prompt budget evidence already competes for. It was originally built ahead of Concept 09, "Source identifiers and citations" -- that concept has since been authored, closing the gap. Module 11's eleventh and final concept, the end-to-end framework-free implementation, is the one remaining gap in the sequence.</p>
+<div class="beginner-memory"><b>Concept 10 is active.</b> Module 11 stands at 10 of 11 concepts. Concept 09 has since been built, closing the gap this page originally flagged.</div>
+<a class="button primary" href="module-11-concept-09.html">← Back to Concept 09's read-back check</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A follow-up isn't a fresh query</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s07"><span>01</span><b>Raw vs. rewritten retrieval, node-verified</b><small>Turn 2: 0.000 raw → 1.000 rewritten. Turn 3: rewriting helps but doesn't land the ideal chunk.</small></a>
+<a href="#s08"><span>02</span><b>History vs. evidence, same budget</b><small>74 tokens for 3 turns; unbounded growth overflows the remaining allowance by turn 107.</small></a>
+<a href="#s11"><span>03</span><b>Rewrite the follow-up</b><small>The lab -- step through Turn 2 and Turn 3 and watch the ranking and the running history cost update live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 10 path:</b> a follow-up turn arrives elliptical → rewrite it against prior turns before anything embeds it → Concept 05 retrieves against the rewritten query, not the raw one → the rewritten history itself now has to be carried into Concept 07's assembled prompt, competing with evidence for the same fixed budget → the lab lets you step through the conversation and watch both effects at once.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Conversation history" deep dive</b><em>Full citations, the scoring code, and Rewrite the follow-up</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Dependencies</a>
+<a href="#s04"><i>04</i> Evidence + control</a>
+<a href="#s05"><i>05</i> Architecture schema</a>
+<a href="#s06"><i>06</i> Mechanism code</a>
+<a href="#s07"><i>07</i> Worked example: rewriting</a>
+<a href="#s08"><i>08</i> Worked example: budget</a>
+<a href="#s09"><i>09</i> Math verification</a>
+<a href="#s10"><i>10</i> Lab intro</a>
+<a href="#s11"><i>11</i> Lab</a>
+<a href="#s12"><i>12</i> Lab data model</a>
+<a href="#s13"><i>13</i> Lab JS mechanics</a>
+<a href="#s14"><i>14</i> What it teaches</a>
+<a href="#s15"><i>15</i> Contrast: lean vs. naive</a>
+<a href="#s16"><i>16</i> Misconceptions</a>
+<a href="#s17"><i>17</i> Interview</a>
+<a href="#s18"><i>18</i> Knowledge check</a>
+<a href="#s19"><i>19</i> References</a>
+<a href="#s20"><i>20</i> History as an unverified claim</a>
+<a href="#s21"><i>21</i> Lost in the middle, again</a>
+<a href="#s22"><i>22</i> Growth compounding</a>
+<a href="#s23"><i>23</i> Failure attribution</a>
+<a href="#s24"><i>24</i> Checkpoint</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where conversation history sits, and the gap it's built next to</h2></div></header>
+<p>This concept occupies position 10 of Module 11's fixed 11-concept sequence. It was originally built ahead of Concept 09, "Source identifiers and citations" -- Module 11's roadmap entry named that concept, but no <code>module-11-concept-09.html</code> existed yet at the time this page was authored. That gap has since been closed, the same precedent Concepts 03 and 04 already set when Concept 04 was built ahead of Concept 03 (Module 11 Concept 04's own Section 01: "originally built ahead of Concept 03 ... that gap has since been closed"). Nothing below ever depended on Concept 09's content: citation mechanics were already covered directly by Concept 08 (Section 20 there: "a citation tag gets attached to the output, but has to be checked against the actual cited text"), reused as-is in Section 20 below. Concept 09's own worked example goes on to check exactly the kind of unverified claim this concept's Section 20 flags in Turn 1's history.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Terms this concept uses precisely</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Owning concept</th></tr></thead>
+<tbody>
+<tr><td>Elliptical query</td><td>A follow-up turn that omits a subject or referent already established in a prior turn ("does that still apply")</td><td>this concept</td></tr>
+<tr><td>Query rewriting / contextualization</td><td>Expanding a raw follow-up into a self-contained query using prior turns, before retrieval runs</td><td>this concept</td></tr>
+<tr><td>Conversation history</td><td>The record of prior turns (user + assistant text) a pipeline may carry forward into later turns' rewriting and prompting</td><td>this concept</td></tr>
+<tr><td>Sliding window (history)</td><td>Keeping only the most recent N turns of history rather than the full transcript</td><td>this concept</td></tr>
+<tr><td>Prompt budget</td><td>3,584 tokens -- the 4,096-token context window minus a 512-token generation reserve</td><td>Module 11 Concept 07</td></tr>
+<tr><td>Lexical-overlap proxy</td><td>A crude, non-embedding retrieval-ranking stand-in that counts shared non-stopword terms; used here only because this module has no real embedding model to run</td><td>this concept</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>What this concept reuses without re-deriving</h2></div></header>
+<p>Module 11 Concept 07's 3,584-token prompt budget (4,096-token window minus a 512-token generation reserve) and its 35 system-instruction tokens plus 6 boundary tokens per chunk are reused verbatim below, not recomputed. Concept 06's five-chunk, 880-token evidence set (<code>cA</code>, <code>c007</code>'s child, <code>cB</code>, <code>cC</code>, <code>cE</code>) is the same fixed evidence set this concept's conversation retrieves against. Concept 08's own lab answer ("90-day grace period") is deliberately reused as Turn 1's assistant response, not the corrected "14 days" figure from Concept 08's Section 07 -- so this concept's history carries forward a claim that was never actually verified, which Section 20 below makes explicit. Concept 05's query-embedding-and-retrieval step is what a rewritten query is <i>for</i> -- this concept ends where Concept 05 begins.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>The fixed three-turn conversation</h2></div></header>
+<table class="notation">
+<thead><tr><th>Turn</th><th>User (raw)</th><th>Assistant</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>what's the return window after the grace period</td><td>Based on [SOURCE 2], the order-cancellation grace period is 90 days, so returns are accepted within that window.</td></tr>
+<tr><td>2</td><td>does that still apply if it's a gift</td><td>The sources don't distinguish gift orders from standard orders, so the same grace period should apply, but this isn't explicitly stated in [SOURCE 2].</td></tr>
+<tr><td>3</td><td>what about if I already opened the package</td><td>(live query -- not yet answered in this worked example)</td></tr>
+</tbody>
+</table>
+<p>Turn 1 is Concept 06/07's own query, continued verbatim. Its answer deliberately carries Concept 08's lab-scenario figure ("90 days"), not Concept 08's Section 07 worked answer ("14 days") -- a claim that entered history without ever being checked against the cited chunk's actual text. That gap matters for Section 20.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">ARCHITECTURE</span><h2>Rewrite, then retrieve, then pay for what's kept</h2></div></header>
+<div class="flow">
+<div class="flow-node">Raw follow-up turn</div>
+<div class="flow-node hot">Rewrite against history</div>
+<div class="flow-node">Concept 05 — embed &amp; retrieve</div>
+<div class="flow-node">Concepts 06-07 — select &amp; assemble</div>
+<div class="flow-node">History added to the prompt too</div>
+<div class="flow-node">Concept 08 — generate</div>
+</div>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">CODE</span><h2>The lexical-overlap scorer, and the token-count proxy</h2></div></header>
+<div class="code-block">
+<span class="code-label">JAVASCRIPT · OVERLAP SCORE + TOKEN-COUNT PROXY (node-run, see Section 09)</span>
+<pre><code>function overlapScore(query, chunkText) {
+  const qTerms = new Set(terms(query));       // lowercased, stopwords removed
+  const cTerms = new Set(terms(chunkText));
+  let shared = 0;
+  for (const t of qTerms) if (cTerms.has(t)) shared++;
+  return cTerms.size === 0 ? 0 : shared / cTerms.size;
+}
+
+function estimateTokens(text) {
+  // word-count proxy, same convention as Concept 07's own tokenizer --
+  // splits contraction apostrophes and trailing punctuation into tokens
+}</code></pre>
+</div>
+<p>Neither function is a real embedding model or a real BPE tokenizer -- this module has never had either to run, and Concept 06's own <code>cA</code>-<code>cG</code> scores carry the same illustrative status. What's real and load-bearing is the arithmetic run on top of them: the actual overlap ratios in Section 07 and the actual token counts in Section 08, both node-computed, not typed from memory.</p>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Raw query vs. rewritten query, node-verified retrieval ranking</h2></div></header>
+<p>Same five-chunk evidence set as Concept 06/07 throughout: <code>cA</code> (a 30-day standard return policy), <code>c007</code>'s child (the grace-period sentence), <code>cB</code> (shipping/tracking), <code>cC</code> (order-status values), <code>cE</code> (pre-shipment cancellation). Scored with the Section 06 overlap function, run via node against the exact turn text.</p>
+<table class="worked-table">
+<thead><tr><th>Turn</th><th>Query form</th><th>Ranking (chunk=score, descending)</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">2</td><td>raw: "does that still apply if it's a gift"</td><td>cA=0.000, c007_child=0.000, cB=0.000, cC=0.000, cE=0.000</td></tr>
+<tr><td>rewritten: "does the order-cancellation return window and grace period still apply if the order is a gift order"</td><td><b>c007_child=1.000</b>, cC=0.235, cE=0.136, cB=0.045, cA=0.000</td></tr>
+<tr><td rowspan="2">3</td><td>raw: "what about if I already opened the package"</td><td>cB=0.045, cA=0.000, c007_child=0.000, cC=0.000, cE=0.000</td></tr>
+<tr><td>rewritten: "does the return refund window still apply if the customer has already opened the package"</td><td><b>cC=0.176</b>, cB=0.091, cE=0.091, cA=0.050, c007_child=0.000</td></tr>
+</tbody>
+</table>
+<p>Turn 2 is the clean case: the raw query retrieves nothing at all -- every chunk scores exactly 0.000, because "does that still apply if it's a gift" shares zero non-stopword terms with any of the five chunks. Rewritten, it scores a perfect 1.000 against <code>c007</code>'s child, the one chunk that actually contains "grace period" and "order cancellation." Rewriting turned a total retrieval failure into a perfect top match.</p>
+<div class="callout warning"><b>The honest complication -- Turn 3 doesn't clean up the same way:</b> the raw Turn 3 query weakly favors <code>cB</code> (0.045, the shipping/tracking chunk -- wrong). Rewritten, the top chunk becomes <code>cC</code> (0.176, order-status values) -- also arguably not the best answer, since <code>cA</code> (the actual 30-day-return-with-original-packaging policy) only scores 0.050 and ranks last among the non-zero chunks. The reason: the overlap scorer has no stemming, so the query's word "package" never matches the chunk's word "packaging" -- a real, mechanical limitation of this proxy scorer, not a flaw in the rewriting step itself. Rewriting fixed Turn 2's zero-recall failure outright; for Turn 3 it only improved the ranking, and a real embedding model (which generalizes across "package"/"packaging" far better than exact term overlap) would very plausibly do better than this proxy shows.</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>History and evidence, competing for the same 3,584-token budget</h2></div></header>
+<p>Per-turn token counts, word-count proxy, node-computed: Turn 1 -- user 9, assistant 20, total 29. Turn 2 -- user 9, assistant 28, total 37. Turn 3 -- user 8 (its own live query has no assistant turn yet), total 8. History carried into Turn 3 (Turns 1+2, user+assistant) is 29+37 = 66 tokens; Turn 3's own rewritten query costs 15 tokens.</p>
+<div class="equation">assembled(turn 3) = sys(35) + history(66) + evidence(880) + boundaries(30) + query(15) = 1,026 tokens
+prompt budget (Concept 07) = 3,584 tokens → 2,558 tokens of headroom
+history's share of the assembled prompt = 66 / 1,026 = 6.4% -- evidence's share = 880 / 1,026 = 85.8%</div>
+<p>History is a small fraction of this particular assembled prompt -- but that's because this conversation is only three turns long. Holding sys/evidence/boundaries/query fixed at their Turn-3 values leaves 3,584 − 960 = 2,624 tokens of budget available to history alone. Simulating this conversation's own average turn size (24.7 tokens/turn) with no trimming at all, that 2,624-token allowance is exceeded after turn 107 (cumulative history at that point: 2,639.3 tokens). Trimmed with a sliding window instead, keeping the most recent 3 of this conversation's 3 turns costs exactly 74 tokens (29+37+8) -- comfortably inside the allowance, because this specific conversation never got long enough to need trimming yet. The 107-turn figure is what shows the mitigation actually matters at scale, not in this 3-turn example.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>The verification standard: run it, don't eyeball it</h2></div></header>
+<div class="callout"><b>Verification method</b>All of Sections 07-08's numbers were produced by a single node script executed this session (not typed from memory): a sanity check first confirmed <code>estimateTokens()</code> reproduces Concept 06/07's own established 9-token query count exactly (match), then the same tokenizer and a lexical-overlap ranking function were run against the fixed three-turn conversation and five-chunk evidence set. Every ranking, every per-turn token count, the 1,026-token Turn-3 assembly, the 2,624-token history allowance, the turn-107 overflow point, the 74-token sliding-window total, and the turn-3 naive-policy overflow in Section 15 all came out of that one execution, printed and read back -- not asserted.</div>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Rewrite the follow-up"</h2></div></header>
+<div class="callout">This lab steps through Turn 2 and Turn 3 of Section 04's conversation one at a time. At each step it shows the raw query, the rewritten query, both queries' actual node-computed retrieval ranking as a <code>rank-chip-row</code>, and a running <code>budget-bar</code> tracking cumulative lean history cost against the 2,624-token allowance computed in Section 08.</div>
+<div class="callout warning"><b>One-line disclaimer:</b> the rank-chip ordering in this lab is the exact Section 07 overlap scores, re-sorted descending per step -- it is not re-derived or rounded differently here, and it carries the same no-stemming caveat Section 07 already named for Turn 3.</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">EXPERIMENT</span><h2>Rewrite the follow-up</h2></div>
+</header>
+<div class="lab" id="lab_1110">
+<p>Step through the conversation one turn at a time. Each step compares the raw follow-up's retrieval ranking against its rewritten form's ranking, and updates the running history-token cost below.</p>
+<div class="lab-controls">
+<div class="control"><span id="stepLabel_1110">Turn 1 -- history seeded, nothing to rewrite yet</span></div>
+</div>
+<div class="mask-panels" id="panels_1110">
+<div class="mask-panel">
+<span class="mask-panel-title">RAW QUERY</span>
+<p id="rawQuery_1110">(Turn 1 has no prior turn to rewrite against.)</p>
+<div class="rank-chip-row" id="rawChips_1110"></div>
+</div>
+<div class="mask-panel">
+<span class="mask-panel-title">REWRITTEN QUERY</span>
+<p id="rewrittenQuery_1110">what's the return window after the grace period</p>
+<div class="rank-chip-row" id="rewrittenChips_1110"></div>
+</div>
+</div>
+<div class="budget-bar" id="historyBar_1110"></div>
+<p class="budget-meta" id="historyMeta_1110"></p>
+<div class="lab-actions">
+<button type="button" id="stepBtn_1110">Advance to next turn</button>
+<button type="button" id="resetBtn_1110">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>The lab holds a fixed three-step array, <code>TURNS_1110</code>. Step 0 (Turn 1) has no raw/rewritten comparison -- it only seeds history at 29 tokens. Step 1 (Turn 2) holds <code>{ raw, rewritten, rawScores, rewrittenScores, turnTokens: 37 }</code> with Section 07's exact five scores per query form. Step 2 (Turn 3) holds the same shape with <code>turnTokens: 8</code>. Each step also carries a running <code>cumulativeHistory</code> value (29, then 66, then 74) checked against the fixed 2,624-token allowance from Section 08.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>A <code>render_1110()</code> function writes the current step's raw and rewritten query text into <code>rawQuery_1110</code>/<code>rewrittenQuery_1110</code>, rebuilds both <code>rank-chip-row</code>s by sorting that step's five scores descending (each chip gets <code>.sorted-in</code> for the reorder animation and <code>.match</code> if it's the top-ranked chip), and repaints the <code>budget-bar</code> with one <code>budget-segment</code> per turn seen so far, sized against the fixed 2,624-token allowance, plus a <code>budget-meta</code> line stating the running total and percentage used. Clicking <code>stepBtn_1110</code> advances to the next turn and re-renders; clicking <code>resetBtn_1110</code> returns to Turn 1's seed state.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>What the lab teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>TURN 2, WATCH THE CHIP JUMP</span><h3>Rewriting can turn a zero into a perfect match</h3><p>Every chip sits at 0.000 for the raw query; one chip jumps straight to 1.000 for the rewritten query, with no chunk in between -- an all-or-nothing failure that rewriting alone fixes here.</p></article>
+<article class="info-card"><span>TURN 3, WATCH THE TOP CHIP STAY WRONG-ISH</span><h3>Rewriting isn't a guarantee</h3><p>The top chip changes (cB → cC) but the chip most people would call "actually correct" (cA) stays near the bottom -- a live demonstration that this proxy scorer's own blind spot survives rewriting.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CONTRAST</span><h2>Lean history policy vs. a naive full-snapshot policy</h2></div></header>
+<p>A naive implementation might store, as "history," the entire assembled prompt from each turn -- system instructions, all five evidence chunks, boundaries, and that turn's query -- instead of just the user/assistant exchange. Re-using Turn 3's own 1,026-token assembled total as that per-turn snapshot size, and the same 2,624-token allowance from Section 08:</p>
+<table class="compare-table">
+<thead><tr><th>Policy</th><th>Per-turn cost</th><th>Turns until the 2,624-token allowance overflows</th></tr></thead>
+<tbody>
+<tr><td>Lean (user/assistant text only)</td><td>~24.7 tokens/turn average, this conversation</td><td>Turn 107 (cumulative 2,639.3 tokens)</td></tr>
+<tr><td>Naive (re-snapshots the full assembled prompt every turn)</td><td>1,026 tokens/turn (re-injects all 880 tokens of evidence, every turn)</td><td>Turn 3 (cumulative 3,078 tokens)</td></tr>
+</tbody>
+</table>
+<p>Both policies are node-simulated against the identical allowance. The naive policy doesn't fail because its logic is wrong -- it fails because it pays the evidence cost a second time, every single turn, for evidence retrieval already has a place to live (Concepts 05-07's own retrieve-and-assemble step, run fresh each turn). Storing it again inside "history" is pure duplication, and duplication compounds.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Rewriting a follow-up guarantees the best possible retrieval</td><td>No -- Turn 3's rewritten query still ranks a less-relevant chunk first under this proxy scorer, because of a vocabulary mismatch ("package" vs. "packaging") rewriting never touches.</td></tr>
+<tr><td>A short conversation means history's token cost doesn't matter</td><td>No -- it's small here (74 tokens) only because this conversation is three turns long; the same average turn size overflows the remaining allowance by turn 107 if never trimmed.</td></tr>
+<tr><td>Keeping "more context" in history is always safer</td><td>No -- a policy that snapshots the full assembled prompt (including evidence) into history every turn overflows the same allowance 36x sooner than one that keeps only the user/assistant exchange (turn 3 vs. turn 107).</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why does a raw follow-up like "does that still apply if it's a gift" fail retrieval on its own?</summary><div>Because retrieval ranks by vocabulary/embedding overlap with the query, and an elliptical follow-up's missing referent ("that") means the query itself carries none of the words or meaning needed to match the right chunk -- Turn 2's raw query scores 0.000 against every evidence chunk under the overlap proxy used here.</div></details>
+<details class="quiz"><summary>Conceptual: does query rewriting guarantee correct retrieval afterward?</summary><div>No -- it fixes referent-missing failures (Turn 2's clean 0.000 → 1.000 case) but doesn't fix other gaps in the retrieval method itself, such as this proxy scorer's lack of stemming, which still misranks Turn 3 after rewriting.</div></details>
+<details class="quiz"><summary>System design: why does a naive "snapshot the full prompt into history" policy blow the budget so much faster than a lean one?</summary><div>Because it re-stores the retrieved evidence a second time, every turn, on top of the evidence Concepts 05-07 already re-retrieve and re-assemble fresh each turn -- pure duplication that compounds turn over turn (turn 3 overflow vs. turn 107 for the lean policy, same allowance).</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can state Turn 2's before/after retrieval scores</b><p>0.000 raw (all five chunks) → 1.000 rewritten, on c007's child.</p></div>
+<div><b>I can state Turn 3's caveat precisely</b><p>Rewritten still ranks cC (0.176) above cA (0.050) -- a no-stemming gap in the scorer, not a rewriting failure.</p></div>
+<div><b>I can state the budget numbers</b><p>74 tokens for this conversation's full lean history; overflow at turn 107 unbounded; overflow at turn 3 under a naive full-snapshot policy.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References</h2></div></header>
+<div class="references">
+<a href="module-11-concept-05.html"><b>Module 11 Concept 05 — Query embedding, retrieval and candidate search</b><br><span>Reused directly -- the retrieval step a rewritten query actually feeds into, cited in Sections 01 and 05.</span></a>
+<a href="module-11-concept-06.html"><b>Module 11 Concept 06 — Top-k evidence selection</b><br><span>Reused directly -- the five-chunk, 880-token evidence set every ranking in this concept is scored against.</span></a>
+<a href="module-11-concept-07.html"><b>Module 11 Concept 07 — Context injection, context construction and prompt construction</b><br><span>Reused directly -- the 3,584-token prompt budget and the 35/6-token system/boundary costs, cited in Section 08.</span></a>
+<a href="module-11-concept-08.html"><b>Module 11 Concept 08 — LLM generation and the final answer</b><br><span>Reused directly -- Turn 1's history deliberately reuses its lab-scenario answer, cited in Sections 03-04 and 20.</span></a>
+<a href="module-11-concept-09.html"><b>Module 11 Concept 09 — Source identifiers and citations</b><br><span>Reused directly -- this concept's immediate predecessor on disk; its own read-back check is exactly the mechanism Section 20 above says would have caught Turn 1's unverified "90 days" claim, cited in Sections 01 and 20.</span></a>
+<a href="module-11-concept-04.html"><b>Module 11 Concept 04 — Vector database and vector-store persistence</b><br><span>Cited for precedent only -- the "flags the gap in-page rather than hiding it" pattern this concept follows for the Concept 09 gap, cited in Section 01.</span></a>
+</div>
+<p class="fine-print">No new external benchmark citation is introduced for this concept. Every number above came from the node script described in Section 09, run against this course's own established constants -- not from an outside study.</p>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>An unverified claim in history is exactly as risky as an unverified citation</h2></div></header>
+<p>Concept 08's Section 20 established that a <code>[SOURCE n]</code> tag is cheap to attach and has to be checked against the cited chunk's actual text before it's trusted. Turn 1's own assistant message in Section 04 is the same risk one turn earlier: it states "90 days" -- Concept 08's deliberately illustrative lab answer, not the corrected "14 days" figure its own Section 07 worked example established -- and that unchecked figure now sits in conversation history, available to be repeated or built on by a later turn. Nothing about carrying a turn forward into history re-verifies what that turn claimed; the same read-back discipline Concept 08 asked for on citations applies just as much to a prior turn's own unverified assertion.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>Where history lands in the assembled prompt still matters</h2></div></header>
+<p>Module 02 Concept 10's lost-in-the-middle effect, already applied to evidence-chunk ordering in Concept 07 Section 21, applies just as much to conversation history once it's added to the same assembled string: history placed in the middle of a long prompt is recalled less reliably than history near the start or end, even when every token of it is intact. This concept doesn't resolve where history should sit in the string -- it only establishes that history is now one more thing inside that string, subject to the same positional risk evidence already carries.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CROSS-REFERENCE</span><h2>Growth that compounds looks small right up until it doesn't</h2></div></header>
+<p>Module 09 Concept 07's 3.4x tenant-filter over-fetch fact and this concept's turn-107-vs-turn-3 contrast share the same shape: a cost that looks negligible at small scale (over-fetching a few extra candidates; carrying 74 tokens of history) can compound into the dominant cost once the input that drives it -- corpus size there, turn count here -- grows. Section 15's naive policy isn't a strawman for this reason: re-injecting the full evidence set into history every turn is the conversational equivalent of never dropping the over-fetched candidates that didn't survive filtering.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>A fourth thing that can make an answer wrong</h2></div></header>
+<p>Module 03 Concept 11's three-link failure chain -- retrieval, augmentation, generation -- was framed around a single-turn query. In a multi-turn conversation, a wrong answer can now also trace back to a rewriting failure that happens strictly before all three: if Turn 2's raw query had been sent to retrieval unrewritten, the resulting 0.000-scored, effectively random evidence set would make the retrieval link look broken when the actual defect was upstream of it, in the rewrite step this concept owns. Checking whether the query was rewritten correctly, before checking retrieval, augmentation, or generation, is the one new diagnostic question multi-turn conversations add to that chain.</p>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Checkpoint</h2></div></header>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 10/11</span>
+<h3>A follow-up isn't a fresh query. Rewriting turns before they retrieve, and paying for history once they're kept.</h3>
+<p>You can now explain why an elliptical follow-up fails retrieval on its own, state exactly what rewriting does and doesn't fix (including its real limitation on Turn 3), and do the token-budget arithmetic that puts conversation history and retrieved evidence in the same fixed budget. This concept was originally built ahead of Concept 09 (source identifiers and citations); that gap has since closed, and Concept 09's own read-back check is directly relevant to Section 20 above -- Turn 1's unverified "90 days" claim is exactly the kind of citation that check would have caught.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s11">Open Rewrite the follow-up ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 10 of 11 concepts. Previous concept: Concept 09, source identifiers and citations. This concept was originally built ahead of Concept 09 -- that gap has since closed.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 10 · Active</p>
+<a href="module-11-concept-09.html">← Concept</a>
+</footer>
+</body>
+</html>
