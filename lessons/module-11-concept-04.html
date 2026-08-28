@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An embedding exists in process memory the instant it's computed -- but that's not the same as being durably written anywhere. This concept answers exactly where chunk c007's 384-dimensional all-MiniLM-L6-v2 vector actually lands: a vector store (LangChain's own InMemoryVectorStore, no persistence by default), a vector database (Oracle's VECTOR(384, FLOAT32) column or pgvector's vector(384), written via a committed INSERT), or a search engine's committed index segment. Byte cost is independently re-verified via node: 1,536 bytes per vector, 150.00 KB at 100 chunks, 1.465 MB at 1,000, 14.648 MB at 10,000. The lab, Where does the embedding go?, lets you pick a destination and see what actually survives a crash.">
+<title>Vector database and vector-store persistence — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-04.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 04 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 04</p>
+<h1>Computed is not the same as saved.<br><em>Where the 384 numbers actually land.</em></h1>
+<p class="lesson-lead">An embedding exists the instant it's computed -- in process memory, nowhere else, until something writes it somewhere that outlives the call. This concept names exactly where that write can land: a vector store (often nowhere durable at all), a vector database (a real table row), or a search engine (a committed index segment) -- and shows, concretely, which of those three actually survives a restart.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Fourth concept of Module 11 (4/11) -- originally built ahead of Concept 03 (document chunking and embedding flow); that gap has since been closed (see Section 01)</b></div>
+<div><span>PREREQUISITE</span><b>Module 10 Concept 01's three-category framework; Module 10 Concepts 03/05/14 (schema, VECTOR syntax, upsert/query/delete); Module 09 Concepts 01/05 (byte math, compression) -- all cited, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Define "durable" precisely; name which of the three destinations actually survives a restart</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">An embedding exists the moment it's computed. Where does it go next?</h2>
+</div>
+<p>Concept 03 produces a chunk's embedding. This concept asks the very next question: once that vector exists in memory, where does it actually get written so it's still there after the process restarts?</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>A note in your head, versus a note saved to a file</h3>
+<p>An embedding fresh out of the model is like a thought you just had -- real, but gone the moment you stop thinking about it, unless you write it down somewhere. This concept names the three places a computed embedding can actually be written: a vector store, a vector database, or a search engine index -- and only some of them count as "written down" by default.</p>
+<div class="beginner-memory"><b>First memory:</b> "the embedding was computed correctly" and "the embedding is saved anywhere" are two completely different claims.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Concept 03 produced a vector. It has to land somewhere.</h3>
+<p>Without naming where the embedding goes, "chunking and embedding flow" (Concept 03) would produce a vector that simply vanishes when the process exits. This concept closes that gap before Concept 05 needs to read that same vector back for a live query.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>Chunk c007, and where its vector actually goes</h3>
+<p>Take chunk <code>c007</code>, the same chunk id used in Module 10 Concept 14's own adapter code, with its 384-dimensional all-MiniLM-L6-v2 vector already computed. In a vector store (LangChain's own <code>InMemoryVectorStore</code>, confirmed in Module 10 Concept 01 to ship with no persistence by default), that vector lives in process RAM only. In a vector database, it's written into the <code>embeddings</code> table's <code>VECTOR(384, FLOAT32)</code> column and committed -- a real, durable row.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Three destinations, one question: does it survive a restart?</h3>
+<p><b>Vector store</b> -- often RAM only, per Module 10 Concept 01's own citation of LangChain's <code>InMemoryVectorStore</code>. <b>Vector database</b> -- written into a real table row via a committed <code>INSERT</code>, using Module 10 Concept 05's own <code>VECTOR(384, FLOAT32)</code> column type and Module 10 Concept 14's <code>upsert()</code> call. <b>Search engine</b> -- written into a committed index segment file on disk, per that category's own origin story (Module 10 Concept 01).</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 03 — produces the embedding</span><i>→</i>
+<span class="hot">THIS concept — where that embedding gets durably written</span><i>→</i>
+<span>Concept 05 — reads it back for a live query</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>"Durable" is a precise claim, not a vibe</h3>
+<p>Durable means specifically: the data survives past the current call and is visible to a later, separate read -- not just that the computation was correct, and not just that a search API exists on top of it. A system can offer excellent similarity search (a vector store's whole job) while offering zero durability guarantee at all -- those are two independent properties, not one.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"It has a similarity-search API, so it must be saving my data."</b><p>False -- a vector store's search API and its persistence guarantee are separate concerns; LangChain's own <code>InMemoryVectorStore</code> has excellent search and zero persistence.</p></div>
+<div><b>"Once the vector is in the table, it's automatically durable."</b><p>Not quite -- it's durable once the write is <b>committed</b>. An uncommitted transaction can still be rolled back, per Module 10 Concept 08's own no-autocommit-by-default rule.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Checking your own project's actual persistence</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Right after embedding, right before any query can use it</b><p>Ask directly: if this process restarted right now, would this embedding still exist anywhere?</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 4/11</b><p>Originally built ahead of Concept 03 (document chunking and embedding flow); that gap has since closed. Concept 05, query embedding retrieval and candidate search, is next.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Define "durable" precisely</b><p>Survives past the current call, visible to a later, separate read -- not just computed correctly.</p></div>
+<div><b>Name which destination is durable by default</b><p>A vector database's committed table row -- not a bare vector store's in-memory default.</p></div>
+<div><b>Explain why a search-API guarantee isn't a persistence guarantee</b><p>They're independent properties; a system can have one without the other.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>If your process restarted right now, would chunk c007's embedding still exist? Where, specifically?</li>
+<li>Why does LangChain's own <code>InMemoryVectorStore</code> count as "no persistence by default" despite having a working search API?</li>
+<li>What makes a database write durable that an uncommitted transaction doesn't have?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 4 OF 11</h3>
+<p>This concept named the three real destinations a computed embedding can be written to, and showed precisely which one survives a restart by default. It was originally built ahead of Concept 03, "Document chunking and embedding flow" -- that concept has since been authored, closing the gap. Concept 05, "Query embedding, retrieval and candidate search," is next -- reading back exactly what this concept persists.</p>
+<div class="beginner-memory"><b>Concept 04 is active.</b> Module 11 stands at 4 of 11 concepts. Concept 03 has since been built, closing the gap this page originally flagged.</div>
+<a class="button primary" href="module-11-concept-02.html">← Back to Concept 02's ingestion workflow</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Computed is not the same as saved</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s12"><span>01</span><b>1,536 bytes per vector, node-verified</b><small>150.00 KB / 1.465 MB / 14.648 MB at 100/1,000/10,000 chunks.</small></a>
+<a href="#s13"><span>02</span><b>The read-back guarantee</b><small>VECTOR_DISTANCE proving the row survives to the next SELECT.</small></a>
+<a href="#s16"><span>03</span><b>Where does the embedding go?</b><small>The lab -- pick a destination, see what survives a crash.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 04 path:</b> Concept 03 produced chunk c007's embedding → this concept names the three real destinations it could be written to → a vector store's own default offers no persistence, a vector database's committed row does → the byte cost is independently verified via node → the lab lets you pick a destination and see what survives a crash → Concept 05 reads back exactly what gets persisted here.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Vector database and vector-store persistence" deep dive</b><em>Full citations, the write/commit/read-back code, and Where does the embedding go?</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Definitions</a>
+<a href="#s03"><i>03</i> Three categories, reused</a>
+<a href="#s04"><i>04</i> Vector-store baseline</a>
+<a href="#s05"><i>05</i> Schema anchor</a>
+<a href="#s06"><i>06</i> SQL persistence syntax</a>
+<a href="#s07"><i>07</i> Adapter interface</a>
+<a href="#s08"><i>08</i> What's stored where</a>
+<a href="#s09"><i>09</i> Worked example intro</a>
+<a href="#s10"><i>10</i> Write path code</a>
+<a href="#s11"><i>11</i> Commit semantics</a>
+<a href="#s12"><i>12</i> Byte-cost verification</a>
+<a href="#s13"><i>13</i> Read-back guarantee</a>
+<a href="#s14"><i>14</i> Compression note</a>
+<a href="#s15"><i>15</i> Lab intro</a>
+<a href="#s16"><i>16</i> Lab</a>
+<a href="#s17"><i>17</i> Lab data model</a>
+<a href="#s18"><i>18</i> Lab mechanics</a>
+<a href="#s19"><i>19</i> Lab walkthrough</a>
+<a href="#s20"><i>20</i> Comparison table</a>
+<a href="#s21"><i>21</i> Misconceptions</a>
+<a href="#s22"><i>22</i> Interview</a>
+<a href="#s23"><i>23</i> Check</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Where a chunk's embedding actually lands</h2></div></header>
+<p>This is the fourth concept of Module 11 (4/11), naming exactly where a chunk's own computed embedding gets durably written before Concept 05 needs to read it back for a live query. It was originally built ahead of Concept 03, "Document chunking and embedding flow" -- that concept has since been authored, closing the gap. Nothing in this concept ever depended on Concept 03's content: chunk <code>c007</code> is reused directly from Module 10 Concept 14's own adapter code. Every category and syntax fact here is cited from Modules 08-10, never re-derived.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">PRECISION</span><h2>Persisted vs. held -- a precise distinction</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td>Held</td><td>Alive only in the current process's memory -- gone on restart</td></tr>
+<tr><td>Persisted</td><td>Survives past the current call, visible to a later, separate read</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Module 10 Concept 01's three categories, reused</h2></div></header>
+<p>Vector store, vector database, and search engine (Module 10 Concept 01) map directly onto this concept's own question: which of the three actually persists the vector by default, and which just holds it in memory. None of the category definitions are rebuilt here -- only their persistence consequence for this specific moment in the pipeline.</p>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>The vector-store baseline, cited</h2></div></header>
+<p>LangChain's own <code>VectorStore</code> class is documented as an abstract interface; its own first-party <code>InMemoryVectorStore</code> implementation carries no persistence by default (both cited in Module 10 Concept 01). This is the concrete "held, not persisted" baseline the rest of this concept contrasts against.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">ARCHITECTURE</span><h2>The schema anchor, cited</h2></div></header>
+<p>Module 10 Concept 03's five-table schema -- <code>documents → document_versions → chunks → embeddings → citations</code> -- names exactly which table a persisted vector lands in: the <code>embeddings</code> table, keyed by <code>chunk_id</code>, with chunk text and metadata staying in the separate <code>chunks</code> row.</p>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>The concrete SQL persistence syntax, cited</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · ORACLE'S OWN VECTOR COLUMN TYPE (Module 10 Concept 05)</span>
+<pre><code>CREATE TABLE embeddings (
+  chunk_id VARCHAR2(64) PRIMARY KEY,
+  embedding VECTOR(384, FLOAT32)
+);
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">CODE</span><h2>The adapter interface, cited</h2></div></header>
+<p>Module 10 Concept 14's store-agnostic <code>upsert(vectors, metadata) / query(vector, k) / delete(ids)</code> interface is the same call surface this concept's own worked example uses to write chunk <code>c007</code>'s vector -- the identical id already used in that concept's own adapter code.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">IMPORTANT DISTINCTIONS</span><h2>What's stored where</h2></div></header>
+<p>Only <code>chunk_id</code> and the 384 floats live in the <code>embeddings</code> row. Chunk text and other metadata stay in the separate <code>chunks</code> row (Module 10 Concept 03) -- reusing Module 07 Concept 09's own distinction that structured metadata is never embedded into the vector itself, only carried alongside it.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>Chunk c007, ready to be written</h2></div></header>
+<p>Chunk <code>c007</code>, the running example already used in Module 10 Concept 14's own adapter code, with a 384-dimensional all-MiniLM-L6-v2 vector already computed by the embedding stage. The question this section answers: what actually happens when that vector gets written.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">CODE</span><h2>The write path, verbatim from Module 10 Concept 14</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · ORACLE WRITE (python-oracledb)</span>
+<pre><code>cursor.execute(
+    "insert into embeddings (chunk_id, embedding) values (:1, :2)",
+    ["c007", array.array("f", embedding)]
+)
+connection.commit()
+</code></pre>
+</div>
+<div class="code-block">
+<span class="code-label">PYTHON · PGVECTOR WRITE (psycopg)</span>
+<pre><code>cur.execute(
+    "INSERT INTO embeddings (chunk_id, embedding) VALUES (%s, %s)",
+    ("c007", str(embedding))
+)
+conn.commit()
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANISM</span><h2>Commit is the concrete meaning of "durable"</h2></div></header>
+<p><code>connection.commit()</code> / <code>conn.commit()</code> is the exact line that turns a pending write into a durable one -- per Module 10 Concept 08's own no-autocommit-by-default rule, nothing before this line is guaranteed to survive.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MATHEMATICS</span><h2>Byte cost, independently verified</h2></div></header>
+<div class="equation">bytes_per_vector = dim × bytes_per_float = 384 × 4 = 1,536 bytes</div>
+<table class="worked-table">
+<thead><tr><th>Chunks</th><th>Total bytes</th><th>KB</th><th>MB</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1,536</td><td>1.50</td><td>0.001</td></tr>
+<tr><td>100</td><td>153,600</td><td>150.00</td><td>0.147</td></tr>
+<tr><td>1,000</td><td>1,536,000</td><td>1,500.00</td><td>1.465</td></tr>
+<tr><td>10,000</td><td>15,360,000</td><td>15,000.00</td><td>14.648</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>Run directly via <code>node -e</code> with 384 × 4 as the per-vector byte formula (Module 09 Concept 01's own n·d·4 convention), applied at n=1/100/1,000/10,000 -- every value above printed and confirmed arithmetically, not typed from memory.</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>The read-back guarantee</h2></div></header>
+<p>Once committed, chunk <code>c007</code>'s row is queryable via <code>VECTOR_DISTANCE(e.embedding, :qv, COSINE)</code> (Oracle, Module 10 Concept 05) or <code>embedding &lt;=&gt; %s</code> (pgvector, Module 10 Concept 11) from a completely separate later call -- that's what "durably written" concretely means here, contrasted directly against LangChain's own <code>InMemoryVectorStore</code>, which offers no equivalent guarantee once the process exits.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CONCRETE USE</span><h2>Compression as an optional cost reduction, not a persistence change</h2></div></header>
+<p>Module 09 Concept 05's own SQ8 (4.00x) and PQ (32.00x) compression figures reduce the byte cost computed above without changing whether the write is durable -- compression and persistence are independent decisions, the same way search-API quality and persistence were shown to be independent in Section 04.</p>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Introducing "Where does the embedding go?"</h2></div></header>
+<div class="callout">This lab lets you pick one of the three destinations from Module 10 Concept 01's own category framework and see, concretely, what actually survives a crash -- not just read about the distinction.</div>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">EXPERIMENT</span><h2>Where does the embedding go?</h2></div></header>
+<div class="lab" id="persistLab_1104">
+<p>Pick a destination for chunk c007's embedding and see what's actually durable, where the vector lives, what survives a crash, and the byte cost at scale.</p>
+<div class="lab-actions" id="storePicker_1104">
+<button type="button" class="active" data-store="store">In-memory vector store</button>
+<button type="button" class="secondary" data-store="db">Vector database (Oracle/pgvector)</button>
+<button type="button" class="secondary" data-store="search">Search engine index</button>
+</div>
+<div class="diagram-hub" id="persistDiagram_1104">
+<div class="diagram-node active" id="node_chunk_1104"><b>Chunk embedding</b><small>384-dim, float32</small></div>
+<div class="diagram-node hub-center" id="node_hub_1104"><b>Persistence layer</b></div>
+<div class="diagram-node active" id="node_ram_1104"><b>RAM only</b></div>
+<div class="diagram-node" id="node_disk_1104"><b>Disk / table row</b></div>
+<div class="diagram-node" id="node_index_1104"><b>Index segment</b></div>
+</div>
+<table class="worked-table" id="persistTable_1104">
+<thead><tr><th>Property</th><th id="colStore_1104">In-memory vector store</th></tr></thead>
+<tbody id="persistTableBody_1104"></tbody>
+</table>
+<div class="callout warning" id="persistCallout_1104"></div>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own data model</h2></div></header>
+<p>Each of the three picks reports four facts: whether the write is durable across a restart, where the 384-dim vector physically lives, what survives a crash, and the byte cost for 10,000 chunks. The vector-store pick shows no durability by default (RAM only, re-embed from source on restart); the vector-database pick shows a full committed row (chunk text, vector, citation link, per Module 10 Concept 03's schema); the search-engine pick shows a committed index segment, with uncommitted writes possibly lost.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">MECHANICS</span><h2>The lab's own JS logic</h2></div></header>
+<p>A single <code>render</code> function looks up the clicked destination's facts, toggles <code>.active</code> on the clicked button and the matching <code>.diagram-node</code> elements, rewrites the comparison table's header and four rows, and sets the callout's class (plain or <code>.warning</code>) and text -- all driven from one small data object, no new CSS classes anywhere.</p>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CONCRETE USE</span><h2>What each pick teaches</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>VECTOR STORE</span><h3>The durability gap</h3><p>A working search API with nothing saved once the process exits -- the exact trap Section 04 named.</p></article>
+<article class="info-card"><span>VECTOR DATABASE</span><h3>The schema in action</h3><p>The same adapter interface now writes to a durable table row instead of RAM.</p></article>
+<article class="info-card"><span>SEARCH ENGINE</span><h3>A different persistence unit</h3><p>Same underlying vector, saved as a committed index segment instead of a database row.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">CONTRAST</span><h2>The three-way comparison, restated as prose</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Vector store</th><th>Vector database</th><th>Search engine</th></tr></thead>
+<tbody>
+<tr><td>No persistence by default</td><td>Committed table row</td><td>Committed index segment</td></tr>
+<tr><td>Gone on restart, unless re-embedded</td><td>Survives restart and crash (once committed)</td><td>Survives once the segment commits</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>A working similarity-search API means the data is being saved</td><td>False -- LangChain's own InMemoryVectorStore has a full search API and zero persistence by default; the two are independent.</td></tr>
+<tr><td>Being in the embeddings table means it's already durable</td><td>Not quite -- it's durable once committed; an uncommitted transaction can still roll back.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why doesn't a vector store's similarity-search capability imply persistence?</summary><div>They're independent properties -- search quality is about the indexing/comparison mechanism, persistence is about whether the underlying data outlives the process. A system can excel at one while offering nothing on the other.</div></details>
+<details class="quiz"><summary>System design: a production RAG system's vector store loses all data on every container restart. What's the likely fix?</summary><div>It's very likely running a bare in-memory wrapper under the assumption it behaves like a database -- migrate to a genuine vector database with a committed write path, or add an explicit persistence layer.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can define "durable" precisely</b><p>Survives past the current call, visible to a later, separate read.</p></div>
+<div><b>I can name the byte cost at 10,000 chunks</b><p>14.648 MB, node-verified.</p></div>
+<div><b>I can name what makes a write durable</b><p>The commit -- not the INSERT statement alone.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://reference.langchain.com/python/langchain-core/vectorstores/base/VectorStore"><b>VectorStore — LangChain API reference</b><br><span>Reused from Module 10 Concept 01 -- InMemoryVectorStore's own no-persistence-by-default behavior.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-tables-using-vector-data-type.html"><b>Create Tables Using the VECTOR Data Type — Oracle Documentation</b><br><span>Reused from Module 10 Concept 05 -- the VECTOR(384, FLOAT32) column syntax used in Section 06.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html"><b>VECTOR_DISTANCE — Oracle Documentation</b><br><span>Reused from Module 10 Concept 05 -- the read-back function cited in Section 13.</span></a>
+<a href="https://github.com/pgvector/pgvector"><b>pgvector — GitHub README</b><br><span>Reused from Module 10 Concept 11 -- the vector(384) column type and &lt;=&gt; operator.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 4/11</span>
+<h3>Computed is not the same as saved. Where the 384 numbers actually land.</h3>
+<p>You can now define "durable" precisely, name which of the three destinations survives a restart by default, and trace chunk c007's own write, commit, and read-back. This concept was originally built ahead of Concept 03 (document chunking and embedding flow); that gap has since closed. Concept 05, "Query embedding, retrieval and candidate search," is next -- reading back exactly what this concept persists.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s16">Open Where does the embedding go? ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 4 of 11 concepts. Position 3 (document chunking and embedding flow) has since been built. Next concept: Concept 05, Query embedding, retrieval and candidate search.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 04 · Active</p>
+<a href="module-11-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

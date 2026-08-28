@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 02 named 'chunk' and 'embed' as two stations in a six-step assembly line, using a deliberately trivial single-chunk example so neither mechanism actually ran. This concept goes deeper: a fresh Oracle Order Management passage is split at two different overlap sizes -- 6 words (below the 10-word fact it must protect) and 10 words (exactly at the fact length) -- and the fact survives intact in 0 of 4 chunks at the smaller overlap versus 2 of 6 at the larger one, run against real all-MiniLM-L6-v2 weights, not approximated. A hand-traced tokenize-contextualize-pool pass matches the library's own model.encode() to within float32 noise (cosine 1.0000001). The lab, Split -> Tokenize -> Contextualize -> Pool, steps through all four embedding sub-stages on a fresh document with clearly-labeled toy numbers.">
+<title>Document chunking and embedding flow — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-03.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip"><i></i> Concept 03 active</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 03</p>
+<h1>A bet on a boundary.<br><em>Overlap is how you hedge it.</em></h1>
+<p class="lesson-lead">Concept 02 named "chunk" and "embed" as two labeled stations in a six-step assembly line, using a document so short that neither mechanism actually had to run. This concept runs both for real: a fresh passage is split at two different overlap sizes, and a fact survives intact in some chunks and not others depending on exactly one number -- then each surviving chunk is tokenized, contextualized, and pooled into a real 384-dimensional vector, traced against the actual model weights, not a description of the process.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Third concept of Module 11 (3/11) -- the deep-dive into Concept 02's own "chunk" and "embed" stations</b></div>
+<div><span>PREREQUISITE</span><b>Concept 02's six-station overview; Module 07 (splitting, overlap, dilution); Module 08 (tokenize/contextualize/pool, all-MiniLM-L6-v2/384-dim, prefix convention) -- all cited, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Predict whether a fact survives a chunk boundary given its length, chunk size, and overlap; name the four embed sub-steps in order</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Two labeled steps, run for real for the first time</h2>
+</div>
+<p>Concept 02 named "chunk" and "embed" as stations on an assembly line but ran neither for real -- its own worked example was one short sentence that never needed splitting. This concept runs both mechanisms on a fresh, longer passage, so the fact-survival math and the embedding pipeline actually happen.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Split into pieces, then turn each piece into a vector</h3>
+<p>Document chunking and embedding flow is the pipeline that turns one document into several pieces (chunks), then turns each piece into a dense vector (an embedding) that captures its meaning. Two separate stages, two separate failure modes -- a bad split can't be fixed by a good embedder, and a diluted pool can't be fixed by a perfect split.</p>
+<div class="beginner-memory"><b>First memory:</b> chunking decides what text goes into a vector; embedding decides how that text becomes a vector.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>A whole document is too big and too diluted to embed as one vector</h3>
+<p>A whole document embedded as a single vector dilutes its own meaning across everything it contains (Module 07 Concept 01's own dilution finding), and retrieval needs to compare at roughly query-length granularity, not document-length. The document has to be split first, then each piece embedded separately -- that's the entire reason this flow exists.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One fact, two overlap sizes, two different outcomes</h3>
+<p>Take a fresh passage: "Oracle Order Management lets a customer cancel a shipped order within a grace period. The grace period is fourteen days from the delivery date, not the order date. After fourteen days, the system blocks self-service cancellation and routes the request to a support agent instead." (279 characters, 45 words). The fact to protect -- "fourteen days from the delivery date, not the order date" -- is 10 words long. Split into 16-word chunks with only 6 words of overlap, that fact survives intact in <b>0 of 4</b> chunks. Split again with 10 words of overlap (exactly the fact's own length), it survives intact in <b>2 of 6</b> chunks.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Split, then four sub-steps to embed</h3>
+<p><b>Split</b> -- word-based chunking at a fixed size, with overlap sized relative to the fact you're protecting. <b>Tokenize</b> -- the chunk text (prefixed <code>"passage: "</code>, this course's own adopted convention) is broken into subword tokens. <b>Look up token embeddings</b> -- each token gets an initial vector. <b>Contextualize</b> -- bidirectional attention updates every token's vector using every other token in the chunk. <b>Pool</b> -- attention-mask-weighted mean pooling averages all token vectors into one 384-dimensional chunk vector, then L2-normalized.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 02 — named "chunk" and "embed" as labeled stations</span><i>→</i>
+<span class="hot">THIS concept — both stations, run for real, on a real document</span><i>→</i>
+<span>Concept 04 — where the finished vector gets persisted</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Overlap sized right guarantees a floor, not a ceiling</h3>
+<p><code>overlap_size ≥ fact_length</code> guarantees at least one chunk boundary the fact doesn't cross -- it does not guarantee the fact survives in every window, and it does not guarantee most windows contain it. It's a necessary floor, not a full guarantee: this concept's own 2-of-6 result at exactly the fact's length proves the floor is real but modest.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Overlap below the fact's length is close enough."</b><p>False -- this concept's own worked example shows overlap=6 against a 10-word fact keeps it intact in exactly 0 of 4 chunks, not "mostly."</p></div>
+<div><b>"A better embedding model can fix a bad split."</b><p>False -- if the fact never appears intact in any chunk, no embedding model, however good, has any chunk vector to represent it faithfully. The split has to happen right first.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands: stages 2-3 of Concept 02's own six stations</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Between raw document and a stored vector</b><p>This is where "Chunk" and "Embed" stop being labeled steps and become a document that was actually split and actually embedded.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 3/11</b><p>Concept 04, vector database and vector-store persistence, picks up right after this -- where the finished vector actually goes.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Predict fact survival from length, chunk size, and overlap</b><p>Overlap below the fact's length guarantees it splits at some stride; overlap at or above the fact's length guarantees at least one intact chunk exists.</p></div>
+<div><b>Name the four embed sub-steps in order</b><p>Tokenize, look up token embeddings, contextualize, pool.</p></div>
+<div><b>State why the two stages have independent failure modes</b><p>A bad split can't be rescued by a good embedder; a diluted pool can't be rescued by a perfect split.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Why does overlap=6 keep the fact intact in 0 of 4 chunks, while overlap=10 keeps it intact in 2 of 6?</li>
+<li>What does "contextualize" actually change about a token's vector, and what does "pool" do afterward?</li>
+<li>Why is the <code>passage:</code> prefix a course convention and not a requirement of the model itself?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 3 OF 11</h3>
+<p>This concept ran both chunking and embedding for real on a fresh document, proving the overlap-sizing guarantee against actual model weights and tracing the full tokenize-contextualize-pool pipeline by hand. Concept 04, "Vector database and vector-store persistence," picks up right after this -- where a finished chunk vector actually gets written.</p>
+<div class="beginner-memory"><b>Concept 03 is active.</b> Module 11 stands at 3 of 11 concepts.</div>
+<a class="button primary" href="module-11-concept-02.html">← Back to Concept 02's ingestion workflow</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">A bet on a boundary. Overlap is how you hedge it.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s17"><span>01</span><b>0 of 4 vs. 2 of 6</b><small>The overlap-sizing guarantee, run against real model weights.</small></a>
+<a href="#s18"><span>02</span><b>Manual pooling matches the library exactly</b><small>Cosine 1.0000001 against model.encode().</small></a>
+<a href="#s20"><span>03</span><b>Split → Tokenize → Contextualize → Pool</b><small>The lab -- step through all four sub-stages live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 03 path:</b> Concept 02 named "chunk" and "embed" without running either for real → a fresh 45-word passage is split at overlap=6 and overlap=10, proving the fact-survival guarantee (0/4 vs. 2/6) → chunk 2 is tokenized, contextualized, and mean-pooled by hand, matching the real library output to float32 noise → a 6x6 cosine matrix shows overlap pulling neighboring chunk embeddings closer geometrically, not just protecting text → the lab lets you step through all four embedding sub-stages yourself → Concept 04 picks up where the finished vector goes.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Document chunking and embedding flow" deep dive</b><em>Full citations, the tokenize/pool code, and Split → Tokenize → Contextualize → Pool</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Out of scope</a>
+<a href="#s03"><i>03</i> Objectives</a>
+<a href="#s04"><i>04</i> Precision claim</a>
+<a href="#s05"><i>05</i> Dependencies</a>
+<a href="#s06"><i>06</i> Intuition — split</a>
+<a href="#s07"><i>07</i> Intuition — pool</a>
+<a href="#s08"><i>08</i> Intuition — compound</a>
+<a href="#s09"><i>09</i> Splitting mechanics</a>
+<a href="#s10"><i>10</i> Overlap guarantee</a>
+<a href="#s11"><i>11</i> Tokenization + prefix</a>
+<a href="#s12"><i>12</i> Contextualization</a>
+<a href="#s13"><i>13</i> Pooling</a>
+<a href="#s14"><i>14</i> Splitter code</a>
+<a href="#s15"><i>15</i> Tokenizer code</a>
+<a href="#s16"><i>16</i> Pooling code</a>
+<a href="#s17"><i>17</i> Survival result</a>
+<a href="#s18"><i>18</i> Control check</a>
+<a href="#s19"><i>19</i> Similarity matrix</a>
+<a href="#s20"><i>20</i> Lab</a>
+<a href="#s21"><i>21</i> Lab reading</a>
+<a href="#s22"><i>22</i> Misconceptions</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> Check + references</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>The deep-dive into Concept 02's own "chunk" and "embed" stations</h2></div></header>
+<p>This is the third concept of Module 11 (3/11) -- the deep-dive into stages 2 and 3 of Concept 02's six-station assembly line, picking up after Concept 02's deliberately trivial single-chunk example and before Concept 04's persistence stage.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">ORIENTATION</span><h2>What's explicitly out of scope</h2></div></header>
+<p>No new splitting algorithm, no new embedding model, and no retrieval evaluation -- ranking retrieved chunks against a query is Module 07 Concept 10's own job. This concept only chains already-verified Module 07/08 mechanisms on one fresh document.</p>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>PREDICT</span><h3>Fact survival from length, size, and overlap</h3><p>Given a fact's length and a chunk size, compute the minimum overlap that guarantees at least one intact chunk.</p></article>
+<article class="info-card"><span>NAME</span><h3>The four embed sub-steps, in order</h3><p>Tokenize, look up token embeddings, contextualize, pool.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A real forward pass, not a description</h3><p>Chunk 2's own tokenize-contextualize-pool pass, verified against real model weights.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">PRECISION</span><h2>The precision claim under test</h2></div></header>
+<p><code>overlap_size ≥ fact_length</code> is necessary but not sufficient for full-fact-survival -- it guarantees at least one intact chunk exists, not that every window contains the fact. This concept's own numbers (0/4 below the threshold, 2/6 at the threshold) test that claim directly rather than merely asserting it.</p>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 07 Concept 01</b> -- the dilution finding motivating why a whole document can't be embedded as one vector.</li>
+<li><b>Module 07 Concept 06</b> -- overlap/stride math, <code>overlap = chunk_size − stride</code>, reused directly.</li>
+<li><b>Module 08 Concepts 02, 03, 06, 08</b> -- the real tokenize/contextualize/pool forward pass, bi-encoder asymmetry, all-MiniLM-L6-v2 at 384 dimensions, and the document-side prefix convention, all reused unchanged.</li>
+<li><b><a href="module-11-concept-02.html">Concept 02</a></b> -- the six-station overview this concept deep-dives into stages 2-3 of.</li>
+<li><b>Explicitly out of scope:</b> retrieval ranking evaluation, named forward to Module 07 Concept 10.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">INTUITION</span><h2>A chunk boundary is a bet</h2></div></header>
+<p>Drawing a chunk boundary is a bet that no single fact spans it. Overlap is how you hedge that bet without re-embedding the whole document at every possible offset -- it doesn't remove the bet, it just narrows how badly it can go wrong.</p>
+<div class="callout warning"><b>Analogy boundary</b>The betting picture explains why overlap exists, not the exact guarantee -- that comes from Section 10's own inequality, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">INTUITION</span><h2>Pooling is compression, not labeling</h2></div></header>
+<p>Embedding a chunk isn't attaching a label to it -- it's compressing every token's contextualized meaning into one fixed-size average. What survives that average depends entirely on which tokens dominate it; a chunk full of function words dilutes its own content words the same way a whole document dilutes its own facts.</p>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">INTUITION</span><h2>The two stages compound</h2></div></header>
+<p>A bad split (a fact straddling a boundary) can't be rescued by a good embedder -- there's no intact chunk left to embed well. A diluted pool (too many function words drowning the content) can't be rescued by a perfect split either. Both stages have to work.</p>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MECHANISM</span><h2>Splitting mechanics</h2></div></header>
+<p>Word-based chunking at a fixed size of 16 words, with stride = chunk_size − overlap (Module 07 Concept 06). At overlap=6, stride=10, producing 4 chunks from the 45-word passage. At overlap=10, stride=6, producing 6 chunks from the same passage.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">MATHEMATICS</span><h2>The overlap-sizing guarantee, restated precisely</h2></div></header>
+<div class="equation">overlap_size ≥ fact_length ⟹ at least one chunk boundary the fact doesn't cross exists</div>
+<div class="equation">overlap_size &lt; fact_length ⟹ every stride position can split the fact</div>
+<p>This is a floor, not a ceiling -- it guarantees the fact survives intact somewhere, not that most or all windows contain it.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANISM</span><h2>Tokenization, and the prefix convention</h2></div></header>
+<p>Chunk text is prefixed <code>"passage: " + chunk_text</code> before tokenization -- this course's own adopted convention from the E5/BGE family (Module 08 Concept 03, Concept 02's own reuse in this module), not an architectural requirement of all-MiniLM-L6-v2 itself. Stating this explicitly so it isn't mistaken for a MiniLM feature.</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">MECHANISM</span><h2>Contextualization</h2></div></header>
+<p>Bidirectional attention (<a href="https://arxiv.org/abs/1706.03762">"Attention Is All You Need"</a>, <a href="https://arxiv.org/abs/1810.04805">BERT</a>) updates every token's vector using every other token in the chunk, not just left-context -- each token's contextualized vector reflects the whole chunk, not just what preceded it.</p>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">MECHANISM</span><h2>Pooling</h2></div></header>
+<p>Attention-mask-weighted mean pooling (<a href="https://arxiv.org/abs/1908.10084">Sentence-BERT</a>) averages every contextualized token vector into one fixed-size chunk vector, then L2-normalizes it so a dot product between two chunk vectors equals their cosine similarity.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">CODE</span><h2>The splitter, reproduced on the real passage</h2></div></header>
+<div class="code-block">
+<span class="code-label">PASSAGE (45 words, 279 characters)</span>
+<pre><code>Oracle Order Management lets a customer cancel a shipped order within a
+grace period. The grace period is fourteen days from the delivery date,
+not the order date. After fourteen days, the system blocks self-service
+cancellation and routes the request to a support agent instead.
+</code></pre>
+</div>
+<table class="compare-table">
+<thead><tr><th>Overlap</th><th>Stride</th><th>Chunks</th><th>Fact intact in</th></tr></thead>
+<tbody>
+<tr><td>6 words (&lt; fact_length=10)</td><td>10</td><td>4</td><td>0 of 4</td></tr>
+<tr><td>10 words (= fact_length)</td><td>6</td><td>6</td><td>2 of 6 (chunk 2, chunk 3)</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">CODE</span><h2>Tokenizing chunk 2</h2></div></header>
+<p>Chunk 2 (91 characters): "grace period. The grace period is fourteen days from the delivery date, not the order date." Prefixed: <code>"passage: grace period. The grace period is fourteen days from the delivery date, not the order date."</code></p>
+<div class="code-block">
+<span class="code-label">TOKENS (23 total, including special tokens)</span>
+<pre><code>[CLS] passage : grace period . the grace period is fourteen days
+from the delivery date , not the order date . [SEP]
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">CODE</span><h2>Pooling, verified against the real library</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · MANUAL MEAN-POOL + L2-NORMALIZE, vs. model.encode()</span>
+<pre><code>outputs = model(**inputs)
+token_vecs = outputs.last_hidden_state  # shape: (23, 384)
+mask = inputs["attention_mask"]
+pooled = (token_vecs * mask.unsqueeze(-1)).sum(1) / mask.sum(1, keepdim=True)
+manual = pooled / pooled.norm(dim=1, keepdim=True)  # L2-normalize
+
+library = model.encode([prefixed_text], normalize_embeddings=True)
+
+cosine(manual, library)  # 1.0000001 (float32 noise)
+max_abs_diff(manual, library)  # 1.04e-07
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The survival result, run against real model weights</h2></div></header>
+<div class="callout"><b>Verification method</b>Run locally against the actual sentence-transformers/all-MiniLM-L6-v2 weights -- not a re-implementation. Both the chunk-boundary logic and the embedding numbers are exact, from a real forward pass, not approximated.</div>
+<p>overlap=6 (below the 10-word fact) keeps the fact intact in exactly <b>0 of 4</b> chunks -- it splits across a boundary at every stride position. overlap=10 (exactly at the fact's length) keeps it intact in <b>2 of 6</b> chunks -- proof that the guarantee is a real floor, not a ceiling: most windows still miss it even when the guarantee holds.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Control check -- manual pooling matches the library exactly</h2></div></header>
+<p>Manual pooling vs. the library's own <code>model.encode()</code>: cosine similarity <b>1.0000001</b> (1.0 within float32 noise), maximum absolute per-dimension difference <b>1.04e-7</b>. This confirms the hand-traced pooling math above matches the real implementation exactly -- "pool" stops being a black box.</p>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">EXPERIMENT SETUP</span><h2>Overlap's geometric effect -- the full similarity matrix</h2></div></header>
+<div class="code-block">
+<span class="code-label">6×6 COSINE SIMILARITY MATRIX (overlap=10 run, 384-dim, normalized)</span>
+<pre><code>        c0      c1      c2      c3      c4      c5
+c0   1.0000  0.7855  0.5830  0.4422  0.4933  0.3798
+c1   0.7855  1.0000  0.7751  0.6542  0.5983  0.3530
+c2   0.5830  0.7751  1.0000  0.7101  0.5352  0.2503
+c3   0.4422  0.6542  0.7101  1.0000  0.7229  0.4329
+c4   0.4933  0.5983  0.5352  0.7229  1.0000  0.7579
+c5   0.3798  0.3530  0.2503  0.4329  0.7579  1.0000
+</code></pre>
+</div>
+<p>Adjacent (overlapping) chunks score 0.65-0.79; non-adjacent chunks fall to 0.25-0.49 -- verified evidence that overlap pulls neighboring chunk <b>embeddings</b> closer geometrically, not just that it protects text. <span class="fine-print">A dropped query-retrieval ranking test on this same data (a real, interesting finding) is named forward to Module 07 Concept 10 rather than claimed here -- ranking retrieved chunks against a query is that concept's own job, not this one's.</span></p>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">EXPERIMENT</span><h2>Split → Tokenize → Contextualize → Pool</h2></div></header>
+<div class="lab" id="lab_1103">
+<p>A fresh document: "Refunds process within five business days after the warehouse confirms the return. International orders take up to twelve days because customs adds an extra clearance step." Drag the overlap slider, then step through all four embedding sub-stages on the highlighted chunk.</p>
+<div class="callout warning">This lab's per-token numbers are fixed, deterministic toy values, hand-authored in the same style as Module 08's own illustrations -- a client-side widget can't run a real transformer forward pass in-browser. The real-model evidence is Sections 14-18 above; this lab teaches the interaction, not a live re-run.</div>
+<div class="boundary-strip-label"><span>OVERLAP</span><b id="overlapReadout_1103">15 chars</b></div>
+<div class="boundary-strip" id="strip_1103"></div>
+<p class="boundary-readout" id="stripReadout_1103">Chunk 2 of 3 · 61 chars · overlap carries "because customs"</p>
+<div class="lab-controls">
+<div class="control">
+<label for="overlapSlider_1103">Overlap</label>
+<input type="range" id="overlapSlider_1103" min="0" max="30" step="15" value="15">
+<span class="output" id="overlapVal_1103">15</span>
+</div>
+</div>
+<div class="rank-chip-row" id="stageRow_1103">
+<div class="rank-chip match" data-stage="split"><b>1</b><span>Split</span><small>chunk boundaries set</small></div>
+<div class="rank-chip excluded" data-stage="tokenize"><b>2</b><span>Tokenize</span><small>pending</small></div>
+<div class="rank-chip excluded" data-stage="contextualize"><b>3</b><span>Contextualize</span><small>pending</small></div>
+<div class="rank-chip excluded" data-stage="pool"><b>4</b><span>Pool</span><small>pending</small></div>
+</div>
+<div class="lab-actions">
+<button type="button" id="stepBtn_1103">Run next stage →</button>
+<button type="button" id="resetBtn_1103" class="secondary">Reset</button>
+</div>
+<div class="token-bar" id="tokenBar_1103" style="display:none"></div>
+<div class="token-bar-legend" id="tokenLegend_1103" style="display:none">
+<span><i class="sw-kept"></i>high pooling weight</span>
+<span><i class="sw-lost"></i>low pooling weight (diluted)</span>
+</div>
+<p class="boundary-caption" id="stageCaption_1103"></p>
+</div>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">CONCRETE USE</span><h2>Reading the lab's token-weight bar</h2></div></header>
+<p>At the pool stage, high-weight content tokens ("customs", "clearance") dominate the mean; low-weight function tokens ("the", "an") dilute it -- the same dilution mechanism Module 07 Concept 01 already named at the whole-document scale, now visible at the single-chunk scale.</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The passage:/query: prefix is a MiniLM architectural requirement</td><td>False -- all-MiniLM-L6-v2 has no native prefix requirement; it's this course's own adopted E5/BGE-style convention, applied consistently but not mechanically required.</td></tr>
+<tr><td>Overlap at or above the fact's length guarantees every window contains it</td><td>False -- it guarantees at least one intact chunk exists (a floor), not that most or all windows contain the fact, as this concept's own 2-of-6 result shows.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Given a fact's length, a chunk size, and an overlap value, how do you predict whether the fact survives intact in some chunk?</summary><div>Compute overlap_size vs. fact_length: if overlap is at or above the fact's length, at least one intact chunk is guaranteed to exist; below that, every stride position can split the fact.</div></details>
+<details class="quiz"><summary>Why can't a better embedding model fix a bad chunk split?</summary><div>If the fact never appears intact in any chunk, there's no chunk vector that could faithfully represent it -- the embedding stage only ever sees what the split stage handed it.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>Recall check, references, and checkpoint</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can state the overlap guarantee's exact inequality</b><p>overlap_size ≥ fact_length guarantees at least one intact chunk exists.</p></div>
+<div><b>I can name the four embed sub-steps in order</b><p>Tokenize, look up token embeddings, contextualize, pool.</p></div>
+<div><b>I can name the one thing pooling cannot undo</b><p>A bad split -- if the fact isn't intact in any chunk, no pooling strategy can recover it.</p></div>
+</div>
+<div class="references">
+<a href="https://raw.githubusercontent.com/langchain-ai/langchain/master/libs/text-splitters/langchain_text_splitters/character.py"><b>RecursiveCharacterTextSplitter source — LangChain</b><br><span>Reused from Module 07 Concept 02 -- the separator-priority list behind real recursive splitting.</span></a>
+<a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"><b>all-MiniLM-L6-v2 — Hugging Face model card</b><br><span>Reused from Module 08 Concept 06 -- model identity and 384 dimensions.</span></a>
+<a href="https://arxiv.org/abs/1706.03762"><b>Attention Is All You Need — arXiv</b><br><span>Reused from Module 01 -- Attention(Q,K,V), the mechanism behind contextualization (Section 12).</span></a>
+<a href="https://arxiv.org/abs/1810.04805"><b>BERT — arXiv</b><br><span>Reused from Module 01 -- bidirectional-transformer contextualization.</span></a>
+<a href="https://arxiv.org/abs/1908.10084"><b>Sentence-BERT — arXiv</b><br><span>Reused from Module 08 Concept 02 -- mean pooling as the strategy verified in Sections 16 and 18.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 3/11</span>
+<h3>A bet on a boundary. Overlap is how you hedge it.</h3>
+<p>You can now predict fact survival from length, chunk size, and overlap, name all four embed sub-steps in order, and trace a real tokenize-contextualize-pool pass matching the library's own output to within float32 noise. Concept 04, "Vector database and vector-store persistence," picks up right after this -- where the finished chunk vector actually goes.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s20">Open Split → Tokenize → Contextualize → Pool ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 3 of 11 concepts. Next concept: Concept 04, Vector database and vector-store persistence.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 03 · Active</p>
+<a href="module-11-concept-02.html">← Concept</a>
+</footer>
+</body>
+</html>

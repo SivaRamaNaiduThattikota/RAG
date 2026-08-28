@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept 01 named the offline path's four stages without building any of them. This concept builds the first two: a document ingestion and index construction workflow that turns a raw file into query-ready rows. A SHA-256 hash decides new/unchanged/new-version before any other work runs; the course's own POLICY-REFUND-001 v2 document is chunked, embedded with all-MiniLM-L6-v2's document-side passage: prefix, written into the five-table schema under one commit, and the vector index is rebuilt or refreshed as a separate, later step. Two open points are flagged rather than glossed over: HNSW's own DML-staleness behavior has no confirmed source (unlike IVF's), and this worked example is deliberately a single-chunk case. The Ingestion Run lab steps through all six stages live.">
+<title>Document ingestion and index construction workflow — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-02.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 02 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 02</p>
+<h1>An assembly line, not a button.<br><em>Fixed stations, in a fixed order.</em></h1>
+<p class="lesson-lead">Concept 01 named the offline path -- ingest, chunk, embed, store -- without building any of it. This concept builds the first two of those stages out concretely, plus the index-construction step that follows them: a real ingestion workflow that decides whether a document is new, unchanged, or a new version, then chunks it, embeds it, writes it, and rebuilds the vector index so it's actually reachable by a query.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>Second concept of Module 11 (2/11) -- builds the offline path's ingestion and index-construction stages concretely</b></div>
+<div><span>PREREQUISITE</span><b>Concept 01's six-stage trace; Module 06 (hashing/versioning), Module 07 (chunking), Module 08 (embeddings), Module 09 Concept 08 (tombstones), Module 10 Concepts 03/05/06/08/09 (schema, indexes, python-oracledb, delete ordering) -- all cited, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Name the six ingestion stages in order and explain why change detection runs before anything else</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">From "a file exists" to "a query can find it"</h2>
+</div>
+<p>Concept 01 traced a question through the whole pipeline at a glance. This concept builds out the part that runs before any question ever arrives: turning one raw document into query-ready rows and an up-to-date index.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>An assembly line, not a single "index everything" button</h3>
+<p>Ingestion is not one operation -- it's six fixed stations a document passes through in order: hash check, chunk, embed, write, build index, query-ready. Every station reuses a mechanism Modules 06-10 already built; this concept's own job is the order and the handoffs between them.</p>
+<div class="beginner-memory"><b>First memory:</b> nothing here is a new mechanism -- it's the same six stations Modules 06-10 already built, run in a fixed sequence for the first time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Without a workflow, ingestion is an ad-hoc script re-run by hand</h3>
+<p>Without a defined workflow, chunking, embedding, writing, and indexing would be separate scripts re-run manually every time a document changes, with no consistent rule for whether a document is new, unchanged, or an update to something that already exists. Getting that rule wrong either wastes work re-ingesting unchanged files, or silently skips a real update.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One real document, six stages, one real hash</h3>
+<p>Take <code>POLICY-REFUND-001</code> v2, this course's own running document since Module 06 Concept 07: "Refund requests must be submitted within 45 days of purchase." Its SHA-256 hash, <code>2be6d94f...071dd9d</code>, is computed and compared against the stored hash for that same <code>doc_id</code> -- a mismatch means treat this as a new version, not an unchanged document and not a brand-new document.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Six stages, each already covered by name</h3>
+<p><b>Hash check</b> (Module 06) decides new / unchanged / new-version before any other work runs. <b>Chunk</b> (Module 07) splits the document, sizing overlap so no single fact spans a chunk boundary. <b>Embed</b> (Module 08) runs each chunk through all-MiniLM-L6-v2 with the document-side <code>passage:</code> prefix -- embedded once, offline, unlike a query which is embedded live per request. <b>Write</b> (Module 10) inserts the new rows into the five-table schema as one committed batch, never row by row. <b>Build index</b> (Module 10) rebuilds or refreshes the vector index only after the write commits -- never as part of each row insert. <b>Query-ready</b> is the state the document is in once all five prior stages finish.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Concept 01 — named all six online/offline stages</span><i>→</i>
+<span class="hot">THIS concept — builds the offline path's first five stages concretely</span><i>→</i>
+<span>Concepts 05-06 — the online path's own retrieval build-out</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Ingestion is batch. Retrieval is live.</h3>
+<p>Ingestion runs once per document, offline, well before any question arrives -- it can afford to be slower and heavier, since nobody is waiting on it in real time. Retrieval (Concepts 05-06) runs once per incoming question, live, and has to be fast. Confusing the two -- for instance, embedding a query with the same batch-oriented assumptions as a document -- is exactly what Module 08's bi-encoder asymmetry (query-side vs. document-side prefixes) exists to prevent.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"Skip the hash check -- just always re-ingest."</b><p>Wasteful and risky: re-ingesting an unchanged document duplicates work for nothing, and doing it carelessly can create duplicate rows if the version logic isn't handled correctly.</p></div>
+<div><b>"Build the index before the write commits."</b><p>Backwards -- Module 10's own transaction rule (no autocommit by default) means the index should only be built or refreshed once the new rows are durably committed, not while the write is still in flight.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Where this lands in a real ingestion job</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>The batch job that runs whenever documents change</b><p>Hash check, chunk, embed, write, build index -- in that fixed order, every time.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 2/11</b><p>Concept 03, document chunking and embedding flow, goes deeper into stages 2-3 specifically.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name all six ingestion stages, in order</b><p>Hash check, chunk, embed, write, build index, query-ready.</p></div>
+<div><b>Explain why the hash check runs first</b><p>It decides whether any of the other five stages should run at all -- unchanged documents skip re-ingestion entirely.</p></div>
+<div><b>State why index building happens after the write commits, not during it</b><p>Building against uncommitted rows risks indexing data that could still be rolled back.</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Walk through what happens to <code>POLICY-REFUND-001</code> v2 at each of the six stages.</li>
+<li>Why does the document-side embedding use a different prefix convention than a live query would?</li>
+<li>What could go wrong if the vector index were rebuilt before the new rows' write transaction committed?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 2 OF 11</h3>
+<p>This concept built the ingestion workflow's first five stages concretely, tracing a real document through a real hash check, chunking, embedding, a committed write, and an index rebuild. Concept 03, "Document chunking and embedding flow," goes deeper into stages 2 and 3 specifically.</p>
+<div class="beginner-memory"><b>Concept 02 is active.</b> Module 11 stands at 2 of 11 concepts.</div>
+<a class="button primary" href="module-11-concept-01.html">← Back to Concept 01's six-stage trace</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">An assembly line, not a button</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s16"><span>01</span><b>POLICY-REFUND-001 v2, traced</b><small>A real hash, a real dimension, a real schema write.</small></a>
+<a href="#s14"><span>02</span><b>The one open question</b><small>HNSW's own DML-staleness behavior has no confirmed source.</small></a>
+<a href="#s21"><span>03</span><b>The Ingestion Run</b><small>The lab -- step a document through all six stages live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, code, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 02 path:</b> a hash check decides new/unchanged/new-version before anything else runs → the document is chunked and embedded with the document-side prefix → the new rows commit as one batch into the five-table schema → the vector index is rebuilt or refreshed only after that commit → the lab lets you step a document through all six stages yourself → Concept 03 goes deeper into chunking and embedding specifically.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "Document ingestion and index construction workflow" deep dive</b><em>Full citations, the schema/index code, and The Ingestion Run lab</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> Hash/version check</a>
+<a href="#s09"><i>09</i> Chunking recap</a>
+<a href="#s10"><i>10</i> Overlap sizing</a>
+<a href="#s11"><i>11</i> Embedding pass</a>
+<a href="#s12"><i>12</i> Schema write</a>
+<a href="#s13"><i>13</i> Delete-ordering</a>
+<a href="#s14"><i>14</i> Index construction</a>
+<a href="#s15"><i>15</i> Query-ready state</a>
+<a href="#s16"><i>16</i> Worked example</a>
+<a href="#s17"><i>17</i> Worked-example caveat</a>
+<a href="#s18"><i>18</i> Misconceptions</a>
+<a href="#s19"><i>19</i> Interview</a>
+<a href="#s20"><i>20</i> Production</a>
+<a href="#s21"><i>21</i> Lab</a>
+<a href="#s22"><i>22</i> Lab reflection</a>
+<a href="#s23"><i>23</i> Check</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Building the offline path's own first five stages</h2></div></header>
+<p>This is the second concept of Module 11 (2/11). Concept 01 named all six stages a RAG system runs through, online and offline, without building any of them. This concept builds out the offline path's own ingestion and index-construction stages concretely -- what happens whenever a document is added or changed, before any question ever arrives. Live query-time retrieval is explicitly out of scope here, covered starting Concept 05.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>ORDER</span><h3>All six ingestion stages, in fixed sequence</h3><p>Hash check, chunk, embed, write, build index, query-ready.</p></article>
+<article class="info-card"><span>EXPLAIN</span><h3>Why change detection runs first</h3><p>It decides whether the other five stages should run at all.</p></article>
+<article class="info-card"><span>TRACE</span><h3>A real document through every stage</h3><p><code>POLICY-REFUND-001</code> v2, with a real recomputed hash and dimension.</p></article>
+<article class="info-card"><span>FLAG</span><h3>What's genuinely still open</h3><p>HNSW's own DML-staleness behavior, unlike IVF's, has no confirmed source.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b>Module 06 Concepts 07 and 09</b> -- document versioning, hashing, and the incremental-ingestion trigger/scope framing, reused directly for stage 1.</li>
+<li><b>Module 07 Concepts 02, 05, and 06</b> -- fixed-size vs. recursive chunking, chunk-size trade-offs, and overlap sizing, reused for stage 2.</li>
+<li><b>Module 08 Concepts 02, 03, 06, and 08</b> -- the tokenize/embed/contextualize/pool pipeline, bi-encoder asymmetry, all-MiniLM-L6-v2 at 384 dimensions, and document-side prefixing, reused for stage 3.</li>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> and <b><a href="module-10-concept-08.html">Module 10 Concept 08</a></b> -- the five-table schema and the python-oracledb bind/transaction pattern, reused for stage 4.</li>
+<li><b>Module 09 Concept 08</b> and <b><a href="module-10-concept-09.html">Module 10 Concept 09</a></b> -- tombstones versus hard-delete ordering, reused for handling superseded versions.</li>
+<li><b><a href="module-10-concept-05.html">Module 10 Concept 05</a></b> and <b><a href="module-10-concept-06.html">Module 10 Concept 06</a></b> -- HNSW/IVF index-construction syntax, reused for stage 5.</li>
+<li><b>Explicitly out of scope:</b> live query-time retrieval -- named forward to Concepts 05-06, not built here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>An assembly line, not a single button</h2></div></header>
+<p>Ingestion works like a factory assembly line, not a single "index everything" button: a part (the document) moves through fixed stations in a fixed order -- inspect, cut, coat, bolt on, inspect again -- and skipping a station or running them out of order produces a broken part, not a faster one.</p>
+<div class="callout warning"><b>Analogy boundary</b>The assembly-line picture explains the fixed ordering, not the actual mechanism at each station -- that comes from Section 06's own traced example, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Stage</th><th>What it decides or produces</th><th>Owning module</th></tr></thead>
+<tbody>
+<tr><td>Hash check</td><td>New / unchanged / new-version, via SHA-256 vs. stored <code>doc_id</code> hash</td><td>Module 06</td></tr>
+<tr><td>Chunk</td><td>Stable retrievable units, overlap sized to fact length</td><td>Module 07</td></tr>
+<tr><td>Embed</td><td>A 384-dim normalized vector per chunk, document-side prefix</td><td>Module 08</td></tr>
+<tr><td>Write</td><td>New rows committed as one batch into the five-table schema</td><td>Module 10</td></tr>
+<tr><td>Build index</td><td>The vector index rebuilt or refreshed over the new rows</td><td>Module 10</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Six stages, traced on one real document</h2></div></header>
+<p><code>POLICY-REFUND-001</code> v2: "Refund requests must be submitted within 45 days of purchase." (61 characters, 10 words).</p>
+<ol>
+<li><b>Hash check</b> -- SHA-256 of the incoming text, <code>2be6d94f38532cc9a4070b0edf7882b25f0d3fa73d7473cbf3d9858c3071dd9d</code>, compared against the stored hash for <code>doc_id=POLICY-REFUND-001</code> (the v1/45-day-vs-30-day text's own hash). A mismatch means proceed as a new version.</li>
+<li><b>Chunk</b> -- at this course's own cited chunk-size range (roughly 200-500 tokens), a 10-word sentence fits trivially inside one chunk -- no recursive split, no overlap logic triggered.</li>
+<li><b>Embed</b> -- the single chunk is embedded once, offline, using the document-side <code>passage:</code>-style prefix, producing a 384-dimensional vector via all-MiniLM-L6-v2.</li>
+<li><b>Write</b> -- a new row lands in <code>document_versions</code> (v2, current), one row in <code>chunks</code>, one row in <code>embeddings</code> with the vector bound via <code>array.array("f", embedding)</code>; the FK chain <code>documents → document_versions → chunks → embeddings</code> stays intact. Superseded v1 rows are either tombstoned (Module 09 Concept 08) or hard-deleted in child-first order (Module 10 Concept 09) -- both are valid paths, not a single canonical choice.</li>
+<li><b>Build index</b> -- once the write commits, the existing HNSW or IVF index either absorbs the new row automatically or is explicitly rebuilt/refreshed, per Module 10 Concepts 05-06's own syntax.</li>
+</ol>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>One document, five active stations, one waiting state</h2></div></header>
+<div class="diagram-hub">
+<div class="diagram-node hub-center"><b>POLICY-REFUND-001 v2</b><small>the document moving through</small></div>
+<div class="diagram-node"><b>Hash check</b><small>new version detected</small></div>
+<div class="diagram-node"><b>Chunk + Embed</b><small>one chunk, 384-dim</small></div>
+<div class="diagram-node"><b>Write + Build index</b><small>commit, then reindex</small></div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">TECHNICAL MECHANISM</span><h2>Change detection, in detail</h2></div></header>
+<div class="distinction-table" role="table" aria-label="Hash-check outcomes">
+<div role="row"><b role="cell">Comparison result</b><b role="cell">What happens next</b></div>
+<div role="row"><span role="cell">Hash matches stored hash</span><span role="cell">Document is unchanged -- skip re-ingestion entirely, no further stages run.</span></div>
+<div role="row"><span role="cell">Hash differs, doc_id already exists</span><span role="cell">Treat as a new version -- proceed through chunk/embed/write, mark the old version superseded.</span></div>
+<div role="row"><span role="cell">doc_id has never been seen</span><span role="cell">Treat as a brand-new document -- proceed through every stage from scratch.</span></div>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">TECHNICAL MECHANISM</span><h2>Chunking, recapped</h2></div></header>
+<p>Fixed-size and recursive chunking (Module 07 Concept 02) and the chunk-size precision/context trade-off (Concept 05) apply here unchanged -- ingestion doesn't introduce a new chunking rule, it's the point where whichever rule the project already chose actually runs against real incoming text.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">TECHNICAL MECHANISM</span><h2>Overlap sizing</h2></div></header>
+<p>Overlap (Module 07 Concept 06) is sized so no single fact spans a chunk boundary undetected -- relevant during ingestion whenever a real document is long enough to require more than one chunk, unlike this concept's own deliberately short worked example.</p>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">MECHANISM</span><h2>The embedding pass, in detail</h2></div></header>
+<p>Each chunk runs through the real forward pass confirmed in Module 08 Concept 02: tokenize → embed → contextualize → pool, using the document-side prefix convention (Module 08 Concepts 03 and 08) rather than the query-side one -- because ingestion embeds text once, in a batch, ahead of any question, while a live query embeds text once, per request, in real time. That asymmetry is the literal reason this stage is called "ingestion."</p>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The schema write, reproduced directly</h2></div></header>
+<div class="code-block">
+<span class="code-label">PYTHON · WRITE ONE COMMITTED BATCH (python-oracledb, Module 10 Concept 08's own pattern)</span>
+<pre><code>cursor.execute(
+    "insert into chunks (chunk_id, doc_version_id, text) values (:1, :2, :3)",
+    [chunk_id, doc_version_id, chunk_text]
+)
+cursor.execute(
+    "insert into embeddings (chunk_id, embedding) values (:1, :2)",
+    [chunk_id, array.array("f", embedding)]
+)
+connection.commit()  # nothing durable until this line runs
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">DIAGNOSIS</span><h2>Superseded versions -- two valid paths</h2></div></header>
+<div class="callout"><b>Tombstone vs. hard delete</b>Superseded v1 rows can either be tombstoned and cleaned up asynchronously (Module 09 Concept 08's own mechanic), or hard-deleted in the child-table-first order Module 10 Concept 09 requires (embeddings and chunks before documents, or Oracle raises <code>ORA-02292</code>). Which path a project takes depends on its own re-ingestion strategy -- this concept presents both as valid, not one as canonical.</div>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">TECHNICAL MECHANISM</span><h2>Index construction, and the one open question</h2></div></header>
+<div class="code-block">
+<span class="code-label">SQL · HNSW REBUILD (Module 10 Concept 05's own syntax)</span>
+<pre><code>CREATE VECTOR INDEX embeddings_hnsw_idx ON embeddings (embedding)
+  ORGANIZATION INMEMORY NEIGHBOR GRAPH
+  DISTANCE COSINE
+  WITH TARGET ACCURACY 95;
+</code></pre>
+</div>
+<div class="callout warning"><b>Open, unverified point -- carried forward, not resolved</b>Oracle's own documentation states that IVF index accuracy "may diminish over time due to DML operations" and names <code>DBMS_VECTOR.INDEX_ACCURACY_QUERY</code>/<code>REBUILD_INDEX</code> as the remediation (Module 10 Concept 09). No equivalent staleness statement was found for HNSW in this course's own cited references. This concept states that gap explicitly rather than assuming HNSW behaves the same way as IVF.</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">DIAGNOSIS</span><h2>What "query-ready" actually means</h2></div></header>
+<p>A document is query-ready once all five prior stages finish: its rows exist in the five-table schema, and the vector index has actually incorporated them -- present-in-the-table alone is not sufficient if the index hasn't caught up. Live query-time retrieval against a query-ready document is Concepts 05-06's own territory, not built here.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full trace, restated as one continuous pass</h2></div></header>
+<table class="worked-table">
+<thead><tr><th>Stage</th><th>Result for POLICY-REFUND-001 v2</th></tr></thead>
+<tbody>
+<tr><td>Hash check</td><td>2be6d94f...071dd9d, mismatch vs. stored v1 hash → new version</td></tr>
+<tr><td>Chunk</td><td>1 chunk, 61 characters, 10 words -- no split, no overlap triggered</td></tr>
+<tr><td>Embed</td><td>384-dim vector, all-MiniLM-L6-v2, document-side prefix</td></tr>
+<tr><td>Write</td><td>1 row in document_versions, 1 in chunks, 1 in embeddings -- one commit</td></tr>
+<tr><td>Build index</td><td>HNSW index refreshed over the new embedding row</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Verification method</b>The SHA-256 hash was independently recomputed via Node's crypto module, not copied from memory, and matches the hash already cited in module-06-concept-07.html exactly. The 384-dimension and schema facts were grepped directly against module-08-concept-06.html and module-10-concept-03.html/module-10-concept-08.html, not assumed.</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">DIAGNOSIS</span><h2>A deliberately trivial worked example</h2></div></header>
+<p>This worked example is a single 61-character sentence that fits inside one chunk with no recursive split and no overlap logic triggered -- deliberately small so the trace stays hand-verifiable in one pass. Most real documents split into many chunks first, each independently embedded and written; this example's single-chunk shape is not typical, and this concept says so explicitly rather than implying otherwise.</p>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>Ingestion and indexing are the same step</td><td>False -- ingestion (hash/chunk/embed/write) produces rows; index construction is a separate, later step that makes those rows actually reachable by search.</td></tr>
+<tr><td>The hash check is optional overhead</td><td>False -- skipping it means every ingestion run redoes chunking/embedding/writing for documents that never changed, and risks duplicate rows if version logic isn't otherwise handled.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: why is ingestion considered a batch job rather than a live operation?</summary><div>It runs once per document, offline, well before any question arrives -- nobody is waiting on it in real time, so it can afford heavier processing than the live retrieval path can.</div></details>
+<details class="quiz"><summary>Conceptual: what specifically triggers re-ingestion of an already-seen document?</summary><div>A SHA-256 hash mismatch against the stored hash for that document's doc_id -- an unchanged hash means skip re-ingestion entirely.</div></details>
+<details class="quiz"><summary>System design: why build or refresh the vector index after the write commits, rather than during it?</summary><div>Indexing rows that are still inside an uncommitted transaction risks indexing data that could be rolled back -- the index should only reflect durably committed state.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Hash-based change detection scales to large document sets far better than manual tracking -- it's the same mechanism regardless of how many documents are ingested per run.</li>
+<li>Whether superseded rows are tombstoned or hard-deleted is a real operational choice with different cleanup costs, not a detail to decide arbitrarily per document.</li>
+<li>HNSW's own DML-staleness behavior remaining unconfirmed (Section 14) is a real production risk to monitor directly rather than assume away, until Oracle's own documentation states otherwise.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">EXPERIMENT</span><h2>The Ingestion Run</h2></div></header>
+<div class="lab" id="ingestLab_1102">
+<p>Step <code>POLICY-REFUND-001</code> v2 through all six ingestion stages, one at a time.</p>
+<div class="rank-chip-row" id="ingestChips_1102">
+<div class="rank-chip match" data-stage="0"><b>1</b><span>Hash check</span><small>SHA-256 vs doc_id row</small></div>
+<div class="rank-chip excluded" data-stage="1"><b>2</b><span>Chunk</span><small>recursive split + overlap</small></div>
+<div class="rank-chip excluded" data-stage="2"><b>3</b><span>Embed</span><small>passage: prefix, 384-dim</small></div>
+<div class="rank-chip excluded" data-stage="3"><b>4</b><span>Write rows</span><small>chunks → embeddings</small></div>
+<div class="rank-chip excluded" data-stage="4"><b>5</b><span>Build index</span><small>CREATE VECTOR INDEX</small></div>
+<div class="rank-chip excluded" data-stage="5"><b>6</b><span>Query-ready</span><small>doc is searchable</small></div>
+</div>
+<p class="fine-print" id="ingestNarration_1102">Stage 1 of 6 — the workflow computes a SHA-256 hash of the incoming file and compares it to the stored doc_id row. New hash → proceed; unchanged hash → skip re-ingestion entirely.</p>
+<div class="lab-actions">
+<button type="button" id="ingestNextBtn_1102">Run next stage →</button>
+<button class="secondary" type="button" id="ingestResetBtn_1102">Reset</button>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">TRANSFER</span><h2>Lab reflection</h2></div></header>
+<p>For each of the six stages in the lab above, name the module that already covers its mechanism, and identify which single stage would break the whole pipeline if it were silently skipped.</p>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="readiness-grid">
+<div><b>I can name all six ingestion stages in order</b><p>Hash check, chunk, embed, write, build index, query-ready.</p></div>
+<div><b>I know why the hash check runs first</b><p>It decides whether the other five stages run at all.</p></div>
+<div><b>I can name the one genuinely open question in this concept</b><p>Whether HNSW suffers the same DML-staleness IVF is documented to have -- no confirmed source either way.</p></div>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/hierarchical-navigable-small-world-index-syntax-and-parameters.html"><b>HNSW Index Syntax and Parameters — Oracle Documentation</b><br><span>Reused from Module 10 Concept 05 -- the CREATE VECTOR INDEX HNSW syntax used in Section 14.</span></a>
+<a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html"><b>Guidelines for Using Vector Indexes — Oracle Documentation</b><br><span>Reused from Module 10 Concept 09 -- source of IVF's own documented DML-staleness/REBUILD_INDEX remediation, and the reason HNSW's own behavior is flagged unconfirmed rather than assumed symmetric.</span></a>
+<a href="https://python-oracledb.readthedocs.io/en/latest/user_guide/txn_management.html"><b>Transaction Management — python-oracledb documentation</b><br><span>Reused from Module 10 Concept 08 -- the no-autocommit-by-default rule behind Section 12's commit() call.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 2/11</span>
+<h3>An assembly line, not a button. Fixed stations, in a fixed order.</h3>
+<p>You can now name all six ingestion stages in order, explain why change detection runs first, and trace a real document through a real hash check, chunking, embedding, a committed write, and an index rebuild. One point stays genuinely open: HNSW's own DML-staleness behavior has no confirmed source in this course's own citations. Concept 03, "Document chunking and embedding flow," goes deeper into stages 2 and 3 next.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s21">Open The Ingestion Run ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 2 of 11 concepts. Next concept: Concept 03, Document chunking and embedding flow.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 02 · Complete</p>
+<a href="module-11-concept-01.html">← Concept</a>
+</footer>
+</body>
+</html>

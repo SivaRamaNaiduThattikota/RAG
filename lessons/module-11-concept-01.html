@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Modules 06-10 each taught one stage of a RAG system in isolation -- ingestion, chunking, embeddings, vector-search mechanics, and the database/storage boundary. Module 11's opening concept assembles them into one traceable path: a single question about doc_9f21's own grace-period chunk is ingested, chunked, embedded with all-MiniLM-L6-v2 at 384 dimensions, persisted through Module 10's own upsert/query/delete interface, retrieved, and handed to generation. The lab, Trace one query through the pipeline, steps through all six stages live.">
+<title>End-to-end basic RAG pipeline and architecture — RAG Atlas</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../roadmap.css">
+<link rel="stylesheet" href="lesson.css">
+<script defer src="../shell.js"></script>
+<script defer src="lesson-11-01.js"></script>
+</head>
+<body class="course-shell lesson-page">
+<a class="skip-link" href="#lesson">Skip to lesson</a>
+<header class="topbar solid-bar lesson-topbar">
+<a class="brand" href="../index.html"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></a>
+<nav aria-label="Primary">
+<a href="../index.html">Home</a>
+<a href="../roadmap.html">Roadmap</a>
+<a href="../concept-structure.html">Lesson anatomy</a>
+<a href="../projects.html">Projects</a>
+</nav>
+<div class="top-actions">
+<span class="status-chip complete-chip"><i></i> Concept 01 complete</span>
+<button id="themeToggle" class="icon-button theme-toggle" aria-label="Toggle color theme">◐</button>
+</div>
+</header>
+<main id="lesson">
+<section class="lesson-hero">
+<div>
+<p class="lesson-crumb">MODULE 11 · CONCEPT 01</p>
+<h1>Five isolated toolkits.<br><em>One traceable path for a single query.</em></h1>
+<p class="lesson-lead">Modules 06 through 10 each taught one stage of a RAG system on its own -- ingestion, chunking, embeddings, vector-search mechanics, and the database's own boundary. None of them ever showed how a real question actually moves through all of them together. This concept does exactly that: one question about a document this course has already built, traced end to end through ingest, chunk, embed, store, retrieve, and generate -- reusing facts you already have, connecting them for the first time.</p>
+</div>
+<div class="lesson-meta">
+<div><span>POSITION</span><b>First concept of Module 11 (1/11) -- opens the module, assembles Modules 06-10 into one traceable pipeline</b></div>
+<div><span>PREREQUISITE</span><b>Modules 06-10 (ingestion, chunking, embeddings, vector-search mechanics, storage/database boundary) -- all cited, none re-derived</b></div>
+<div><span>BEGINNER GOAL</span><b>Name and order the six online-pipeline stages; state which module already covers each one</b></div>
+<div><span>ADVANCED MATERIAL</span><b>24 sections · optional</b></div>
+</div>
+</section>
+<section class="beginner-path progressive-core" id="beginner-core" aria-labelledby="beginner-title">
+<header class="beginner-heading">
+<div>
+<p class="lesson-crumb">PROGRESSIVE BEGINNER CORE</p>
+<h2 id="beginner-title">Six stages, taught apart. One path, shown together.</h2>
+</div>
+<p>Modules 06-10 each built one stage abstractly and separately, with no product or pipeline attached. This concept names this concept's own job plainly: show them as one connected path a single query actually travels, not teach any of them again.</p>
+</header>
+<div class="beginner-layout">
+<aside class="beginner-toc" aria-label="Beginner lesson sections">
+<span>BEGINNER LESSON · 10 STEPS</span>
+<a href="#b01"><i>01</i> Concept first</a>
+<a href="#b02"><i>02</i> Why it exists</a>
+<a href="#b03"><i>03</i> Concrete example</a>
+<a href="#b04"><i>04</i> Technical mechanism</a>
+<a href="#b05"><i>05</i> Architecture / flow</a>
+<a href="#b06"><i>06</i> Important distinctions</a>
+<a href="#b07"><i>07</i> Common mistakes</a>
+<a href="#b08"><i>08</i> Project mapping</a>
+<a href="#b09"><i>09</i> Readiness check</a>
+<a href="#b10"><i>10</i> Next lesson</a>
+</aside>
+<div class="beginner-content">
+<article class="core-block core-definition" id="b01">
+<span class="core-step">01 · CONCEPT FIRST</span>
+<h3>Six pieces, taught alone -- shown as one path for the first time</h3>
+<div class="mental-compare">
+<div><span>TAUGHT SEPARATELY (MODULES 06-10)</span><p>Ingestion, chunking, embeddings, vector-search mechanics, and the database's own persistence/consistency/query boundary -- five toolkits, each covered on its own.</p></div>
+<div><span>THIS CONCEPT'S JOB</span><p>Trace one real question through all six stages -- ingest, chunk, embed, store, retrieve, generate -- as a single connected path, using only facts already established.</p></div>
+</div>
+<div class="beginner-memory"><b>First memory:</b> nothing here is new material -- it's the same six stages Modules 06-10 already taught, shown running end to end for the first time.</div>
+</article>
+<article class="core-block" id="b02">
+<span class="core-step">02 · WHY IT EXISTS</span>
+<h3>Five isolated toolkits, no mental model connecting them</h3>
+<p>Modules 06-10 each taught one stage abstractly and separately, with no product or pipeline attached to any of them. That was the right teaching order, but it leaves a real gap: a learner who finishes Module 10 has five separate toolkits and no picture of how a real question actually gets answered end to end. This concept closes that gap before Module 11 goes on to build each stage out concretely.</p>
+</article>
+<article class="core-block" id="b03">
+<span class="core-step">03 · CONCRETE EXAMPLE</span>
+<h3>One question, traced through a document this course already built</h3>
+<p>Take the exact question "What is the grace period length for canceling an order?" against <code>doc_9f21</code>, the Order Management document this course has used as its running example since Module 10 Concept 03. The chunk that answers it is one already verified word-for-word in Module 07: "The order-cancellation grace period is 14 days from the ship date. Once it elapses, the order status locks to CLOSED and refunds stop processing automatically. Support agents must file a manual override." Nothing about this chunk, this document, or this question is new -- what's new is watching it move through every stage in order.</p>
+</article>
+<article class="core-block" id="b04">
+<span class="core-step">04 · TECHNICAL MECHANISM</span>
+<h3>Six stages, in order, each already covered by name</h3>
+<p><b>Ingest</b> -- <code>doc_9f21</code> is read and versioned (Module 06's own territory). <b>Chunk</b> -- the grace-period passage becomes one chunk with a stable <code>chunk_id</code> (Module 07). <b>Embed</b> -- that chunk is embedded with <b>all-MiniLM-L6-v2</b>, this course's own standing convention since Module 08 Concept 06, into a <b>384-dimensional</b> dense vector -- confirmed directly on the model's own card ("maps sentences &amp; paragraphs to a 384 dimensional dense vector space") and independently corroborated in this course's own byte-math table (Module 08 Concept 06: "384 dim (all-MiniLM-L6-v2) → 1.536 GB"). <b>Store</b> -- the vector, <code>chunk_id</code>, and <code>tenant_id</code> are persisted through Module 10 Concept 14's closing <code>upsert/query/delete</code> interface into the five-table schema <code>documents → document_versions → chunks → embeddings → citations</code>. <b>Retrieve</b> -- the incoming question is embedded the same way and <code>query()</code> runs nearest-neighbor search. <b>Generate</b> -- the retrieved chunk would be injected into a prompt and cited, named here but not built until Concepts 07-09.</p>
+</article>
+<article class="core-block" id="b05">
+<span class="core-step">05 · ARCHITECTURE / FLOW</span>
+<h3>Where this sits in the fixed skeleton</h3>
+<div class="scroll-flow">
+<span>Modules 06-10 — every stage, taught alone</span><i>→</i>
+<span class="hot">THIS concept — the same six stages, connected into one path</span><i>→</i>
+<span>Concepts 02-11 — each stage, built out concretely</span>
+</div>
+</article>
+<article class="core-block" id="b06">
+<span class="core-step">06 · IMPORTANT DISTINCTIONS</span>
+<h3>Online path vs. offline path -- both previewed, neither built here</h3>
+<p>The <b>online path</b> (traced above) runs once per incoming question, in real time: embed the question, retrieve, generate. The <b>offline path</b> (ingest → chunk → embed → store) runs once per document, ahead of time, well before any question arrives -- Concepts 02-04 build that path out in depth. This concept previews both but is itself neither in depth; it exists to show how they fit together, not to build either one.</p>
+</article>
+<article class="core-block" id="b07">
+<span class="core-step">07 · COMMON MISTAKES</span>
+<h3>What beginners often assume, and shouldn't</h3>
+<div class="mistake-list">
+<div><b>"The vector database is doing the RAG."</b><p>False -- Module 10 Concept 02 already drew this exact boundary: the database owns persistence, transactional consistency, and query execution only. Chunking, embedding, and generation all happen outside it, in the pipeline this concept traces.</p></div>
+<div><b>"Chunking and embedding are basically the same step."</b><p>False -- they're different modules for a reason. Chunking (Module 07) decides what text becomes one retrievable unit; embedding (Module 08) decides how that unit becomes a vector. Confusing the two hides where each kind of design decision actually lives.</p></div>
+</div>
+</article>
+<article class="core-block" id="b08">
+<span class="core-step">08 · YOUR PROJECT MAPPING</span>
+<h3>Mapping your own project's pipeline, stage by stage</h3>
+<div class="project-map">
+<div><span>WHERE THIS LIVES</span><b>Before building any one stage further</b><p>Naming which of the six stages already exists in your own project, and which still needs building, is the same exercise this concept walks through on <code>doc_9f21</code>.</p></div>
+<div><span>MODULE STATE</span><b>MODULE 11 · 1/11</b><p>Concept 02, document ingestion and index construction workflow, is next -- the offline path's own first stage, built out concretely.</p></div>
+</div>
+</article>
+<article class="core-block core-checkpoint" id="b09">
+<span class="core-step">09 · WHAT YOU SHOULD UNDERSTAND</span>
+<h3>Readiness check before moving on</h3>
+<div class="readiness-grid">
+<div><b>Name all six stages, in order</b><p>Ingest, chunk, embed, store, retrieve, generate.</p></div>
+<div><b>Match each stage to the module that already covers it</b><p>Ingest/chunk → Modules 06-07. Embed → Module 08. Store/retrieve mechanics → Modules 09-10.</p></div>
+<div><b>State the one governing boundary fact</b><p>The database owns persistence, transactional consistency, and query execution -- nothing else (Module 10 Concept 02).</p></div>
+</div>
+<h4>Teach-back questions</h4>
+<ol>
+<li>Walk through all six stages a query passes through, using <code>doc_9f21</code>'s own grace-period chunk as the example.</li>
+<li>Why doesn't the vector database's own boundary (Module 10 Concept 02) include chunking or embedding?</li>
+<li>Which stage does this concept name but not build, and which two concepts build it out?</li>
+</ol>
+</article>
+<article class="core-block next-preview" id="b10">
+<span class="core-step">10 · NEXT LESSON</span>
+<h3>MODULE 11 · 1 OF 11</h3>
+<p>This concept named all six stages a query passes through and showed which module already covers each one, without teaching any of them again. Concept 02, "Document ingestion and index construction workflow," is next: the offline path's own first stage, built out concretely for the first time.</p>
+<div class="beginner-memory"><b>Concept 01 is active.</b> Module 11 stands at 1 of 11 concepts.</div>
+<a class="button primary" href="module-10-concept-14.html">← Back to Module 10's own close</a>
+</article>
+</div>
+</div>
+</section>
+<section class="lesson-bridge" aria-labelledby="lesson-map-title">
+<header>
+<p class="lesson-crumb">LESSON MAP</p>
+<h2 id="lesson-map-title">Six stages, taught apart. One path, shown together.</h2>
+</header>
+<div class="bridge-steps">
+<a href="#s06"><span>01</span><b>The full six-stage trace</b><small>doc_9f21's grace-period chunk, ingested through generation.</small></a>
+<a href="#s07"><span>02</span><b>The chain diagram</b><small>Six boxes, left to right, one per stage.</small></a>
+<a href="#s14"><span>03</span><b>Trace one query through the pipeline</b><small>The lab -- step through all six stages live.</small></a>
+<a href="#advanced-lesson" class="optional"><span>04</span><b>Advanced · optional</b><small>Full citations, pseudocode skeleton, and the lab.</small></a>
+</div>
+<div class="bridge-rule"><b>Concept 01 path:</b> Modules 06-10 each taught one stage with no product attached → this concept connects all six into one traceable path → the same question, "What is the grace period length for canceling an order?", moves through ingest, chunk, embed, store, retrieve, generate → the lab lets you step through every stage yourself → Concept 02 begins the offline path's own build-out next.</div>
+</section>
+<details class="advanced-lesson" id="advanced-lesson">
+<summary>
+<span><small>OPTIONAL · 24 SECTIONS</small><b>Open the "End-to-end basic RAG pipeline and architecture" deep dive</b><em>Full citations, the pseudocode skeleton, and Trace one query through the pipeline</em></span>
+<i aria-hidden="true"></i>
+</summary>
+<div class="lesson-layout">
+<aside class="lesson-toc" aria-label="Advanced lesson sections">
+<span>ADVANCED MAP · 24 SECTIONS</span>
+<a href="#s01"><i>01</i> Position</a>
+<a href="#s02"><i>02</i> Objectives</a>
+<a href="#s03"><i>03</i> Prerequisites</a>
+<a href="#s04"><i>04</i> Intuition</a>
+<a href="#s05"><i>05</i> Definitions</a>
+<a href="#s06"><i>06</i> Mechanism</a>
+<a href="#s07"><i>07</i> Visual flow</a>
+<a href="#s08"><i>08</i> RAG skeleton</a>
+<a href="#s09"><i>09</i> Mathematics</a>
+<a href="#s10"><i>10</i> Worked example</a>
+<a href="#s11"><i>11</i> Examples</a>
+<a href="#s12"><i>12</i> Code</a>
+<a href="#s13"><i>13</i> Ecosystem</a>
+<a href="#s14"><i>14</i> Lab</a>
+<a href="#s15"><i>15</i> Trade-offs</a>
+<a href="#s16"><i>16</i> Failures</a>
+<a href="#s17"><i>17</i> Misconceptions</a>
+<a href="#s18"><i>18</i> Production</a>
+<a href="#s19"><i>19</i> Check</a>
+<a href="#s20"><i>20</i> Exercise</a>
+<a href="#s21"><i>21</i> Solution</a>
+<a href="#s22"><i>22</i> Concept card</a>
+<a href="#s23"><i>23</i> Interview</a>
+<a href="#s24"><i>24</i> References</a>
+</aside>
+<div class="lesson-content">
+<section class="lesson-section" id="s01">
+<header class="section-head"><span class="section-number">01</span><div><span class="section-kicker">ORIENTATION</span><h2>Module 11's opening concept -- assembling, not teaching a new stage</h2></div></header>
+<p>This is the first concept of Module 11, "Baseline RAG from first principles" (1/11), immediately following Module 10's own close (14/14). Every stage this concept traces -- ingestion, chunking, embeddings, storage, retrieval mechanics -- is cited directly from Modules 06-10, never re-derived. This concept's own job is showing them as one connected path for the first time.</p>
+</section>
+<section class="lesson-section" id="s02">
+<header class="section-head"><span class="section-number">02</span><div><span class="section-kicker">OUTCOMES</span><h2>Objectives</h2></div></header>
+<div class="objective-grid">
+<article class="info-card"><span>NAME</span><h3>All six online-pipeline stages, in order</h3><p>Ingest, chunk, embed, store, retrieve, generate.</p></article>
+<article class="info-card"><span>MAP</span><h3>Every stage to the module that already covers it</h3><p>Modules 06-10, cited directly, none re-derived.</p></article>
+<article class="info-card"><span>TRACE</span><h3>One real question end to end</h3><p><code>doc_9f21</code>'s own grace-period chunk, from ingestion to a would-be generated, cited answer.</p></article>
+<article class="info-card"><span>DISTINGUISH</span><h3>Online path vs. offline path</h3><p>What runs once per question versus once per document, ahead of time.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s03">
+<header class="section-head"><span class="section-number">03</span><div><span class="section-kicker">DEPENDENCIES</span><h2>Prerequisite check</h2></div></header>
+<ul>
+<li><b><a href="module-10-concept-03.html">Module 10 Concept 03</a></b> -- the five-table schema and <code>doc_9f21</code> itself, reused unchanged as this concept's own running example.</li>
+<li><b><a href="module-10-concept-02.html">Module 10 Concept 02</a></b> -- the database's own boundary (persistence, transactional consistency, query execution), the fixed point this concept connects outward from.</li>
+<li><b><a href="module-10-concept-14.html">Module 10 Concept 14</a></b> -- the store-agnostic <code>upsert/query/delete</code> interface, reused as this concept's own storage/retrieval calls.</li>
+<li><b>Module 07 Concepts 06-07</b> -- the grace-period chunk's exact wording, reused verbatim.</li>
+<li><b>Module 08 Concept 06</b> -- all-MiniLM-L6-v2 at 384 dimensions, reused unchanged.</li>
+<li><b>Explicitly out of scope:</b> any real implementation of ingestion, chunking, embedding, storage, or generation code -- all named forward to Concepts 02-11, nothing built here.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s04">
+<header class="section-head"><span class="section-number">04</span><div><span class="section-kicker">INTUITION</span><h2>Five tools on a workbench, one finished object</h2></div></header>
+<p>Modules 06-10 handed over five separate tools -- a parser, a pair of scissors, a translator, a filing cabinet, and a magnifying glass -- each explained on its own workbench, in isolation. This concept is the first time anyone actually picks up all five in sequence and makes one finished object: a single answered question, built by passing the same document through each tool in turn.</p>
+<div class="callout warning"><b>Analogy boundary</b>The workbench picture explains why a connected path was missing, not the actual mechanism -- that comes from Section 06's own traced example, not from the analogy.</div>
+</section>
+<section class="lesson-section" id="s05">
+<header class="section-head"><span class="section-number">05</span><div><span class="section-kicker">PRECISION</span><h2>Formal definitions</h2></div></header>
+<table class="notation">
+<thead><tr><th>Term</th><th>Definition</th><th>Owning module</th></tr></thead>
+<tbody>
+<tr><td>Online pipeline</td><td>The request-time path a single incoming question travels -- embed, retrieve, generate</td><td>This concept, Concepts 07-11</td></tr>
+<tr><td>Offline pipeline</td><td>The path each document travels once, ahead of any question -- ingest, chunk, embed, store</td><td>Concepts 02-04</td></tr>
+<tr><td>Database boundary</td><td>Persistence, transactional consistency, and query execution only -- explicitly excludes chunking, embedding, generation</td><td>Module 10 Concept 02</td></tr>
+<tr><td>Store-agnostic interface</td><td>The three-verb contract <code>upsert(vectors, metadata) / query(vector, k) / delete(ids)</code></td><td>Module 10 Concept 14</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s06">
+<header class="section-head"><span class="section-number">06</span><div><span class="section-kicker">MECHANISM</span><h2>Six stages, traced on one real question</h2></div></header>
+<p>Question: "What is the grace period length for canceling an order?" Traced against <code>doc_9f21</code>, the Order Management document established in Module 10 Concept 03.</p>
+<ol>
+<li><b>Ingest</b> -- <code>doc_9f21</code> is read and versioned. Nothing is chunked, embedded, or stored yet; this stage belongs to Module 06's own territory (parsing, versioning, provenance), named but not re-taught.</li>
+<li><b>Chunk</b> -- the answer-bearing passage, verified verbatim in Module 07 Concepts 06 and 07: "The order-cancellation grace period is 14 days from the ship date. Once it elapses, the order status locks to CLOSED and refunds stop processing automatically. Support agents must file a manual override." It becomes one chunk with a stable <code>chunk_id</code>.</li>
+<li><b>Embed</b> -- the chunk is embedded with <b>all-MiniLM-L6-v2</b>, this course's own standing convention since Module 08 Concept 06, reused unbroken through Module 09 Concept 07 and every schema/adapter example in Module 10. The model's own card states it "maps sentences &amp; paragraphs to a 384 dimensional dense vector space" -- confirmed independently here, not solely from the in-course citation.</li>
+<li><b>Store</b> -- the vector, <code>chunk_id</code>, and <code>tenant_id</code> are persisted via <code>upsert()</code>, Module 10 Concept 14's own closing abstraction, into the five-table schema <code>documents → document_versions → chunks → embeddings → citations</code> (Module 10 Concepts 03-04). This is the exact point where Module 10 Concept 02's database-boundary triad becomes concrete -- this concept is what reconnects what that boundary drew a line around.</li>
+<li><b>Retrieve</b> -- the incoming question is embedded with the query-side prefix (bi-encoder asymmetry, Module 08 Concepts 03 and 08), then <code>query()</code> runs nearest-neighbor search. Module 09 Concept 07's own tenant-filter fact -- a 20-chunk corpus, 30% selectivity, k=5, matches at ranks {3,7,9,14,17,20}, forcing a scan to rank 17, a 3.4x over-fetch (17 ÷ 5 = 3.4 exactly) -- is named here as a forward-pointer to what filtered retrieval costs, without building it in this concept.</li>
+<li><b>Generate</b> -- named forward, not built: context injection, prompt construction, generation, and citations are Concepts 07-09's own territory. This concept stops at "the retrieved chunk would be injected and cited."</li>
+</ol>
+</section>
+<section class="lesson-section" id="s07">
+<header class="section-head"><span class="section-number">07</span><div><span class="section-kicker">VISUALIZATION</span><h2>Six boxes, one direction</h2></div></header>
+<div class="diagram-scroll">
+<div class="flow" id="staticPipelineFlow_1101">
+<div class="diagram-node"><b>Ingest</b><small>doc_9f21 read</small></div>
+<div class="diagram-node"><b>Chunk</b><small>grace-period passage</small></div>
+<div class="diagram-node"><b>Embed</b><small>MiniLM-L6-v2, 384-d</small></div>
+<div class="diagram-node"><b>Store</b><small>upsert()</small></div>
+<div class="diagram-node"><b>Retrieve</b><small>query() top-k</small></div>
+<div class="diagram-node"><b>Generate</b><small>answer + citation</small></div>
+</div>
+</div>
+</section>
+<section class="lesson-section" id="s08">
+<header class="section-head"><span class="section-number">08</span><div><span class="section-kicker">ARCHITECTURE</span><h2>A minimal skeleton, six calls, zero implementations</h2></div></header>
+<div class="code-block">
+<span class="code-label">PSEUDOCODE · SIX CALLS, NAMED ONLY</span>
+<pre><code>doc = ingest(source)              # Module 06 -- not built here
+chunks = chunk(doc)                # Module 07 -- not built here
+vectors = [embed(c) for c in chunks]  # Module 08 -- not built here
+upsert(vectors, metadata)          # Module 10 Concept 14 -- reused directly
+
+q_vector = embed(question)         # same embed() as above
+hits = query(q_vector, k=5)        # Module 10 Concept 14 -- reused directly
+answer = generate(question, hits)  # Concepts 07-09 -- not built here
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s09">
+<header class="section-head"><span class="section-number">09</span><div><span class="section-kicker">MATHEMATICS</span><h2>What's needed for orientation only</h2></div></header>
+<div class="equation">embed: text → R^384 -- all-MiniLM-L6-v2's own output space (Module 08 Concept 06)</div>
+<div class="equation">query(v, k) returns the k nearest chunks by cosine similarity -- the comparison operation Module 09 built, cited unchanged</div>
+<p>Derivation of embedding geometry and similarity search mechanics is Module 08 and Module 09's own job -- this concept only needs to know that these operations exist and where they sit in the trace.</p>
+</section>
+<section class="lesson-section" id="s10">
+<header class="section-head"><span class="section-number">10</span><div><span class="section-kicker">WORKED EXAMPLE</span><h2>The full trace, restated as one continuous pass</h2></div></header>
+<p><code>doc_9f21</code> → ingested and versioned → its grace-period passage chunked, verbatim, with a stable <code>chunk_id</code> → embedded with all-MiniLM-L6-v2 into a 384-dimensional vector → persisted via <code>upsert()</code> into the five-table schema, alongside <code>tenant_id</code> → an incoming question, "What is the grace period length for canceling an order?", embedded the same way → <code>query()</code> returns this chunk among its top-k nearest neighbors → the chunk would be injected into a prompt and cited, per Concepts 07-09's own future job.</p>
+<div class="callout"><b>Verification method</b>Every fact in this trace was checked against the actual lesson source it comes from, not re-derived or invented: the grace-period wording and its own citation scores (module-07-concept-06.html, module-07-concept-07.html), the MiniLM/384-dim citation (module-08-concept-06.html, corroborated against the model's own live card), the 3.4x over-fetch figure (module-09-concept-07.html, cross-checked via 17 ÷ 5 = 3.4), and the schema/interface facts (module-10-concept-03.html, module-10-concept-14.html).</div>
+</section>
+<section class="lesson-section" id="s11">
+<header class="section-head"><span class="section-number">11</span><div><span class="section-kicker">CONCRETE USE</span><h2>A second trace, same shape</h2></div></header>
+<div class="example-grid">
+<article class="info-card"><span>SAME SIX STAGES</span><h3>A different question about the same document</h3><p>"What happens to refunds once the grace period elapses?" travels the identical six stages -- ingest, chunk, embed, store, retrieve, generate -- landing on the same chunk, since it answers both questions.</p></article>
+<article class="info-card"><span>GENERALITY</span><h3>The shape doesn't change with the question</h3><p>Only which chunk gets retrieved changes; the six-stage path itself is fixed regardless of which real question is asked.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s12">
+<header class="section-head"><span class="section-number">12</span><div><span class="section-kicker">CODE</span><h2>The same skeleton, annotated by owning concept</h2></div></header>
+<div class="code-block">
+<span class="code-label">PSEUDOCODE · SIX CALLS, ANNOTATED</span>
+<pre><code># Offline path (Concepts 02-04 build these out)
+doc = ingest(source)                    # Concept 02
+chunks = chunk(doc)                     # Concept 03 (reuses Module 07)
+vectors = [embed(c) for c in chunks]    # Concept 03 (reuses Module 08)
+upsert(vectors, metadata)               # Concept 04 (reuses Module 10 C14)
+
+# Online path (Concepts 05-06 build these out)
+q_vector = embed(question)
+hits = query(q_vector, k=5)             # Concept 05-06 (reuses Module 09-10)
+
+# Named forward only -- Concepts 07-09
+answer = generate(question, hits)
+</code></pre>
+</div>
+</section>
+<section class="lesson-section" id="s13">
+<header class="section-head"><span class="section-number">13</span><div><span class="section-kicker">ECOSYSTEM</span><h2>Where real frameworks draw the identical six boundaries</h2></div></header>
+<p>Real frameworks (LangChain, LlamaIndex, and others explored in Module 12's own concepts) draw these same six seams -- a document loader, a splitter, an embedding model, a vector-store interface, a retriever, and a generation chain -- as separate, swappable components. This concept names that this boundary-drawing is universal, without endorsing or deep-diving any one framework here; Module 11 Concept 11's own "end-to-end framework-free implementation" is the deliberate contrast to build against.</p>
+</section>
+<section class="lesson-section" id="s14">
+<header class="section-head"><span class="section-number">14</span><div><span class="section-kicker">EXPERIMENT</span><h2>Trace one query through the pipeline</h2></div></header>
+<div class="lab">
+<p>Walk <code>doc_9f21</code>'s chunk through every stage Modules 06-10 taught in isolation. Click a stage to jump to it directly, or step through with Back/Next, and see what actually happens there.</p>
+<div class="diagram-scroll">
+<div class="flow" id="pipelineFlow_1101">
+<div class="diagram-node active" id="node0_1101" data-step="0"><b>Ingest</b><small>doc_9f21 read</small></div>
+<div class="diagram-node" id="node1_1101" data-step="1"><b>Chunk</b><small>grace-period passage</small></div>
+<div class="diagram-node" id="node2_1101" data-step="2"><b>Embed</b><small>MiniLM-L6-v2, 384-d</small></div>
+<div class="diagram-node" id="node3_1101" data-step="3"><b>Store</b><small>upsert()</small></div>
+<div class="diagram-node" id="node4_1101" data-step="4"><b>Retrieve</b><small>query() top-k</small></div>
+<div class="diagram-node" id="node5_1101" data-step="5"><b>Generate</b><small>answer + citation</small></div>
+</div>
+</div>
+<div class="lab-actions" role="group" aria-label="Step through the pipeline" id="stepButtons_1101">
+<button type="button" class="secondary" id="prevBtn_1101">← Back</button>
+<button type="button" class="secondary active" id="nextBtn_1101">Next stage →</button>
+</div>
+<p class="boundary-readout" id="stageReadout_1101">
+<b>1 / 6 · Ingest —</b> the Order Management document is parsed and versioned as <code>doc_9f21</code>. Nothing is chunked, embedded, or stored yet.
+</p>
+</div>
+</section>
+<section class="lesson-section" id="s15">
+<header class="section-head"><span class="section-number">15</span><div><span class="section-kicker">TRADE-OFFS</span><h2>A fixed seam vs. tightly-coupled code</h2></div></header>
+<p>Module 10 Concept 14's <code>upsert/query/delete</code> seam exists precisely so that stage boundaries stay swappable -- a project could change its embedding model, its vector store, or its chunking strategy independently, as long as each stage still speaks through the same seam. Code that skips the seam and calls a specific vendor's API directly from inside the chunking stage trades that flexibility for less indirection, at the cost of a harder later migration.</p>
+</section>
+<section class="lesson-section" id="s16">
+<header class="section-head"><span class="section-number">16</span><div><span class="section-kicker">DIAGNOSIS</span><h2>What breaks when a stage boundary is violated</h2></div></header>
+<div class="failure-grid">
+<article class="info-card"><span>LEAKED RESPONSIBILITY</span><h3>Embedding logic inside the store layer</h3><p>Module 10 Concept 02 already drew this boundary -- the database owns persistence/consistency/query execution only. Embedding logic that leaks into that layer becomes untestable independently of the database.</p></article>
+<article class="info-card"><span>VENDOR-SPECIFIC RETRIEVAL</span><h3>Retrieval code assuming one vendor's query syntax</h3><p>Bypassing Module 10 Concept 14's generic <code>query()</code> interface to call a specific vendor's syntax directly reintroduces the exact lock-in that interface was built to remove.</p></article>
+</div>
+</section>
+<section class="lesson-section" id="s17">
+<header class="section-head"><span class="section-number">17</span><div><span class="section-kicker">CORRECTION</span><h2>Misconceptions</h2></div></header>
+<table class="compare-table">
+<thead><tr><th>Incorrect belief</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td>The vector database is doing the RAG</td><td>False -- Module 10 Concept 02's own boundary limits the database to persistence, consistency, and query execution; chunking, embedding, and generation all happen outside it.</td></tr>
+<tr><td>Chunking and embedding are the same step</td><td>False -- Module 07 and Module 08 are separate modules for a reason: one decides what text becomes a retrievable unit, the other decides how that unit becomes a vector.</td></tr>
+</tbody>
+</table>
+</section>
+<section class="lesson-section" id="s18">
+<header class="section-head"><span class="section-number">18</span><div><span class="section-kicker">REALITY</span><h2>Production implications</h2></div></header>
+<ul>
+<li>Latency budget is spent across all six stages, not just retrieval -- Module 09's own recall/latency trade-off table applies specifically to the retrieve stage, and each other stage has its own separate cost.</li>
+<li>Caching helps most where a stage's output is reused across many questions -- embeddings of a fixed document corpus, for instance -- rather than uniformly across every stage.</li>
+<li>A stage boundary violated early (Concept 16 above) is a real migration cost paid later, not immediately -- the same lesson Module 10 Concept 01 named for category choice, restated here for pipeline seams.</li>
+</ul>
+</section>
+<section class="lesson-section" id="s19">
+<header class="section-head"><span class="section-number">19</span><div><span class="section-kicker">RECALL</span><h2>Knowledge check</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Name all six stages, in order, from memory.</summary><div>Ingest, chunk, embed, store, retrieve, generate.</div></details>
+<details class="quiz"><summary>Which stages make up the offline path, and which make up the online path?</summary><div>Offline: ingest, chunk, embed, store -- runs once per document. Online: embed (the question), retrieve, generate -- runs once per incoming question.</div></details>
+<details class="quiz"><summary>What does Module 10 Concept 02's database boundary explicitly exclude?</summary><div>Chunking, embedding, and generation -- the database owns persistence, transactional consistency, and query execution only.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s20">
+<header class="section-head"><span class="section-number">20</span><div><span class="section-kicker">TRANSFER</span><h2>Hands-on exercise</h2></div></header>
+<p>Sketch your own project's six-stage pipeline diagram, labeling which of the six stages already exist in some form and which still need building. Be specific about which module's own facts each existing stage already reuses.</p>
+</section>
+<section class="lesson-section" id="s21">
+<header class="section-head"><span class="section-number">21</span><div><span class="section-kicker">FEEDBACK</span><h2>Solution and teach-back</h2></div></header>
+<details class="quiz">
+<summary>Open the worked solution</summary>
+<div>Using this concept's own <code>doc_9f21</code> trace as the reference shape: Ingest (a document loader reading raw source) → Chunk (a splitter producing stable, identifiable units) → Embed (a fixed model producing fixed-dimension vectors) → Store (a persistence layer behind a stable interface) → Retrieve (a nearest-neighbor query against that same interface) → Generate (a prompt-construction and generation step, named but not yet built in this course). Mark each stage present/missing in your own project against this exact shape.</div>
+</details>
+<p>Teach-back: why is it useful to name a stage as "existing" only when it's reachable through a stable interface, rather than just "some code that does something similar"?</p>
+</section>
+<section class="lesson-section" id="s22">
+<header class="section-head"><span class="section-number">22</span><div><span class="section-kicker">PORTABLE MEMORY</span><h2>Concept card</h2></div></header>
+<article class="concept-card">
+<div class="concept-card-grid">
+<div><h3>End-to-end basic RAG pipeline and architecture</h3><ul><li><b>Six stages:</b> ingest, chunk, embed, store, retrieve, generate -- each already covered by Modules 06-10.</li><li><b>The traced example:</b> <code>doc_9f21</code>'s own grace-period chunk, all-MiniLM-L6-v2 at 384 dimensions, Module 10 Concept 14's <code>upsert/query/delete</code>.</li><li><b>The governing boundary:</b> the database owns persistence/consistency/query execution only (Module 10 Concept 02).</li></ul></div>
+<div><h3>Module 11 · 1/11</h3><p>Concept 02, document ingestion and index construction workflow, is next.</p></div>
+</div>
+</article>
+</section>
+<section class="lesson-section" id="s23">
+<header class="section-head"><span class="section-number">23</span><div><span class="section-kicker">CAREER PRACTICE</span><h2>Interview questions</h2></div></header>
+<div class="interview-grid">
+<details class="quiz"><summary>Conceptual: walk me through what happens end-to-end when a RAG system receives a query.</summary><div>The question is embedded with the same model used at index time, a nearest-neighbor query runs against the stored vectors, the top-k matching chunks are retrieved, and those chunks are injected into a prompt along with the question for the generation step to answer from and cite.</div></details>
+<details class="quiz"><summary>System design: why keep the embedding model identical between indexing time and query time?</summary><div>Different models produce different, generally incomparable vector spaces -- nearest-neighbor search only means anything when the query vector and the stored vectors were produced by the same embedding function.</div></details>
+<details class="quiz"><summary>Debugging: retrieval returns plausible-looking but wrong chunks. Which stage boundary would you check first, and why?</summary><div>Whether the embedding model used at query time matches the one used at ingest time -- a silent model mismatch is one of the most common causes of confidently-wrong-looking retrieval, and it's invisible unless the two stages are checked against each other directly.</div></details>
+<details class="quiz"><summary>Coding: extend Section 08's skeleton to log which module owns each call.</summary><div>Wrap each call with a comment or log line naming its owning concept (as in Section 12's annotated version) -- the point being that every call in a real pipeline should be traceable back to a specific, already-understood design decision, not an unexamined default.</div></details>
+</div>
+</section>
+<section class="lesson-section" id="s24">
+<header class="section-head"><span class="section-number">24</span><div><span class="section-kicker">EVIDENCE + CONTROL</span><h2>References and checkpoint</h2></div></header>
+<div class="references">
+<a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"><b>all-MiniLM-L6-v2 — Hugging Face model card</b><br><span>"Maps sentences &amp; paragraphs to a 384 dimensional dense vector space" -- the model+dimension pairing reused unbroken since Module 08 Concept 06, corroborated live for this concept.</span></a>
+</div>
+<div class="checkpoint">
+<span class="checkpoint-state">MODULE 11 · 1/11</span>
+<h3>Five isolated toolkits. One traceable path for a single query.</h3>
+<p>You can now name and order all six stages a RAG query travels through, state which module already covers each one, and trace a real question end to end using facts you already had. Concept 02, "Document ingestion and index construction workflow," is next -- the offline path's own first stage, built out concretely.</p>
+<div class="checkpoint-actions">
+<a class="button secondary" href="#b09">Return to readiness check ↑</a>
+<a class="button primary" href="#s14">Open Trace one query through the pipeline ↑</a>
+</div>
+<p class="fine-print">Module 11 stands at 1 of 11 concepts. Next concept: Concept 02, Document ingestion and index construction workflow.</p>
+</div>
+</section>
+</div>
+</div>
+</details>
+</main>
+<footer>
+<div class="brand"><span class="brand-mark">R</span><span>RAG <b>ATLAS</b></span></div>
+<p>Module 11 · Concept 01 · Complete</p>
+<a href="module-10-concept-14.html">← Concept</a>
+</footer>
+</body>
+</html>
